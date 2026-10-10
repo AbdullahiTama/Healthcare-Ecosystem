@@ -54,16 +54,23 @@ Regression tests: `PublicProfile.subscribe.test.jsx`, `Clients.import.test.jsx`,
 - `cancelAutoRenew` returns `{ ok, error }` and the caller ignores it, so the "Auto-renew turned off" toast shows even when the update failed.
 - Five `// eslint-disable react-hooks/exhaustive-deps` comments referred to a plugin that is not installed, so they did nothing and were removed. They mark effects whose dependency arrays are deliberately incomplete (CareFind `Profile`, `ArticleEditor`, `PostPage`; CareHub `DashboardHome`, `FacilityPicker`). If `eslint-plugin-react-hooks` is added later, those five need a fresh look.
 
-## 6. What this unmasked: the security audit step is red
+## 6. What this unmasked: the security audit step (fixed)
 
-"Test & build" runs `npm audit --audit-level=high` straight after Lint, so while Lint failed the audit **never ran**. With Lint green it runs for the first time in a long while and fails in both apps (CareFind 13 findings: 4 high, 3 critical; CareHub 12: 4 high, 3 critical). None of it comes from this change (`eslint-plugin-react`'s tree has no advisories). Until it is dealt with, the audit step keeps the later steps (unit tests, coverage, build) from running in CI, even though they pass locally.
+"Test & build" runs `npm audit --audit-level=high` straight after Lint, so while Lint failed the audit **never ran**. With Lint green it ran for the first time in a long while and failed in both apps (CareFind 13 findings: 4 high, 3 critical; CareHub 12: 4 high, 3 critical), which kept the unit tests, coverage and build from running in CI. It now passes in both apps (`npm audit --audit-level=high` exits 0).
 
-| Package | Where | Severity | Fix |
-|---|---|---|---|
-| `xlsx` 0.18.5 | **CareFind runtime dependency**, used by `api/_handlers/excel-import.js` (any signed-in user can POST a workbook that the server parses with `XLSX.read`) and the business-directory import/export | high: prototype pollution (CVE-2023-30533) and ReDoS (CVE-2024-22363) | none on npm: SheetJS publishes fixed versions (0.19.3 / 0.20.2 and later) only from its own CDN. Install the CDN tarball, or replace the library, and restrict who may call the endpoint. |
-| `vitest`, `@vitest/coverage-v8`, `tinypool`, `vite` | dev tooling in both apps (the test runner and bundler; not shipped to users) | critical / high | major upgrades (vitest 5, vite 8), so a planned migration, not a drive-by |
-| `brace-expansion`, `source-map-js` | transitive dev dependencies | high | `npm audit fix` (no breaking change) |
-| `undici` | CareHub, transitive | high | `npm audit fix` (no breaking change) |
+| Finding | What was done |
+|---|---|
+| `vite` (high), `vitest`, `@vitest/coverage-v8`, `tinypool` (critical): dev tooling | vite 5.4 to **6.4.4** (the advisories cover `<=6.4.2`), vitest 2 to **4.1.11**, coverage-v8 to 4.1.11. These are the smallest versions outside the vulnerable ranges. The registry suggests vite 8 and vitest 5, but vitest 5 needs Node 22 and CI runs Node 20; vitest 4.1.11 supports Node 20 and no longer depends on `tinypool`. `@vitejs/plugin-react` stays on 4.x. No test, config or CI change was needed. |
+| `brace-expansion`, `source-map-js` (both apps), `undici` (CareHub) | `npm audit fix` (no breaking change). |
+| `xlsx` 0.18.5 (**CareFind runtime**: prototype pollution and ReDoS, no fixed release on npm; SheetJS publishes fixes only from its own CDN, which CI cannot be assumed to reach and which could not be verified) | Replaced by `read-excel-file` (import) and `write-excel-file` (export). **Legacy `.xls` is no longer supported**; the upload screen and `parseFile` refuse it up front with "save as .xlsx or CSV" (decided by extension, because Windows labels plain `.csv` files with the `.xls` MIME type). |
+| CareHub's lockfile carried 54 stale entries for `packages/shared-notifications/node_modules` | Removed. They recorded a folder installed on one machine, not in CI, and kept vitest 2, vite 5 and `tinypool` in its audit. |
 
-Options for CI, to be decided by the owner (none is done here, because they change what the pipeline enforces): (1) fix the findings (`npm audit fix` clears three at no cost; `xlsx` and the vitest/vite majors need real work); (2) move the audit to the end of the job or to its own job, so tests and the build always run and the audit is still reported; (3) audit production dependencies only (`--omit=dev`), which still fails on `xlsx` until that is fixed.
+**A bug found while replacing `xlsx`:** the browser uploads with `FormData` (a `multipart/form-data` body) but `api/_handlers/excel-import.js` parsed the raw body, so the old library read the multipart wrapper as text and returned the boundary line as the header row. Excel import through the UI never produced real rows. `api/_lib/multipart.js` now unwraps the file part (a raw `.xlsx` body still works). The export no longer puts the caller's filename unchecked into the `Content-Disposition` header.
 
+**Verification.** On the final head: lint, the full test suites with coverage, the production build and the finance suite pass in both apps (CareFind 2,414 tests, CareHub 1,302); both built apps were also loaded in Chromium (landing, login and shop pages) with no uncaught errors and no blank pages. The mutations "skip the multipart unwrap", "drop the filename sanitiser" and "remove the `.xls` check" each make the intended test fail.
+
+**Left, by design.**
+- Two moderate `react-router` advisories (both apps). They are below the gate; fixing them means a `react-router` major.
+- The shared packages (`packages/shared-email`, `shared-payments`, `shared-marketplace`, `shared-notifications`) still declare `vitest ^2` for their own tests. CI does not audit them, and they only run the test runner. Upgrade them the same way if they ever get an audit step.
+- Lockfiles were resolved with npm 11, because npm 10.9 crashes on this dependency swap (`Cannot read properties of null (reading 'edgesOut')`). `npm ci` reads either.
+- Who may call `excel-import` is unchanged: any signed-in user. The new reader is a much smaller attack surface than the old one, but restricting the endpoint to the people who need it is still worth a decision.
