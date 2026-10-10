@@ -8,6 +8,7 @@ export { sendEmail } from './sendEmail.js'
 // full-API outage rather than a local one.
 export { EmailService, getEmailService } from './EmailService.js'
 export { sendAuthEmail } from './authEmail.js'
+export { createOutboxFlusher, canRunInBackground } from './outboxFlush.js'
 export * from './templates/index.js'
 export { renderEmailTemplate, generateSampleVariables } from './templates/Marketing/templateRenderer.js'
 export { SAMPLES, TEMPLATE_META } from './templates/samples.js'

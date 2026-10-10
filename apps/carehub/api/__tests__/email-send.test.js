@@ -96,11 +96,29 @@ describe('POST /api/email/send', () => {
     expect(enqueue).toHaveBeenCalledTimes(4)
   })
 
-  it('enqueues and returns 202 without waiting for send', async () => {
-    processBatch.mockReturnValue(new Promise(() => {}))
+  // On Vercel the flush is handed to the platform, so the response does not wait for the provider yet the send is not lost when
+  // the function freezes. (Anywhere else the flush is waited for, bounded - see outbox.test.js.)
+  it('enqueues and returns 202 without waiting for send, handing the flush to the platform', async () => {
+    const waitUntil = vi.fn()
+    globalThis[Symbol.for('@vercel/request-context')] = { get: () => ({ waitUntil }) }
+    try {
+      processBatch.mockReturnValue(new Promise(() => {}))
+      const res = await post(valid)
+      expect(res.statusCode).toBe(202)
+      expect(res.body).toEqual({ ok: true, outboxId: 'row-1' })
+      expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ templateKey: 'business_approved', toEmail: 'owner@example.com' }))
+      expect(processBatch).toHaveBeenCalledTimes(1)
+      expect(waitUntil).toHaveBeenCalledTimes(1)
+    } finally {
+      delete globalThis[Symbol.for('@vercel/request-context')]
+    }
+  })
+
+  it('still answers 202 when the flush fails: the row is queued, the next drain retries it', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    processBatch.mockRejectedValue(new Error('provider down'))
     const res = await post(valid)
     expect(res.statusCode).toBe(202)
     expect(res.body).toEqual({ ok: true, outboxId: 'row-1' })
-    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ templateKey: 'business_approved', toEmail: 'owner@example.com' }))
   })
 })

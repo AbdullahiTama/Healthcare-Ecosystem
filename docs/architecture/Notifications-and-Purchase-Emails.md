@@ -44,7 +44,29 @@ The production cause cannot be proven from the repository (it needs Vercel runti
 |---|---|
 | `EmailService.enqueue` required `EMAIL_FROM`/`RESEND_FROM_EMAIL` and threw when neither was set. The settlement wrapper swallowed the error. | The sender falls back to the app's own sender (`packages/shared-email/src/branding.js`: `CareFind <support@mail.carefind.app>`, `CareHub <support@mail.carefindhub.com>`). Precedence: explicit argument, then environment, then the app default. With no sender and no known app it still refuses. `authEmail.js` reads the same constants, so there is one definition. |
 | The shared package cannot resolve `@supabase/supabase-js` from its own folder, so a client created inside it fails. | The service-role client is created by the app (`apps/carefind/api/_lib/emailService.js`, lazy singleton) and **injected** into `EmailService`. The cron endpoint builds its client once and reuses it. |
-| The serverless function is frozen when the response is sent. The settlement wrapper queued the email, then kicked off a flush it did not wait for, so the flush often never ran. | The wrapper now awaits the flush, **bounded** (`flushBounded`, 4 s): a slow provider cannot hold the payment response, and a failed or timed-out flush is logged and left to the per-minute cron. Both CareFind and CareHub wrappers use it. |
+| The serverless function is frozen when the response is sent. The settlement wrapper queued the email, then kicked off a flush it did not wait for, so the flush often never ran. | The flush is now handed to Vercel's `waitUntil` (or, anywhere else, awaited with a 4 s bound), through one helper used by every handler in both apps. See section 4.1. |
+
+### 4.1 The in-request flush (every handler, both apps)
+
+Queuing an email only writes a row to `email_outbox`. Sending it is the flush (`EmailService.processBatch`), and the flush has to happen **inside the request**, because the daily Vercel cron is the only other thing that sends mail until the per-minute pg_cron is switched on. About 19 places (the settlement, withdrawal, refund, payout-review and business-withdrawal effects, `initiate-withdrawal`, `withdrawal-pin-otp`, `booking`, `cancel-appointment`, `admin-auth`, the subscription-expiry cron and the email send/test endpoints, in both apps) used `flush().catch(...)`: start the flush and return. A serverless function is frozen the moment it responds, so that flush never ran, and withdrawal security codes, refund notices and booking confirmations all waited for the next cron.
+
+**One helper.** `createOutboxFlusher` (`packages/shared-email/src/outboxFlush.js`) returns `flushOutbox()`, which handlers `await` where they used to chain `.catch`:
+
+| Where it runs | What `flushOutbox()` does |
+|---|---|
+| On Vercel (a request context with `waitUntil` exists) | Starts the flush, hands the promise to `waitUntil`, and **returns at once**. The response is not delayed, and the platform keeps the invocation alive until the flush settles. |
+| Anywhere else (tests, local dev, another host, or `waitUntil` unavailable) | Waits for the flush, but only for 4 s, so a slow provider cannot hold a response hostage. A flush that misses the deadline is sent by the next drain (the row was queued first). |
+| Always | Never rejects. A failed flush is logged (`outbox.flush.failed`) and the row stays queued; a handler's success or error response is decided by the enqueue, not the flush. |
+
+`waitUntil` is silently a no-op outside a Vercel request, and handing the work to it there would lose the flush, so the helper checks for the request context first (`canRunInBackground`). It is **injected** rather than imported, because the shared package is deployed without its own `node_modules` and cannot resolve `@vercel/functions`. Each app supplies it in `api/_lib/outbox.js` (CareHub imports it statically; CareFind loads it lazily, like `emailService.js`, because its router imports every handler and a load failure would take every route down).
+
+**Guard.** `outboxNotFireAndForget.test.js` (one per app) fails the build if any file under `api/` calls `flushOutbox()` or `processBatch()` without awaiting it or handing it on, which is the shape that caused this.
+
+**Two related fixes found on the way.** `api/email/send.js` and `api/cron/check-subscription-expiry.js` (CareFind) built an `EmailService` without the injected client, so on Vercel their enqueue/flush path would fail to resolve `@supabase/supabase-js` (section 4, second row). The first now injects it; the cron no longer builds one and uses `flushOutbox()`.
+
+**Limits.** Work handed to `waitUntil` still counts against the function's `maxDuration` (only `process-email-outbox` sets one; the others use the platform default). A flush normally sends one or two rows in well under a second; the batch stops claiming new rows after `EMAIL_OUTBOX_TIME_BUDGET_MS` (8 s), which is what keeps a slow provider from running a function into its limit. If one is killed mid-send anyway, the claim expires after two minutes and the row is retried: at-least-once delivery, as it was for the cron. The helper does not change that.
+
+**Security.** No permission, authentication or data access changed. The flush runs with the same service-role client as before and sends only rows already in the outbox. A flush that now runs to completion means withdrawal one-time codes are delivered in seconds instead of at the next cron, which is the intended behaviour and shortens the window in which a code sits unsent. `waitUntil` receives a promise that never rejects and carries no request data.
 
 **Failures are now visible.** A settlement email that cannot be queued writes a row to `email_logs` (`event_type = 'failed'`, `metadata.stage = 'enqueue'`, with the template key and idempotency key; never the recipient address) as well as to the function log. Before, the failure existed only in a log that nobody reads.
 
@@ -94,12 +116,14 @@ order by created_at desc limit 50;
 | `UserGoLive.invite.test.jsx` (2) | The invitation carries `actor_id`. |
 | `notificationsInsertPolicy.db.test.js` (PGlite, 14) | The hole exists before the migration; afterwards a member can write each browser type as themselves and nothing else; DEFINER functions and the service role still work; inboxes stay private; idempotent; a leftover differently-named policy is removed; a `FOR ALL` policy makes it refuse. |
 | `shared-email` `EmailService.test.js` | Sender fallback, precedence, refusal. |
-| `shared-payments` `effects.test.js` | Enqueue failure recorded without the address; `flushBounded` waits, bounds a hang, swallows errors. |
-| `api/_lib/__tests__/emailService.test.js`, `settlementEffects.test.js` | Client injected and built once; flush awaited; a hanging flush is bounded; a queue failure reaches `email_logs`; nothing sent when not settled. |
+| `shared-payments` `effects.test.js` | Enqueue failure recorded without the address; every purpose sends the right email or nothing. |
+| `shared-email` `outboxFlush.test.js` (17) | Hands the flush to `waitUntil` and returns at once; waits, bounded, when there is no background support; never rejects; falls back when `waitUntil` fails; lazy loader called once and only when supported; `canRunInBackground` reads the Vercel context safely. |
+| `api/**/outbox.test.js` (both apps) | The real helper wired to each app's `processBatch`: waits off Vercel; on a simulated Vercel request the flush goes to `waitUntil` and the call returns while the provider is still running; a provider failure rejects nothing; CareFind survives the helper failing to load. |
+| `api/__tests__/outboxNotFireAndForget.test.js` (both apps) | No file under `api/` starts a flush it does not await. Checked by putting the old pattern back: it fails. |
+| `api/_lib/__tests__/emailService.test.js`, `settlementEffects.test.js` | Client injected and built once; the settlement waits for the flush; a hanging flush is bounded; a queue failure reaches `email_logs`; nothing sent when not settled. |
 
 ## 7. Not done here (found, deliberately left)
 
-- **The same fire-and-forget flush is used in about 19 other places** (`flushOutbox().catch(...)` / `emailService.processBatch().catch(...)` in both apps: the withdrawal, refund, payout-review and business-withdrawal effects, `initiate-withdrawal`, `withdrawal-pin-otp`, `booking`, `cancel-appointment`, `admin-auth`, the email test/send endpoints). In a serverless function that has already responded, the flush may never run and the email then waits for the next cron (daily today). Only the payment and booking confirmations (`settlementEffects`) were fixed here. The clean fix is one shared helper used everywhere, ideally built on Vercel's `waitUntil`, with the bounded await (`flushBounded`) as the fallback. Withdrawal OTP emails are the most time-sensitive of the rest.
 - CareCoin consultation, subscription and auto-renew events produce no notification or email.
 - The unread badge is not refreshed live and the list is not paginated.
 - `record_shop_notification` is dead code (execute revoked in F-43); remove it in a cleanup migration.

@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
+import { flushOutbox } from '../_lib/outbox.js'
 
 // Cron: scan businesses whose plan expires within the notice window and
 // enqueue a subscription_expiry email to the owner. Guarded by CRON_SECRET,
 // idempotent (dedupes against recently-sent outbox rows for the same
-// business + template), and never blocks the cron response on email delivery.
+// business + template), and does not hold the cron response for email delivery (the
+// flush is handed to the platform to finish after the response, see _lib/outbox.js).
 
 const NOTICE_DAYS = 7
 
@@ -34,9 +36,6 @@ export default async function handler(req, res) {
       .eq('status', 'active')
 
     if (error) throw error
-
-    const { EmailService } = await import('@care-ecosystem/shared-email')
-    const emailService = new EmailService()
 
     let enqueued = 0
     let skipped = 0
@@ -80,9 +79,7 @@ export default async function handler(req, res) {
     }
 
     // Flush immediately so the daily outbox cron is only a retry fallback.
-    emailService.processBatch().catch((err) => {
-      console.error('[cron/check-subscription-expiry] flush failed', err)
-    })
+    await flushOutbox()
 
     return res.status(200).json({ ok: true, scanned: (businesses || []).length, enqueued, skipped })
   } catch (e) {

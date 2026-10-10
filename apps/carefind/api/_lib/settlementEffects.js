@@ -1,5 +1,6 @@
-import { createSettlementEffects, flushBounded } from '@care-ecosystem/shared-payments'
-import { enqueue as enqueueOutbox, processBatch as flushOutbox } from './emailService.js'
+import { createSettlementEffects } from '@care-ecosystem/shared-payments'
+import { enqueue as enqueueOutbox } from './emailService.js'
+import { flushOutbox } from './outbox.js'
 
 // Post-settlement emails and notices (see shared-payments/effects.js). CareFind supplies how an email is
 // queued and flushed; the effects themselves are shared with CareHub, so a payment settled by the shared
@@ -11,9 +12,9 @@ export async function runSettlementEffects(supabase, result) {
     supabase,
     send: async (message) => {
       await enqueueOutbox(message)
-      // Awaited (bounded), not fire-and-forget: the function is frozen as soon as the handler responds, so an
-      // un-awaited flush never ran and the confirmation waited for the next cron - once a day in production.
-      await flushBounded(flushOutbox, { logger })
+      // The flush must be handed to the platform (waitUntil) or awaited, never left running: the function is frozen as
+      // soon as the handler responds, so an un-awaited flush never ran and the confirmation waited for the next cron.
+      await flushOutbox()
     },
     logger,
   })

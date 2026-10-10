@@ -1,4 +1,5 @@
 import { emailService } from '../../src/lib/emailService.js'
+import { flushOutbox } from '../_lib/outbox.js'
 import { supabase } from '../_lib/supabase.js'
 import { requirePlatformAdmin } from '../_lib/requirePlatformAdmin.js'
 import { getTemplate, isValidEmail } from '@care-ecosystem/shared-email'
@@ -20,7 +21,7 @@ export default async function handler(req, res) {
 
   try {
     const row = await emailService.enqueue({ templateKey, toEmail, payload, subject: `[TEST] ${templateKey}` })
-    emailService.processBatch().catch(e => console.error('[email/test-send] process failed', e))
+    await flushOutbox()
     return res.status(202).json({ ok: true, outboxId: row.id, message: `Test email queued to ${toEmail}` })
   } catch (e) {
     console.error('[email/test-send] failed', e)

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { isValidEmail } from '@care-ecosystem/shared-email'
 import { requireAdmin } from '../_lib/requireAdmin.js'
+import { flushOutbox } from '../_lib/outbox.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -25,9 +26,10 @@ export default async function handler(req, res) {
 
   try {
     const { EmailService } = await import('@care-ecosystem/shared-email')
-    const emailService = new EmailService()
+    // The client is injected: left alone the package resolves '@supabase/supabase-js' from its own folder, which does not exist on Vercel.
+    const emailService = new EmailService({ supabase })
     const row = await emailService.enqueue({ templateKey, toEmail, payload, subject })
-    emailService.processBatch().catch(e => console.error('[email/send] immediate process failed', e))
+    await flushOutbox()
     return res.status(202).json({ ok: true, outboxId: row.id })
   } catch (e) {
     console.error('[email/send] enqueue failed', e)

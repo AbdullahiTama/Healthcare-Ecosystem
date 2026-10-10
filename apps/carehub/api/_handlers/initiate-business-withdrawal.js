@@ -6,6 +6,7 @@ import { createTransferRecipient, initiateTransfer, checkBalance, resolveAccount
 import { reconcileBusinessWithdrawal } from '../_lib/withdrawalRecovery.js'
 import { applyBusinessWithdrawalResult } from '../_lib/businessWithdrawalEffects.js'
 import { emailService } from '../../src/lib/emailService.js'
+import { flushOutbox } from '../_lib/outbox.js'
 
 const MAX_AMOUNT_KOBO = 2_000_000_000 // business_withdrawal_requests.amount is a 32-bit integer
 
@@ -130,7 +131,7 @@ export default async function handler(req, res) {
         subject: 'CareHub: withdrawal requested',
         idempotencyKey: `withdrawal-requested:${reference}`,
       })
-      emailService.processBatch().catch(() => {})
+      await flushOutbox()
     } catch (err) {
       console.warn('[initiate-business-withdrawal] email enqueue failed:', err.message)
     }

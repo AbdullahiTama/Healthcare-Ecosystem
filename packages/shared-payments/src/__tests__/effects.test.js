@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createSettlementEffects, flushBounded } from '../index.js'
+import { createSettlementEffects } from '../index.js'
 
 // The best-effort effects after a settlement: every branch must either send exactly the right email or quietly do nothing, and none may
 // ever throw into the settlement that already committed.
@@ -200,32 +200,5 @@ describe('effects: a confirmation that cannot be queued leaves a trace in the da
     const { run, sb } = setup({ users: { u1: { email: 'a@b.com' } } })
     await run(settled('wallet_topup', intent()))
     expect(sb.inserts.filter(([table]) => table === 'email_logs')).toEqual([])
-  })
-})
-
-describe('flushBounded', () => {
-  it('waits for a flush that finishes in time', async () => {
-    let done = false
-    await flushBounded(async () => { await new Promise((r) => setTimeout(r, 10)); done = true }, { timeoutMs: 500 })
-    expect(done).toBe(true)
-  })
-
-  it('gives up on a flush that hangs, so a slow provider cannot hold the payment response', async () => {
-    const started = Date.now()
-    await flushBounded(() => new Promise(() => {}), { timeoutMs: 30 })
-    expect(Date.now() - started).toBeLessThan(400)
-  })
-
-  it('logs and swallows a flush that fails, and a rejection after the deadline is not left unhandled', async () => {
-    const logger = { error: vi.fn() }
-    await expect(flushBounded(async () => { throw new Error('provider 500') }, { logger })).resolves.toBeUndefined()
-    expect(logger.error).toHaveBeenCalledWith('settlement.flush.failed', { message: 'provider 500' })
-
-    const unhandled = vi.fn()
-    process.on('unhandledRejection', unhandled)
-    await flushBounded(() => new Promise((_, reject) => setTimeout(() => reject(new Error('late')), 40)), { timeoutMs: 10 })
-    await new Promise((r) => setTimeout(r, 80))
-    process.off('unhandledRejection', unhandled)
-    expect(unhandled).not.toHaveBeenCalled()
   })
 })

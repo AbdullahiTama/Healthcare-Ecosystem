@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
+import { enqueue as enqueueOutbox } from '../_lib/emailService.js'
+import { flushOutbox } from '../_lib/outbox.js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { userOwnsBusiness } from '../_lib/businessOwnership.js'
 import { requestRefund, executeCardRefund } from '@care-ecosystem/shared-payments'
@@ -123,7 +124,7 @@ export default async function handler(req, res) {
     read_at: null,
   }).catch(() => {})
 
-  // Client notification email (fire-and-forget; never blocks a cancellation)
+  // Client notification email (best-effort: a failure here never fails a cancellation)
   if (appt.client_email && appt.client_email.includes('@')) {
     try {
       await enqueueOutbox({
@@ -134,7 +135,7 @@ export default async function handler(req, res) {
         sourceId: appt.id,
         idempotencyKey: `booking-cancelled:${appt.id}`,
       })
-      flushOutbox().catch((err) => console.error('[cancel-appointment] outbox flush error:', err))
+      await flushOutbox()
     } catch (err) {
       console.error('[cancel-appointment] email enqueue error:', err)
     }

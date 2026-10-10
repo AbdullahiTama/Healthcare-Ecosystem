@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
-import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
+import { enqueue as enqueueOutbox } from '../_lib/emailService.js'
+import { flushOutbox } from '../_lib/outbox.js'
 import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
 import { verifyWithdrawalOtp } from '../_lib/emailOtp.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount } from '../_lib/paystackTransfer.js'
@@ -163,7 +164,7 @@ export default async function handler(req, res) {
           subject: 'CareFind: your wallet needs attention',
           idempotencyKey: 'wallet-needs-attention:' + user.id,
         })
-        flushOutbox().catch((e) => console.error('[initiate-withdrawal] outbox flush error:', e))
+        await flushOutbox()
       }
     } catch (e) { console.error('[initiate-withdrawal] email enqueue error:', e) }
     return res.status(403).json({
@@ -241,7 +242,7 @@ export default async function handler(req, res) {
           subject: 'CareFind: withdrawal requested',
           idempotencyKey: 'withdrawal-requested:' + reference,
         })
-        flushOutbox().catch((e) => console.error('[initiate-withdrawal] outbox flush error:', e))
+        await flushOutbox()
       }
     } catch (e) { console.error('[initiate-withdrawal] email enqueue error:', e) }
 

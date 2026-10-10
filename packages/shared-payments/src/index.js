@@ -10,7 +10,7 @@ export { createBudget, createLoopGuard, runScheduled, isProviderInfraError } fro
 export { runDbReconciliation, replayProviderEvents, sweepOpenIntents, reconcileProviderTransactions, runReconciliation, alertOnCriticalFindings, RECONCILIATION_SCHEDULE } from './reconciliation.js'
 export { paystackEventId, recordProviderEvent, finishProviderEvent } from './events.js'
 export { settleIntentForRequest } from './requestSettlement.js'
-export { createSettlementEffects, flushBounded } from './effects.js'
+export { createSettlementEffects } from './effects.js'
 export { createBusinessWithdrawalEffects } from './businessWithdrawalEffects.js'
 export { createRefundEffects } from './refundEffects.js'
 export { createPayoutAccountReviewEffects } from './payoutReviewEffects.js'

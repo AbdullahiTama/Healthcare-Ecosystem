@@ -3,7 +3,8 @@
 // result of a settle_withdrawal() call that CHANGED the request ('completed' / 'refunded'), so redeliveries and
 // racing paths cannot count a withdrawal twice.
 import { createClient } from '@supabase/supabase-js'
-import { enqueue as enqueueOutbox, processBatch as flushOutbox } from './emailService.js'
+import { enqueue as enqueueOutbox } from './emailService.js'
+import { flushOutbox } from './outbox.js'
 
 async function recordTrust(supabase, userId, amount, status) {
   try {
@@ -26,7 +27,7 @@ async function emailOf(supabase, userId) {
 async function send(message) {
   try {
     await enqueueOutbox(message)
-    flushOutbox().catch((err) => console.error('[withdrawal-effects] flush error:', err))
+    await flushOutbox()
   } catch (err) {
     console.error('[withdrawal-effects] email error:', err)
   }

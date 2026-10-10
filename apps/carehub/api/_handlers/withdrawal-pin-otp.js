@@ -2,6 +2,7 @@ import { supabase } from '../_lib/supabase.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { requestWithdrawalOtp } from '../_lib/emailOtp.js'
 import { emailService } from '../../src/lib/emailService.js'
+import { flushOutbox } from '../_lib/outbox.js'
 
 // POST /api/withdrawal-pin-otp — email a 6-digit code for the withdrawal step-up. The same
 // action-neutral code serves both flows: arming/changing the withdrawal PIN (action 'set_pin',
@@ -32,7 +33,7 @@ export default async function handler(req, res) {
       subject: 'CareHub: your withdrawal security code',
       idempotencyKey: `pin-otp:${user.id}:${Date.now()}`,
     })
-    emailService.processBatch().catch(() => {})
+    await flushOutbox()
   } catch (err) {
     console.error('[withdrawal-pin-otp] email enqueue failed:', err.message)
     return res.status(500).json({ error: 'Could not send the code' })

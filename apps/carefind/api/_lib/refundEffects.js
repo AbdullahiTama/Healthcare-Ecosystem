@@ -1,5 +1,6 @@
 import { createRefundEffects } from '@care-ecosystem/shared-payments'
-import { enqueue as enqueueOutbox, processBatch as flushOutbox } from './emailService.js'
+import { enqueue as enqueueOutbox } from './emailService.js'
+import { flushOutbox } from './outbox.js'
 
 // The payer's email after a refund flips to completed (shared-payments/refundEffects.js). Whichever seam
 // completed the refund - the cancel call, the webhook, or a cron pass - is the one that notifies; the effect
@@ -9,7 +10,7 @@ export async function applyRefundResult(supabase, result) {
     supabase,
     send: async (message) => {
       await enqueueOutbox(message)
-      flushOutbox().catch((err) => console.error('[refundEffects] outbox flush error:', err))
+      await flushOutbox()
     },
     logger: { error: (msg, fields) => console.error(`[refundEffects] ${msg}`, fields) },
   })

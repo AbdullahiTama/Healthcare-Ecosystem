@@ -1,4 +1,5 @@
 import { emailService } from '../../src/lib/emailService.js'
+import { flushOutbox } from '../_lib/outbox.js'
 import { supabase } from '../_lib/supabase.js'
 import { requirePlatformAdmin } from '../_lib/requirePlatformAdmin.js'
 import { isValidEmail } from '@care-ecosystem/shared-email'
@@ -67,7 +68,7 @@ export default async function handler(req, res) {
   const idempotencyKey = `${templateKey}:${toEmail}`
   try {
      const row = await emailService.enqueue({ templateKey, toEmail, payload, subject })
-     emailService.processBatch().catch(e => console.error('[email/send] immediate process failed', e))
+     await flushOutbox()
      return res.status(202).json({ ok: true, outboxId: row.id })
    } catch (e) {
     console.error('[email/send] enqueue failed', e)

@@ -3,7 +3,8 @@ import crypto from 'crypto'
 import { createPaymentIntent, markIntentPending } from '@care-ecosystem/shared-payments'
 import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
 import { verifyUser } from '../_lib/verifyUser.js'
-import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
+import { enqueue as enqueueOutbox } from '../_lib/emailService.js'
+import { flushOutbox } from '../_lib/outbox.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -407,9 +408,7 @@ async function notifyBusiness(businessId, appointmentId, clientName, bookingType
         sourceId: appointmentId,
         idempotencyKey: `booking-confirmed:${appointmentId}`,
       })
-      flushOutbox().catch((err) => {
-        console.error('[booking] outbox flush error:', err)
-      })
+      await flushOutbox()
     } catch (e) {
       console.error('[booking] booking confirmation email error:', e)
     }

@@ -38,7 +38,7 @@ Rules:
 * Editing bank/account number resets the row to `pending_review` and keeps the old default until re-verified.
 * Shared across CareFind and CareHub by owner (one person, one set of saved accounts — same as the one-PIN-per-person rule).
 * Replacing details requires the current PIN as well, so a stolen session alone cannot redirect withdrawals.
-* Admin approve/fail in the admin console emails the owner (`payout_account_review`: verified / not verified), best-effort through the outbox (`admin-auth.js` fire-and-forget after the audit insert; an email failure never fails the review action).
+* Admin approve/fail in the admin console emails the owner (`payout_account_review`: verified / not verified), best-effort through the outbox (`admin-auth.js` flushes with `flushOutbox()` after the audit insert - handed to `waitUntil` on Vercel, see `Notifications-and-Purchase-Emails.md` 4.1; an email failure never fails the review action).
 
 ## 4. PIN + email OTP
 

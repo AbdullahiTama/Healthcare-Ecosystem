@@ -4,33 +4,8 @@
 // and does nothing, so the effects run exactly once. Nothing here moves money and nothing here may fail a
 // settlement: every effect is best-effort and swallows its own errors.
 //
-// The app supplies `send(message)` (enqueue the email and flush the outbox with ITS email service), so this
-// module depends on neither app's email wiring.
-
-/**
- * Drain the outbox NOW, but only for as long as a customer should wait for it.
- *
- * A serverless function is frozen the moment it returns its response, so a fire-and-forget flush does not
- * run: the email sits in the outbox until the next cron, and in production that is once a day (packages/
- * shared-email authEmail.js documents the same trap). So the effects wait for the flush - bounded, so a slow
- * provider cannot hold the "payment confirmed" screen hostage - and never throw: a row that misses the
- * deadline is simply picked up by the next drain.
- *
- * @param {() => Promise<unknown>} flush   e.g. () => emailService.processBatch()
- * @param {{timeoutMs?: number, logger?: {error: Function}}} [opts]
- */
-export async function flushBounded(flush, { timeoutMs = 4000, logger = { error() {} } } = {}) {
-  let timer
-  try {
-    const flushing = Promise.resolve().then(flush)
-    flushing.catch(() => {}) // a rejection that lands after the deadline must not become an unhandled one
-    await Promise.race([flushing, new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs) })])
-  } catch (err) {
-    logger.error('settlement.flush.failed', { message: err?.message })
-  } finally {
-    clearTimeout(timer)
-  }
-}
+// The app supplies `send(message)` (enqueue the email and flush the outbox with ITS email service - each app's
+// `flushOutbox()`, built on packages/shared-email/src/outboxFlush.js), so this module depends on neither app's email wiring.
 
 /**
  * @param {object} deps

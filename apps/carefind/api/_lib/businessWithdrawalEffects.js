@@ -1,5 +1,6 @@
 import { createBusinessWithdrawalEffects } from '@care-ecosystem/shared-payments'
-import { enqueue as enqueueOutbox, processBatch as flushOutbox } from './emailService.js'
+import { enqueue as enqueueOutbox } from './emailService.js'
+import { flushOutbox } from './outbox.js'
 
 // The owner's email after a CareHub business withdrawal settles (shared-payments/businessWithdrawalEffects.js).
 // CareFind's webhook endpoint serves transfer events for BOTH apps' references, so when the database settles a
@@ -10,7 +11,7 @@ export async function applyBusinessWithdrawalResult(supabase, result) {
     supabase,
     send: async (message) => {
       await enqueueOutbox(message)
-      flushOutbox().catch((err) => console.error('[businessWithdrawalEffects] outbox flush error:', err))
+      await flushOutbox()
     },
     logger: { error: (msg, fields) => console.error(`[businessWithdrawalEffects] ${msg}`, fields) },
   })

@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { requestWithdrawalOtp } from '../_lib/emailOtp.js'
-import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
+import { enqueue as enqueueOutbox } from '../_lib/emailService.js'
+import { flushOutbox } from '../_lib/outbox.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -37,7 +38,7 @@ export default async function handler(req, res) {
       subject: 'CareFind: your withdrawal security code',
       idempotencyKey: 'pin-otp:' + user.id + ':' + Date.now(),
     })
-    flushOutbox().catch((e) => console.error('[withdrawal-pin-otp] outbox flush error:', e))
+    await flushOutbox()
   } catch (e) {
     console.error('[withdrawal-pin-otp] email enqueue error:', e)
     return res.status(500).json({ error: 'Could not send the code' })
