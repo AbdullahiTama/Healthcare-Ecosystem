@@ -700,7 +700,7 @@ async function handleRequest(req, res) {
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('news').select('*, profiles(full_name, display_name)').order('created_at', { ascending: false }).limit(60)
     const authorIds = [...new Set((data || []).map(n => n.author_id).filter(Boolean))]
-    let phones = {}
+    const phones = {}
     if (authorIds.length) {
       const { data: verifs } = await supabase.from('verification_requests').select('user_id, phone').in('user_id', authorIds)
       ;(verifs || []).forEach(v => { if (v.user_id && v.phone) phones[v.user_id] = v.phone })
@@ -963,7 +963,7 @@ async function handleRequest(req, res) {
     const payload = await verifyToken(token)
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { search } = req.body
-    let query = supabase.rpc('get_admin_shop_overview').then(() => null)
+    const query = supabase.rpc('get_admin_shop_overview').then(() => null)
     const { data: orders } = await supabase
       .from('shop_orders')
       .select('customer_id, customer_name, total_kobo, status, created_at, vendor_business_id')
@@ -1023,7 +1023,7 @@ async function handleRequest(req, res) {
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { status: filterStatus } = req.body
     const activeStatuses = ['paid', 'accepted', 'processing', 'packed', 'at_pickup_station', 'ready_for_pickup', 'in_transit']
-    let query = supabase.from('shop_orders').select('*, shop_order_items(*), businesses!shop_orders_vendor_business_id_fkey(id, name, city), shop_pickup_stations(id, name, address, city), profiles!shop_orders_customer_id_fkey(id, full_name, display_name)').in('status', filterStatus ? [filterStatus] : activeStatuses).order('created_at', { ascending: false }).limit(200)
+    const query = supabase.from('shop_orders').select('*, shop_order_items(*), businesses!shop_orders_vendor_business_id_fkey(id, name, city), shop_pickup_stations(id, name, address, city), profiles!shop_orders_customer_id_fkey(id, full_name, display_name)').in('status', filterStatus ? [filterStatus] : activeStatuses).order('created_at', { ascending: false }).limit(200)
     const { data, error } = await query
     if (error) return res.status(400).json({ error: error.message })
     return res.status(200).json({ data: data || [] })
@@ -1222,7 +1222,7 @@ async function handleRequest(req, res) {
     if (error) return res.status(400).json({ error: error.message })
     // Resolve actor names from admin_users
     const actorIds = [...new Set((data || []).map(l => l.actor_admin_id).filter(Boolean))]
-    let actorNames = {}
+    const actorNames = {}
     if (actorIds.length) {
       const { data: admins } = await supabase.from('admin_users').select('id, full_name').in('id', actorIds)
       ;(admins || []).forEach(a => { actorNames[a.id] = a.full_name })

@@ -112,7 +112,7 @@ export function useProfileReviews(subjectId) {
 
       const reviews = data || []
       const userIds = [...new Set(reviews.map(r => r.user_id).filter(Boolean))]
-      let reviewers = {}
+      const reviewers = {}
       if (userIds.length) {
         const { data: profs } = await supabase
           .from('profiles')
@@ -370,7 +370,7 @@ export function useMyReviews(userId) {
 
       const reviews = data || []
       const userIds = [...new Set(reviews.map(r => r.user_id).filter(Boolean))]
-      let reviewers = {}
+      const reviewers = {}
       if (userIds.length) {
         const { data: profs } = await supabase
           .from('profiles')
@@ -575,7 +575,7 @@ export function useApprovedClaims(userId) {
 
       const list = claims || []
       const bizIds = [...new Set(list.map(c => c.staff?.business_id).filter(Boolean))]
-      let bizMap = {}
+      const bizMap = {}
       if (bizIds.length) {
         const { data: bizzes } = await supabase
           .from('businesses')

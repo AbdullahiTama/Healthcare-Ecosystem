@@ -1,5 +1,6 @@
 import { runRefundSweeps, runScheduled } from '@care-ecosystem/shared-payments'
 import { sweepWithdrawals } from './withdrawalRecovery.js'
+import { applyRefundResult } from './refundEffects.js'
 import { getPaystackProvider, paymentLogger } from './payments.js'
 import { runFinanceReconciliation } from './financeReconcile.js'
 
@@ -40,7 +41,7 @@ export async function runFinanceJobs(supabase, { budget, force = false } = {}) {
     // CareFind withdrawals still reserved/processing after the grace period: ask Paystack, settle or refund
     { name: 'withdrawals', everyMinutes: FINANCE_STEPS_EVERY_MINUTES.withdrawals, run: ({ deadline }) => sweepWithdrawals(supabase, { deadline }) },
     // card refunds the provider has not answered, payments that could not be applied, appointments cancelled while paid
-    { name: 'refunds', everyMinutes: FINANCE_STEPS_EVERY_MINUTES.refunds, run: ({ deadline }) => runRefundSweeps(supabase, provider, { logger: paymentLogger, deadline }) },
+    { name: 'refunds', everyMinutes: FINANCE_STEPS_EVERY_MINUTES.refunds, run: ({ deadline }) => runRefundSweeps(supabase, provider, { logger: paymentLogger, deadline, onSettled: (result) => applyRefundResult(supabase, result) }) },
     // replay failed webhooks, settle payments Paystack says were paid, compare with Paystack, database checks, alerts (each has its own slot)
     { name: 'reconciliation', everyMinutes: FINANCE_STEPS_EVERY_MINUTES.reconciliation, run: ({ deadline }) => runFinanceReconciliation(supabase, { deadline }) },
   ]

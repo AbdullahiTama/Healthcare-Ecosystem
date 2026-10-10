@@ -119,7 +119,7 @@ const QUERY_PATTERNS = {
       const { data } = await callAdminAuth('list_transactions', { token })
       const txns = (data || []).filter(t => t.type === 'topup')
       
-      let startDate = new Date()
+      const startDate = new Date()
       let label = 'Total revenue'
       
       if (match[0].includes('today')) {

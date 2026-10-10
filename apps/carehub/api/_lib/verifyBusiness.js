@@ -29,7 +29,7 @@ export async function verifyBusiness(supabase, req) {
   // be able to renew, so this scopes to exactly the top-level business row.
   const { data: business } = await supabase
     .from('businesses')
-    .select('id, email, plan, plan_expires_at, parent_business_id')
+    .select('id, name, email, plan, plan_expires_at, parent_business_id')
     .ilike('email', escapeLikePattern(userData.user.email))
     .is('parent_business_id', null)
     .maybeSingle()

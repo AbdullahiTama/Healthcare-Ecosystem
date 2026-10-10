@@ -1,12 +1,14 @@
 // resolve-account turns a bank code + account number into the account holder's name (used by the withdrawal form). It validates the
 // input locally before spending a Paystack call, and maps Paystack's refusals to messages that do not leak internals.
-const h = vi.hoisted(() => ({ resolveAccount: vi.fn() }))
+const h = vi.hoisted(() => ({ resolveAccount: vi.fn(), user: { id: 'u1' } }))
+vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({}) }))
+vi.mock('../_lib/verifyUser.js', () => ({ verifyUser: async () => h.user }))
 vi.mock('../_lib/paystackTransfer.js', () => ({ resolveAccount: h.resolveAccount }))
 import handler from './resolve-account.js'
 
 const res = () => { const r = { statusCode: null, body: null }; r.status = (c) => { r.statusCode = c; return r }; r.json = (b) => { r.body = b; return r }; return r }
 const call = async (body, method = 'POST') => { const r = res(); await handler({ method, body }, r); return r }
-beforeEach(() => { h.resolveAccount.mockReset(); vi.spyOn(console, 'error').mockImplementation(() => {}) })
+beforeEach(() => { h.resolveAccount.mockReset(); h.user = { id: 'u' + Math.random() }; vi.spyOn(console, 'error').mockImplementation(() => {}) })
 
 describe('resolve-account', () => {
   it('returns the account name for a valid bank and 10-digit number (trimmed)', async () => {
@@ -34,5 +36,18 @@ describe('resolve-account', () => {
     expect(r.statusCode).toBe(400)
     expect(r.body.error).toMatch(expected)
     expect(r.body.unsupportedBank).toBe(unsupported)
+  })
+
+  it('is for signed-in users only, and rate limited per user (10 a minute) before any Paystack call', async () => {
+    h.user = null
+    expect((await call({ bankCode: '058', accountNumber: '0123456789' })).statusCode).toBe(401)
+    expect(h.resolveAccount).not.toHaveBeenCalled()
+    h.user = { id: 'heavy-user' }
+    h.resolveAccount.mockResolvedValue({ accountName: 'ADA OBI' })
+    const codes = []
+    for (let i = 0; i < 12; i++) codes.push((await call({ bankCode: '058', accountNumber: '0123456789' })).statusCode)
+    expect(codes.filter((c) => c === 200)).toHaveLength(10)
+    expect(codes.slice(10)).toEqual([429, 429])
+    expect(h.resolveAccount).toHaveBeenCalledTimes(10)
   })
 })

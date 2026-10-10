@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   }
 
   // Normalize phone: strip spaces, dashes, ensure it starts with country code
-  const normalizedPhone = String(phone).replace(/[\s\-]/g, '').trim()
+  const normalizedPhone = String(phone).replace(/[\s-]/g, '').trim()
   if (normalizedPhone.length < 7 || normalizedPhone.length > 15) {
     return res.status(400).json({ error: 'Invalid phone number' })
   }

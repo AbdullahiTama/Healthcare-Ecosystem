@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createSettlementEffects } from '../index.js'
+import { createSettlementEffects, flushBounded } from '../index.js'
 
 // The best-effort effects after a settlement: every branch must either send exactly the right email or quietly do nothing, and none may
 // ever throw into the settlement that already committed.
@@ -114,9 +114,118 @@ describe('effects: the paths around the happy ones', () => {
     })])
   })
 
+  it('business wallet top-up: the owner is told the wallet was credited, with the new balance, keyed by the reference', async () => {
+    const { run, sent } = setup({
+      tables: {
+        businesses: [{ id: 'b1', name: 'Sunrise Clinic', owner_name: 'Ada', owner_email: 'ada@example.com', email: 'biz@example.com' }],
+        business_wallets: [{ business_id: 'b1', available_balance: 1500000 }],
+      },
+    })
+    await run(settled('business_wallet_topup', intent({ reference: 'ref_topup_1' })))
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({
+      templateKey: 'business_wallet_topup', toEmail: 'ada@example.com',
+      subject: 'CareHub: wallet topped up', idempotencyKey: 'wallet-topped-up:ref_topup_1',
+    })
+    expect(sent[0].payload).toMatchObject({ fullName: 'Ada', businessName: 'Sunrise Clinic', reference: 'ref_topup_1' })
+    expect(sent[0].payload.amount).toContain('5,000')
+    expect(sent[0].payload.newBalance).toContain('15,000')
+  })
+
+  it('business wallet top-up: falls back to the business email; no address anywhere sends nothing; a wallet not yet visible still sends', async () => {
+    const fallback = setup({ tables: { businesses: [{ id: 'b1', owner_name: 'Ada', owner_email: null, email: 'biz@example.com' }] } })
+    await fallback.run(settled('business_wallet_topup', intent()))
+    expect(fallback.sent[0]).toMatchObject({ templateKey: 'business_wallet_topup', toEmail: 'biz@example.com' })
+    expect(fallback.sent[0].payload.newBalance).toBe('')
+
+    const noWallet = setup({ tables: { businesses: [{ id: 'b1', owner_email: 'ada@example.com' }] } })
+    await noWallet.run(settled('business_wallet_topup', intent()))
+    expect(noWallet.sent).toHaveLength(1)
+
+    const none = setup({ tables: { businesses: [{ id: 'b1', owner_email: null, email: null }] } })
+    await none.run(settled('business_wallet_topup', intent()))
+    expect(none.sent).toEqual([])
+    const missing = setup({})
+    await missing.run(settled('business_wallet_topup', intent()))
+    expect(missing.sent).toEqual([])
+  })
+
   it('a send that throws is logged with the template and never propagates (the settlement stands)', async () => {
     const { run, logger } = setup({ users: { u1: { email: 'a@b.com' } } }, async () => { throw new Error('smtp down') })
     await expect(run(settled('wallet_topup', intent()))).resolves.toBeUndefined()
     expect(logger.error).toHaveBeenCalledWith('settlement.email.failed', { template: 'payment_success', message: 'smtp down' })
+  })
+})
+
+describe('effects: a confirmation that cannot be queued leaves a trace in the database', () => {
+  // A confirmation that failed to queue used to leave only a line in a serverless log that no longer exists. The failure is
+  // now an email_logs row, so "settled but never queued" is a query.
+  it('records the failure in email_logs (no outbox row, stage enqueue) without the recipient address, and still never throws', async () => {
+    const { run, sb } = setup({ users: { u1: { email: 'ada@example.com' } } }, async () => { throw new Error('EMAIL_FROM is not configured') })
+    await expect(run(settled('wallet_topup', intent()))).resolves.toBeUndefined()
+
+    const logged = sb.inserts.filter(([table]) => table === 'email_logs')
+    expect(logged).toHaveLength(1)
+    expect(logged[0][1]).toMatchObject({
+      outbox_id: null,
+      // email_logs.event_type is CHECK-constrained to a fixed list that has no 'enqueue_failed'
+      event_type: 'failed',
+      metadata: { stage: 'enqueue', template_key: 'payment_success', idempotency_key: 'payment-success:ref_00000001' },
+    })
+    expect(logged[0][1].detail).toContain('EMAIL_FROM is not configured')
+    expect(JSON.stringify(logged)).not.toContain('ada@example.com')
+  })
+
+  it('a failure to record the failure changes nothing: the settlement still stands', async () => {
+    const sb = { ...fake({ users: { u1: { email: 'a@b.com' } } }) }
+    const from = sb.from
+    sb.from = (table) => (table === 'email_logs' ? { insert: async () => { throw new Error('db down') } } : from(table))
+    const logger = { error: vi.fn() }
+    const run = createSettlementEffects({ supabase: sb, send: async () => { throw new Error('queue down') }, logger })
+    await expect(run(settled('wallet_topup', intent()))).resolves.toBeUndefined()
+    expect(logger.error).toHaveBeenCalledWith('settlement.email.failed', { template: 'payment_success', message: 'queue down' })
+  })
+
+  it('says so when the failure could not be recorded either (supabase-js returns { error }, it does not throw)', async () => {
+    const sb = { ...fake({ users: { u1: { email: 'a@b.com' } } }) }
+    const from = sb.from
+    sb.from = (table) => (table === 'email_logs' ? { insert: async () => ({ error: { message: 'permission denied' } }) } : from(table))
+    const logger = { error: vi.fn() }
+    const run = createSettlementEffects({ supabase: sb, send: async () => { throw new Error('queue down') }, logger })
+    await expect(run(settled('wallet_topup', intent()))).resolves.toBeUndefined()
+    expect(logger.error).toHaveBeenCalledWith('settlement.email.failure_not_recorded', { template: 'payment_success', message: 'permission denied' })
+  })
+
+  it('a send that succeeds records nothing', async () => {
+    const { run, sb } = setup({ users: { u1: { email: 'a@b.com' } } })
+    await run(settled('wallet_topup', intent()))
+    expect(sb.inserts.filter(([table]) => table === 'email_logs')).toEqual([])
+  })
+})
+
+describe('flushBounded', () => {
+  it('waits for a flush that finishes in time', async () => {
+    let done = false
+    await flushBounded(async () => { await new Promise((r) => setTimeout(r, 10)); done = true }, { timeoutMs: 500 })
+    expect(done).toBe(true)
+  })
+
+  it('gives up on a flush that hangs, so a slow provider cannot hold the payment response', async () => {
+    const started = Date.now()
+    await flushBounded(() => new Promise(() => {}), { timeoutMs: 30 })
+    expect(Date.now() - started).toBeLessThan(400)
+  })
+
+  it('logs and swallows a flush that fails, and a rejection after the deadline is not left unhandled', async () => {
+    const logger = { error: vi.fn() }
+    await expect(flushBounded(async () => { throw new Error('provider 500') }, { logger })).resolves.toBeUndefined()
+    expect(logger.error).toHaveBeenCalledWith('settlement.flush.failed', { message: 'provider 500' })
+
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+    await flushBounded(() => new Promise((_, reject) => setTimeout(() => reject(new Error('late')), 40)), { timeoutMs: 10 })
+    await new Promise((r) => setTimeout(r, 80))
+    process.off('unhandledRejection', unhandled)
+    expect(unhandled).not.toHaveBeenCalled()
   })
 })

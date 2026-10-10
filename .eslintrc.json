@@ -8,6 +8,9 @@
   "extends": [
     "eslint:recommended"
   ],
+  "plugins": [
+    "react"
+  ],
   "parserOptions": {
     "ecmaVersion": 2022,
     "sourceType": "module",
@@ -16,17 +19,35 @@
     }
   },
   "rules": {
-    "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "react/jsx-uses-vars": "error",
+    "react/jsx-uses-react": "error",
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
     "no-undef": "error",
     "no-console": "off",
     "no-debugger": "warn",
     "prefer-const": "error",
     "no-var": "error",
-    "eqeqeq": ["error", "always"],
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
     "no-implicit-globals": "error",
     "no-empty": "warn",
     "no-duplicate-imports": "error"
   },
+  "overrides": [
+    {
+      "files": ["**/src/test/**/*.js", "**/src/test/**/*.jsx"],
+      "globals": {
+        "vi": "readonly",
+        "describe": "readonly",
+        "it": "readonly",
+        "test": "readonly",
+        "expect": "readonly",
+        "beforeAll": "readonly",
+        "afterAll": "readonly",
+        "beforeEach": "readonly",
+        "afterEach": "readonly"
+      }
+    }
+  ],
   "ignorePatterns": [
     "node_modules/",
     "dist/",

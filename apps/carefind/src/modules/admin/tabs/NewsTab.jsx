@@ -176,7 +176,7 @@ export default function NewsTab({
                       </div>
                     )}
                     <div style={{ fontSize: theme.type.bodySm.size, color: theme.textLight }}>
-                      {(n.body || '').replace(/[{}\[\]"]/g, ' ').slice(0, 180)}…
+                      {(n.body || '').replace(/[{}[\]"]/g, ' ').slice(0, 180)}…
                     </div>
                   </div>
                 )}

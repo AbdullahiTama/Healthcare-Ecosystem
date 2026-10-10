@@ -1,67 +1,92 @@
-import { describe, it, expect, vi } from 'vitest'
-import { fetchAllBanks, createBanksHandler, FALLBACK_NIGERIAN_BANKS } from '../banks.js'
+import { describe, it, expect } from 'vitest'
+import * as payments from '../banks.js'
 
-const page = ({ banks, next, nextCursor }) => ({ status: true, message: 'OK', data: banks, meta: next ? { next: true, next_cursor: nextCursor } : { next: false } })
-const res = () => { const r = { code: 0, body: null }; r.status = (c) => { r.code = c; return r }; r.json = (b) => { r.body = b; return r }; return r }
+const { createBanksHandler } = payments
+const NIGERIAN_BANKS = payments.NIGERIAN_BANKS
 
-// Paystack's codes for the online banks, as /bank returns them; the NIBSS codes the old curated list used are not Paystack's.
-const PAYSTACK_ONLINE_BANKS = [
-  { code: '999992', name: 'OPay Digital Services Limited (OPay)', slug: 'paycom' },
-  { code: '999991', name: 'PalmPay', slug: 'palmpay' },
-  { code: '50211', name: 'Kuda Bank', slug: 'kuda-bank' },
-  { code: '50515', name: 'Moniepoint MFB', slug: 'moniepoint-mfb' },
+// The owner-approved withdrawal bank list. Codes and slugs are Paystack's own (verified against
+// /bank?country=nigeria): the same code is sent to /bank/resolve (account-name lookup) and to
+// /transferrecipient (the payout), and Paystack accepts only its own codes for either.
+const SUPPORTED = [
+  { code: '057',    name: 'Zenith Bank',            slug: 'zenith-bank' },
+  { code: '999992', name: 'OPay',                   slug: 'paycom' },
+  { code: '999991', name: 'PalmPay',                slug: 'palmpay' },
+  { code: '011',    name: 'First Bank of Nigeria',  slug: 'first-bank-of-nigeria' },
+  { code: '033',    name: 'United Bank for Africa', slug: 'united-bank-for-africa' },
+  { code: '301',    name: 'Jaiz Bank',              slug: 'jaiz-bank' },
+  { code: '063',    name: 'Diamond Bank',           slug: 'access-bank-diamond' },
+  { code: '50211',  name: 'Kuda',                   slug: 'kuda-bank' },
+  { code: '232',    name: 'Sterling Bank',          slug: 'sterling-bank' },
+  { code: '058',    name: 'GTBank',                 slug: 'guaranty-trust-bank' },
+  { code: '044',    name: 'Access Bank',            slug: 'access-bank' },
+  { code: '214',    name: 'First City Monument Bank', slug: 'first-city-monument-bank' },
+  { code: '070',    name: 'Fidelity Bank',          slug: 'fidelity-bank' },
+  { code: '221',    name: 'Stanbic IBTC Bank',      slug: 'stanbic-ibtc-bank' },
+  { code: '032',    name: 'Union Bank of Nigeria',  slug: 'union-bank-of-nigeria' },
+  { code: '035',    name: 'Wema Bank',              slug: 'wema-bank' },
+  { code: '076',    name: 'Polaris Bank',           slug: 'polaris-bank' },
+  { code: '050',    name: 'Ecobank Nigeria',        slug: 'ecobank-nigeria' },
+  { code: '068',    name: 'Standard Chartered Bank', slug: 'standard-chartered-bank' },
+  { code: '082',    name: 'Keystone Bank',          slug: 'keystone-bank' },
+  { code: '215',    name: 'Unity Bank',             slug: 'unity-bank' },
+  { code: '101',    name: 'Providus Bank',          slug: 'providus-bank' },
+  { code: '023',    name: 'Citibank Nigeria',       slug: 'citibank-nigeria' },
+  { code: '50515',  name: 'Moniepoint MFB',        slug: 'moniepoint-mfb-ng' },
+  { code: '102',    name: 'Titan Bank',             slug: 'titan-bank' },
+  { code: '00103',  name: 'Globus Bank',            slug: 'globus-bank' },
+  { code: '107',    name: 'Optimus Bank Limited',   slug: 'optimus-bank-ltd' },
+  { code: '104',    name: 'Parallex Bank',          slug: 'parallex-bank' },
+  { code: '100',    name: 'Suntrust Bank',          slug: 'suntrust-bank' },
+  { code: '035A',   name: 'ALAT by WEMA',           slug: 'alat-by-wema' },
 ]
 
-describe('fetchAllBanks', () => {
-  it('serves Paystack\'s list as it is: every page, sorted, and no second OPay/PalmPay/Kuda with a code Paystack cannot resolve', async () => {
-    const fetchFn = vi.fn()
-      .mockResolvedValueOnce(page({ banks: [{ code: '057', name: 'Zenith Bank', slug: 'zenith-bank' }, ...PAYSTACK_ONLINE_BANKS.slice(0, 2)], next: true, nextCursor: 'abc' }))
-      .mockResolvedValueOnce(page({ banks: [...PAYSTACK_ONLINE_BANKS.slice(2), { code: '044', name: 'Access Bank', slug: 'access-bank' }], next: false }))
-    const banks = await fetchAllBanks(fetchFn)
-    expect(fetchFn.mock.calls[0][0]).toContain('perPage=100')
-    expect(fetchFn.mock.calls[1][0]).toContain('&cursor=abc')
-    expect(banks.map((b) => b.code)).toEqual(['044', '50211', '50515', '999992', '999991', '057'])     // sorted by name
-    expect(banks.filter((b) => /opay/i.test(b.name))).toEqual([{ code: '999992', name: 'OPay Digital Services Limited (OPay)', slug: 'paycom' }])
-    for (const nibss of ['090405', '090410', '083']) expect(banks.some((b) => b.code === nibss)).toBe(false)
+const res = () => { const r = { code: 0, body: null }; r.status = (c) => { r.code = c; return r }; r.json = (b) => { r.body = b; return r }; return r }
+
+describe('NIGERIAN_BANKS', () => {
+  it('is exactly the supported banks, in the approved order', () => {
+    expect(NIGERIAN_BANKS).toEqual(SUPPORTED)
   })
 
-  it('stops at the page cap and keeps one entry per code', async () => {
-    const fetchFn = vi.fn().mockResolvedValue(page({ banks: [{ code: '001', name: 'Bank A' }], next: true, nextCursor: 'same' }))
-    expect(await fetchAllBanks(fetchFn)).toHaveLength(1)
-    expect(fetchFn).toHaveBeenCalledTimes(10)
-  })
-
-  it('fails loudly on a Paystack error or an empty list', async () => {
-    await expect(fetchAllBanks(vi.fn().mockResolvedValue({ status: false, message: 'Invalid key' }))).rejects.toThrow('Paystack error')
-    await expect(fetchAllBanks(vi.fn().mockResolvedValue(page({ banks: [], next: false })))).rejects.toThrow('no banks')
-  })
-})
-
-describe('the fallback list', () => {
-  it('uses Paystack\'s codes for the online banks, so a lookup still works when the live list cannot be loaded', () => {
-    const code = (name) => FALLBACK_NIGERIAN_BANKS.find((b) => b.name === name)?.code
-    expect(code('OPay')).toBe('999992')
-    expect(code('PalmPay')).toBe('999991')
-    expect(code('Kuda Bank')).toBe('50211')
-    expect(code('Moniepoint MFB')).toBe('50515')
-    expect(new Set(FALLBACK_NIGERIAN_BANKS.map((b) => b.code)).size).toBe(FALLBACK_NIGERIAN_BANKS.length)
+  it('carries one unique string code per bank, so a lookup cannot be ambiguous', () => {
+    expect(NIGERIAN_BANKS).toBeDefined()
+    const codes = NIGERIAN_BANKS.map((b) => b.code)
+    expect(codes).toHaveLength(new Set(codes).size)
+    expect(codes.every((c) => typeof c === 'string')).toBe(true)
   })
 })
 
 describe('createBanksHandler', () => {
-  it('caches a good list, serves it when Paystack later fails, and falls back to the curated list before any success', async () => {
-    let t = 0
-    const fetchFn = vi.fn().mockResolvedValueOnce(page({ banks: PAYSTACK_ONLINE_BANKS, next: false })).mockRejectedValue(new Error('down'))
-    const handler = createBanksHandler({ fetchFn, ttlMs: 1000, now: () => t, logger: { error: () => {} } })
-    const first = res(); await handler({ method: 'GET' }, first)
-    expect(first.body).toHaveLength(4)
-    t = 5000
-    const second = res(); await handler({ method: 'GET' }, second)
-    expect(second.code).toBe(200); expect(second.body).toHaveLength(4)                    // the last good list
-    const cold = createBanksHandler({ fetchFn: vi.fn().mockRejectedValue(new Error('down')), logger: { error: () => {} } })
-    const third = res(); await cold({ method: 'GET' }, third)
-    expect(third.body).toBe(FALLBACK_NIGERIAN_BANKS)
-    const post = res(); await cold({ method: 'POST' }, post)
-    expect(post.code).toBe(405)
+  it('serves the fixed list on GET without contacting Paystack', async () => {
+    const handler = createBanksHandler()
+    const r = res()
+    await handler({ method: 'GET' }, r)
+    expect(r.code).toBe(200)
+    expect(r.body).toEqual(SUPPORTED)
+  })
+
+  it('rejects non-GET methods with 405', async () => {
+    const handler = createBanksHandler()
+    const r = res()
+    await handler({ method: 'POST' }, r)
+    expect(r.code).toBe(405)
+  })
+})
+
+describe('createBankDirectory', () => {
+  const { createBankDirectory } = payments
+
+  it('resolves a bank name from its code using the fixed list', async () => {
+    const dir = createBankDirectory()
+    const first = NIGERIAN_BANKS[0]
+    expect(await dir.nameFor(first.code)).toBe(first.name)
+    expect(await dir.nameFor(String(first.code))).toBe(first.name)
+  })
+
+  it('returns null for a code that is not on the list', async () => {
+    expect(await createBankDirectory().nameFor('000000')).toBeNull()
+  })
+
+  it('lists exactly the banks /api/banks serves', async () => {
+    expect(await createBankDirectory().list()).toEqual(NIGERIAN_BANKS)
   })
 })

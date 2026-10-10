@@ -192,7 +192,7 @@ export function validateRecord(record, rowNumber) {
 
   // Validate phone if provided
   if (record.phone && record.phone.trim() !== '') {
-    const phoneRegex = /^[\d\s\-\+\(\)]+$/;
+    const phoneRegex = /^[\d\s+()-]+$/;
     if (!phoneRegex.test(record.phone)) {
       errors.push({
         type: 'format',

@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
-import { hashPin, randomPinSalt, isValidPin } from '../_lib/pinCrypto.js'
+import { hashPin, isValidPin } from '../_lib/pinCrypto.js'
+import { OTP_PURPOSES, sendOtp, setWithdrawalPin, withdrawalPinStatus } from '@care-ecosystem/shared-payments'
+import { getSecurityMailer } from '../_lib/securityMailer.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -18,10 +20,11 @@ function subPath(req) {
   return segments[1] || ''
 }
 
-// POST /api/withdrawal-pin/set     — create/replace the account owner's PIN
-// POST /api/withdrawal-pin/verify  — pre-check a PIN (a future "change PIN"
-//                                    flow verifies the old PIN before setting
-//                                    a new one)
+// POST /api/withdrawal-pin/status  — { hasPin }
+// POST /api/withdrawal-pin/otp     — email a 6-digit code: { purpose?: 'pin_set' (default) | 'withdrawal' }
+// POST /api/withdrawal-pin/set     — create/replace the PIN: { pin, otp, currentPin? | forgot: true }.
+//                                    A session alone can never set it (audit F-32).
+// POST /api/withdrawal-pin/verify  — pre-check a PIN
 //
 // The raw PIN travels from the client only over HTTPS and is never logged. It
 // is never stored: the API derives scrypt(pin, salt) via pinCrypto and the
@@ -35,31 +38,30 @@ export default async function handler(req, res) {
   const action = subPath(req)
   const { pin } = req.body || {}
 
-  if (!isValidPin(pin)) {
-    return res.status(400).json({ error: 'Withdrawal PIN must be 4-6 digits' })
+  if (action === 'status') {
+    const r = await withdrawalPinStatus(supabase, user.id)
+    return res.status(r.status).json(r.body)
+  }
+
+  if (action === 'otp') {
+    // Two things need a code: arming the PIN (default) and confirming a withdrawal ({ purpose: 'withdrawal' }). Anything
+    // else is refused, so this endpoint cannot be used to mint codes for the other purposes.
+    const wanted = (req.body || {}).purpose
+    if (wanted !== undefined && wanted !== OTP_PURPOSES.PIN_SET && wanted !== OTP_PURPOSES.WITHDRAWAL) {
+      return res.status(400).json({ error: 'Unknown code purpose' })
+    }
+    const r = await sendOtp({ supabase, user, purpose: wanted || OTP_PURPOSES.PIN_SET, mailer: await getSecurityMailer() })
+    return res.status(r.status).json(r.body)
   }
 
   if (action === 'set') {
-    // A PIN is a step-up credential, so the account must already prove it owns
-    // its email before it can arm one.
-    if (!user.email_confirmed_at) {
-      return res.status(403).json({ error: 'Confirm your email before setting a withdrawal PIN' })
-    }
-
-    const salt = randomPinSalt()
-    const hash = hashPin(pin, salt)
-    const { error } = await supabase.rpc('set_withdrawal_pin', {
-      p_user_id: user.id,
-      p_pin_hash: hash,
-      p_pin_salt: salt,
-    })
-    if (error) {
-      return res.status(500).json({ error: 'Could not set withdrawal PIN' })
-    }
-    return res.status(200).json({ ok: true })
+    const { otp, currentPin, forgot } = req.body || {}
+    const r = await setWithdrawalPin(supabase, user, { pin, otp, currentPin, forgot: forgot === true, mailer: await getSecurityMailer() })
+    return res.status(r.status).json(r.body)
   }
 
   if (action === 'verify') {
+    if (!isValidPin(pin)) return res.status(400).json({ error: 'Withdrawal PIN must be 4-6 digits' })
     const { data: rows, error: getError } = await supabase.rpc('get_withdrawal_pin', {
       p_user_id: user.id,
     })

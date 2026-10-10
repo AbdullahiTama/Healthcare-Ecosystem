@@ -1,4 +1,10 @@
+import { createRateLimiter } from '@care-ecosystem/shared-payments'
 import { resolveAccount } from '../_lib/paystackTransfer.js'
+import { supabase } from '../_lib/supabase.js'
+import { verifyBusiness } from '../_lib/verifyBusiness.js'
+
+// Each lookup is a paid, rate-limited Paystack call made with our secret key: signed-in business owners only, 10 a minute.
+const allow = createRateLimiter({ max: 10, windowMs: 60_000 })
 
 // POST /api/resolve-account
 // Resolves a bank account name from bank code + account number via Paystack.
@@ -7,6 +13,10 @@ export default async function resolveAccountHandler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
+
+  const { user, error: authError } = await verifyBusiness(supabase, req)
+  if (authError) return res.status(401).json({ error: authError })
+  if (!allow(user.id)) return res.status(429).json({ error: 'Too many lookups. Wait a minute and try again.' })
 
   const { bankCode, accountNumber } = req.body || {}
 

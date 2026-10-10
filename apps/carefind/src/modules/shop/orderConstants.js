@@ -3,6 +3,9 @@
 import { Clock, CheckCircle, Package, Truck, MapPin, XCircle, AlertTriangle, RotateCcw } from 'lucide-react'
 import { theme } from '../../styles/theme'
 
+// Kobo -> '₦18,500' (or '₦18,500.50'). The one money formatter for order screens, the invoice and notifications.
+export const formatKobo = (kobo) => `₦${(Number(kobo || 0) / 100).toLocaleString('en-NG', { maximumFractionDigits: 2 })}`
+
 export const STATUS_CONFIG = {
   pending_payment: { 
     label: 'Pending Payment', 

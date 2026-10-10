@@ -8,7 +8,9 @@
 // Storage format (text columns on withdrawal_pins):
 //   pin_salt = 16 random bytes, hex (32 chars);  pin_hash = scrypt(pin, salt, 64 bytes), hex (128 chars)
 import crypto from 'node:crypto'
+import { OTP_PURPOSES, checkOtp } from './otp.js'
 
+export const PIN_LOCK_AFTER = 5 // consecutive wrong PINs that lock it (verify_withdrawal_pin)
 const SCRYPT_KEYLEN = 64
 const SALT_BYTES = 16
 
@@ -39,8 +41,10 @@ export function verifyPin(pin, saltHex, expectedHash) {
  * @param {object} supabase  service-role client
  * @param {string} userId    the verified auth user
  * @param {string} pin       what the client typed
+ * @param {{ onLocked?: () => unknown }} [opts]  called (best effort, never throws) when THIS wrong attempt locked the PIN,
+ *                          so the owner can be warned that someone is guessing
  */
-export async function checkWithdrawalPin(supabase, userId, pin) {
+export async function checkWithdrawalPin(supabase, userId, pin, { onLocked } = {}) {
   if (!isValidPin(pin)) return { ok: false, status: 400, code: 'invalid_pin', error: 'Withdrawal PIN must be 4-6 digits' }
 
   const { data: rows, error: fetchError } = await supabase.rpc('get_withdrawal_pin', { p_user_id: userId })
@@ -58,6 +62,53 @@ export async function checkWithdrawalPin(supabase, userId, pin) {
   const { data: verified, error: verifyError } = await supabase.rpc('verify_withdrawal_pin', {
     p_user_id: userId, p_pin_hash: attemptHash, p_pin_salt: stored.pin_salt,
   })
-  if (verifyError || !locallyMatches || verified !== true) return { ok: false, status: 403, code: 'pin_incorrect', error: 'Incorrect withdrawal PIN.' }
+  if (verifyError || !locallyMatches || verified !== true) {
+    // verify_withdrawal_pin locks on the 5th consecutive failure; `failed_attempts` is the count BEFORE this attempt.
+    if (onLocked && !verifyError && Number(stored.failed_attempts) + 1 >= PIN_LOCK_AFTER) {
+      try { await onLocked() } catch { /* an alert must never change the answer */ }
+    }
+    return { ok: false, status: 403, code: 'pin_incorrect', error: 'Incorrect withdrawal PIN.' }
+  }
   return { ok: true }
+}
+
+/**
+ * Set or replace the withdrawal PIN. A signed-in session alone is NEVER enough (audit F-32 / F-08): a thief holding a
+ * session would otherwise set their own PIN and drain the wallet.
+ *   * a fresh emailed one-time code is always required (proves control of the inbox), and
+ *   * REPLACING an existing PIN also needs the current PIN, unless `forgot` is true, where the code is the only proof.
+ * The current PIN is checked BEFORE the code is consumed, so a typo does not burn the code.
+ * -> { status, body } for the HTTP layer.
+ * @param {{ sendPinChanged: Function }} mailer  best-effort security alert after the change
+ */
+export async function setWithdrawalPin(supabase, user, { pin, otp, currentPin, forgot = false, mailer }) {
+  if (!isValidPin(pin)) return { status: 400, body: { error: 'Withdrawal PIN must be 4-6 digits', code: 'invalid_pin' } }
+  if (!user.email_confirmed_at) return { status: 403, body: { error: 'Confirm your email before setting a withdrawal PIN' } }
+
+  const { data: rows, error: readError } = await supabase.rpc('get_withdrawal_pin', { p_user_id: user.id })
+  if (readError) return { status: 500, body: { error: 'Could not set withdrawal PIN' } }
+  const hasPin = Boolean((Array.isArray(rows) ? rows[0] : rows)?.pin_hash)
+
+  if (hasPin && !forgot) {
+    if (!currentPin) return { status: 400, body: { error: 'Enter your current PIN, or choose "Forgot PIN".', code: 'current_pin_required' } }
+    const current = await checkWithdrawalPin(supabase, user.id, currentPin)
+    if (!current.ok) return { status: current.status, body: { error: current.error, code: current.code } }
+  }
+
+  const otpResult = await checkOtp({ supabase, userId: user.id, purpose: OTP_PURPOSES.PIN_SET, code: otp })
+  if (!otpResult.ok) return { status: otpResult.status, body: { error: otpResult.error, code: otpResult.code } }
+
+  const salt = randomPinSalt()
+  const { error } = await supabase.rpc('set_withdrawal_pin', { p_user_id: user.id, p_pin_hash: hashPin(pin, salt), p_pin_salt: salt })
+  if (error) return { status: 500, body: { error: 'Could not set withdrawal PIN' } }
+
+  if (mailer && user.email) await mailer.sendPinChanged({ to: user.email }).catch(() => {})
+  return { status: 200, body: { ok: true, hadPin: hasPin } }
+}
+
+/** { hasPin } without exposing the hash. */
+export async function withdrawalPinStatus(supabase, userId) {
+  const { data: rows, error } = await supabase.rpc('get_withdrawal_pin', { p_user_id: userId })
+  if (error) return { status: 500, body: { error: 'Could not read your withdrawal PIN settings' } }
+  return { status: 200, body: { hasPin: Boolean((Array.isArray(rows) ? rows[0] : rows)?.pin_hash) } }
 }

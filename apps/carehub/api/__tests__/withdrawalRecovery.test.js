@@ -2,8 +2,9 @@ import { describe, it, expect, vi } from 'vitest'
 
 // CareHub's binding of the shared withdrawal recovery (Paystack lookup). The decision and settlement logic is tested
 // in shared-payments; the refund is the database's settle_business_withdrawal.
-const h = vi.hoisted(() => ({ paystackFetch: vi.fn() }))
+const h = vi.hoisted(() => ({ paystackFetch: vi.fn(), applied: [] }))
 vi.mock('../_lib/paystack.js', () => ({ paystackFetch: h.paystackFetch }))
+vi.mock('../_lib/businessWithdrawalEffects.js', () => ({ applyBusinessWithdrawalResult: async (_s, result) => { h.applied.push(result) } }))
 
 import { reconcileBusinessWithdrawal, reconcileBusinessWithdrawals, IN_FLIGHT_GRACE_MS } from '../_lib/withdrawalRecovery.js'
 
@@ -56,12 +57,14 @@ describe('reconcileBusinessWithdrawal', () => {
 })
 
 describe('reconcileBusinessWithdrawals (the cron sweep)', () => {
-  it('settles each stuck request and counts outcomes', async () => {
+  it('settles each stuck request, counts outcomes, and emails the owner only for the changes this sweep made', async () => {
+    h.applied.length = 0
     h.paystackFetch.mockImplementation(async (path) => (path.includes('gone') ? { status: false, message: 'Transfer not found' } : { status: true, data: { status: 'success' } }))
-    const rows = [row({ id: 'a', paystack_reference: 'ch_wd_ok', paystack_transfer_code: 'T' }), row({ id: 'b', paystack_reference: 'ch_wd_gone' })]
-    const s = fakeSupabase(rows, (a) => ({ result: a.p_outcome === 'success' ? 'completed' : 'refunded' }))
+    const rows = [row({ id: 'a', paystack_reference: 'ch_wd_ok', paystack_transfer_code: 'T' }), row({ id: 'b', paystack_reference: 'ch_wd_gone' }), row({ id: 'c', paystack_reference: 'ch_wd_late', paystack_transfer_code: 'T' })]
+    const s = fakeSupabase(rows, (a) => ({ id: a.p_request_id, result: a.p_request_id === 'c' ? 'already_completed' : a.p_outcome === 'success' ? 'completed' : 'refunded', reference: 'ch_wd_late' }))
     const out = await reconcileBusinessWithdrawals(s, { now: NOW, logger: { warn() {}, error() {} } })
-    expect(out).toEqual({ checked: 2, refunded: 1, completed: 1, waiting: 0, errors: 0 })
+    expect(out).toEqual({ checked: 3, refunded: 1, completed: 1, waiting: 1, errors: 0 })
+    expect(h.applied.map((r) => [r.result, r.id])).toEqual([['completed', 'a'], ['refunded', 'b']])
   })
 
   it('a query failure throws instead of reporting success', async () => {

@@ -4,9 +4,7 @@
 // so an unescaped product name (written by the vendor) or address could run script with the customer's session.
 
 import { escapeHtmlAttribute as esc } from '../../lib/openGraph.js'
-import { STATUS_CONFIG, formatOrderAddress } from './orderConstants'
-
-const naira = (kobo) => `₦${(Number(kobo || 0) / 100).toLocaleString('en-NG', { maximumFractionDigits: 2 })}`
+import { STATUS_CONFIG, formatOrderAddress, formatKobo as naira } from './orderConstants'
 
 function deliveryLabel(order) {
   if (order.delivery_kobo > 0) return naira(order.delivery_kobo)

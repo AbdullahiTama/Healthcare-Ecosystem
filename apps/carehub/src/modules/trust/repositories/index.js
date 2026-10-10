@@ -79,7 +79,7 @@ export function createTrustRepository({ request = sbFetch } = {}) {
 
     // ── Drug Intel → ADR (T5) ───────────────────────────────────────────
     async getProducts({ limit = 20 } = {}) {
-      let q = `products?order=created_at.desc&limit=${limit}&select=id,name,generic_name`
+      const q = `products?order=created_at.desc&limit=${limit}&select=id,name,generic_name`
       return request(q).catch(() => [])
     },
     async getProductReviews({ product_id, limit = 50 } = {}) {

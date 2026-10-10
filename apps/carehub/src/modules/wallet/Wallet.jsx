@@ -1,8 +1,15 @@
-import { useState, useEffect, useRef } from 'react'
-import { Wallet as WalletIcon, Banknote, ArrowUpCircle, ArrowDownCircle, Clock, CheckCircle, AlertTriangle, Download } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Wallet as WalletIcon, Banknote, ArrowUpCircle, ArrowDownCircle, Clock, CheckCircle, AlertTriangle, Download, PlusCircle } from 'lucide-react'
 import { walletRepository } from './repositories'
 import WithdrawalPinField from './WithdrawalPinField'
+import WithdrawalOtpField from './WithdrawalOtpField'
+import PayoutAccountsPanel from './PayoutAccountsPanel.jsx'
+import BankPicker from './BankPicker.jsx'
+import { createPayoutManager, rankBanks } from '@care-ecosystem/shared-payout-ui'
 import { startBusinessWithdrawal, withdrawalErrorMessage } from './withdrawalApi'
+import { authClient } from '../../lib/authClient'
+import { initiateWalletTopup, verifyWalletTopup, goToPaystack, MIN_TOPUP_KOBO, MAX_TOPUP_KOBO } from './topupApi'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Pill, Inp, GhostBtn, TealBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
@@ -24,27 +31,83 @@ export default function Wallet({ brand, role }) {
   const [withdrawForm, setWithdrawForm] = useState({})
   const [withdrawing, setWithdrawing] = useState(false)
   const [withdrawPin, setWithdrawPin] = useState('')
+  const [withdrawOtp, setWithdrawOtp] = useState('')
   const [needsPin, setNeedsPin] = useState(false)
+  const [showTopup, setShowTopup] = useState(false)
+  const [topupAmount, setTopupAmount] = useState('')
+  const [topupStarting, setTopupStarting] = useState(false)
   const [banks, setBanks] = useState([])
+  const [banksStatus, setBanksStatus] = useState('loading')
+  // Saved, identity-verified payout accounts (the safe way to say where the money goes).
+  const payouts = useMemo(() => createPayoutManager({ getToken: async () => (await authClient.auth.getSession()).data.session?.access_token }), [])
+  const payoutState = useSyncExternalStore(payouts.subscribe, payouts.getState)
+  const [selectedAccountId, setSelectedAccountId] = useState('')
+  const [useTyped, setUseTyped] = useState(false)
   const [accountResolving, setAccountResolving] = useState(false)
   const [accountResolved, setAccountResolved] = useState(false)
   const resolveTimer = useRef(null)
+  const [searchParams] = useSearchParams()
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
 
   useEffect(() => { load() }, [brand?.id])
 
+  // Return from Paystack. Confirm the opaque reference server-side before
+  // showing any credit — the same "never trust the URL, ask Paystack" shape
+  // as Settings.jsx's plan renewal and CareFind's wallet. The verify handler
+  // settles the intent; the engine credits the wallet only for a payment
+  // that matches it exactly.
   useEffect(() => {
-    async function loadBanks() {
+    async function handleTopupReturn() {
+      const ref = searchParams.get('reference') || searchParams.get('trxref')
+      if (!ref || role !== 'Owner') return
       try {
-        const res = await fetch('/api/banks')
-        if (res.ok) {
-          const data = await res.json()
-          setBanks(data)
+        const out = await verifyWalletTopup(ref)
+        window.history.replaceState({}, '', '/dashboard/wallet')
+        if (out.sessionExpired) return
+        if (out.networkError) {
+          showToast('Could not confirm payment. If you were charged, contact support with your reference.', { type: 'error' })
+          return
         }
-      } catch (err) {}
+        if (!out.ok) {
+          showToast(`Could not confirm payment: ${out.data.error || 'unknown error'}`, { type: 'error' })
+          return
+        }
+        load()
+        if (!out.data.alreadyProcessed) showToast(`Top-up received! New balance: ${naira(out.data.newAvailable)}`, { type: 'success' })
+      } catch {
+        window.history.replaceState({}, '', '/dashboard/wallet')
+        showToast('Could not confirm payment. If you were charged, contact support with your reference.', { type: 'error' })
+      }
     }
-    loadBanks()
-  }, [])
+    handleTopupReturn()
+    // eslint-disable-next-line
+  }, [searchParams])
+
+  async function loadBanks() {
+    setBanksStatus('loading')
+    try {
+      const res = await fetch('/api/banks')
+      if (!res.ok) throw new Error('banks')
+      // Popular banks first (Access, GTBank, UBA, Zenith, Sterling, Jaiz, OPay, PalmPay, Moniepoint...), then A-Z.
+      setBanks(rankBanks(await res.json()))
+      setBanksStatus('ready')
+    } catch {
+      setBanksStatus('error')
+    }
+  }
+  useEffect(() => { loadBanks() }, [])
+
+  // Load identity + accounts when the withdraw dialog opens.
+  useEffect(() => { if (showWithdraw) payouts.load() }, [showWithdraw, payouts])
+  // Keep a valid account selected: the one already chosen, else the default, else the first.
+  useEffect(() => {
+    const list = payoutState.accounts
+    if (list.length === 0) { setSelectedAccountId(''); return }
+    if (!list.some((a) => a.id === selectedAccountId)) setSelectedAccountId((list.find((a) => a.isDefault) || list[0]).id)
+  }, [payoutState.accounts, selectedAccountId])
+  const savedAccount = payoutState.accounts.find((a) => a.id === selectedAccountId) || null
+  const typedAllowed = !payoutState.required
+  const typedMode = !savedAccount || useTyped
 
   // Resolve account name when bank code and 10-digit account number are both set.
   // Debounced to avoid firing on every keystroke.
@@ -63,9 +126,10 @@ export default function Wallet({ brand, role }) {
     resolveTimer.current = setTimeout(async () => {
       setAccountResolving(true)
       try {
+        const { data: { session } } = await authClient.auth.getSession()
         const res = await fetch('/api/resolve-account', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
           body: JSON.stringify({ bankCode, accountNumber: acctNum }),
         })
         const data = await res.json()
@@ -108,7 +172,7 @@ export default function Wallet({ brand, role }) {
   const naira = (kobo) => `₦${((kobo || 0) / 100).toLocaleString()}`
 
   async function handleWithdraw() {
-    if (!withdrawForm.amount || !withdrawForm.bankName || !withdrawForm.bankCode || !withdrawForm.accountNumber || !withdrawForm.accountName) {
+    if (!withdrawForm.amount || (typedMode && (!withdrawForm.bankName || !withdrawForm.bankCode || !withdrawForm.accountNumber || !withdrawForm.accountName))) {
       showToast('Fill in amount and bank details.', { type: 'warning' }); return
     }
     const amountKobo = Math.round(parseFloat(withdrawForm.amount) * 100)
@@ -120,24 +184,39 @@ export default function Wallet({ brand, role }) {
     }
     setWithdrawing(true)
     try {
-      const r = await startBusinessWithdrawal({
-        businessId: brand.id, amountKobo,
-        bankCode: withdrawForm.bankCode, bankName: withdrawForm.bankName,
-        accountNumber: withdrawForm.accountNumber, accountName: withdrawForm.accountName, pin: withdrawPin,
-      })
+      const r = await startBusinessWithdrawal(typedMode
+        ? { businessId: brand.id, amountKobo, bankCode: withdrawForm.bankCode, bankName: withdrawForm.bankName, accountNumber: withdrawForm.accountNumber, accountName: withdrawForm.accountName, pin: withdrawPin, otp: withdrawOtp }
+        : { businessId: brand.id, amountKobo, payoutAccountId: savedAccount.id, pin: withdrawPin, otp: withdrawOtp })
       if (r.sessionExpired) { showToast('Please log in again.', { type: 'warning' }); setWithdrawing(false); return }
       if (r.networkError) { showToast('Network error.', { type: 'error' }); setWithdrawing(false); return }
       if (!r.ok) {
         if (r.data.needsPin) setNeedsPin(true)
+        if (r.data.code === 'payout_account_required') payouts.load()
         showToast(withdrawalErrorMessage(r.data), { type: 'error' })
-        setWithdrawPin('')
+        setWithdrawPin(''); setWithdrawOtp('')
         setWithdrawing(false); return
       }
-      setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false); setShowWithdraw(false); setAccountResolved(false)
+      setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false); setShowWithdraw(false); setAccountResolved(false)
       load()
       showToast('Withdrawal started — will arrive shortly.', { type: 'success' })
     } catch (e) { showToast('Network error.', { type: 'error' }) }
     setWithdrawing(false)
+  }
+
+  async function handleTopup() {
+    const amountKobo = Math.round(parseFloat(topupAmount) * 100)
+    if (!Number.isSafeInteger(amountKobo) || amountKobo < MIN_TOPUP_KOBO || amountKobo > MAX_TOPUP_KOBO) {
+      showToast('Enter an amount between ₦100 and ₦100,000.', { type: 'warning' }); return
+    }
+    setTopupStarting(true)
+    const out = await initiateWalletTopup({ amountKobo, callbackUrl: `${window.location.origin}/dashboard/wallet` })
+    if (out.sessionExpired) { showToast('Please log in again.', { type: 'warning' }); setTopupStarting(false); return }
+    if (out.networkError) { showToast('Network error. Please check your connection.', { type: 'error' }); setTopupStarting(false); return }
+    if (!out.ok || !out.data.authorization_url) {
+      showToast(out.data.error || 'Could not start payment.', { type: 'error' })
+      setTopupStarting(false); return
+    }
+    goToPaystack(out.data.authorization_url)
   }
 
   function exportCsv() {
@@ -154,6 +233,12 @@ export default function Wallet({ brand, role }) {
   const filtered = filter === 'all' ? txs : txs.filter(t => (filter === 'booking_credit' ? t.type === 'booking_credit' || t.type === 'shop_credit' : t.type === filter))
   const totalReceived = txs.filter(t => t.type === 'booking_credit' || t.type === 'shop_credit' || t.type === 'release').reduce((s, t) => s + (t.amount || 0), 0)
   const isOwner = role === 'Owner'
+  // Guidance while the owner types (validation on submit, not keystroke —
+  // UX_PATTERNS): the Continue button stays disabled until the amount is
+  // inside the server's bounds.
+  const topupKobo = Math.round((parseFloat(topupAmount) || 0) * 100)
+  const topupValid = topupAmount !== '' && Number.isSafeInteger(topupKobo) && topupKobo >= MIN_TOPUP_KOBO && topupKobo <= MAX_TOPUP_KOBO
+  const topupHint = topupAmount !== '' && !topupValid ? 'Enter an amount between ₦100 and ₦100,000.' : undefined
 
   if (loading) return <Loading text="Loading wallet..." />
   if (!isOwner) return (
@@ -187,6 +272,17 @@ export default function Wallet({ brand, role }) {
           <TealBtn onClick={() => setShowWithdraw(true)}><Banknote size={14} style={{ marginRight: 6 }} />Withdraw</TealBtn>
         </Card>
       )}
+
+      <Card style={{ marginBottom: '16px', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: 40, height: 40, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PlusCircle size={18} /></div>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: '800', color: navy }}>Add funds</div>
+            <div style={{ fontSize: '12px', color: gray500 }}>Top up your wallet by card — min ₦100</div>
+          </div>
+        </div>
+        <TealBtn onClick={() => { setTopupAmount(''); setShowTopup(true) }}><PlusCircle size={14} style={{ marginRight: 6 }} />Top Up</TealBtn>
+      </Card>
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {['all', 'booking_credit', 'release', 'refund', 'withdrawal'].map(s => {
@@ -227,7 +323,7 @@ export default function Wallet({ brand, role }) {
 
       {showWithdraw && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-          <Card style={{ maxWidth: '480px', width: '100%', padding: '24px' }}>
+          <Card style={{ maxWidth: '480px', width: '100%', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ fontSize: '16px', fontWeight: '800', color: navy, marginBottom: '12px' }}>Withdraw to Bank</div>
             <div style={{ fontSize: '12px', color: gray500, marginBottom: '16px' }}>Available: <strong style={{ color: success }}>{naira(wallet?.available_balance)}</strong></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -235,55 +331,92 @@ export default function Wallet({ brand, role }) {
               {withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0) && (
                 <span style={{ fontSize: '11px', color: danger, fontWeight: '700' }}>Amount exceeds available balance of {naira(wallet?.available_balance)}</span>
               )}
-              <label style={{ fontSize: '12px', fontWeight: '700', color: gray600, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                Bank *
-                <select
-                  value={withdrawForm.bankCode || ''}
-                  onChange={e => {
-                    const bank = banks.find(b => b.code === e.target.value)
-                    setWithdrawForm(p => ({ ...p, bankCode: e.target.value, bankName: bank ? bank.name : '' }))
-                  }}
-                  required
-                  style={{
-                    padding: '10px 12px', fontSize: '13px', borderRadius: '8px',
-                    border: `1px solid ${border}`, background: '#fff',
-                    color: navy, fontFamily: 'inherit',
-                  }}
-                >
-                  <option value="">Select your bank</option>
-                  {banks.map((b) => (
-                    <option key={b.code} value={b.code}>{b.name}</option>
-                  ))}
-                </select>
-                {banks.length === 0 && (
-                  <span style={{ fontSize: '11px', color: gray400 }}>Loading banks...</span>
-                )}
-              </label>
-              <Inp label="Account number" value={withdrawForm.accountNumber || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountNumber: String(v || '').replace(/\D/g, '').slice(0, 10) }))} placeholder="10 digits" inputMode="numeric" pattern="[0-9]*" required />
-              <div>
-                <Inp
-                  label={accountResolving ? 'Account name (verifying...)' : 'Account name'}
-                  value={withdrawForm.accountName || ''}
-                  onChange={v => setWithdrawForm(p => ({ ...p, accountName: v }))}
-                  placeholder={accountResolving ? 'Verifying account...' : 'Select bank and enter account number'}
-                  readOnly={accountResolved || accountResolving}
-                  required
-                  style={accountResolved ? { background: success + '10', borderColor: success } : undefined}
+              <PayoutAccountsPanel
+                manager={payouts}
+                selectedId={selectedAccountId}
+                onSelect={(id) => { setSelectedAccountId(id); setUseTyped(false) }}
+                banks={banks}
+                banksStatus={banksStatus}
+                onRetryBanks={loadBanks}
+              />
+              {savedAccount && (
+                <div style={{ fontSize: '12.5px', color: gray600, padding: '8px 12px', borderRadius: '12px', background: tealMist }}>
+                  Paying to <strong>{savedAccount.bankName} ••••{savedAccount.accountLast4}</strong> — {savedAccount.accountName}
+                  {typedAllowed && (
+                    <button type="button" onClick={() => setUseTyped((v) => !v)} style={{ marginLeft: '8px', background: 'none', border: 'none', padding: 0, color: theme.tealDeep, fontWeight: 800, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      {useTyped ? 'Use saved account' : 'Use a different account'}
+                    </button>
+                  )}
+                </div>
+              )}
+              {!savedAccount && !typedAllowed && (
+                <span role="status" style={{ fontSize: '12.5px', color: danger, fontWeight: 700 }}>Add and verify a payout account above before you can withdraw.</span>
+              )}
+              {typedMode && typedAllowed && (
+                <>
+                <BankPicker
+                  banks={banks}
+                  status={banksStatus}
+                  selectedCode={withdrawForm.bankCode || ''}
+                  onSelect={(bank) => setWithdrawForm(p => ({ ...p, bankCode: bank ? bank.code : '', bankName: bank ? bank.name : '' }))}
+                  onRetry={loadBanks}
                 />
-                {accountResolving && (
-                  <span style={{ fontSize: '11px', color: gray400 }}>Verifying account name with your bank...</span>
-                )}
-                {accountResolved && withdrawForm.accountName && (
-                  <span style={{ fontSize: '11px', color: success, fontWeight: '700' }}>✓ Account name verified</span>
-                )}
-                {!accountResolved && !accountResolving && withdrawForm.bankCode && (withdrawForm.accountNumber || '').length === 10 && (
-                  <span style={{ fontSize: '11px', color: warning, fontWeight: '700' }}>Automatic verification unavailable for this bank. Please enter your account name manually.</span>
-                )}
-              </div>
+                <Inp label="Account number" value={withdrawForm.accountNumber || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountNumber: String(v || '').replace(/\D/g, '').slice(0, 10) }))} placeholder="10 digits" inputMode="numeric" pattern="[0-9]*" required />
+                <div>
+                  <Inp
+                    label={accountResolving ? 'Account name (verifying...)' : 'Account name'}
+                    value={withdrawForm.accountName || ''}
+                    onChange={v => setWithdrawForm(p => ({ ...p, accountName: v }))}
+                    placeholder={accountResolving ? 'Verifying account...' : 'Select bank and enter account number'}
+                    readOnly={accountResolved || accountResolving}
+                    required
+                    style={accountResolved ? { background: success + '10', borderColor: success } : undefined}
+                  />
+                  {accountResolving && (
+                    <span style={{ fontSize: '11px', color: gray400 }}>Verifying account name with your bank...</span>
+                  )}
+                  {accountResolved && withdrawForm.accountName && (
+                    <span style={{ fontSize: '11px', color: success, fontWeight: '700' }}>✓ Account name verified</span>
+                  )}
+                  {!accountResolved && !accountResolving && withdrawForm.bankCode && (withdrawForm.accountNumber || '').length === 10 && (
+                    <span style={{ fontSize: '11px', color: warning, fontWeight: '700' }}>Automatic verification unavailable for this bank. Please enter your account name manually.</span>
+                  )}
+                </div>
+                </>
+              )}
               <WithdrawalPinField pin={withdrawPin} onPinChange={setWithdrawPin} needsPin={needsPin} disabled={withdrawing} />
+              <WithdrawalOtpField value={withdrawOtp} onChange={setWithdrawOtp} disabled={withdrawing} />
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-                <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
-                <TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
+                <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+                <TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !/^\d{6}$/.test(withdrawOtp) || !(typedMode ? (typedAllowed && (accountResolved || withdrawForm.accountName)) : savedAccount) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !/^\d{6}$/.test(withdrawOtp) || !(typedMode ? (typedAllowed && (accountResolved || withdrawForm.accountName)) : savedAccount) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {showTopup && (
+        <div role="dialog" aria-modal="true" aria-label="Top up wallet" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <Card style={{ maxWidth: '420px', width: '100%', padding: '24px' }}>
+            <div style={{ fontSize: '16px', fontWeight: '800', color: navy, marginBottom: '12px' }}>Top Up Wallet</div>
+            <div style={{ fontSize: '12px', color: gray500, marginBottom: '16px' }}>Pay with your card via Paystack. The wallet is credited only after Paystack confirms the exact amount.</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <Inp
+                id="topup-amount"
+                label="Amount (₦)"
+                type="number"
+                inputMode="decimal"
+                value={topupAmount}
+                onChange={setTopupAmount}
+                placeholder="e.g. 5000"
+                min={MIN_TOPUP_KOBO / 100}
+                max={MAX_TOPUP_KOBO / 100}
+                helperText={topupHint}
+                required
+              />
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                <GhostBtn onClick={() => { setShowTopup(false); setTopupAmount(''); setTopupStarting(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+                <TealBtn onClick={handleTopup} disabled={!topupValid || topupStarting} style={{ flex: 1, padding: '12px', opacity: (!topupValid || topupStarting) ? 0.6 : 1 }}>{topupStarting ? 'Opening Paystack...' : 'Continue'}</TealBtn>
               </div>
             </div>
           </Card>

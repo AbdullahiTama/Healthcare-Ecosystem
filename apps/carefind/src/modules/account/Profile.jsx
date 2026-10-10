@@ -171,7 +171,6 @@ function Profile() {
     if (!postKey || !user) return undefined
     engagement.hydrate(postIndex).catch(() => {})
     return undefined
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postKey])
 
   function authorName(post) {

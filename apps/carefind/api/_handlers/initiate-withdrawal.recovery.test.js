@@ -36,10 +36,11 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
   resolveAccount: async () => ({ accountName: 'Ada Obi' }),
 }))
 
+process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from './initiate-withdrawal.js'
 
 const REF = 'cf_wd_0123456789abcdef0123456789abcdef'
-const req = { method: 'POST', body: { amount: 10, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'Ada Obi', pin: '1234' } }
+const req = { method: 'POST', body: { amount: 10, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'Ada Obi', pin: '1234', otp: '123456' } }
 const res = () => { const r = { statusCode: 0, body: null }; r.status = (c) => { r.statusCode = c; return r }; r.json = (b) => { r.body = b; return r }; r.setHeader = () => {}; return r }
 const calls = (name) => h.rpcCalls.filter(([n]) => n === name)
 const settles = () => calls('settle_withdrawal').map(([, a]) => a)
@@ -50,6 +51,7 @@ beforeEach(() => {
   h.routes.get_withdrawal_trust = { data: { trust_level: 'new' } }
   h.routes.get_withdrawal_pin = { data: [{ pin_hash: 'x', pin_salt: 's', locked_until: null }] }
   h.routes.verify_withdrawal_pin = { data: true }
+  h.routes.verify_otp = { data: 'ok' }
   h.routes.create_withdrawal = created
   h.routes.attach_withdrawal_transfer = { data: 'ok' }
   h.routes.settle_withdrawal = (a) => ({ data: { result: a.p_outcome === 'success' ? 'completed' : 'refunded', id: 'wd-1', user_id: 'user-12345678', amount: 10, from_status: 'reserved', reference: REF } })

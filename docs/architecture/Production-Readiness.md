@@ -2,6 +2,8 @@
 
 Status: audit and runbook written 2026-10-06. This phase changed no code and no database object; it checked what production actually looks like and what a go-live needs. Findings are in section 1; the deploy runbook, rollback, monitoring and owner decisions follow.
 
+Update 2026-10-09: the wallet/PIN-OTP design workstream (`docs/superpowers/specs/2026-10-08-wallet-and-payout-accounts-design.md`) is implemented and fully tested — shared-email 328, shared-payments 372, carefind 2,383, carehub 1,298 tests green (two carefind timeouts under load pass in isolation) — but **not deployed**; every row below still describes production. It adds one availability dependency on section 2: once deployed, every withdrawal requires an emailed OTP, delivered by `RESEND_API_KEY`/`RESEND_FROM_EMAIL` through an inline outbox flush at request time, with the (currently broken) cron from 1.1 as backstop — if both fail, withdrawals fail closed until mail flows.
+
 ## 1. What production looks like today (read from the live database)
 
 | Check | Result |
@@ -24,7 +26,7 @@ The function `dispatch_email_outbox_cron` is correct: it refuses to run, loudly,
 * `email_outbox_cron_carehub_url` and `email_outbox_cron_carefind_url`: the full URL of each app's `/api/cron/process-email-outbox`
 * `email_outbox_cron_secret`: must equal the apps' `CRON_SECRET`
 
-Consequence today: no queued email is sent by either app (transactional mail, plan/payment notices, and the Phase 11 `finance_alert` mail for critical findings), and the finance steps that ride on the same cron (webhook replay, open-payment sweep, vendor credit release, reconciliation, alerting) never run. Because the Phase 04-14 code is not deployed, the deployed endpoint is the old one: pointing the cron at it now would start draining email but would not run the finance steps. **So the order matters (section 2).** Setting the secrets is an owner action (it needs the production URLs and the secret value); I did not touch Vault.
+Consequence today: no queued email is sent by either app (transactional mail, plan/payment notices, and the Phase 11 `finance_alert` mail for critical findings), and the finance steps that ride on the same cron (webhook replay, open-payment sweep, vendor credit release, reconciliation, alerting) never run. Because the Phase 04-14 code is not deployed, the deployed endpoint is the old one: pointing the cron at it now would start draining email but would not run the finance steps. **So the order matters (section 2).** Setting the secrets is an owner action (it needs the production URLs and the secret value); I did not touch Vault. Once the 2026-10-09 wallet workstream deploys, this cron is also the backstop for withdrawal OTP delivery (see the status note): the primary path is the inline flush on each request, so `RESEND_API_KEY`/`RESEND_FROM_EMAIL` become withdrawal availability dependencies, not just notification ones.
 
 ### 1.2 Security advisor summary (after migration 19)
 
@@ -48,7 +50,8 @@ The Supabase plan's backup and point-in-time-recovery status could not be read t
 5. **Set the Vault secrets** (1.1) with the production URLs and `email_outbox_cron_secret` equal to `CRON_SECRET`. Within one minute `cron.job_run_details` must show `succeeded`.
 6. **Verify the schedule** with the queries in section 4: outbox draining, a reconciliation run recorded, no critical findings.
 7. **Paystack**: confirm the webhook URL points at the new CareFind endpoint and a test event is answered 200; keep test and live keys separate.
-8. **Smoke payment** with a small real amount per path (shop order, booking, subscription): settled, split correct, vendor credit held, refund of the test payment completes.
+8. **Smoke payment** with a small real amount per path (shop order, booking, subscription): settled, split correct, vendor credit held, refund of the test payment completes. Also confirm the buyer received the confirmation email, and that the `email_logs` enqueue-failure query in section 4 returns nothing.
+9. **Notifications INSERT policy** (`carefind_20261026_notifications_insert_policy.sql`, F-45): apply it only after the CareFind build that sets `actor_id` on live-show invitations (`UserGoLive.jsx`) is live, then check that "Go live" with an invited guest still works and that a like/follow still notifies. Rollback SQL is in the file.
 
 ## 3. Rollback
 
@@ -67,6 +70,8 @@ The Supabase plan's backup and point-in-time-recovery status could not be read t
 | Stuck payments | `select count(*) from public.payment_intents where status='pending' and created_at < now()-interval '1 hour'` | 0 (the sweep resolves them) |
 | Failed provider events | `select count(*) from public.payment_provider_events where outcome='failed'` | 0 or falling |
 | Money Checks screen | CareFind admin, "Money Checks" (`G K`) | no critical |
+| Purchase/payment emails that could not be queued | `select created_at, detail from public.email_logs where event_type='failed' and metadata->>'stage'='enqueue' order by created_at desc limit 50` | none |
+| Outbox backlog | `select status, count(*) from public.email_outbox where created_at > now()-interval '1 day' group by 1` | no growing `pending`/`retrying`; `sent` rises with payments |
 
 An unattended money system needs somebody to notice a red signal. Today the only push channel is the finance alert email (which is itself blocked by 1.1). Recommended: a second channel (a webhook to chat) and an external uptime check on `/api/cron/process-email-outbox`'s last success. Both are owner decisions.
 

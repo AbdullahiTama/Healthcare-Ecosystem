@@ -7,8 +7,7 @@ import { notify } from '../../../services/notify.js'
 import { getActiveIdentity } from '../../../lib/activeIdentity'
 import { theme } from '../../../styles/theme'
 import { Camera, X, Mic, HelpCircle, FileText, BookOpen, Star, Image as ImageIcon, Pen, Search } from 'lucide-react'
-import { Avatar, TealBtn, GhostBtn, Pill } from '../../../components/ui'
-import { useToast } from '../../../components/ui'
+import { Avatar, TealBtn, GhostBtn, Pill, useToast } from '../../../components/ui'
 import { extractMentions } from '../mentions.js'
 import { resizeImage } from '../../../utils/imageResize.js'
 import { MAX_POST_IMAGES } from '../mediaLimits.js'
@@ -140,7 +139,7 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
       ]
       setMentionResults(results)
       setMentionLoading(false)
-      mentionQueryRef.current = { query: mentionQuery, len: mentionMatch?.[0]?.length || 0 }
+      mentionQueryRef.current = { query: mentionQuery, len: mentionQuery.length + 1 }
     }, 200)
 
     return () => { cancelled = true; clearTimeout(timer) }
@@ -257,7 +256,7 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
       }
       const activeIdentity = getActiveIdentity()
 
-      let imageUrls = []
+      const imageUrls = []
       if (imageFiles.length) {
         setUploadingImage(true)
         try {

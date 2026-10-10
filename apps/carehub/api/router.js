@@ -20,10 +20,14 @@ import emailHandler from './_handlers/email-handler.js'
 import initiateAppointmentPaymentHandler from './_handlers/initiate-appointment-payment.js'
 import initiateBusinessWithdrawalHandler from './_handlers/initiate-business-withdrawal.js'
 import withdrawalPinHandler from './_handlers/withdrawal-pin.js'
+import initiateWalletTopupHandler from './_handlers/initiate-wallet-topup.js'
+import verifyWalletTopupHandler from './_handlers/verify-wallet-topup.js'
 import initiatePlanPaymentHandler from './_handlers/initiate-plan-payment.js'
 import notifyBusinessStatusHandler from './_handlers/notify-business-status.js'
 import notifyRegistrationHandler from './_handlers/notify-registration.js'
 import resolveAccountHandler from './_handlers/resolve-account.js'
+import kycHandler from './_handlers/kyc.js'
+import payoutAccountsHandler from './_handlers/payout-accounts.js'
 import verifyAppointmentPaymentHandler from './_handlers/verify-appointment-payment.js'
 import verifyPlanPaymentHandler from './_handlers/verify-plan-payment.js'
 import webhooksHandler from './_handlers/webhooks-handler.js'
@@ -84,6 +88,10 @@ const HANDLERS = {
   'initiate-plan-payment':        initiatePlanPaymentHandler,
   'initiate-business-withdrawal': initiateBusinessWithdrawalHandler,
   'withdrawal-pin':               withdrawalPinHandler,
+  'kyc':                          kycHandler,
+  'initiate-wallet-topup':        initiateWalletTopupHandler,
+  'verify-wallet-topup':          verifyWalletTopupHandler,
+  'payout-accounts':              payoutAccountsHandler,
   'initiate-appointment-payment': initiateAppointmentPaymentHandler,
   'ecommerce-review':             ecommerceReviewHandler,
   'auth-email':                   authEmailHandler,

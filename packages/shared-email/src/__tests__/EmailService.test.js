@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { EmailService, getEmailService, redactPayload } from '../EmailService.js'
@@ -199,6 +199,51 @@ describe('EmailService.enqueue quarantine contract', () => {
     })
     expect(state.row.app).toBeTruthy()
     expect(state.row.event_key).toBeTruthy()
+  })
+})
+
+describe('EmailService.enqueue sender', () => {
+  // A purchase confirmation is enqueued by best-effort code that passes no sender. It used to throw
+  // "EMAIL_FROM is not configured" whenever the deployment lacked that variable, the caller swallowed the throw,
+  // and the customer never got the email - while auth emails, which pass a sender, kept working.
+  const capture = () => {
+    const state = { row: null }
+    const rowTable = { insert: (r) => { state.row = r; return { select: () => ({ single: async () => ({ data: { id: 'outbox-1' }, error: null }) }) } } }
+    state.db = { from: (t) => (t === 'email_outbox' ? rowTable : { insert: async () => ({ data: null, error: null }) }) }
+    return state
+  }
+  const base = { templateKey: 'payment_success', toEmail: 'buyer@example.com' }
+  let saved
+  beforeEach(() => { saved = { f: process.env.EMAIL_FROM, r: process.env.RESEND_FROM_EMAIL }; delete process.env.EMAIL_FROM; delete process.env.RESEND_FROM_EMAIL })
+  afterEach(() => {
+    for (const [k, v] of [['EMAIL_FROM', saved.f], ['RESEND_FROM_EMAIL', saved.r]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v }
+  })
+
+  it('falls back to the app\'s own verified sender when none is given and the environment has none', async () => {
+    for (const [app, sender] of [['carefind', 'CareFind <support@mail.carefind.app>'], ['carehub', 'CareHub <support@mail.carefindhub.com>']]) {
+      const state = capture()
+      await new EmailService({ supabase: state.db }).enqueue({ ...base, app })
+      expect(state.row.from_email, app).toBe(sender)
+      expect(state.row.app, app).toBe(app)
+    }
+  })
+
+  it('still lets the caller choose the sender, then the environment, before the app default', async () => {
+    const explicit = capture()
+    process.env.EMAIL_FROM = 'CareFind <env@example.com>'
+    await new EmailService({ supabase: explicit.db }).enqueue({ ...base, app: 'carefind', fromEmail: 'CareFind <explicit@example.com>' })
+    expect(explicit.row.from_email).toBe('CareFind <explicit@example.com>')
+
+    const fromEnv = capture()
+    await new EmailService({ supabase: fromEnv.db }).enqueue({ ...base, app: 'carefind' })
+    expect(fromEnv.row.from_email).toBe('CareFind <env@example.com>')
+  })
+
+  it('still refuses when there is genuinely no sender to use (no explicit sender, no environment, unknown app)', async () => {
+    const state = capture()
+    await expect(new EmailService({ supabase: state.db }).enqueue(base)).rejects.toThrow(/sender/i)
+    await expect(new EmailService({ supabase: state.db }).enqueue({ ...base, app: 'something-else' })).rejects.toThrow(/sender/i)
+    expect(state.row).toBeNull()
   })
 })
 

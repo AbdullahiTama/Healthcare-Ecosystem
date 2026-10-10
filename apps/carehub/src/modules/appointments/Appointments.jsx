@@ -10,6 +10,7 @@ import { todayDate } from '../../lib/utils'
 import { authClient } from '../../lib/authClient'
 import { theme } from '../../styles/theme'
 import WithdrawalPinField from '../wallet/WithdrawalPinField'
+import WithdrawalOtpField from '../wallet/WithdrawalOtpField'
 import { startBusinessWithdrawal, withdrawalErrorMessage } from '../wallet/withdrawalApi'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Avatar, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
@@ -56,6 +57,7 @@ export default function Appointments({ brand, role, perms }) {
   const [withdrawForm, setWithdrawForm] = useState({})
   const [withdrawing, setWithdrawing] = useState(false)
   const [withdrawPin, setWithdrawPin] = useState('')
+  const [withdrawOtp, setWithdrawOtp] = useState('')
   const [needsPin, setNeedsPin] = useState(false)
   const [banks, setBanks] = useState([])
   const [accountResolving, setAccountResolving] = useState(false)
@@ -115,9 +117,10 @@ export default function Appointments({ brand, role, perms }) {
     resolveTimer.current = setTimeout(async () => {
       setAccountResolving(true)
       try {
+        const { data: { session } } = await authClient.auth.getSession()
         const res = await fetch('/api/resolve-account', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
           body: JSON.stringify({ bankCode, accountNumber: acctNum }),
         })
         const data = await res.json()
@@ -293,22 +296,25 @@ export default function Appointments({ brand, role, perms }) {
     if (!/^\d{4,6}$/.test(withdrawPin)) {
       showToast('Enter your 4-6 digit withdrawal PIN.', { type: 'warning' }); return
     }
+    if (!/^\d{6}$/.test(withdrawOtp)) {
+      showToast('Request a code and enter the 6-digit code we emailed you.', { type: 'warning' }); return
+    }
     setWithdrawing(true)
     try {
       const r = await startBusinessWithdrawal({
         businessId: brand.id, amountKobo,
         bankCode: withdrawForm.bankCode || '', bankName: withdrawForm.bankName,
-        accountNumber: withdrawForm.accountNumber, accountName: withdrawForm.accountName, pin: withdrawPin,
+        accountNumber: withdrawForm.accountNumber, accountName: withdrawForm.accountName, pin: withdrawPin, otp: withdrawOtp,
       })
       if (r.sessionExpired) { showToast('Please log in again.', { type: 'warning' }); setWithdrawing(false); return }
       if (r.networkError) { showToast('Network error. Please try again.', { type: 'error' }); setWithdrawing(false); return }
       if (!r.ok) {
         if (r.data.needsPin) setNeedsPin(true)
         showToast(withdrawalErrorMessage(r.data), { type: 'error' })
-        setWithdrawPin('')
+        setWithdrawPin(''); setWithdrawOtp('')
         setWithdrawing(false); return
       }
-      setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false); setShowWithdraw(false); setAccountResolved(false)
+      setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false); setShowWithdraw(false); setAccountResolved(false)
       // Refresh the wallet balance.
       sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => { if (Array.isArray(w) && w[0]) setWallet(w[0]) }).catch(() => {})
       showToast('Withdrawal started — it will arrive shortly.', { type: 'success' })
@@ -541,8 +547,8 @@ export default function Appointments({ brand, role, perms }) {
         consequence={`This permanently removes ${deleteTarget?.client_name ? `${deleteTarget.client_name}'s` : 'this'} appointment from your records. This cannot be undone. If you just need to cancel it, use Cancel instead.`}
         confirmLabel='Delete' />
 
-      <Modal show={showWithdraw} onClose={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false) }} title='Withdraw booking balance'
-        footer={<><GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn></>}>
+      <Modal show={showWithdraw} onClose={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false) }} title='Withdraw booking balance'
+        footer={<><GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !/^\d{6}$/.test(withdrawOtp) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !/^\d{6}$/.test(withdrawOtp) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <p style={{ margin: 0, fontSize: '12.5px', color: gray600 }}>
             Available balance: <b style={{ color: success }}>{naira(wallet?.available_balance)}</b>. Money is sent straight to the bank account below via Paystack.
@@ -597,6 +603,7 @@ export default function Appointments({ brand, role, perms }) {
             )}
           </div>
           <WithdrawalPinField pin={withdrawPin} onPinChange={setWithdrawPin} needsPin={needsPin} disabled={withdrawing} />
+          <WithdrawalOtpField value={withdrawOtp} onChange={setWithdrawOtp} disabled={withdrawing} />
         </div>
       </Modal>
 

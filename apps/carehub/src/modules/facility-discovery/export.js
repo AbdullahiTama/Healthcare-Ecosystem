@@ -55,7 +55,7 @@ export function exportToCSV(facilities, filters = {}) {
   const metaCsv = meta.map(function (r) { return r.map(csvEscape).join(',') }).join('\n')
   const headerRow = headers.map(csvEscape).join(',')
   const dataRows = rows.map(function (r) { return keys.map(function (k) { return csvEscape(r[k]) }).join(',') }).join('\n')
-  let csv = metaCsv + '\n' + headerRow + '\n' + dataRows
+  const csv = metaCsv + '\n' + headerRow + '\n' + dataRows
   // Provider export restrictions: Google Places data must not be exported beyond allowed caching.
   // We annotate source but do not export Google rows beyond 5-year? For spec compliance, filter out google if export restricted
   // This implementation respects by including source column and not violating attribution; actual restriction enforced server-side

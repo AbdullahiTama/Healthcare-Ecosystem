@@ -73,7 +73,6 @@ export default function FacilityPicker({
       })
       .finally(function () { if (!cancelled) setLoading(false) })
     return function () { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gps && gps.lat, gps && gps.lng, businessId, readOnly, searchMode])
 
   const selected = readOnly ? (highlight || value) : value
