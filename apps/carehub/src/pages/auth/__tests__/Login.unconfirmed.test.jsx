@@ -58,4 +58,41 @@ describe('sign-in with an unverified email', () => {
     expect(JSON.parse(init.body)).toMatchObject({ action: 'password_reset', email: 'ada@x.test' })
     expect(host.textContent).toMatch(/new link is on its way/i)
   })
+
+  const signInUnverified = async () => {
+    await act(async () => { root.render(<MemoryRouter><Login /></MemoryRouter>) })
+    await act(async () => {
+      setValue(host.querySelector('input[type="email"]'), 'ada@x.test')
+      setValue(host.querySelector('input[type="password"]'), 'whatever1')
+    })
+    await act(async () => { button(host, /^sign in$/i).click() })
+    await flush()
+    expect(host.textContent).toMatch(/verify your email/i)
+  }
+
+  it('removes the notice when the email is edited', async () => {
+    await signInUnverified()
+    await act(async () => { setValue(host.querySelector('input[type="email"]'), 'ada@y.test') })
+    expect(host.textContent).not.toMatch(/verify your email/i)
+    expect(host.textContent).not.toMatch(/new link is on its way/i)
+  })
+
+  it('shows only the validation error when the password is cleared and resubmitted', async () => {
+    await signInUnverified()
+    await act(async () => { setValue(host.querySelector('input[type="password"]'), '') })
+    await act(async () => { button(host, /^sign in$/i).click() })
+    await flush()
+    expect(host.textContent).toMatch(/please enter your email and password/i)
+    expect(host.textContent).not.toMatch(/verify your email/i)
+  })
+
+  it('shows only the credentials error after an invalid-credentials attempt', async () => {
+    await signInUnverified()
+    h.signIn.mockResolvedValue({ data: { session: null }, error: { code: 'invalid_credentials', message: 'Invalid login credentials' } })
+    await act(async () => { setValue(host.querySelector('input[type="password"]'), 'otherpass1') })
+    await act(async () => { button(host, /^sign in$/i).click() })
+    await flush()
+    expect(host.textContent).toMatch(/incorrect email or password/i)
+    expect(host.textContent).not.toMatch(/verify your email/i)
+  })
 })

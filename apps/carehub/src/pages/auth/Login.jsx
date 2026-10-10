@@ -22,8 +22,9 @@ export default function Login() {
   const navigate = useNavigate()
 
   const handleLogin = async () => {
+    setUnverified(false); setResent(false)
     if (!email || !pass) { setErr('Please enter your email and password.'); return }
-    setLoading(true); setErr(''); setUnverified(false); setResent(false)
+    setLoading(true); setErr('')
     const normalizedEmail = email.toLowerCase()
 
     // C2: the plaintext password columns and legacy_login_business are gone, so
@@ -119,7 +120,7 @@ export default function Login() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: navy, marginBottom: 8 }}>Email address <span style={{ color: theme.danger }}>*</span></div>
-              <input value={email} onChange={e => setEmail(e.target.value)} type='email' placeholder='you@example.com'
+              <input value={email} onChange={e => { setEmail(e.target.value); setUnverified(false); setResent(false) }} type='email' placeholder='you@example.com'
                 onKeyDown={e => e.key === 'Enter' && handleLogin()} style={fieldStyle} />
             </div>
             <div>
