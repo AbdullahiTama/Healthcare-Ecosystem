@@ -12,6 +12,7 @@ import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Inp, Toast, useToast, CardSkeleton } from '../../components/ui/index.jsx'
 import WithdrawalPinModal from './WithdrawalPinModal.jsx'
+import WithdrawalOtpField from './WithdrawalOtpField.jsx'
 import PayoutAccountsPanel from './PayoutAccountsPanel.jsx'
 import BankPicker from './BankPicker.jsx'
 import { createPayoutManager, rankBanks } from '@care-ecosystem/shared-payout-ui'
@@ -59,6 +60,7 @@ function Wallet() {
   const [wdAccountNumber, setWdAccountNumber] = useState('')
   const [wdAccountName, setWdAccountName] = useState('')
   const [wdPin, setWdPin] = useState('')
+  const [wdOtp, setWdOtp] = useState('')
   // Saved, identity-verified payout accounts (the safe way to say where the money goes).
   const payouts = useMemo(() => createPayoutManager({ getToken: async () => (await supabase.auth.getSession()).data.session?.access_token }), [])
   const payoutState = useSyncExternalStore(payouts.subscribe, payouts.getState)
@@ -208,8 +210,8 @@ function Wallet() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify(typedMode
-          ? { amount: wdAmount, bankCode: wdBankCode, bankName: wdBankName, accountNumber: wdAccountNumber, accountName: wdAccountName, pin: wdPin }
-          : { amount: wdAmount, payoutAccountId: savedAccount.id, pin: wdPin }),
+          ? { amount: wdAmount, bankCode: wdBankCode, bankName: wdBankName, accountNumber: wdAccountNumber, accountName: wdAccountName, pin: wdPin, otp: wdOtp }
+          : { amount: wdAmount, payoutAccountId: savedAccount.id, pin: wdPin, otp: wdOtp }),
       })
       const data = await response.json()
       setWdSubmitting(false)
@@ -229,7 +231,7 @@ function Wallet() {
         return
       }
 
-      setWdAmount(''); setWdBankCode(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName(''); setWdPin(''); setWdAccountResolved(false)
+      setWdAmount(''); setWdBankCode(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName(''); setWdPin(''); setWdOtp(''); setWdAccountResolved(false)
       qc.invalidateQueries({ queryKey: keys.walletData(user.id) })
       qc.invalidateQueries({ queryKey: keys.walletBalance(user.id) })
       qc.invalidateQueries({ queryKey: keys.transactions(user.id) })
@@ -516,13 +518,14 @@ function Wallet() {
                   autoComplete="current-password"
                   required
                 />
+                <WithdrawalOtpField value={wdOtp} onChange={setWdOtp} disabled={wdSubmitting} />
                 <button
                   type="submit"
-                  disabled={wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !(typedMode ? (typedAllowed && wdBankCode && (wdAccountResolved || wdAccountName)) : savedAccount) || !wdPin}
+                  disabled={wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !(typedMode ? (typedAllowed && wdBankCode && (wdAccountResolved || wdAccountName)) : savedAccount) || !wdPin || !/^\d{6}$/.test(wdOtp)}
                   style={{
                     width: '100%', padding: 13, background: theme.tealDeep, color: '#fff',
                     border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14,
-                    opacity: (wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !(typedMode ? (typedAllowed && wdBankCode && (wdAccountResolved || wdAccountName)) : savedAccount) || !wdPin) ? 0.6 : 1,
+                    opacity: (wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !(typedMode ? (typedAllowed && wdBankCode && (wdAccountResolved || wdAccountName)) : savedAccount) || !wdPin || !/^\d{6}$/.test(wdOtp)) ? 0.6 : 1,
                   }}
                 >
                   {wdSubmitting ? 'Submitting…' : 'Request Withdrawal'}

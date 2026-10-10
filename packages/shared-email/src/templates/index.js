@@ -23,6 +23,10 @@ const HUB_TEMPLATE_MAP = {
   withdrawalRequested: 'withdrawal_requested',
   withdrawalCompleted: 'withdrawal_completed',
   withdrawalFailed: 'withdrawal_failed',
+  withdrawalPinOtp: 'withdrawal_pin_otp',
+  businessWalletTopup: 'business_wallet_topup',
+  refundCompleted: 'refund_completed',
+  payoutAccountReview: 'payout_account_review',
 }
 
 const FIND_TEMPLATE_MAP = {
@@ -46,6 +50,9 @@ const FIND_TEMPLATE_MAP = {
   withdrawalCompleted: 'withdrawal_completed',
   withdrawalFailed: 'withdrawal_failed',
   walletNeedsAttention: 'wallet_needs_attention',
+  withdrawalPinOtp: 'withdrawal_pin_otp',
+  refundCompleted: 'refund_completed',
+  payoutAccountReview: 'payout_account_review',
   referralAgentApproved: 'referral_agent_approved',
   referralAgentRejected: 'referral_agent_rejected',
   financeAlert: 'finance_alert',

@@ -36,6 +36,7 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
   resolveAccount: async () => h.resolved,
 }))
 
+process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from './initiate-withdrawal.js'
 import { enqueue } from '../_lib/emailService.js'
 
@@ -51,6 +52,7 @@ beforeEach(() => {
   h.routes.get_withdrawal_trust = { data: { trust_level: 'new' } }
   h.routes.get_withdrawal_pin = { data: [{ pin_hash: 'x', pin_salt: 's', locked_until: null }] }
   h.routes.verify_withdrawal_pin = { data: true }
+  h.routes.verify_otp = { data: 'ok' }
   h.routes.create_withdrawal = { data: { outcome: 'ok', id: 'wd-1', reference: REF, coins: 10, payout_kobo: 160000 } }
   h.routes.attach_withdrawal_transfer = { data: 'ok' }
 })
@@ -58,7 +60,7 @@ beforeEach(() => {
 describe('initiate-withdrawal with a saved payout account', () => {
   it('uses the saved account\'s details and ignores whatever destination the browser sent', async () => {
     const r = res()
-    await handler({ method: 'POST', body: { amount: 10, pin: '1234', payoutAccountId: 'pa-1', bankCode: '999', bankName: 'Evil Bank', accountNumber: '9999999999', accountName: 'Mallory' } }, r)
+    await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', payoutAccountId: 'pa-1', bankCode: '999', bankName: 'Evil Bank', accountNumber: '9999999999', accountName: 'Mallory' } }, r)
     expect(r.statusCode).toBe(200)
     expect(created('create_withdrawal')[0][1]).toMatchObject({
       p_bank_code: '058', p_bank_name: 'Guaranty Trust Bank', p_account_number: '0123456789', p_account_name: 'ADA CHINYERE OBI',
@@ -67,7 +69,7 @@ describe('initiate-withdrawal with a saved payout account', () => {
 
   it('works with only an amount, a PIN and the account id', async () => {
     const r = res()
-    await handler({ method: 'POST', body: { amount: 10, pin: '1234', payoutAccountId: 'pa-1' } }, r)
+    await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', payoutAccountId: 'pa-1' } }, r)
     expect(r.statusCode).toBe(200)
   })
 
@@ -76,7 +78,7 @@ describe('initiate-withdrawal with a saved payout account', () => {
       h.tables.payout_accounts = rows
       h.rpcCalls.length = 0
       const r = res()
-      await handler({ method: 'POST', body: { amount: 10, pin: '1234', payoutAccountId: 'pa-1' } }, r)
+      await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', payoutAccountId: 'pa-1' } }, r)
       expect(r.statusCode).toBe(400)
       expect(r.body.code).toBe('payout_account_not_found')
       expect(created('create_withdrawal')).toHaveLength(0)
@@ -86,7 +88,7 @@ describe('initiate-withdrawal with a saved payout account', () => {
   it('still re-checks the account with the bank: a changed name stops the withdrawal before reserving', async () => {
     h.resolved = { accountName: 'SOMEONE ELSE ENTIRELY' }
     const r = res()
-    await handler({ method: 'POST', body: { amount: 10, pin: '1234', payoutAccountId: 'pa-1' } }, r)
+    await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', payoutAccountId: 'pa-1' } }, r)
     expect(r.statusCode).toBe(400)
     expect(created('create_withdrawal')).toHaveLength(0)
   })
@@ -101,7 +103,7 @@ describe('initiate-withdrawal with a saved payout account', () => {
 })
 
 describe('payout_account_required', () => {
-  const typed = { amount: 10, pin: '1234', bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'ADA CHINYERE OBI' }
+  const typed = { amount: 10, pin: '1234', otp: '123456', bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'ADA CHINYERE OBI' }
 
   it('off: a typed destination still works (today\'s behaviour)', async () => {
     const r = res()
@@ -121,13 +123,13 @@ describe('payout_account_required', () => {
   it('on: a saved account still works', async () => {
     h.tables.financial_config = [{ key: 'payout_account_required', value: 1 }, { key: 'coin_value_kobo', value: 20000 }]
     const r = res()
-    await handler({ method: 'POST', body: { amount: 10, pin: '1234', payoutAccountId: 'pa-1' } }, r)
+    await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', payoutAccountId: 'pa-1' } }, r)
     expect(r.statusCode).toBe(200)
   })
 })
 
 describe('Phase 4: a verified identity lifts the trust ladder; a new account lowers it (all via the engine cap)', () => {
-  const body = { amount: 10, pin: '1234', payoutAccountId: 'pa-1' }
+  const body = { amount: 10, pin: '1234', otp: '123456', payoutAccountId: 'pa-1' }
   const capSent = () => created('create_withdrawal')[0][1].p_daily_cap_coins
   const withLimits = (rows) => { h.tables.financial_config = [{ key: 'payout_account_required', value: 0 }, { key: 'coin_value_kobo', value: 20000 }, ...rows] }
 
@@ -184,7 +186,7 @@ describe('Phase 4: a verified identity lifts the trust ladder; a new account low
   })
 
   it('typed-in (legacy) destinations are not lifted: the trust cap applies unchanged', async () => {
-    await handler({ method: 'POST', body: { amount: 10, pin: '1234', bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'ADA CHINYERE OBI' } }, res())
+    await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'ADA CHINYERE OBI' } }, res())
     expect(capSent()).toBe(50)
   })
 })
@@ -192,7 +194,7 @@ describe('Phase 4: a verified identity lifts the trust ladder; a new account low
 describe('Phase 4: alerts', () => {
   it('the withdrawal-requested alert shows only the last four digits of the destination', async () => {
     enqueue.mockClear()
-    await handler({ method: 'POST', body: { amount: 10, pin: '1234', payoutAccountId: 'pa-1' } }, res())
+    await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', payoutAccountId: 'pa-1' } }, res())
     const payload = enqueue.mock.calls[0][0].payload
     expect(payload.accountNumber).toBe('••••6789')
     expect(payload.accountNumber).not.toContain('0123456789')
@@ -209,5 +211,47 @@ describe('Phase 4: alerts', () => {
     await handler({ method: 'POST', body: { amount: 10, pin: '0000', payoutAccountId: 'pa-1' } }, r)
     expect(r.statusCode).toBe(403)
     expect(mailer.sendPinLocked).toHaveBeenCalledWith({ to: 'u@example.com' })
+  })
+})
+
+describe('the emailed withdrawal code (third factor)', () => {
+  const body = { amount: 10, pin: '1234', payoutAccountId: 'pa-1' }
+
+  it('refuses a withdrawal with no code, before anything is reserved', async () => {
+    const r = res()
+    await handler({ method: 'POST', body }, r)
+    expect(r.statusCode).toBe(400)
+    expect(r.body.code).toBe('otp_invalid')
+    expect(created('verify_otp')).toHaveLength(0)
+    expect(created('create_withdrawal')).toHaveLength(0)
+  })
+
+  it('refuses a wrong, expired or locked code with the engine untouched', async () => {
+    for (const [result, status, code] of [['invalid', 400, 'otp_invalid'], ['expired', 400, 'otp_expired'], ['locked', 429, 'otp_locked'], ['none', 400, 'otp_missing']]) {
+      h.routes.verify_otp = { data: result }
+      h.rpcCalls.length = 0
+      const r = res()
+      await handler({ method: 'POST', body: { ...body, otp: '123456' } }, r)
+      expect(r.statusCode).toBe(status)
+      expect(r.body.code).toBe(code)
+      expect(created('create_withdrawal')).toHaveLength(0)
+    }
+  })
+
+  it('checks the code for the withdrawal purpose, and only after the PIN', async () => {
+    const r = res()
+    await handler({ method: 'POST', body: { ...body, otp: '123456' } }, r)
+    expect(r.statusCode).toBe(200)
+    const names = h.rpcCalls.map(([n]) => n)
+    expect(names.indexOf('verify_withdrawal_pin')).toBeLessThan(names.indexOf('verify_otp'))
+    expect(created('verify_otp')[0][1]).toMatchObject({ p_user_id: 'user-12345678', p_purpose: 'withdrawal' })
+  })
+
+  it('a wrong PIN never touches (or burns) the code', async () => {
+    h.routes.verify_withdrawal_pin = { data: false }
+    const r = res()
+    await handler({ method: 'POST', body: { ...body, otp: '123456' } }, r)
+    expect(r.statusCode).toBe(403)
+    expect(created('verify_otp')).toHaveLength(0)
   })
 })

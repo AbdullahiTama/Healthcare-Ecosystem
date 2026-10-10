@@ -2,12 +2,16 @@
 
 Status: **phases 1-4 code complete and tested; database APPLIED to production (2026-10-09 and 2026-10-10); app code NOT yet deployed.** Identity checks need Dojah credentials and have not been run against the live Dojah API (see section 6).
 
+## Withdrawal code (third factor)
+
+Every withdrawal, from either app and from CareHub Appointments, needs the PIN **and** a one-time code emailed to the account (`otp` purpose `withdrawal`, same service and limits as the other codes: HMAC only, 5 tries, 5-minute TTL, 60 s resend gap, 3 an hour, counted per purpose). The handler checks the PIN first, then the code (single use), and only then resolves the bank account and reserves money, so a wrong PIN never burns a code. The person asks for it with `POST /api/withdrawal-pin/otp {"purpose":"withdrawal"}`; any other purpose is refused (400) so this endpoint cannot mint codes for the others. Needs migration `carefind_20261027_withdrawal_otp_purpose` (widens `issue_otp`; **not applied to production yet**: apply it before deploying this code). Origin: commit `5b090a6` on `main` required a code on every withdrawal using its own `withdrawal_email_otps` table; that table and endpoint were not taken, this rebuilds the same requirement on `otp_challenges`.
+
 ## 1. What this protects against
 
 | Threat | Control |
 |---|---|
 | Stolen session sets its own withdrawal PIN, then withdraws (F-32) | Setting/replacing the PIN needs an emailed one-time code, plus the current PIN unless "forgot PIN" |
-| Stolen session withdraws to the thief's own bank account | Withdrawals go to a **saved payout account** whose holder was verified (BVN + NIN + name match + emailed code), and still need the PIN |
+| Stolen session withdraws to the thief's own bank account | Withdrawals go to a **saved payout account** whose holder was verified (BVN + NIN + name match + emailed code), and still need the PIN **and a fresh emailed code** |
 | Someone adds their own account to a victim's wallet | An account can only be saved if the bank-reported name matches the **verified legal name** of the signed-in person (a business may also match its registered name) |
 | One person's identity used on many accounts | One BVN and one NIN per person, enforced by keyed hashes |
 | Probing other people's BVNs / running up Dojah costs | 5 identity attempts per person per 24 h (database, atomic) |
@@ -24,7 +28,8 @@ Status: **phases 1-4 code complete and tested; database APPLIED to production (2
  withdraw                POST /api/initiate-withdrawal | /api/initiate-business-withdrawal   {amount, pin, payoutAccountId}
                            destination read from the database; bank re-resolved; PIN checked; then the existing withdrawal engine
  manage                  /api/payout-accounts/{list,default,remove}   remove needs the PIN; add/remove send an alert email
- PIN                     /api/withdrawal-pin/{status,otp,set}
+ PIN                     /api/withdrawal-pin/{status,otp,set}   (otp takes { purpose: 'pin_set' (default) | 'withdrawal' })
+ withdraw                /api/initiate-withdrawal, /api/initiate-business-withdrawal   { amount, payoutAccountId, pin, otp }
 ```
 
 CareFind: the person owns their accounts. CareHub: the verified **owner** manages the business's accounts (owner_type `business`, owner_id = parent business); branches withdraw to them. The *person* is what gets KYC'd, receives codes and holds the PIN (one login, one PIN, one KYC across both apps).

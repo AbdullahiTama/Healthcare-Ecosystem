@@ -126,6 +126,18 @@ describe('/api/withdrawal-pin', () => {
     expect((await call('otp')).statusCode).toBe(401)
   })
 
+  it('otp can also be asked for a withdrawal code, but never for another purpose', async () => {
+    let r = await call('otp', { purpose: 'withdrawal' })
+    expect(r.statusCode).toBe(200)
+    expect(h.mailer.sendOtp).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'withdrawal' }))
+    expect(rpcs('issue_otp')[0][1]).toMatchObject({ p_purpose: 'withdrawal' })
+    h.mailer.sendOtp.mockClear(); h.rpcCalls.length = 0
+    r = await call('otp', { purpose: 'payout_account' })
+    expect(r.statusCode).toBe(400)
+    expect(rpcs('issue_otp')).toHaveLength(0)
+    expect(h.mailer.sendOtp).not.toHaveBeenCalled()
+  })
+
   it('a database failure is a 500, an unknown action a 404', async () => {
     h.setError = { message: 'down' }
     expect((await call('set', { pin: '1234', otp: '123456' })).statusCode).toBe(500)

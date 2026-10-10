@@ -19,7 +19,6 @@ export function createStockValidationRepository(request = sbFetch) {
           const parsed = parseInt(copy.new_stock, 10)
           copy.new_stock = Number.isNaN(parsed) ? 0 : parsed
         }
-        if (copy.unit_price != null) copy.unit_price = copy.unit_price
         // Normalize empty reason to null for DB consistency
         if ('reason' in copy) copy.reason = copy.reason || null
         // Ensure shelf_label null if empty

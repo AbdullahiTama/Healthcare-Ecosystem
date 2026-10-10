@@ -35,7 +35,13 @@ export default async function handler(req, res) {
   }
 
   if (action === 'otp') {
-    const r = await sendOtp({ supabase, user, purpose: OTP_PURPOSES.PIN_SET, mailer: await getSecurityMailer() })
+    // Two things need a code: arming the PIN (default) and confirming a withdrawal ({ purpose: 'withdrawal' }). Anything
+    // else is refused, so this endpoint cannot be used to mint codes for the other purposes.
+    const wanted = (req.body || {}).purpose
+    if (wanted !== undefined && wanted !== OTP_PURPOSES.PIN_SET && wanted !== OTP_PURPOSES.WITHDRAWAL) {
+      return res.status(400).json({ error: 'Unknown code purpose' })
+    }
+    const r = await sendOtp({ supabase, user, purpose: wanted || OTP_PURPOSES.PIN_SET, mailer: await getSecurityMailer() })
     return res.status(r.status).json(r.body)
   }
 

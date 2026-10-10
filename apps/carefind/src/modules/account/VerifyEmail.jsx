@@ -28,7 +28,7 @@ const SIGNUP_HASH_TYPES = new Set(['signup'])
 // false and Rollup tree-shakes the branch). The judged record holds the
 // token-bearing snapshot URL, so it must never be reachable from production
 // code -- KEEP: "no prod test hook".
-let judgedSnapshots = new Map()
+const judgedSnapshots = new Map()
 
 // Keeps the visit log bounded (oldest-evicting) so a long-lived SPA session
 // never grows an unbounded Map across many consumed links.

@@ -4,6 +4,7 @@ import { verifyUser } from '../_lib/verifyUser.js'
 import { userOwnsBusiness } from '../_lib/businessOwnership.js'
 import { requestRefund, executeCardRefund } from '@care-ecosystem/shared-payments'
 import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
+import { applyRefundResult } from '../_lib/refundEffects.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -158,7 +159,7 @@ async function refundCancelledBooking(appointmentId) {
     const r = await requestRefund(supabase, { cause: 'booking_cancelled', entityType: 'appointment', entityId: appointmentId, reason: 'appointment cancelled' })
     if (r.outcome === 'completed') return { status: 'completed' }
     if (r.outcome === 'requested') {
-      const sent = await executeCardRefund(supabase, getPaystackProvider(), r, { reason: 'Appointment cancelled', logger: paymentLogger })
+      const sent = await executeCardRefund(supabase, getPaystackProvider(), r, { reason: 'Appointment cancelled', logger: paymentLogger, onSettled: (result) => applyRefundResult(supabase, result) })
       return { status: sent.state }
     }
     if (r.outcome === 'already_requested' || r.outcome === 'already_refunded') return { status: 'already' }

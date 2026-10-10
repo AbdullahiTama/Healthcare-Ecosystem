@@ -35,7 +35,7 @@ export function usePostComposer() {
     try {
       const activeIdentity = getActiveIdentity()
 
-      let imageUrls = []
+      const imageUrls = []
       if (imageFiles.length) {
         setUploadingImage(true)
         try {

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Wallet as WalletIcon, Banknote, ArrowUpCircle, ArrowDownCircle, Clock, CheckCircle, AlertTriangle, Download, PlusCircle } from 'lucide-react'
 import { walletRepository } from './repositories'
 import WithdrawalPinField from './WithdrawalPinField'
+import WithdrawalOtpField from './WithdrawalOtpField'
 import PayoutAccountsPanel from './PayoutAccountsPanel.jsx'
 import BankPicker from './BankPicker.jsx'
 import { createPayoutManager, rankBanks } from '@care-ecosystem/shared-payout-ui'
@@ -30,6 +31,7 @@ export default function Wallet({ brand, role }) {
   const [withdrawForm, setWithdrawForm] = useState({})
   const [withdrawing, setWithdrawing] = useState(false)
   const [withdrawPin, setWithdrawPin] = useState('')
+  const [withdrawOtp, setWithdrawOtp] = useState('')
   const [needsPin, setNeedsPin] = useState(false)
   const [showTopup, setShowTopup] = useState(false)
   const [topupAmount, setTopupAmount] = useState('')
@@ -183,18 +185,18 @@ export default function Wallet({ brand, role }) {
     setWithdrawing(true)
     try {
       const r = await startBusinessWithdrawal(typedMode
-        ? { businessId: brand.id, amountKobo, bankCode: withdrawForm.bankCode, bankName: withdrawForm.bankName, accountNumber: withdrawForm.accountNumber, accountName: withdrawForm.accountName, pin: withdrawPin }
-        : { businessId: brand.id, amountKobo, payoutAccountId: savedAccount.id, pin: withdrawPin })
+        ? { businessId: brand.id, amountKobo, bankCode: withdrawForm.bankCode, bankName: withdrawForm.bankName, accountNumber: withdrawForm.accountNumber, accountName: withdrawForm.accountName, pin: withdrawPin, otp: withdrawOtp }
+        : { businessId: brand.id, amountKobo, payoutAccountId: savedAccount.id, pin: withdrawPin, otp: withdrawOtp })
       if (r.sessionExpired) { showToast('Please log in again.', { type: 'warning' }); setWithdrawing(false); return }
       if (r.networkError) { showToast('Network error.', { type: 'error' }); setWithdrawing(false); return }
       if (!r.ok) {
         if (r.data.needsPin) setNeedsPin(true)
         if (r.data.code === 'payout_account_required') payouts.load()
         showToast(withdrawalErrorMessage(r.data), { type: 'error' })
-        setWithdrawPin('')
+        setWithdrawPin(''); setWithdrawOtp('')
         setWithdrawing(false); return
       }
-      setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false); setShowWithdraw(false); setAccountResolved(false)
+      setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false); setShowWithdraw(false); setAccountResolved(false)
       load()
       showToast('Withdrawal started — will arrive shortly.', { type: 'success' })
     } catch (e) { showToast('Network error.', { type: 'error' }) }
@@ -383,9 +385,10 @@ export default function Wallet({ brand, role }) {
                 </>
               )}
               <WithdrawalPinField pin={withdrawPin} onPinChange={setWithdrawPin} needsPin={needsPin} disabled={withdrawing} />
+              <WithdrawalOtpField value={withdrawOtp} onChange={setWithdrawOtp} disabled={withdrawing} />
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-                <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
-                <TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !(typedMode ? (typedAllowed && (accountResolved || withdrawForm.accountName)) : savedAccount) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !(typedMode ? (typedAllowed && (accountResolved || withdrawForm.accountName)) : savedAccount) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
+                <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+                <TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !/^\d{6}$/.test(withdrawOtp) || !(typedMode ? (typedAllowed && (accountResolved || withdrawForm.accountName)) : savedAccount) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !/^\d{6}$/.test(withdrawOtp) || !(typedMode ? (typedAllowed && (accountResolved || withdrawForm.accountName)) : savedAccount) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
               </div>
             </div>
           </Card>

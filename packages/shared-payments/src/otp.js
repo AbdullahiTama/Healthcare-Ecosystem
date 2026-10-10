@@ -1,4 +1,4 @@
-// One-time passcodes for step-up actions on money settings (setting the withdrawal PIN; adding a payout account).
+// One-time passcodes for step-up actions on money settings (setting the withdrawal PIN; adding a payout account; every withdrawal).
 //
 // Storage (otp_challenges, issue_otp / verify_otp - service-role only): only an HMAC of the code is stored. A 6-digit
 // code has 1M possibilities, so an unkeyed hash would not survive a database leak; the keyed HMAC makes a leak
@@ -10,7 +10,7 @@
 import crypto from 'node:crypto'
 
 export const OTP_TTL_SECONDS = 300
-export const OTP_PURPOSES = Object.freeze({ PIN_SET: 'pin_set', PAYOUT_ACCOUNT: 'payout_account' })
+export const OTP_PURPOSES = Object.freeze({ PIN_SET: 'pin_set', PAYOUT_ACCOUNT: 'payout_account', WITHDRAWAL: 'withdrawal' })
 
 function secret() {
   const s = process.env.OTP_HMAC_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY

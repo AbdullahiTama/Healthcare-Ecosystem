@@ -531,7 +531,7 @@ export default function LiveActivity({ brand }) {
       const verified = verifyState === FACILITY_VERIFICATION.VERIFIED
       const pendingReview = verifyState === FACILITY_VERIFICATION.PENDING
 
-      await logActivity({
+      await liveActivityRepository.logActivity({
         business_id: brand.id,
         staff_id: meStaffId,
         rep_name: meName,

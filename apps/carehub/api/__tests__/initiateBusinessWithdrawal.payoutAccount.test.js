@@ -29,6 +29,7 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
 }))
 
 import { hashPin } from '@care-ecosystem/shared-payments'
+process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from '../_handlers/initiate-business-withdrawal.js'
 
 const REF = 'ch_wd_0123456789abcdef0123456789abcdef'
@@ -43,6 +44,7 @@ beforeEach(() => {
   h.auth = { business: { id: 'biz-1', name: 'Grace Pharmacy' }, user: { id: 'user-1', email: 'b@example.com', email_confirmed_at: '2026-01-01' } }
   h.routes.get_withdrawal_pin = { data: [{ pin_hash: hashPin('1234', SALT), pin_salt: SALT, locked_until: null }] }
   h.routes.verify_withdrawal_pin = { data: true }
+  h.routes.verify_otp = { data: 'ok' }
   h.routes.create_business_withdrawal = { data: { outcome: 'ok', id: 'bw-1', reference: REF, amount_kobo: 500000 } }
   h.routes.attach_business_withdrawal_transfer = { data: 'ok' }
   h.initiateTransfer.mockReset().mockResolvedValue({ transferCode: 'TRF_1' })
@@ -51,7 +53,7 @@ beforeEach(() => {
   h.resolveAccount.mockReset().mockResolvedValue({ accountName: 'GRACE PHARMACY LIMITED' })
 })
 
-const base = { business_id: 'biz-1', amount: 500000, pin: '1234' }
+const base = { business_id: 'biz-1', amount: 500000, pin: '1234', otp: '123456' }
 
 describe('initiate-business-withdrawal with a saved payout account', () => {
   it('sends the money to the saved account and ignores the browser\'s destination', async () => {
@@ -157,5 +159,47 @@ describe('Phase 4 (CareHub): cooling-off cap and alerts', () => {
     await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1', pin: '0000' } }, r)
     expect(r.statusCode).toBe(403)
     expect(mailer.sendPinLocked).toHaveBeenCalledWith({ to: 'b@example.com' })
+  })
+})
+
+describe('the emailed withdrawal code (third factor)', () => {
+  const body = { business_id: 'biz-1', amount: 500000, pin: '1234', payoutAccountId: 'pa-1' }
+
+  it('refuses a withdrawal with no code, before anything is reserved', async () => {
+    const r = res()
+    await handler({ method: 'POST', body }, r)
+    expect(r.statusCode).toBe(400)
+    expect(r.body.code).toBe('otp_invalid')
+    expect(calls('verify_otp')).toHaveLength(0)
+    expect(calls('create_business_withdrawal')).toHaveLength(0)
+  })
+
+  it('refuses a wrong, expired or locked code with the engine untouched', async () => {
+    for (const [result, status, code] of [['invalid', 400, 'otp_invalid'], ['expired', 400, 'otp_expired'], ['locked', 429, 'otp_locked'], ['none', 400, 'otp_missing']]) {
+      h.routes.verify_otp = { data: result }
+      h.rpcCalls.length = 0
+      const r = res()
+      await handler({ method: 'POST', body: { ...body, otp: '123456' } }, r)
+      expect(r.statusCode).toBe(status)
+      expect(r.body.code).toBe(code)
+      expect(calls('create_business_withdrawal')).toHaveLength(0)
+    }
+  })
+
+  it('checks the code for the withdrawal purpose, and only after the PIN', async () => {
+    const r = res()
+    await handler({ method: 'POST', body: { ...body, otp: '123456' } }, r)
+    expect(r.statusCode).toBe(200)
+    const names = h.rpcCalls.map(([n]) => n)
+    expect(names.indexOf('verify_withdrawal_pin')).toBeLessThan(names.indexOf('verify_otp'))
+    expect(calls('verify_otp')[0][1]).toMatchObject({ p_user_id: 'user-1', p_purpose: 'withdrawal' })
+  })
+
+  it('a wrong PIN never touches (or burns) the code', async () => {
+    h.routes.verify_withdrawal_pin = { data: false }
+    const r = res()
+    await handler({ method: 'POST', body: { ...body, otp: '123456' } }, r)
+    expect(r.statusCode).toBe(403)
+    expect(calls('verify_otp')).toHaveLength(0)
   })
 })

@@ -21,6 +21,7 @@ const h = vi.hoisted(() => {
       if (name === 'get_withdrawal_trust') return { data: [s.trust] }
       if (name === 'get_withdrawal_pin') return { data: [{ pin_hash: 'h', pin_salt: 's' }] }
       if (name === 'verify_withdrawal_pin') return { data: true }
+      if (name === 'verify_otp') return { data: 'ok' }
       if (name === 'create_withdrawal') return { data: s.created }
       return { data: null }
     },
@@ -39,6 +40,7 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
 }))
 vi.mock('../_lib/withdrawalRecovery.js', () => ({ reconcileWithdrawal: vi.fn() }))
 
+process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from './initiate-withdrawal.js'
 import { enqueue, processBatch } from '../_lib/emailService.js'
 import { checkBalance, createTransferRecipient, initiateTransfer } from '../_lib/paystackTransfer.js'
@@ -48,7 +50,7 @@ function call(body) {
   return handler({ method: 'POST', body, headers: {} }, res).then(() => res)
 }
 
-const base = { amount: 15, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'Ada Obi', pin: '1234' }
+const base = { amount: 15, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'Ada Obi', pin: '1234', otp: '123456' }
 
 describe('initiate-withdrawal untraceable credits', () => {
   beforeEach(() => { enqueue.mockClear(); processBatch.mockClear(); checkBalance.mockClear(); createTransferRecipient.mockClear(); initiateTransfer.mockClear() })

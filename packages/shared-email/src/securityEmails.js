@@ -10,6 +10,7 @@ const CODE_STYLE = 'margin:4px 0 20px;font-size:34px;line-height:1.2;font-weight
 const PURPOSES = {
   pin_set: 'set or change your withdrawal PIN',
   payout_account: 'add a payout bank account',
+  withdrawal: 'confirm a withdrawal',
 }
 
 export const senderFor = (app) => {

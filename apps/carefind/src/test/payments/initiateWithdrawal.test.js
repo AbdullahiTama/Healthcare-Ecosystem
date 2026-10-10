@@ -17,10 +17,12 @@ vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn(() => mockSupabase
 vi.mock('../../../api/_lib/verifyUser.js', () => ({ verifyUser: mockVerifyUser }))
 vi.mock('../../../api/_lib/paystackTransfer.js', () => mockPaystack)
 
+process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from '../../../api/_handlers/initiate-withdrawal.js'
 
 let pinRow = []
 let verifyResult = true
+let otpResult = 'ok'
 
 function makeReq(body) {
   return { method: 'POST', url: '/api/initiate-withdrawal', headers: {}, body }
@@ -40,6 +42,7 @@ const VALID_BODY = {
   accountNumber: '0123456789',
   accountName: 'Test User',
   pin: '1234',
+  otp: '123456',
 }
 
 describe('initiate-withdrawal PIN gate', () => {
@@ -53,10 +56,12 @@ describe('initiate-withdrawal PIN gate', () => {
 
     pinRow = []
     verifyResult = true
+    otpResult = 'ok'
     mockSupabase.rpc.mockImplementation(async (fn) => {
       if (fn === 'get_withdrawal_trust') return { data: [{ trust_level: 'new', total_withdrawals: 0, total_amount: 0, instant_threshold: 0, device_trust_enabled: false, biometric_enabled: false, consecutive_success: 0 }], error: null }
       if (fn === 'get_withdrawal_pin') return { data: pinRow, error: null }
       if (fn === 'verify_withdrawal_pin') return { data: verifyResult, error: null }
+      if (fn === 'verify_otp') return { data: otpResult, error: null }
       if (fn === 'create_withdrawal') return { data: { outcome: 'ok', id: 'wd-1', reference: 'cf_wd_00112233445566778899aabbccddeeff', coins: 10, payout_kobo: 160000 }, error: null }
       if (fn === 'attach_withdrawal_transfer') return { data: 'ok', error: null }
       if (fn === 'update_withdrawal_trust_after_withdrawal') return { data: 'new', error: null }

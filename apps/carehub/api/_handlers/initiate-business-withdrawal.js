@@ -1,9 +1,10 @@
-import { checkWithdrawalPin, verifyBankAccount, settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForSavedAccount, limitMessage } from '@care-ecosystem/shared-payments'
+import { checkOtp, OTP_PURPOSES, checkWithdrawalPin, verifyBankAccount, settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForSavedAccount, limitMessage } from '@care-ecosystem/shared-payments'
 import { getSecurityMailer } from '../_lib/securityMailer.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { supabase } from '../_lib/supabase.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, resolveAccount } from '../_lib/paystackTransfer.js'
 import { reconcileBusinessWithdrawal } from '../_lib/withdrawalRecovery.js'
+import { applyBusinessWithdrawalResult } from '../_lib/businessWithdrawalEffects.js'
 import { emailService } from '../../src/lib/emailService.js'
 
 const MAX_AMOUNT_KOBO = 2_000_000_000 // business_withdrawal_requests.amount is a 32-bit integer
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
   if (authError) return res.status(401).json({ error: authError })
 
   let { bankCode, bankName, accountNumber, accountName } = req.body || {}
-  const { business_id: businessId, amount, pin, payoutAccountId } = req.body || {}
+  const { business_id: businessId, amount, pin, otp, payoutAccountId } = req.body || {}
   const amountKobo = Number(amount)
 
   // A saved, identity-verified payout account (owned by the parent business) decides WHERE the money goes: its
@@ -59,6 +60,12 @@ export default async function handler(req, res) {
   if (!pinCheck.ok) {
     return res.status(pinCheck.status).json({ error: pinCheck.error, code: pinCheck.code, ...(pinCheck.code === 'pin_not_set' ? { needsPin: true } : {}) })
   }
+
+  // Third factor: a fresh code emailed to the owner, checked LAST - after the PIN and before the account is resolved or
+  // any money is reserved. The PIN alone is a static secret a shoulder-surfer can read; the code proves the person also
+  // controls the owner's email. Single use (verify_otp consumes it); 5 wrong tries burn it.
+  const otpCheck = await checkOtp({ supabase, userId: user.id, purpose: OTP_PURPOSES.WITHDRAWAL, code: otp })
+  if (!otpCheck.ok) return res.status(otpCheck.status).json({ error: otpCheck.error, code: otpCheck.code })
 
   const account = await verifyBankAccount(resolveAccount, { bankCode, accountNumber, accountName })
   if (!account.ok) return res.status(account.status).json({ error: account.error })
@@ -166,6 +173,10 @@ export default async function handler(req, res) {
     try {
       const row = { id: requestId, paystack_reference: reference, paystack_transfer_code: null, created_at: new Date().toISOString() }
       const recovery = await reconcileBusinessWithdrawal(supabase, row, err.paystackRejected ? { graceMs: 0 } : {})
+      // An outcome the reconciliation actually changed tells the owner; 'waiting' changed nothing and says nothing.
+      if (recovery.outcome === 'completed' || recovery.outcome === 'refunded') {
+        await applyBusinessWithdrawalResult(supabase, recovery.result)
+      }
       if (recovery.outcome === 'refunded') {
         return res.status(502).json({ error: `${err.message || 'Payment provider error'}. The amount has been returned to your wallet.`, refunded: true })
       }

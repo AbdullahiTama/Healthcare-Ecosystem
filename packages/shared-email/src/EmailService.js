@@ -18,6 +18,7 @@ async function deps() {
 }
 
 import { htmlToText } from './utils/htmlToText.js'
+import { senderFor } from './branding.js'
 
 // supabase-js is loaded here and not from deps() because deps() is called on
 // every processBatch(), including when the caller injected its own client via
@@ -211,8 +212,12 @@ export class EmailService {
   async enqueue({ templateKey, toEmail, payload, fromEmail, subject, app, eventKey, sourceId, idempotencyKey }) {
     if (!templateKey || !toEmail) throw new Error('templateKey and toEmail are required')
     const db = await this._getDb()
-    const from = fromEmail || (process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || '')
-    if (!from) throw new Error('EMAIL_FROM is not configured')
+    // Sender precedence: what the caller named, then the deployment's configured sender, then the app's own
+    // verified identity. The last step is new and only fills a gap: a purchase confirmation enqueued with no
+    // explicit sender used to THROW when EMAIL_FROM was absent, and the caller (a best-effort effect) swallowed
+    // it, so the customer silently never got the email. Auth emails never hit this because they pass a sender.
+    const from = fromEmail || process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || senderFor(app)
+    if (!from) throw new Error('EMAIL_FROM is not configured, and no known app was given to take a sender from')
     // app and event_key must always be populated. guard_email_outbox_quarantine()
     // is a BEFORE INSERT trigger that parks any row missing either of them:
     // it sets quarantine_reason='legacy_mapping_unproven' and

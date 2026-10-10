@@ -5,7 +5,7 @@ import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount } from '../_lib/paystackTransfer.js'
 import { getRequiredAuth, isInstantEligible, getDailyCap } from '../_lib/trustLevels.js'
 import { reconcileWithdrawal } from '../_lib/withdrawalRecovery.js'
-import { settleWithdrawal, PIN_LOCK_AFTER, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForSavedAccount, applyLimits, limitMessage } from '@care-ecosystem/shared-payments'
+import { settleWithdrawal, checkOtp, OTP_PURPOSES, PIN_LOCK_AFTER, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForSavedAccount, applyLimits, limitMessage } from '@care-ecosystem/shared-payments'
 import { getFinancialConfig } from '../_lib/financialConfig.js'
 import { getSecurityMailer } from '../_lib/securityMailer.js'
 
@@ -20,8 +20,8 @@ export default async function handler(req, res) {
   const user = await verifyUser(supabase, req)
   if (!user) return res.status(401).json({ error: 'Not signed in' })
 
-  let { amount, bankCode, bankName, accountNumber, accountName } = req.body
-  const { pin, payoutAccountId } = req.body
+  let { bankCode, bankName, accountNumber, accountName } = req.body
+  const { amount, pin, otp, payoutAccountId } = req.body
   const coins = Number(amount)
 
   // A saved, identity-verified payout account decides WHERE the money goes: its details come from the database and
@@ -45,9 +45,10 @@ export default async function handler(req, res) {
   const trustLevel = trust?.trust_level || 'new'
   const requiredAuth = getRequiredAuth(trustLevel, coins)
 
-  // The PIN is the only second factor. Device trust used to stand in for it, but the client's
-  // `deviceToken` was never compared with a stored device, so any non-empty string passed
-  // (financial audit F-02). Re-introduce it only with a server-stored, hashed, expiring token.
+  // The PIN is the second factor; the email OTP below is the third. Device trust used to stand in
+  // for the PIN, but the client's `deviceToken` was never compared with a stored device, so any
+  // non-empty string passed (financial audit F-02). Re-introduce it only with a server-stored,
+  // hashed, expiring token.
   const hasPin = !!pin
 
   if (!hasPin) {
@@ -93,6 +94,12 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Incorrect withdrawal PIN.' })
     }
   }
+
+  // Third factor: a fresh code emailed to the account, checked LAST - after the PIN and before the account is resolved
+  // or any money is reserved. The PIN alone is a static secret a shoulder-surfer can read; the code proves the person
+  // also controls the account's email. Single use (verify_otp consumes it); 5 wrong tries burn it.
+  const otpCheck = await checkOtp({ supabase, userId: user.id, purpose: OTP_PURPOSES.WITHDRAWAL, code: otp })
+  if (!otpCheck.ok) return res.status(otpCheck.status).json({ error: otpCheck.error, code: otpCheck.code })
 
   // Verify the typed account name actually belongs to the account number BEFORE any money is reserved.
   // If Paystack reports the bank does not support / cannot resolve the account, allow the manually-entered
@@ -165,6 +172,39 @@ export default async function handler(req, res) {
         : `Daily withdrawal limit reached. Your ${trustLevel} level allows up to ${getDailyCap(trustLevel)} CareCoins in any 24 hours.`,
       dailyCapCoins,
       ...(extraLimit ? { limitReason: extraLimit.reason, coolingEndsAt: extraLimit.coolingEndsAt } : {}),
+    })
+  }
+  if (created.outcome === 'untraceable_credits') {
+    // Plan D1: some credits on this wallet do not trace to a confirmed payment. The reservation
+    // already refused them; nothing was debited, no provider call happens, and the reconciliation
+    // carries the same finding for the finance team.
+    console.warn('[initiate-withdrawal] untraceable credits refused reservation', {
+      userId: user.id,
+      coins,
+      withdrawable: created.withdrawable_coins,
+      held: created.untraceable_coins,
+    })
+    try {
+      if (user.email) {
+        await enqueueOutbox({
+          templateKey: 'wallet_needs_attention',
+          toEmail: user.email,
+          payload: {
+            fullName: user.user_metadata?.full_name || user.email,
+            heldCoins: String(created.untraceable_coins ?? ''),
+            withdrawableCoins: String(created.withdrawable_coins ?? ''),
+          },
+          subject: 'CareFind: your wallet needs attention',
+          idempotencyKey: 'wallet-needs-attention:' + user.id,
+        })
+        flushOutbox().catch((e) => console.error('[initiate-withdrawal] outbox flush error:', e))
+      }
+    } catch (e) { console.error('[initiate-withdrawal] email enqueue error:', e) }
+    return res.status(403).json({
+      error: 'untraceable_credits',
+      message: `Part of your balance (${created.untraceable_coins ?? 0} CareCoins) cannot be traced to a confirmed payment and is on hold while we review it. You can withdraw up to ${created.withdrawable_coins ?? 0} CareCoins.`,
+      withdrawableCoins: created.withdrawable_coins,
+      heldCoins: created.untraceable_coins,
     })
   }
   if (created.outcome === 'untraceable_credits') {

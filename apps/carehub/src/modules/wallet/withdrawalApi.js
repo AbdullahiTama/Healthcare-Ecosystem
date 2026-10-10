@@ -5,14 +5,14 @@ import { authClient } from '../../lib/authClient'
 // reference and the limits are the database's); the client sends only what the owner typed, including the PIN.
 // -> { ok, data, sessionExpired?, networkError? }
 // With `payoutAccountId` the server takes the destination from the saved, verified account and ignores any bank details.
-export async function startBusinessWithdrawal({ businessId, amountKobo, bankCode, bankName, accountNumber, accountName, pin, payoutAccountId }) {
+export async function startBusinessWithdrawal({ businessId, amountKobo, bankCode, bankName, accountNumber, accountName, pin, otp, payoutAccountId }) {
   const { data: { session } } = await authClient.auth.getSession()
   if (!session) return { ok: false, sessionExpired: true, data: {} }
   try {
     const res = await fetch('/api/initiate-business-withdrawal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ business_id: businessId, amount: amountKobo, bankCode, bankName, accountNumber, accountName, pin, payoutAccountId }),
+      body: JSON.stringify({ business_id: businessId, amount: amountKobo, bankCode, bankName, accountNumber, accountName, pin, otp, payoutAccountId }),
     })
     const data = await res.json().catch(() => ({}))
     return { ok: res.ok, data }

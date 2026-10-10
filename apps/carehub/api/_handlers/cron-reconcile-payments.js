@@ -2,6 +2,7 @@ import { supabase } from '../_lib/supabase.js'
 import { reconcileBusinessWithdrawals } from '../_lib/withdrawalRecovery.js'
 import { reconcileCommissions } from '../_lib/commissionReconcile.js'
 import { runRefundSweeps } from '@care-ecosystem/shared-payments'
+import { applyRefundResult } from '../_lib/refundEffects.js'
 import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
 
 // Cron: backstop for the two ways CareHub money gets stuck.
@@ -45,7 +46,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    result.refunds = await runRefundSweeps(supabase, getPaystackProvider(), { logger: paymentLogger })
+    result.refunds = await runRefundSweeps(supabase, getPaystackProvider(), { logger: paymentLogger, onSettled: (settled) => applyRefundResult(supabase, settled) })
   } catch (err) {
     failed = true
     result.refunds = { error: err.message }

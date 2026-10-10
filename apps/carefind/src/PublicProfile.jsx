@@ -112,14 +112,14 @@ function PublicProfile() {
       return
     }
     if (res.error) { showToast('Could not subscribe: ' + res.error, { type: 'error' }); return }
-    await refreshAccess()
+    await qc.invalidateQueries({ queryKey: keys.subscriptionAccess(user.id, id) })
     notify({ recipientId: id, actorId: user.id, type: 'gift', message: 'subscribed to your content \ud83d\udd13', link: `/u/${user.id}` })
     showToast('Subscribed! You can now read all their subscriber-only content.', { type: 'success' })
   }
 
   async function handleCancelAutoRenew() {
     await cancelAutoRenew(user.id, id)
-    await refreshAccess()
+    await qc.invalidateQueries({ queryKey: keys.subscriptionAccess(user.id, id) })
     showToast("Auto-renew turned off. You'll keep access until your current period ends.", { type: 'info' })
   }
 

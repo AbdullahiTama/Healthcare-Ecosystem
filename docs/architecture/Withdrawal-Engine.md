@@ -85,3 +85,7 @@ Contradictory provider signals are **reported, never auto-fixed**: `conflict_pai
 * **F-32 is fixed.** Setting or replacing the withdrawal PIN (CareFind and CareHub) needs a fresh emailed 6-digit code, and replacing also needs the current PIN unless the person chose "forgot PIN" (the code is then the only proof). A PIN change sends an alert email. See `Payout-Accounts-and-KYC.md`.
 * **Saved payout accounts.** A withdrawal may name a `payoutAccountId`; the destination then comes from the database (a bank account the owner proved is theirs), and any bank details in the request are ignored. `financial_config.payout_account_required` (default 0) makes this mandatory.
 * **`/api/resolve-account`** (a paid Paystack call made with our secret key) is now for signed-in users only, 10 lookups a minute per user.
+
+## 10. Update: a fresh emailed code on every withdrawal
+
+`initiate-withdrawal` (CareFind) and `initiate-business-withdrawal` (CareHub) check, in order: PIN, then a single-use emailed code (`checkOtp`, purpose `withdrawal`), then the bank re-check, limits and the reservation. The code is requested through `POST /api/withdrawal-pin/otp {"purpose":"withdrawal"}`. See `Payout-Accounts-and-KYC.md` (Withdrawal code) and migration `carefind_20261027_withdrawal_otp_purpose` (not yet applied to production).

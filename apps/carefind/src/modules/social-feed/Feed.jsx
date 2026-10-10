@@ -457,7 +457,7 @@ function Feed() {
     // it's applied the RPC is missing and this degrades to a no-op (the old
     // increment_post_view kept counting every refresh, which is exactly the
     // inflation §7 forbids).
-    ;(postData || []).forEach((p) => { recordFeedView.record(p.id) })
+    (postData || []).forEach((p) => { recordFeedView.record(p.id) })
 
     setLoading(false)
   }
@@ -779,7 +779,7 @@ function Feed() {
 
     setPosting(true)
 
-    let imageUrls = []
+    const imageUrls = []
 
     if (imageFiles.length) {
       setUploadingImage(true)

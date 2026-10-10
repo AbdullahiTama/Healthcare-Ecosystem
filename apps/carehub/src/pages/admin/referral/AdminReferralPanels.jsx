@@ -11,7 +11,7 @@ import { fmt, fmtDate } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
 import { Card, StatCard, Pill, Modal, Inp, Sel, TealBtn, GhostBtn, Loading, Empty, ErrorState, Toast, useToast } from '../../../components/ui'
 
-const { tealDeep, navy, gray500, gray400, border, danger, dangerBg } = theme
+const { tealDeep, navy, gray600, gray500, gray400, border, danger, dangerBg } = theme
 
 // ── Shared fetch hook ────────────────────────────────────────────────────────
 // One effect per panel: fetch, expose loading/error/data + a reload() that

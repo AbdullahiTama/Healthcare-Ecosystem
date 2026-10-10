@@ -1514,7 +1514,7 @@ export default function AdminDashboard() {
       if (!navigator.onLine) setPulseOnline(false)
     }, 10000)
     return () => {
-      try { if (channel) { try { channel.unsubscribe() } catch {} ; authClient.removeChannel(channel) } } catch {}
+      try { if (channel) { try { channel.unsubscribe() } catch { /* already closed */ } authClient.removeChannel(channel) } } catch { /* teardown is best effort */ }
       clearInterval(interval)
     }
   }, [pulseAt, load])

@@ -43,6 +43,32 @@ describe('withdrawal-pin handler', () => {
 
   const confirmedUser = { id: 'user-1', email_confirmed_at: '2026-01-01T00:00:00Z' }
 
+  describe('POST /api/withdrawal-pin/otp', () => {
+    const issued = () => mockSupabase.rpc.mock.calls.filter(([fn]) => fn === 'issue_otp')
+
+    beforeEach(() => {
+      mockSupabase.rpc.mockImplementation(async (fn) => (fn === 'issue_otp' ? { data: 'ok', error: null } : { data: null, error: null }))
+    })
+
+    it('issues a PIN-set code by default', async () => {
+      mockVerifyUser.mockResolvedValue({ ...confirmedUser, email: 'u@example.com' })
+      const res = await handler(makeReq('/api/withdrawal-pin/otp', {}), makeRes())
+      expect(res.statusCode).toBe(200)
+      expect(issued()[0][1]).toMatchObject({ p_purpose: 'pin_set' })
+    })
+
+    it('issues a withdrawal code when asked, and nothing for any other purpose', async () => {
+      mockVerifyUser.mockResolvedValue({ ...confirmedUser, email: 'u@example.com' })
+      let res = await handler(makeReq('/api/withdrawal-pin/otp', { purpose: 'withdrawal' }), makeRes())
+      expect(res.statusCode).toBe(200)
+      expect(issued()[0][1]).toMatchObject({ p_purpose: 'withdrawal' })
+      mockSupabase.rpc.mockClear()
+      res = await handler(makeReq('/api/withdrawal-pin/otp', { purpose: 'payout_account' }), makeRes())
+      expect(res.statusCode).toBe(400)
+      expect(issued()).toHaveLength(0)
+    })
+  })
+
   describe('POST /api/withdrawal-pin/set', () => {
     it('rejects a non-digit pin', async () => {
       mockVerifyUser.mockResolvedValue(confirmedUser)

@@ -1,5 +1,7 @@
 import { settleByReference, settleTransferWebhook, settleRefundWebhook } from '@care-ecosystem/shared-payments'
 import { applyWithdrawalResult } from './withdrawalEffects.js'
+import { applyBusinessWithdrawalResult } from './businessWithdrawalEffects.js'
+import { applyRefundResult } from './refundEffects.js'
 import { getPaystackProvider, paymentLogger } from './payments.js'
 import { runSettlementEffects } from './settlementEffects.js'
 
@@ -20,6 +22,8 @@ import { runSettlementEffects } from './settlementEffects.js'
 async function handleTransferEvent(supabase, event) {
   const settled = await settleTransferWebhook(supabase, event, { logger: paymentLogger })
   if (settled.kind === 'carefind') await applyWithdrawalResult(supabase, settled.outcome, settled.result)
+  // The shared endpoint serves both apps' transfer references: a CareHub request gets CareHub's owner email.
+  else if (settled.kind === 'carehub') await applyBusinessWithdrawalResult(supabase, settled.result)
   return { received: true }
 }
 
@@ -27,7 +31,8 @@ async function handleTransferEvent(supabase, event) {
 // completes only for the refunded amount, a failure restores the business exactly, contradictions are reported). An RPC
 // error throws so the event is recorded as failed and Paystack's retry settles it.
 async function handleRefundEvent(supabase, event) {
-  await settleRefundWebhook(supabase, event, { logger: paymentLogger })
+  // Only a delivery that flips the refund completed notifies the payer (refunds.js fires onSettled exactly then).
+  await settleRefundWebhook(supabase, event, { logger: paymentLogger, onSettled: (result) => applyRefundResult(supabase, result) })
   return { received: true }
 }
 

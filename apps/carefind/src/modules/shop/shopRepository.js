@@ -71,7 +71,7 @@ export function createShopRepository(client = supabase) {
     },
 
     async getProductDetail(productId) {
-      let { data, error } = await client
+      const { data: byId, error } = await client
         .from('ecommerce_products')
         .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,attributes,active_at,prescription_required,warnings,restrictions,is_restricted, products(id,name,generic_name,price,stock,category,price_unit,sale_type,emoji,image_url,description)')
         .eq('id', productId)
@@ -79,6 +79,7 @@ export function createShopRepository(client = supabase) {
         .eq('is_restricted', false)
         .maybeSingle()
       if (error) throw error
+      let data = byId
       if (!data) {
         const { data: byProduct } = await client
           .from('ecommerce_products')
