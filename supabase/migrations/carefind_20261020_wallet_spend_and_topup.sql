@@ -702,10 +702,10 @@ begin
       select 'event_failed'::text kind, 'provider_event'::text subject_type, e.id::text subject_id,
              (case when e.received_at < now() - interval '1 day' then 'critical' else 'warning' end)::text severity,
              e.event_type || ' ' || coalesce(e.reference, e.event_id) || ' failed ' || e.attempts || ' time(s): ' || coalesce(e.last_error, '?') detail
-        from public.payment_provider_events e where e.outcome = 'failed' and e.processed_at is null and e.received_at > now() - interval '30 minutes'
+        from public.payment_provider_events e where e.outcome = 'failed' and e.processed_at is null and e.received_at < now() - interval '30 minutes'
       union all
       select 'event_unprocessed', 'provider_event', e.id::text, 'warning', e.event_type || ' ' || coalesce(e.reference, e.event_id) || ' was stored at ' || e.received_at || ' and never processed'
-        from public.payment_provider_events e where e.outcome is null and e.processed_at is null and e.received_at > now() - interval '15 minutes'
+        from public.payment_provider_events e where e.outcome is null and e.processed_at is null and e.received_at < now() - interval '15 minutes'
       union all
       select 'unmatched_charge', 'payment_reference', coalesce(e.reference, e.event_id), 'critical',
              'Paystack reported a successful charge of ' || coalesce(round((e.payload -> 'data' ->> 'amount')::numeric / 100, 2)::text, '?') || ' NGN that no payment intent recognises (received ' || e.received_at || ')'
