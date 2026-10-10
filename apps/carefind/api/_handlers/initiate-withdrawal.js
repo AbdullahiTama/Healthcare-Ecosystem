@@ -167,6 +167,39 @@ export default async function handler(req, res) {
       ...(extraLimit ? { limitReason: extraLimit.reason, coolingEndsAt: extraLimit.coolingEndsAt } : {}),
     })
   }
+  if (created.outcome === 'untraceable_credits') {
+    // Plan D1: some credits on this wallet do not trace to a confirmed payment. The reservation
+    // already refused them; nothing was debited, no provider call happens, and the reconciliation
+    // carries the same finding for the finance team.
+    console.warn('[initiate-withdrawal] untraceable credits refused reservation', {
+      userId: user.id,
+      coins,
+      withdrawable: created.withdrawable_coins,
+      held: created.untraceable_coins,
+    })
+    try {
+      if (user.email) {
+        await enqueueOutbox({
+          templateKey: 'wallet_needs_attention',
+          toEmail: user.email,
+          payload: {
+            fullName: user.user_metadata?.full_name || user.email,
+            heldCoins: String(created.untraceable_coins ?? ''),
+            withdrawableCoins: String(created.withdrawable_coins ?? ''),
+          },
+          subject: 'CareFind: your wallet needs attention',
+          idempotencyKey: 'wallet-needs-attention:' + user.id,
+        })
+        flushOutbox().catch((e) => console.error('[initiate-withdrawal] outbox flush error:', e))
+      }
+    } catch (e) { console.error('[initiate-withdrawal] email enqueue error:', e) }
+    return res.status(403).json({
+      error: 'untraceable_credits',
+      message: `Part of your balance (${created.untraceable_coins ?? 0} CareCoins) cannot be traced to a confirmed payment and is on hold while we review it. You can withdraw up to ${created.withdrawable_coins ?? 0} CareCoins.`,
+      withdrawableCoins: created.withdrawable_coins,
+      heldCoins: created.untraceable_coins,
+    })
+  }
   if (created.outcome !== 'ok') {
     return res.status(400).json({ error: created.outcome === 'insufficient' ? 'insufficient' : 'Could not process withdrawal request' })
   }

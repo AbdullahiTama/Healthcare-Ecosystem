@@ -267,6 +267,20 @@ export function withdrawalFailed({ fullName, amount, reference } = {}) {
   })
 }
 
+// Plan D1: a credit on the user's ledger does not trace to a confirmed payment, so the
+// withdrawal reservation refuses the untraceable portion. Flat numbers only - no reason codes.
+export function walletNeedsAttention({ fullName, heldCoins, withdrawableCoins } = {}) {
+  return email({
+    title: 'Your CareCoin wallet needs attention',
+    preheader: 'Part of your balance is on hold while we review it.',
+    body: [
+      paragraph(html`${hi(fullName)} part of your CareCoin balance cannot be traced to a confirmed payment, so it is on hold and cannot be withdrawn right now.`),
+      detailsTable([['On hold', heldCoins], ['Available to withdraw', withdrawableCoins]]),
+      paragraph('No money has left your wallet. If you believe this is wrong, reply to this email and our finance team will review it.'),
+    ],
+  })
+}
+
 // ── Operations ───────────────────────────────────────────────────────────────────────────────────────────────────────
 // Sent to the platform administrators when the money checks find something critical (catalog event `finance_alert`; the
 // payload is flat strings because the catalog schema is). `lines` is one finding per line.

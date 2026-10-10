@@ -1,6 +1,6 @@
 # Financial System — Master Plan
 
-Current phase: **PHASE 15 — PRODUCTION READINESS**
+Current phase: **PHASE 16 — WALLET TOP-UP & ECOSYSTEM SPEND** (saved payout accounts, KYC and the PIN code: see `docs/architecture/Payout-Accounts-and-KYC.md`)
 Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 COMPLETED (migration applied to production and catalog-verified).
 
 | Phase | Status |
@@ -21,6 +21,7 @@ Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted
 | 13 Financial test suite | READY_FOR_REVIEW (migration 20261018 applied; app code not yet deployed) |
 | 14 Red-team audit | READY_FOR_REVIEW (migration 20261019 applied to production 2026-10-06) |
 | 15 Production readiness | READY_FOR_REVIEW (audit and runbook; no code or database change; NOT ready to go live, see doc) |
+| 16 Wallet top-up & ecosystem spend | READY_FOR_REVIEW (code, tests and docs complete; migration `carefind_20261020_wallet_spend_and_topup` NOT applied to production). Saved payout accounts + Dojah KYC + PIN code: separate work, migrations applied |
 
 ## Phase 00
 
@@ -233,3 +234,13 @@ Found: **every scheduled job in production fails**: all 2,880 pg_cron runs in 24
 Files: `docs/architecture/Production-Readiness.md`.
 Unresolved (owner): deploy the Phase 04-14 code, THEN set the three Vault secrets; confirm backups/PITR; enable leaked-password protection; decide the kill-switch proposal, a second alert channel, event retention, the 3 legacy withdrawals and the 9 pre-credit shop orders; the Phase 14 not-done review areas; `test:finance:pg` not re-run this session.
 Phase status: the planned 16-phase program (00-15) is complete; go-live is gated on the owner items above.
+
+## Phase 16 — Wallet top-up & ecosystem spend
+
+Completed work (originally by Joepuils, merged onto the payout-accounts branch; the payout-account and PIN-code parts of that commit were NOT taken, the KYC-based versions replace them):
+* **CareHub business wallet card top-up (B1-B2):** `initiate-wallet-topup` / `verify-wallet-topup` (server-priced, N100 - N100,000 bounds, purpose `business_wallet_topup` through the one settlement engine); `topupApi.js` plus the "Add funds" card on the CareHub Wallet screen. CareFind's own top-up is unchanged (`wallet_topup` via `initiate-payment`).
+* **Wallet-balance spend (C1-C4):** seven new intent purposes settle from a wallet (`booking_wallet`, `subscription_wallet`, `consultation_wallet`, `shop_order_wallet`, `plan_renewal_wallet`, `appointment_fee_wallet`, `business_wallet_topup`) through the one `settle_payment_intent` engine via private `_settle_*_wallet` handlers that are never client-callable. **Wiring status:** only `business_wallet_topup` has end-to-end handlers and UI; the other six are engine capability proven by tests, no client creates those intents yet.
+* **CareCoin provenance (D1):** every positive coin credit must be traceable; `create_withdrawal` refuses to withdraw past `balance - untraceable` (`untraceable_credits`, handler 403 + `wallet_needs_attention` email); `reconcile_coin_provenance()` feeds `run_db_reconciliation`. Rule: `CareCoin-Wallet.md` §3. Business withdrawals are exempt.
+
+Migration: `carefind_20261020_wallet_spend_and_topup.sql` (+ mirror in `supabase/migrations/`), **NOT applied to production**. Details and rollout: `docs/architecture/Wallet-Spend-and-Topup.md`.
+

@@ -45,6 +45,7 @@ Only the posting primitives. Thirteen functions were moved onto them (signatures
 * **Integer accounting**: fractional balances are gone; every ledger amount is a whole number.
 * **Conservation**: after every storm, `wallet = Σ ledger` and the running balances chain.
 * **No hand-written balance**: an `UPDATE wallets` (even by the owner or service role) is refused; a wallet holding coins cannot be deleted (an account deletion can no longer silently destroy money; its ledger would survive anyway).
+* **Provenance (Phase 16)**: every positive credit is traceable to provider-confirmed money or to a refund/transfer of it. A credit traces when (a) its kind is an engine-only source (`opening_balance`, `topup`, `gift_received`, `withdrawal_refund`, `booking_refund`, `shop_payment_refund` — only definer functions post these), or (b) a **settled** `payment_intents` row carries the same reference, or (c) the reference carries a prefix only service-role code mints (`wd_refund_`, `appt_refund_`, `sref_`, `gift_`, `sub_`, `consult_`, `bk_`, `adj_`), or (d) it is an earning vouched for by a matching successful `transactions` row. Everything else — including a forged `adjustment` with an arbitrary reference — is untraceable: `reconcile_coin_provenance()` lists it, `run_db_reconciliation()` reports it as a critical `untraceable_credit` finding, and `create_withdrawal` refuses to reserve coins beyond `balance − untraceable` (`untraceable_credits` with the held/withdrawable split; see Withdrawal-Engine.md §5).
 
 ## 4. What changed for callers
 

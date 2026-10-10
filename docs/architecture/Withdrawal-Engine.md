@@ -39,6 +39,7 @@ reserved|processing -> failed -> refunded
 | transfer reversal recovery | `transfer.reversed` on a `completed` request -> `reversed` -> coins/balance refunded, once; a reversal before completion is treated as failure |
 | no duplicate refund | request row lock + state machine + unique ledger key (`wd_refund_<id>` / `bwd_refund_<id>`); 40 simultaneous failure notices refund once |
 | no negative balances | `_post_coin_entry` / wallet CHECKs; reservation checks under lock |
+| funds are traceable (Phase 16) | before debiting, `create_withdrawal` sums the user's untraceable credits (`reconcile_coin_provenance()`, rule in CareCoin-Wallet.md §3) and refuses when the request would dip into them: `untraceable_credits` with the withdrawable/held split; the handler 403s, queues one `wallet_needs_attention` email and never calls Paystack |
 | concurrency safe | proven on real Postgres: overlapping transactions, 40-way races, cap races (section 6) |
 | stale state recovery | sweep (CareFind + CareHub cron) over `reserved`/`processing` past the grace period; `reconcile_withdrawals()` reports anything still stuck |
 | no provider calls under locks | reservation commits before the first Paystack call |
@@ -57,6 +58,7 @@ Contradictory provider signals are **reported, never auto-fixed**: `conflict_pai
 
 * Status values changed (`pending` -> `reserved`/`processing`, `rejected`/`failed` -> `refunded`); admin UI, CareHub wallet list and dashboard counts follow. Existing rows are migrated by the migration.
 * CareHub owners must set a PIN before their next withdrawal (the form walks them through it).
+* **Phase 16**: a withdrawal funded partly by untraceable credits is refused with `untraceable_credits` and a `wallet_needs_attention` email naming the held and withdrawable amounts — the coins stay in the wallet while reconciliation reviews them.
 * `cancel-appointment` used to "reverse the held balance" by filing a **fake withdrawal** (bank `refund`, account `0000000000`). That function no longer exists; the call was removed. The wallet reversal and client refund are **Phase 09** (see section 8).
 * Paystack `checkBalance` now runs after reservation (the exact payout is only known then); if the provider balance is low the reservation is released immediately.
 
@@ -73,7 +75,7 @@ Contradictory provider signals are **reported, never auto-fixed**: `conflict_pai
 
 ## 8. Findings from this phase
 
-* **F-32 (CareFind)**: `/api/withdrawal-pin/set` lets any session replace an existing PIN (only email confirmation is required), which defeats the PIN as a stolen-session control. CareHub's new endpoint requires the current PIN; fixing CareFind needs a "forgot PIN" flow (emailed one-time code), a product decision.
+* **F-32 (CareFind) — RESOLVED**: `/api/withdrawal-pin/set` used to let any session replace an existing PIN (only email confirmation required), defeating the PIN as a stolen-session control. Both apps now require a fresh emailed one-time code for any set/change, and a change of an existing PIN additionally needs the current PIN unless the person chose "forgot PIN" (`shared-payments/src/otp.js`, `pin.js`; see `Payout-Accounts-and-KYC.md`).
 * **F-33**: `cancel-appointment` marks a card-paid appointment `refunded` and writes a wallet ledger row but moves no money to the client and does not reduce the business wallet (the fake-withdrawal trick it relied on is gone). Phase 09.
 * **Production data**: 3 `withdrawal_requests` from July/September are `pending` with coins debited and **no transfer** (two have no reference at all, one has a reference but no code): 41 coins. They become `reserved`; the sweep refunds the one with a reference after Paystack says not found; the two without references need an admin reject (which refunds). Decide before applying.
 
