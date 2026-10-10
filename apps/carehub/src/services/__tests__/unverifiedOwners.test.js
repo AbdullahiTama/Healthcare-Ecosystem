@@ -84,15 +84,42 @@ describe('summarizeBulkApproval', () => {
   })
 
   it('separates approved, unverified (pre-skipped plus refused) and failed', () => {
-    const r = summarizeBulkApproval([true, 'unverified', false, true], 1)
+    const r = summarizeBulkApproval([true, 'unverified', false, true], 1, ['No permission'])
     expect(r).toMatchObject({ approved: 2, skippedUnverified: 2, failed: 1 })
-    expect(r.message).toBe('Approved 2 businesses — undo? (Skipped 2: owner has not verified their email; Failed 1: see the error above)')
+    expect(r.message).toBe('Approved 2 businesses — undo? (Skipped 2: owner has not verified their email; Failed 1: No permission)')
   })
 
   it('never labels plain failures as unverified', () => {
-    const r = summarizeBulkApproval([false, false], 0)
-    expect(r).toEqual({ approved: 0, skippedUnverified: 0, failed: 2, message: 'Failed 2: see the error above' })
+    const r = summarizeBulkApproval([false, false], 0, ['No permission', 'No permission'])
+    expect(r).toEqual({ approved: 0, skippedUnverified: 0, failed: 2, message: 'Failed 2: No permission' })
     expect(r.message).not.toMatch(/verified/)
+  })
+
+  it('names the first of several distinct reasons and counts the rest', () => {
+    expect(summarizeBulkApproval([false, false, false], 0, ['No permission', 'Failed to fetch', 'No permission']).message)
+      .toBe('Failed 3: No permission (+1 more reason)')
+    expect(summarizeBulkApproval([false, false, false], 0, ['a', 'b', 'c']).message).toBe('Failed 3: a (+2 more reasons)')
+  })
+
+  it('falls back to a generic reason when no message is available', () => {
+    const msg = summarizeBulkApproval([false], 0).message
+    expect(msg).toBe('Failed 1: the request was refused or could not be completed')
+    expect(msg).not.toMatch(/error above/)
+    expect(summarizeBulkApproval([false], 0, ['   ', '']).message).toBe(msg)
+  })
+
+  it('collapses whitespace and truncates a long reason to 120 characters', () => {
+    const long = 'Supabase error (500):\n  ' + 'x'.repeat(300)
+    const msg = summarizeBulkApproval([false], 0, [long]).message
+    const reason = msg.replace('Failed 1: ', '')
+    expect(reason).toHaveLength(120)
+    expect(reason.endsWith('…')).toBe(true)
+    expect(reason).not.toMatch(/\n/)
+  })
+
+  it('shapes the whole sentence for approved + unverified + failed', () => {
+    expect(summarizeBulkApproval([true, true, 'unverified', false], 1, ['No permission']).message)
+      .toBe('Approved 2 businesses — undo? (Skipped 2: owner has not verified their email; Failed 1: No permission)')
   })
 
   it('reports pre-skipped only', () => {

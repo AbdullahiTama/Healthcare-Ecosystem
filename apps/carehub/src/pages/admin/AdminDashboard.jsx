@@ -397,7 +397,8 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
 
   // Resolves true when the change was saved, 'unverified' when the database refused it because the owner has
   // not verified their email, and false for any other failure or when busy. Failures are already toasted.
-  const handleStatus = async (id, next, prev) => {
+  // `options.onError(message)` receives the same readable message that is toasted, so a bulk caller can report the cause.
+  const handleStatus = async (id, next, prev, options = {}) => {
     if (busy) return false
     let saved = false
     let unverified = false
@@ -420,7 +421,9 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
       unverified = /not verified their email/i.test(e?.message || '')
       setRows(prevRows)
       if (selected?.id===id) setSelected(s=> ({...s, status: prev}))
-      showToast(e.message.includes('permission')||e.message.includes('42501') ? 'No permission' : e.message, { type: 'error' })
+      const readable = e.message.includes('permission')||e.message.includes('42501') ? 'No permission' : e.message
+      showToast(readable, { type: 'error' })
+      options.onError?.(readable)
       setUndo(null)
     }
     setTimeout(()=> setUndo(null), 5000)
@@ -487,17 +490,18 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
     // per-row database refusal as skipped too (handleStatus reports it rather than throwing).
     const { approvable, skipped: unverifiedSkipped } = partitionByOwnerVerification(ids, unverifiedIds)
     const outcomes = []
+    const failureMessages = []
     const approvedIds = []
     for (const id of approvable) {
       const b = rows.find(r=>r.id===id) || prevRowsSnapshot.find(r=>r.id===id)
       if (b && b.status==='pending') {
-        const outcome = await handleStatus(id, 'active', b.status)
+        const outcome = await handleStatus(id, 'active', b.status, { onError: (m) => failureMessages.push(m) })
         outcomes.push(outcome)
         if (outcome === true) approvedIds.push(id)
       }
     }
     // Each bucket is reported truthfully: a permission or network failure is never labelled "unverified".
-    const summary = summarizeBulkApproval(outcomes, unverifiedSkipped.length)
+    const summary = summarizeBulkApproval(outcomes, unverifiedSkipped.length, failureMessages)
     if (summary.approved > 0) {
       showToast(summary.message, { type: 'success', actionLabel: 'Undo', duration: 5000, onAction: async () => {
         for (const id of approvedIds) {

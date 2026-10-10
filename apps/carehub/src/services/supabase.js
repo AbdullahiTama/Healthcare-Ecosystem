@@ -170,15 +170,26 @@ export function partitionByOwnerVerification(ids, unverifiedIds) {
 }
 // Turns per-id bulk-approve outcomes (true | 'unverified' | false, as returned by the panel's handleStatus)
 // plus the number already skipped up front into truthful counts and one toast message. Only 'unverified'
-// is labelled as an unverified owner; any other failure is counted separately.
-export function summarizeBulkApproval(outcomes, preSkipped = 0) {
+// is labelled as an unverified owner; any other failure is counted separately and carries its real reason
+// (first distinct message, whitespace collapsed, capped at 120 characters).
+export function summarizeBulkApproval(outcomes, preSkipped = 0, failureMessages = []) {
   const list = outcomes || []
   const approved = list.filter((o) => o === true).length
   const skippedUnverified = (preSkipped || 0) + list.filter((o) => o === 'unverified').length
   const failed = list.length - approved - list.filter((o) => o === 'unverified').length
   const notes = []
   if (skippedUnverified > 0) notes.push(`Skipped ${skippedUnverified}: owner has not verified their email`)
-  if (failed > 0) notes.push(`Failed ${failed}: see the error above`)
+  if (failed > 0) {
+    // The real cause goes in the text: the toast has one slot, so a per-row error toast is overwritten.
+    const clean = (failureMessages || []).map((m) => String(m || '').replace(/\s+/g, ' ').trim()).filter(Boolean)
+    const distinct = [...new Set(clean)]
+    let reason = 'the request was refused or could not be completed'
+    if (distinct.length > 0) {
+      reason = distinct[0].length > 120 ? distinct[0].slice(0, 119) + '…' : distinct[0]
+      if (distinct.length > 1) reason += ` (+${distinct.length - 1} more ${distinct.length - 1 === 1 ? 'reason' : 'reasons'})`
+    }
+    notes.push(`Failed ${failed}: ${reason}`)
+  }
   const note = notes.join('; ')
   let message = ''
   if (approved > 0) message = `Approved ${approved} businesses — undo?` + (note ? ` (${note})` : '')
