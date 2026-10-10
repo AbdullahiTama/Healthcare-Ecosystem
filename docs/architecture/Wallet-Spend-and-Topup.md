@@ -1,6 +1,6 @@
 # Wallet top-up, wallet spend and CareCoin provenance (Phase 16)
 
-Status: implemented and tested. **Migration `carefind_20261020_wallet_spend_and_topup` is NOT applied to production.** (Authored by Joepuils; merged onto the payout-accounts branch with the payout-account and PIN-code parts left out, since `Payout-Accounts-and-KYC.md` covers those.)
+Status: implemented and tested. **Migration `carefind_20261020_wallet_spend_and_topup` is applied to production (2026-10-10, in seven parts; the `run_db_reconciliation` staleness comparisons were corrected to `<` first).** After applying, the ACLs were re-read (the nine private `_settle_*_wallet` / `_pay_*_for` functions are executable by nobody; `reconcile_coin_provenance`, `create_withdrawal`, `settle_payment_intent` and `run_db_reconciliation` are service_role only; the two `pay_*` wrappers are authenticated + service_role) and `run_db_reconciliation()` returned 0 critical findings and no `untraceable_credit` rows. (Authored by Joepuils; merged onto the payout-accounts branch with the payout-account and PIN-code parts left out, since `Payout-Accounts-and-KYC.md` covers those.)
 
 ## 1. The shape
 
