@@ -1,6 +1,16 @@
 # Email verification at signup: design
 
-Status: draft for review. Nothing in this document is implemented.
+Status: implemented on branch `feat/owner-email-verification` (not merged, not applied to any database, not deployed). Spike S1 (section 9) has **not** been run and is a hard gate before merge. Rollout order and runbook: `docs/architecture/Owner-Email-Verification.md`.
+
+### Findings made during planning
+
+These change the design above; the plan and the implementation follow them, not the literal text of sections 3 to 5.
+
+1. **Catalog foreign key.** `email_outbox` has a foreign key on `(app, event_key)` into `email_event_catalog`, so `owner_setup` cannot be enqueued without a catalog row. The migration inserts one, copied from `staff_welcome`. Its `payload_schema` uses the camelCase keys `sendAuthEmail` actually enqueues (`fullName`, `businessName`, `setupLink`); the schema is not enforced at send time (observed on live data).
+2. **The old "mint confirmed" behaviour was deliberate.** `apps/carehub/src/pages/auth/Login.jsx` carried a comment (C2) stating that `register_business` and `provision_staff_auth` mint confirmed users so that a successful sign-in is authoritative. That was a decision, not an oversight: removing it is a behaviour change, and the comment was rewritten. Staff provisioning (`provision_staff_auth`) is unchanged and still mints confirmed users.
+3. **Approval is a direct PATCH.** Businesses are approved by a PATCH on `businesses` from the admin client, not through an RPC, so an "admin RPC with an `owner_email_confirmed` column" (section 4 and 5) cannot enforce anything. Enforcement is the trigger `businesses_require_verified_owner`; the RPC `admin_unverified_owner_business_ids()` is display-only. The real status vocabulary is `pending`, `active`, `suspended`, `revoked`: the trigger refuses leaving `pending` to anything but `suspended` or `revoked` while the owner's email is unconfirmed.
+
+Other deviations: there is no per-IP rate limit (CareHub has no IP limiter; per-address limits only), and the single migration became two (additive, then cutover) so the previous frontend keeps working until the new one is live.
 
 ## 1. Problem
 
