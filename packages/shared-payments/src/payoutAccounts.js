@@ -1,6 +1,7 @@
 const isValidAccountNumber = (v) => typeof v === 'string' && /^\d{10}$/.test(v)
 import { OTP_PURPOSES, checkOtp, sendOtp } from './otp.js'
 import { matchBusinessName, matchPersonName } from './kyc/nameMatch.js'
+import { accountCooling, kycTier, readLimitConfig } from './withdrawalLimits.js'
 
 // Saved payout accounts: a bank account an owner (a person on CareFind, a business on CareHub) has PROVEN is theirs.
 // To save one the API requires, in this order (cheapest and safest first, all before any row is written):
@@ -14,7 +15,7 @@ import { matchBusinessName, matchPersonName } from './kyc/nameMatch.js'
 
 const MASK = (n) => String(n).slice(-4)
 
-const publicShape = (r) => ({
+const publicShape = (r, config) => ({
   id: r.id,
   bankCode: r.bank_code,
   bankName: r.bank_name,
@@ -22,17 +23,35 @@ const publicShape = (r) => ({
   accountName: r.account_name,
   isDefault: r.is_default,
   verifiedAt: r.verified_at,
+  // When set, withdrawals to this (new) account are capped until this time.
+  coolingEndsAt: accountCooling(r.verified_at, config),
 })
 
-export async function listPayoutAccounts(supabase, { ownerType, ownerId }) {
+export async function listPayoutAccounts(supabase, { ownerType, ownerId, userId }) {
   const { data, error } = await supabase
     .from('payout_accounts')
     .select('id, bank_code, bank_name, account_number, account_name, is_default, verified_at')
     .eq('owner_type', ownerType).eq('owner_id', ownerId).eq('status', 'verified')
     .order('created_at', { ascending: true })
   if (error) return { status: 500, body: { error: 'Could not load your payout accounts' } }
-  // `required` tells the UI whether typing in a destination is still allowed (the server enforces it regardless).
-  return { status: 200, body: { accounts: (data || []).map(publicShape), required: await payoutAccountRequired(supabase) } }
+  // `required` tells the UI whether typing in a destination is still allowed (the server enforces it regardless);
+  // `limits` lets it show what the person can withdraw (the server enforces these too).
+  const config = await readLimitConfig(supabase)
+  const tier = ownerType === 'user' && userId ? await kycTier(supabase, userId) : 0
+  return {
+    status: 200,
+    body: {
+      accounts: (data || []).map((r) => publicShape(r, config)),
+      required: await payoutAccountRequired(supabase),
+      limits: {
+        tier,
+        dailyCapKobo: ownerType === 'user' ? (tier >= 2 ? config.tier2CapKobo : tier === 1 ? config.tier1CapKobo : null) : null,
+        nextTierCapKobo: ownerType === 'user' && tier === 1 ? config.tier2CapKobo : null,
+        cooloffHours: config.cooloffHours,
+        cooloffCapKobo: ownerType === 'business' ? Math.min(config.cooloffCapKobo, config.businessCapKobo) : config.cooloffCapKobo,
+      },
+    },
+  }
 }
 
 /** The full details (incl. account number) of one verified account the owner owns - for the withdrawal handlers ONLY. */
@@ -40,7 +59,7 @@ export async function getPayoutAccountForWithdrawal(supabase, { ownerType, owner
   if (!id) return null
   const { data } = await supabase
     .from('payout_accounts')
-    .select('id, bank_code, bank_name, account_number, account_name')
+    .select('id, bank_code, bank_name, account_number, account_name, verified_at')
     .eq('id', id).eq('owner_type', ownerType).eq('owner_id', ownerId).eq('status', 'verified')
     .maybeSingle()
   return data || null

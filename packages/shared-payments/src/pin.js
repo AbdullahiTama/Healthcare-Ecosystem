@@ -10,6 +10,7 @@
 import crypto from 'node:crypto'
 import { OTP_PURPOSES, checkOtp } from './otp.js'
 
+export const PIN_LOCK_AFTER = 5 // consecutive wrong PINs that lock it (verify_withdrawal_pin)
 const SCRYPT_KEYLEN = 64
 const SALT_BYTES = 16
 
@@ -40,8 +41,10 @@ export function verifyPin(pin, saltHex, expectedHash) {
  * @param {object} supabase  service-role client
  * @param {string} userId    the verified auth user
  * @param {string} pin       what the client typed
+ * @param {{ onLocked?: () => unknown }} [opts]  called (best effort, never throws) when THIS wrong attempt locked the PIN,
+ *                          so the owner can be warned that someone is guessing
  */
-export async function checkWithdrawalPin(supabase, userId, pin) {
+export async function checkWithdrawalPin(supabase, userId, pin, { onLocked } = {}) {
   if (!isValidPin(pin)) return { ok: false, status: 400, code: 'invalid_pin', error: 'Withdrawal PIN must be 4-6 digits' }
 
   const { data: rows, error: fetchError } = await supabase.rpc('get_withdrawal_pin', { p_user_id: userId })
@@ -59,7 +62,13 @@ export async function checkWithdrawalPin(supabase, userId, pin) {
   const { data: verified, error: verifyError } = await supabase.rpc('verify_withdrawal_pin', {
     p_user_id: userId, p_pin_hash: attemptHash, p_pin_salt: stored.pin_salt,
   })
-  if (verifyError || !locallyMatches || verified !== true) return { ok: false, status: 403, code: 'pin_incorrect', error: 'Incorrect withdrawal PIN.' }
+  if (verifyError || !locallyMatches || verified !== true) {
+    // verify_withdrawal_pin locks on the 5th consecutive failure; `failed_attempts` is the count BEFORE this attempt.
+    if (onLocked && !verifyError && Number(stored.failed_attempts) + 1 >= PIN_LOCK_AFTER) {
+      try { await onLocked() } catch { /* an alert must never change the answer */ }
+    }
+    return { ok: false, status: 403, code: 'pin_incorrect', error: 'Incorrect withdrawal PIN.' }
+  }
   return { ok: true }
 }
 

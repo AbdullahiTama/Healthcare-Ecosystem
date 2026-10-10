@@ -8,6 +8,7 @@ const h = vi.hoisted(() => {
     const b = {
       select: () => b, order: () => b, limit: () => b, is: () => b, update: () => b,
       eq: (col, val) => { rows = rows.filter((r) => r[col] === val); return b },
+      in: (col, vals) => { rows = rows.filter((r) => vals.includes(r[col])); return b },
       maybeSingle: async () => ({ data: rows[0] ?? null }),
       then: (resolve) => resolve({ error: null, data: rows }),
     }
@@ -22,6 +23,8 @@ const h = vi.hoisted(() => {
 
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => h.client }))
 vi.mock('../_lib/verifyUser.js', () => ({ verifyUser: async () => ({ id: 'user-12345678', email: 'u@example.com' }) }))
+const mailer = vi.hoisted(() => ({ sendPinLocked: vi.fn(async () => ({ ok: true })) }))
+vi.mock('../_lib/securityMailer.js', () => ({ getSecurityMailer: async () => mailer }))
 vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
 vi.mock('../_lib/pinCrypto.js', () => ({ hashPin: () => 'h', verifyPin: () => true, isValidPin: () => true }))
 vi.mock('../_lib/trustLevels.js', () => ({ getRequiredAuth: () => ['pin'], isInstantEligible: () => false, getDailyCap: () => 50 }))
@@ -34,15 +37,16 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
 }))
 
 import handler from './initiate-withdrawal.js'
+import { enqueue } from '../_lib/emailService.js'
 
 const REF = 'cf_wd_0123456789abcdef0123456789abcdef'
-const SAVED = { id: 'pa-1', owner_type: 'user', owner_id: 'user-12345678', status: 'verified', bank_code: '058', bank_name: 'Guaranty Trust Bank', account_number: '0123456789', account_name: 'ADA CHINYERE OBI' }
+const SAVED = { id: 'pa-1', owner_type: 'user', owner_id: 'user-12345678', status: 'verified', bank_code: '058', bank_name: 'Guaranty Trust Bank', account_number: '0123456789', account_name: 'ADA CHINYERE OBI', verified_at: '2020-01-01T00:00:00Z' }
 const res = () => { const r = { statusCode: 0, body: null }; r.status = (c) => { r.statusCode = c; return r }; r.json = (b) => { r.body = b; return r }; r.setHeader = () => {}; return r }
 const created = (name) => h.rpcCalls.filter(([n]) => n === name)
 
 beforeEach(() => {
   h.rpcCalls.length = 0
-  h.tables = { payout_accounts: [SAVED], financial_config: [{ key: 'payout_account_required', value: 0 }] }
+  h.tables = { payout_accounts: [SAVED], financial_config: [{ key: 'payout_account_required', value: 0 }, { key: 'coin_value_kobo', value: 20000 }], kyc_verifications: [{ user_id: 'user-12345678', tier: 2 }] }
   h.resolved = { accountName: 'ADA CHINYERE OBI' }
   h.routes.get_withdrawal_trust = { data: { trust_level: 'new' } }
   h.routes.get_withdrawal_pin = { data: [{ pin_hash: 'x', pin_salt: 's', locked_until: null }] }
@@ -106,7 +110,7 @@ describe('payout_account_required', () => {
   })
 
   it('on: a typed destination is refused before anything is reserved', async () => {
-    h.tables.financial_config = [{ key: 'payout_account_required', value: 1 }]
+    h.tables.financial_config = [{ key: 'payout_account_required', value: 1 }, { key: 'coin_value_kobo', value: 20000 }]
     const r = res()
     await handler({ method: 'POST', body: typed }, r)
     expect(r.statusCode).toBe(400)
@@ -115,9 +119,88 @@ describe('payout_account_required', () => {
   })
 
   it('on: a saved account still works', async () => {
-    h.tables.financial_config = [{ key: 'payout_account_required', value: 1 }]
+    h.tables.financial_config = [{ key: 'payout_account_required', value: 1 }, { key: 'coin_value_kobo', value: 20000 }]
     const r = res()
     await handler({ method: 'POST', body: { amount: 10, pin: '1234', payoutAccountId: 'pa-1' } }, r)
     expect(r.statusCode).toBe(200)
+  })
+})
+
+describe('Phase 4: tier ceilings and the new-account cooling-off cap (folded into the engine cap)', () => {
+  const body = { amount: 10, pin: '1234', payoutAccountId: 'pa-1' }
+  const capSent = () => created('create_withdrawal')[0][1].p_daily_cap_coins
+  const withLimits = (rows) => { h.tables.financial_config = [{ key: 'payout_account_required', value: 0 }, { key: 'coin_value_kobo', value: 20000 }, ...rows] }
+
+  it('tier 2: a long-standing account is not capped below the trust-level cap (50 coins here)', async () => {
+    await handler({ method: 'POST', body }, res())
+    expect(capSent()).toBe(50)
+  })
+
+  it('tier 1 ceiling (N50,000 = 250 coins) only bites when it is lower than the trust cap', async () => {
+    h.tables.kyc_verifications = [{ user_id: 'user-12345678', tier: 1 }]
+    await handler({ method: 'POST', body }, res())
+    expect(capSent()).toBe(50) // trust cap 50 is tighter than 250
+    h.rpcCalls.length = 0
+    withLimits([{ key: 'kyc_tier1_daily_cap_kobo', value: 2000000 }]) // N20,000 = 100 coins... still above 50
+    await handler({ method: 'POST', body }, res())
+    expect(capSent()).toBe(50)
+    h.rpcCalls.length = 0
+    withLimits([{ key: 'kyc_tier1_daily_cap_kobo', value: 400000 }]) // N4,000 = 20 coins
+    await handler({ method: 'POST', body }, res())
+    expect(capSent()).toBe(20)
+  })
+
+  it('a new account (inside the cooling-off window) caps the 24h total at the cooling-off amount', async () => {
+    h.tables.payout_accounts = [{ ...SAVED, verified_at: new Date(Date.now() - 3600_000).toISOString() }] // 1 h old
+    withLimits([{ key: 'payout_account_cooloff_daily_cap_kobo', value: 200000 }]) // N2,000 = 10 coins
+    await handler({ method: 'POST', body }, res())
+    expect(capSent()).toBe(10)
+  })
+
+  it('an old account (past the window) gets no cooling-off cap', async () => {
+    h.tables.payout_accounts = [{ ...SAVED, verified_at: new Date(Date.now() - 30 * 3600_000).toISOString() }] // 30 h old
+    withLimits([{ key: 'payout_account_cooloff_daily_cap_kobo', value: 200000 }])
+    await handler({ method: 'POST', body }, res())
+    expect(capSent()).toBe(50)
+  })
+
+  it('when the engine says daily_limit because of a new account, the person is told why and until when', async () => {
+    h.tables.payout_accounts = [{ ...SAVED, verified_at: new Date(Date.now() - 3600_000).toISOString() }]
+    withLimits([{ key: 'payout_account_cooloff_daily_cap_kobo', value: 200000 }])
+    h.routes.create_withdrawal = { data: { outcome: 'daily_limit' } }
+    const r = res()
+    await handler({ method: 'POST', body }, r)
+    expect(r.statusCode).toBe(429)
+    expect(r.body).toMatchObject({ error: 'daily_limit', limitReason: 'new_account', dailyCapCoins: 10 })
+    expect(r.body.message).toMatch(/new, so withdrawals are limited/)
+    expect(r.body.coolingEndsAt).toBeTruthy()
+  })
+
+  it('typed-in (legacy) destinations are not given a tier cap: today\'s trust-level cap applies unchanged', async () => {
+    await handler({ method: 'POST', body: { amount: 10, pin: '1234', bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'ADA CHINYERE OBI' } }, res())
+    expect(capSent()).toBe(50)
+  })
+})
+
+describe('Phase 4: alerts', () => {
+  it('the withdrawal-requested alert shows only the last four digits of the destination', async () => {
+    enqueue.mockClear()
+    await handler({ method: 'POST', body: { amount: 10, pin: '1234', payoutAccountId: 'pa-1' } }, res())
+    const payload = enqueue.mock.calls[0][0].payload
+    expect(payload.accountNumber).toBe('••••6789')
+    expect(payload.accountNumber).not.toContain('0123456789')
+  })
+
+  it('the wrong PIN that locks it (5th in a row) emails the owner; earlier wrong PINs do not', async () => {
+    mailer.sendPinLocked.mockClear()
+    h.routes.verify_withdrawal_pin = { data: false }
+    h.routes.get_withdrawal_pin = { data: [{ pin_hash: 'x', pin_salt: 's', locked_until: null, failed_attempts: 3 }] }
+    await handler({ method: 'POST', body: { amount: 10, pin: '0000', payoutAccountId: 'pa-1' } }, res())
+    expect(mailer.sendPinLocked).not.toHaveBeenCalled()
+    h.routes.get_withdrawal_pin = { data: [{ pin_hash: 'x', pin_salt: 's', locked_until: null, failed_attempts: 4 }] }
+    const r = res()
+    await handler({ method: 'POST', body: { amount: 10, pin: '0000', payoutAccountId: 'pa-1' } }, r)
+    expect(r.statusCode).toBe(403)
+    expect(mailer.sendPinLocked).toHaveBeenCalledWith({ to: 'u@example.com' })
   })
 })

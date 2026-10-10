@@ -17,6 +17,7 @@ function fakeDb({ tables = {}, rpc = {} } = {}) {
     const q = {
       select: () => q,
       eq: (col, val) => { result = result.filter((r) => r[col] === val); return q },
+      in: (col, vals) => { result = result.filter((r) => vals.includes(r[col])); return q },
       order: () => q,
       maybeSingle: async () => ({ data: result[0] ?? null, error: null }),
       then: (resolve) => resolve({ data: result, error: null }),
@@ -227,7 +228,7 @@ describe('listing, lookup and management', () => {
   it('lists only the owner’s active accounts, masked: the full number never reaches the client', async () => {
     const r = await listPayoutAccounts(db(), { ownerType: 'user', ownerId: 'u1' })
     expect(r.body.required).toBe(true)
-    expect(r.body.accounts).toEqual([{ id: 'a1', bankCode: '058', bankName: 'GTBank', accountLast4: '6789', accountName: 'ADA OBI', isDefault: true, verifiedAt: 't' }])
+    expect(r.body.accounts).toEqual([{ id: 'a1', bankCode: '058', bankName: 'GTBank', accountLast4: '6789', accountName: 'ADA OBI', isDefault: true, verifiedAt: 't', coolingEndsAt: null }])
     expect(JSON.stringify(r.body)).not.toContain('0123456789')
   })
 

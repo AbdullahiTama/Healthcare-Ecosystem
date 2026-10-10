@@ -1,4 +1,5 @@
-import { checkWithdrawalPin, verifyBankAccount, settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired } from '@care-ecosystem/shared-payments'
+import { checkWithdrawalPin, verifyBankAccount, settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForSavedAccount, limitMessage } from '@care-ecosystem/shared-payments'
+import { getSecurityMailer } from '../_lib/securityMailer.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { supabase } from '../_lib/supabase.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, resolveAccount } from '../_lib/paystackTransfer.js'
@@ -28,8 +29,9 @@ export default async function handler(req, res) {
   // A saved, identity-verified payout account (owned by the parent business) decides WHERE the money goes: its
   // details come from the database and any bank details the browser sent are ignored. When the platform requires
   // saved accounts (financial_config.payout_account_required) a typed-in destination is refused.
+  let saved = null
   if (payoutAccountId) {
-    const saved = await getPayoutAccountForWithdrawal(supabase, { ownerType: 'business', ownerId: business.id, id: payoutAccountId })
+    saved = await getPayoutAccountForWithdrawal(supabase, { ownerType: 'business', ownerId: business.id, id: payoutAccountId })
     if (!saved) return res.status(400).json({ error: 'That payout account is not available. Choose another or add a new one.', code: 'payout_account_not_found' })
     ;({ bank_code: bankCode, bank_name: bankName, account_number: accountNumber, account_name: accountName } = saved)
   } else if (await payoutAccountRequired(supabase)) {
@@ -50,13 +52,20 @@ export default async function handler(req, res) {
   if (!target) return res.status(403).json({ error: 'You do not own this business' })
 
   // Second factor. Nothing below runs without it.
-  const pinCheck = await checkWithdrawalPin(supabase, user.id, pin)
+  const pinCheck = await checkWithdrawalPin(supabase, user.id, pin, {
+    // the wrong PIN that locks it: tell the owner someone is guessing
+    onLocked: async () => (await getSecurityMailer()).sendPinLocked({ to: user.email }),
+  })
   if (!pinCheck.ok) {
     return res.status(pinCheck.status).json({ error: pinCheck.error, code: pinCheck.code, ...(pinCheck.code === 'pin_not_set' ? { needsPin: true } : {}) })
   }
 
   const account = await verifyBankAccount(resolveAccount, { bankCode, accountNumber, accountName })
   if (!account.ok) return res.status(account.status).json({ error: account.error })
+
+  // A NEW saved account (inside the cooling-off window) caps the business's rolling-24h total at a small amount. It is
+  // passed as the engine's own per-call cap (never above the engine's business ceiling), so it is enforced atomically.
+  const extraLimit = saved ? await limitsForSavedAccount(supabase, { ownerType: 'business', userId: user.id, account: saved }) : null
 
   const { data: created, error: createError } = await supabase.rpc('create_business_withdrawal', {
     p_business_id: businessId,
@@ -66,13 +75,14 @@ export default async function handler(req, res) {
     p_account_number: accountNumber,
     p_account_name: account.accountName,
     p_initiated_by: user.id,
+    ...(extraLimit?.capKobo != null ? { p_daily_cap_kobo: extraLimit.capKobo } : {}),
   })
   if (createError || !created) {
     console.error('[initiate-business-withdrawal] create_business_withdrawal failed', createError?.message)
     return res.status(500).json({ error: 'Could not process withdrawal request' })
   }
   if (created.outcome === 'daily_limit') {
-    return res.status(429).json({ error: 'daily_limit', message: 'Daily withdrawal limit reached for this business. Try again later or contact support.' })
+    return res.status(429).json({ error: 'daily_limit', message: extraLimit?.capKobo != null ? limitMessage(extraLimit) : 'Daily withdrawal limit reached for this business. Try again later or contact support.', ...(extraLimit?.capKobo != null ? { limitReason: extraLimit.reason, coolingEndsAt: extraLimit.coolingEndsAt } : {}) })
   }
   if (created.outcome === 'below_minimum') {
     return res.status(400).json({ error: 'below_minimum', message: 'That is below the minimum withdrawal amount.' })
@@ -130,7 +140,7 @@ export default async function handler(req, res) {
       await emailService.enqueue({
         templateKey: 'withdrawal_requested',
         toEmail: business.email,
-        payload: { businessName: '', amount: 'Your withdrawal request is being processed', reference, bankName, accountNumber },
+        payload: { businessName: '', amount: 'Your withdrawal request is being processed', reference, bankName, accountNumber: `••••${String(accountNumber).slice(-4)}` },
         subject: 'CareHub: withdrawal requested',
         idempotencyKey: `withdrawal-requested:${reference}`,
       })

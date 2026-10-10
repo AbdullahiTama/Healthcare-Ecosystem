@@ -6,13 +6,13 @@ vi.mock('../../config/supabaseClient.js', () => ({ supabase: { auth: { getSessio
 import PayoutAccountsPanel from './PayoutAccountsPanel.jsx'
 
 function fakeManager(state, over = {}) {
-  const base = { loading: false, loadError: '', kyc: { verified: false }, accounts: [], required: false, busy: '', error: '', code: '', codeSent: false, sentTo: '' }
+  const base = { limits: null, loading: false, loadError: '', kyc: { verified: false }, accounts: [], required: false, busy: '', error: '', code: '', codeSent: false, sentTo: '' }
   const s = { ...base, ...state }
   return {
     getState: () => s,
     subscribe: () => () => {},
     load: vi.fn(), clearError: vi.fn(),
-    verifyIdentity: vi.fn(async () => true), sendCode: vi.fn(), addAccount: vi.fn(),
+    verifyIdentity: vi.fn(async () => true), verifySelfie: vi.fn(async () => true), sendCode: vi.fn(), addAccount: vi.fn(),
     setDefault: vi.fn(async () => true), remove: vi.fn(async () => true),
     ...over,
   }
@@ -91,5 +91,50 @@ describe('PayoutAccountsPanel', () => {
     fireEvent.change(screen.getByLabelText(/Withdrawal PIN to confirm/), { target: { value: '1234' } })
     fireEvent.click(confirm)
     await waitFor(() => expect(m.remove).toHaveBeenCalledWith({ id: 'a1', pin: '1234' }))
+  })
+
+  const VERIFIED = { verified: true, legalName: 'ADA OBI', bvnLast4: '1234' }
+  const LIMITS1 = { tier: 1, dailyCapKobo: 5000000, nextTierCapKobo: 50000000, cooloffHours: 24, cooloffCapKobo: 2000000 }
+
+  it('shows the daily limit and, at tier 1, offers a selfie check to raise it', async () => {
+    const m = fakeManager({ kyc: VERIFIED, limits: LIMITS1 })
+    render(<PayoutAccountsPanel {...props(m, { showSelfie: true })} />)
+    expect(screen.getByText(/Verification limit: ₦50,000 a day/)).toBeInTheDocument()
+    expect(screen.getByText(/raises your verification limit to/)).toHaveTextContent('₦500,000')
+    const submit = screen.getByRole('button', { name: 'Verify selfie' })
+    expect(submit).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/BVN/, { selector: '#selfie-bvn' }), { target: { value: '22222222222' } })
+    const file = new File(['x'], 'me.jpg', { type: 'image/jpeg' })
+    fireEvent.change(document.getElementById('selfie-file'), { target: { files: [file] } })
+    expect(submit).not.toBeDisabled()
+    expect(document.getElementById('selfie-file')).toHaveAttribute('capture', 'user')
+  })
+
+  it('an unreadable photo is explained and nothing is sent', async () => {
+    const m = fakeManager({ kyc: VERIFIED, limits: LIMITS1 })
+    render(<PayoutAccountsPanel {...props(m, { showSelfie: true })} />)
+    fireEvent.change(screen.getByLabelText(/BVN/, { selector: '#selfie-bvn' }), { target: { value: '22222222222' } })
+    fireEvent.change(document.getElementById('selfie-file'), { target: { files: [new File(['x'], 'doc.pdf', { type: 'application/pdf' })] } })
+    fireEvent.click(screen.getByRole('button', { name: 'Verify selfie' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/not a photo/))
+    expect(m.verifySelfie).not.toHaveBeenCalled()
+  })
+
+  it('no selfie offer at tier 2 (it says so) or when the screen does not ask for it', () => {
+    const { unmount } = render(<PayoutAccountsPanel {...props(fakeManager({ kyc: VERIFIED, limits: { ...LIMITS1, tier: 2, dailyCapKobo: 50000000, nextTierCapKobo: null } }), { showSelfie: true })} />)
+    expect(screen.getByText(/selfie verified/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Verify selfie' })).toBeNull()
+    unmount()
+    render(<PayoutAccountsPanel {...props(fakeManager({ kyc: VERIFIED, limits: LIMITS1 }))} />)
+    expect(screen.queryByRole('button', { name: 'Verify selfie' })).toBeNull()
+  })
+
+  it('a new account explains its cooling-off cap and when it ends', () => {
+    const ends = new Date(Date.now() + 3 * 3600_000).toISOString()
+    const accounts = [{ id: 'n1', bankName: 'GTBank', accountLast4: '6789', accountName: 'ADA OBI', isDefault: true, coolingEndsAt: ends }, { id: 'o1', bankName: 'Zenith', accountLast4: '1111', accountName: 'ADA OBI', isDefault: false, coolingEndsAt: null }]
+    render(<PayoutAccountsPanel {...props(fakeManager({ kyc: VERIFIED, limits: LIMITS1, accounts }), { selectedId: 'n1' })} />)
+    const notes = screen.getAllByRole('note')
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toHaveTextContent(/limited to ₦20,000 in any 24 hours until/)
   })
 })

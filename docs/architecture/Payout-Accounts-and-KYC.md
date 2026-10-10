@@ -1,6 +1,6 @@
 # Payout accounts, identity verification and the withdrawal PIN
 
-Status: **code complete and tested; database APPLIED to production 2026-10-09; app code NOT yet deployed.** Identity checks need Dojah credentials and have not been run against the live Dojah API (see section 6).
+Status: **phases 1-4 code complete and tested; database APPLIED to production (2026-10-09 and 2026-10-10); app code NOT yet deployed.** Identity checks need Dojah credentials and have not been run against the live Dojah API (see section 6).
 
 ## 1. What this protects against
 
@@ -50,12 +50,11 @@ Order-independent; titles (MR, ALHAJI...) ignored; compound names matched joined
 
 ## 6. Known limits
 
-* **Dojah NIN and selfie endpoints/field names are not verified against the live API.** The BVN endpoint and auth headers follow Dojah's published reference; the rest is read defensively and fails closed (an unrecognised response is an error). Run the sandbox before relying on it. The selfie check (tier 2) has a backend (`/api/kyc/selfie`) but **no screen yet** and tier 2 does not change any limit until Phase 4.
+* **Dojah NIN and selfie endpoints/field names are not verified against the live API.** The BVN endpoint and auth headers follow Dojah's published reference; the rest is read defensively and fails closed (an unrecognised response is an error). Run the sandbox before relying on it. The selfie check (tier 2) has a screen on the CareFind wallet (camera/photo, downscaled in the browser to a small JPEG, sent once, never kept).
 * The CareHub **Appointments** withdraw dialog still uses typed bank details (the Wallet screen has the saved-account flow). With `payout_account_required = 1` it is refused by the server with a clear message; move it onto the shared form before flipping the flag.
 * The resolve-account and OTP resend limits: the in-memory limiter is per serverless instance (best effort); the OTP and KYC limits are in the database and exact.
 * A business account matching only the registered business name relies on the name the business typed when registering; CAC verification would strengthen it.
 * `BankPicker`, `PayoutAccountsPanel` and `AddPayoutAccountModal` exist once per app (different design systems). The logic is shared (`packages/shared-payout-ui`, `packages/shared-payments`).
-* Phase 4 (not built): daily limits by KYC tier, a cooling-off period for new accounts, withdrawal alerts.
 
 ## 7. Code map
 
@@ -63,3 +62,22 @@ Order-independent; titles (MR, ALHAJI...) ignored; compound names matched joined
 `packages/shared-email/src/securityEmails.js`: the code and alert emails (sent directly, never through the outbox, so a live code is never stored).
 `packages/shared-payout-ui`: bank ranking/search and the framework-free state machines behind the screens.
 Apps: `api/_handlers/{kyc,payout-accounts,withdrawal-pin,resolve-account,initiate-*withdrawal}.js`; screens in `wallet-payments/` (CareFind) and `wallet/` (CareHub).
+
+## 8. Phase 4: limits and alerts
+
+Configuration in `financial_config` (changes apply within a minute, no deploy; migration `carefind_20261026_withdrawal_limits.sql`, APPLIED):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `kyc_tier1_daily_cap_kobo` | 5,000,000 (N50,000) | rolling-24h ceiling for a person at tier 1 (BVN + NIN) withdrawing to a saved account |
+| `kyc_tier2_daily_cap_kobo` | 50,000,000 (N500,000) | same at tier 2 (+ selfie) |
+| `payout_account_cooloff_hours` | 24 | how long a newly saved account is in cooling-off (0 = off) |
+| `payout_account_cooloff_daily_cap_kobo` | 2,000,000 (N20,000) | rolling-24h total allowed during cooling-off (people and businesses) |
+
+How it is enforced: the handler computes the LOWEST applicable ceiling (`withdrawalLimits.js`) and passes it as the withdrawal engine's own per-call cap (`create_withdrawal.p_daily_cap_coins`, `create_business_withdrawal.p_daily_cap_kobo`). The engine checks it atomically under the wallet lock, together with balance and its own cap, so concurrent requests cannot slip past it. A business's cooling-off cap can only lower the engine's business ceiling, never raise it. When the engine answers `daily_limit` because of one of these, the person is told which limit and until when (`limitReason`, `coolingEndsAt`).
+
+Alerts (all best effort, never block or change the answer): payout account added/removed (with last four digits only), PIN changed, **PIN locked** (the wrong attempt that triggers the 15-minute lock emails the owner that someone may be guessing), and the withdrawal-requested email now shows the destination as `••••1234` instead of the full account number.
+
+**Important limitation (decision needed):** these ceilings only ever LOWER what applies. For CareFind people the existing trust ladder is already tighter (new 50 coins = N10,000, trusted 200 = N40,000, veteran 1,000 = N200,000 per day), so today the tier ceilings bind only for veterans at tier 1, and the selfie (tier 2) does **not** raise anyone's actual withdrawal limit. The screen therefore says "verification limit" and notes that account history may set a lower daily limit. To make the selfie worth doing, decide whether a verified tier should *replace* or lift the trust ladder (a loosening of an existing control, so not done without your say-so). Typed-in (legacy) destinations are unchanged by Phase 4.
+
+Not covered by tier ceilings: businesses (their engine cap is N1,000,000 a day; only the cooling-off cap applies to a new account).

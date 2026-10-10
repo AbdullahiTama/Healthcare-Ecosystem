@@ -226,6 +226,29 @@ describe('createPayoutManager', () => {
     expect(await m.setDefault('a1')).toBe(true)
   })
 
+  it('loads the limits, and verifySelfie validates locally then reloads', async () => {
+    const log = routes({
+      '/api/kyc/status': KYC,
+      '/api/payout-accounts/list': { status: 200, body: { accounts: [], required: false, limits: { tier: 1, dailyCapKobo: 5000000, nextTierCapKobo: 50000000 } } },
+      '/api/kyc/selfie': { status: 200, body: { verified: true, tier: 2 } },
+    })
+    const m = make()
+    await m.load()
+    expect(m.getState().limits).toMatchObject({ tier: 1, nextTierCapKobo: 50000000 })
+    expect(await m.verifySelfie({ bvn: '123', selfieImage: 'x' })).toBe(false)
+    expect(await m.verifySelfie({ bvn: '22222222222', selfieImage: '' })).toBe(false)
+    expect(log.some(([u]) => u === '/api/kyc/selfie')).toBe(false)
+    expect(await m.verifySelfie({ bvn: '22222222222', selfieImage: 'IMG' })).toBe(true)
+    expect(log.find(([u]) => u === '/api/kyc/selfie')[1]).toEqual({ bvn: '22222222222', selfieImage: 'IMG' })
+  })
+
+  it('surfaces a selfie mismatch', async () => {
+    routes({ '/api/kyc/selfie': { status: 422, body: { error: 'The selfie did not match.', code: 'selfie_mismatch' } } })
+    const m = make()
+    expect(await m.verifySelfie({ bvn: '22222222222', selfieImage: 'IMG' })).toBe(false)
+    expect(m.getState().code).toBe('selfie_mismatch')
+  })
+
   it('reports a network failure and clears busy', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline') }))
     const m = make()

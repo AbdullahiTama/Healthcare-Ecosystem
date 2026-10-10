@@ -12,7 +12,7 @@ function db(over = {}) {
   const calls = []
   return {
     calls,
-    from: () => { const q = { select: () => q, eq: () => q, order: () => q, maybeSingle: async () => ({ data: over.kyc ?? null }), then: (r) => r({ data: over.accounts ?? [] }) }; return q },
+    from: () => { const q = { select: () => q, eq: () => q, in: () => q, order: () => q, maybeSingle: async () => ({ data: over.kyc ?? null }), then: (r) => r({ data: over.accounts ?? [] }) }; return q },
     rpc: vi.fn(async (n, a) => {
       calls.push([n, a])
       if (n === 'get_withdrawal_pin') return { data: [{ pin_hash: hashPin('1234', salt), pin_salt: salt, locked_until: null }] }

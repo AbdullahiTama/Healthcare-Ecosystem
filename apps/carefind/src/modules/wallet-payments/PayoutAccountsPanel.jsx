@@ -2,6 +2,7 @@ import { useState, useSyncExternalStore } from 'react'
 import { ShieldCheck, Landmark, Trash2, Star } from 'lucide-react'
 import { theme } from '../../styles/theme.js'
 import { Inp, TealBtn, GhostBtn } from '../../components/ui/index.jsx'
+import { formatKobo, prepareSelfie } from '@care-ecosystem/shared-payout-ui'
 import AddPayoutAccountModal from './AddPayoutAccountModal.jsx'
 
 const box = { border: `1px solid ${theme.border}`, borderRadius: 14, padding: 14, background: '#fff' }
@@ -9,13 +10,16 @@ const linkBtn = { background: 'none', border: 'none', padding: '6px 0', minHeigh
 
 // Identity (BVN + NIN) and the owner's saved, verified payout accounts. Withdrawals can only go to one of these
 // (and, once the platform requires it, ONLY to one of these). `manager` is the shared createPayoutManager store.
-export default function PayoutAccountsPanel({ manager, selectedId, onSelect, banks, banksStatus, onRetryBanks, isMobile }) {
+export default function PayoutAccountsPanel({ manager, selectedId, onSelect, banks, banksStatus, onRetryBanks, isMobile, showSelfie = false }) {
   const s = useSyncExternalStore(manager.subscribe, manager.getState)
   const [bvn, setBvn] = useState('')
   const [nin, setNin] = useState('')
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState(null)
   const [removePin, setRemovePin] = useState('')
+  const [selfieBvn, setSelfieBvn] = useState('')
+  const [selfieFile, setSelfieFile] = useState(null)
+  const [selfieError, setSelfieError] = useState('')
   const digits = (v) => String(v || '').replace(/\D/g, '').slice(0, 11)
 
   if (s.loading) {
@@ -35,6 +39,17 @@ export default function PayoutAccountsPanel({ manager, selectedId, onSelect, ban
   async function verify(e) {
     e.preventDefault()
     if (await manager.verifyIdentity({ bvn, nin })) { setBvn(''); setNin('') }
+  }
+
+  async function submitSelfie(e) {
+    e.preventDefault()
+    setSelfieError('')
+    try {
+      const selfieImage = await prepareSelfie(selfieFile)
+      if (await manager.verifySelfie({ bvn: selfieBvn, selfieImage })) { setSelfieBvn(''); setSelfieFile(null) }
+    } catch (err) {
+      setSelfieError(err.message)
+    }
   }
 
   async function confirmRemove() {
@@ -66,6 +81,28 @@ export default function PayoutAccountsPanel({ manager, selectedId, onSelect, ban
         </form>
       )}
 
+
+      {/* 1b. what the person can withdraw, and how to raise it */}
+      {verified && s.limits && s.limits.dailyCapKobo != null && (
+        <div style={{ ...box, fontSize: 12.5, color: theme.textMid }}>
+          <strong>Verification limit: {formatKobo(s.limits.dailyCapKobo)} a day</strong>
+          {s.limits.tier >= 2 && <span> · selfie verified</span>}
+          <span> (your account history may set a lower daily limit)</span>
+          {showSelfie && s.limits.tier === 1 && s.limits.nextTierCapKobo && (
+            <form onSubmit={submitSelfie} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+              <div>A selfie check raises your verification limit to <strong>{formatKobo(s.limits.nextTierCapKobo)}</strong> a day.</div>
+              <Inp id="selfie-bvn" label="BVN (11 digits)" type="password" inputMode="numeric" autoComplete="off" maxLength={11} value={selfieBvn} onChange={(v) => setSelfieBvn(digits(v))} />
+              <label htmlFor="selfie-file" style={{ fontSize: 11, fontWeight: 700 }}>Photo of your face</label>
+              <input id="selfie-file" type="file" accept="image/*" capture="user" onChange={(e) => setSelfieFile(e.target.files?.[0] || null)} />
+              {(selfieError || (s.error && s.busy === '' && ['selfie_mismatch', 'id_mismatch', 'no_photo', 'kyc_unavailable'].includes(s.code))) && (
+                <p role="alert" style={{ margin: 0, fontSize: 12, color: theme.danger, fontWeight: 700 }}>{selfieError || s.error}</p>
+              )}
+              <TealBtn type="submit" disabled={s.busy === 'selfie' || selfieBvn.length !== 11 || !selfieFile}>{s.busy === 'selfie' ? 'Checking…' : 'Verify selfie'}</TealBtn>
+            </form>
+          )}
+        </div>
+      )}
+
       {/* 2. accounts */}
       <div style={box}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -90,6 +127,11 @@ export default function PayoutAccountsPanel({ manager, selectedId, onSelect, ban
                     <br /><span style={{ fontSize: 12, color: theme.textMid }}>{a.accountName}</span>
                   </span>
                 </label>
+                {a.coolingEndsAt && s.limits && (
+                  <div role="note" style={{ fontSize: 11.5, color: theme.textMid, margin: '2px 0 4px 26px' }}>
+                    New account: withdrawals are limited to {formatKobo(s.limits.cooloffCapKobo)} in any 24 hours until {new Date(a.coolingEndsAt).toLocaleString()}.
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 14 }}>
                   {!a.isDefault && <button type="button" style={linkBtn} onClick={() => manager.setDefault(a.id)} disabled={s.busy === 'default'}><Star size={12} aria-hidden="true" /> Make default</button>}
                   <button type="button" style={{ ...linkBtn, color: theme.danger }} onClick={() => { manager.clearError(); setRemoving(a.id); setRemovePin('') }}><Trash2 size={12} aria-hidden="true" /> Remove</button>

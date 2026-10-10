@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { vi } from 'vitest'
-import { createSecurityMailer, renderOtpEmail, renderPinChangedEmail, renderPayoutAccountEmail, senderFor } from '../securityEmails.js'
+import { createSecurityMailer, renderPinLockedEmail, renderOtpEmail, renderPinChangedEmail, renderPayoutAccountEmail, senderFor } from '../securityEmails.js'
 
 describe('security emails', () => {
   it('OTP email shows the code in the body only, with the right brand and sender', () => {
@@ -31,6 +31,21 @@ describe('security emails', () => {
     expect(m.subject).toContain('removed')
     expect(m.html).toContain('Zenith Bank')
     expect(m.html).toContain('4321')
+  })
+})
+
+describe('PIN-locked alert', () => {
+  it('warns of guessing, names the pause, and carries no code or PIN', () => {
+    const m = renderPinLockedEmail({ app: 'carehub', minutes: 15 })
+    expect(m.subject).toContain('CareHub')
+    expect(m.html).toContain('15 minutes')
+    expect(m.html).toContain('If this was not you')
+    expect(m.from).toBe('CareHub <support@mail.carefindhub.com>')
+  })
+  it('is available on the mailer', async () => {
+    const send = vi.fn(async () => ({ success: true }))
+    expect(await createSecurityMailer({ send }).sendPinLocked({ to: 'a@x.com' })).toEqual({ ok: true })
+    expect(send.mock.calls[0][0].subject).toContain('locked')
   })
 })
 

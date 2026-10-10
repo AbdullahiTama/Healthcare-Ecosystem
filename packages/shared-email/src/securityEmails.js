@@ -59,6 +59,26 @@ export function renderPinChangedEmail({ app = 'carefind', changedAt = new Date()
   }
 }
 
+/** Sent when the PIN gets locked by repeated wrong guesses: someone may be trying to withdraw from this account. */
+export function renderPinLockedEmail({ app = 'carefind', minutes = 15 }) {
+  const brand = brandFor(app)
+  return {
+    subject: `Withdrawals on your ${brand.name} account were locked`,
+    from: senderFor(app),
+    html: layout({
+      app,
+      title: 'Withdrawal PIN locked',
+      preheader: `Too many wrong PIN attempts. Withdrawals are paused for ${minutes} minutes.`,
+      body: [
+        paragraph(`There were several wrong attempts to enter the withdrawal PIN on your account, so withdrawals are paused for ${minutes} minutes.`),
+        notice('danger', `If this was not you, change your password now and contact ${brand.support}.`),
+        smallPrint('If it was you, wait for the pause to end and try again, or reset your PIN with a code sent to this email address.'),
+      ],
+      reason: `You received this security alert because it concerns your ${brand.name} account.`,
+    }),
+  }
+}
+
 /** Sent when a payout bank account is saved or removed. */
 export function renderPayoutAccountEmail({ app = 'carefind', event = 'added', bankName, accountLast4 }) {
   const brand = brandFor(app)
@@ -93,6 +113,7 @@ export function createSecurityMailer({ app = 'carefind', send = sendEmail } = {}
   return {
     sendOtp: ({ to, code, minutes, purpose }) => deliver(to, renderOtpEmail({ app, code, minutes, purpose })),
     sendPinChanged: ({ to }) => deliver(to, renderPinChangedEmail({ app })),
+    sendPinLocked: ({ to }) => deliver(to, renderPinLockedEmail({ app })),
     sendPayoutAccount: ({ to, event, bankName, accountLast4 }) => deliver(to, renderPayoutAccountEmail({ app, event, bankName, accountLast4 })),
   }
 }

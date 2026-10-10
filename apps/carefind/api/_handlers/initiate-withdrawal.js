@@ -5,7 +5,9 @@ import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount } from '../_lib/paystackTransfer.js'
 import { getRequiredAuth, isInstantEligible, getDailyCap } from '../_lib/trustLevels.js'
 import { reconcileWithdrawal } from '../_lib/withdrawalRecovery.js'
-import { settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired } from '@care-ecosystem/shared-payments'
+import { settleWithdrawal, PIN_LOCK_AFTER, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForSavedAccount, capInCoins, limitMessage } from '@care-ecosystem/shared-payments'
+import { getFinancialConfig } from '../_lib/financialConfig.js'
+import { getSecurityMailer } from '../_lib/securityMailer.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -25,8 +27,9 @@ export default async function handler(req, res) {
   // A saved, identity-verified payout account decides WHERE the money goes: its details come from the database and
   // whatever bank details the browser sent are ignored. When the platform requires saved accounts
   // (financial_config.payout_account_required) a typed-in destination is refused.
+  let saved = null
   if (payoutAccountId) {
-    const saved = await getPayoutAccountForWithdrawal(supabase, { ownerType: 'user', ownerId: user.id, id: payoutAccountId })
+    saved = await getPayoutAccountForWithdrawal(supabase, { ownerType: 'user', ownerId: user.id, id: payoutAccountId })
     if (!saved) return res.status(400).json({ error: 'That payout account is not available. Choose another or add a new one.', code: 'payout_account_not_found' })
     ;({ bank_code: bankCode, bank_name: bankName, account_number: accountNumber, account_name: accountName } = saved)
   } else if (await payoutAccountRequired(supabase)) {
@@ -83,6 +86,10 @@ export default async function handler(req, res) {
       p_pin_salt: storedPin.pin_salt,
     })
     if (pinVerifyError || !locallyMatches || pinVerified !== true) {
+      // This wrong attempt was the one that locked the PIN (verify_withdrawal_pin locks on the 5th): warn the owner.
+      if (!pinVerifyError && Number(storedPin.failed_attempts) + 1 >= PIN_LOCK_AFTER && user.email) {
+        getSecurityMailer().then((m) => m.sendPinLocked({ to: user.email })).catch(() => {})
+      }
       return res.status(403).json({ error: 'Incorrect withdrawal PIN.' })
     }
   }
@@ -123,6 +130,19 @@ export default async function handler(req, res) {
   // ledger, creates the request and derives its Paystack reference from the request id. The amount paid out
   // (after the fee) is computed there from financial_config, not here. No Paystack call happens while any lock
   // is held: the reservation has committed before the first provider call below.
+  // Limits for money sent to a SAVED account: the person's KYC tier ceiling and, for a new account, the cooling-off cap.
+  // They are folded into the engine's own rolling-24h cap (the lowest wins), so the engine enforces them atomically.
+  let dailyCapCoins = getDailyCap(trustLevel)
+  let extraLimit = null
+  if (saved) {
+    extraLimit = await limitsForSavedAccount(supabase, { ownerType: 'user', userId: user.id, account: saved })
+    if (extraLimit.capKobo != null) {
+      const coinCap = capInCoins(extraLimit.capKobo, await getFinancialConfig(supabase, 'coin_value_kobo'))
+      if (coinCap < dailyCapCoins) dailyCapCoins = coinCap
+      else extraLimit = null // the trust-level cap is the tighter one; it keeps its own message
+    }
+  }
+
   const { data: created, error: createError } = await supabase.rpc('create_withdrawal', {
     p_user_id: user.id,
     p_coins: coins,
@@ -130,7 +150,7 @@ export default async function handler(req, res) {
     p_bank_code: bankCode,
     p_account_number: accountNumber,
     p_account_name: verifiedAccountName,
-    p_daily_cap_coins: getDailyCap(trustLevel),
+    p_daily_cap_coins: dailyCapCoins,
   })
 
   if (createError || !created) {
@@ -140,8 +160,11 @@ export default async function handler(req, res) {
   if (created.outcome === 'daily_limit') {
     return res.status(429).json({
       error: 'daily_limit',
-      message: `Daily withdrawal limit reached. Your ${trustLevel} level allows up to ${getDailyCap(trustLevel)} CareCoins in any 24 hours.`,
-      dailyCapCoins: getDailyCap(trustLevel),
+      message: extraLimit
+        ? limitMessage(extraLimit)
+        : `Daily withdrawal limit reached. Your ${trustLevel} level allows up to ${getDailyCap(trustLevel)} CareCoins in any 24 hours.`,
+      dailyCapCoins,
+      ...(extraLimit ? { limitReason: extraLimit.reason, coolingEndsAt: extraLimit.coolingEndsAt } : {}),
     })
   }
   if (created.outcome !== 'ok') {
@@ -208,7 +231,7 @@ export default async function handler(req, res) {
         await enqueueOutbox({
           templateKey: 'withdrawal_requested',
           toEmail: user.email,
-          payload: { fullName: user.user_metadata?.full_name || user.email, amount: 'Requested withdrawal', reference, bankName, accountNumber },
+          payload: { fullName: user.user_metadata?.full_name || user.email, amount: 'Requested withdrawal', reference, bankName, accountNumber: `••••${String(accountNumber).slice(-4)}` },
           subject: 'CareFind: withdrawal requested',
           idempotencyKey: 'withdrawal-requested:' + reference,
         })

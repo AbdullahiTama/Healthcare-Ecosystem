@@ -15,7 +15,7 @@ export {
   IN_FLIGHT_GRACE_MS, WITHDRAWAL_KINDS, TRANSFER_EVENT_OUTCOMES, ATTENTION_RESULTS,
   getTransferStatus, normalizeAccountName, verifyBankAccount, decideTransferAction, settleWithdrawal, settleTransferWebhook, reconcileWithdrawal, sweepWithdrawals,
 } from './withdrawals.js'
-export { isValidPin, randomPinSalt, hashPin, verifyPin, checkWithdrawalPin, setWithdrawalPin, withdrawalPinStatus } from './pin.js'
+export { PIN_LOCK_AFTER, isValidPin, randomPinSalt, hashPin, verifyPin, checkWithdrawalPin, setWithdrawalPin, withdrawalPinStatus } from './pin.js'
 export { OTP_TTL_SECONDS, OTP_PURPOSES, generateOtp, isValidOtp, hashOtp, maskEmail, sendOtp, checkOtp } from './otp.js'
 export {
   REFUND_GRACE_MS, REFUND_EVENT_OUTCOMES, REFUND_ATTENTION_RESULTS,
@@ -31,3 +31,6 @@ export {
 } from './payoutAccounts.js'
 export { createKycHandler, createPayoutAccountsHandler } from './payoutHandlers.js'
 export { createRateLimiter } from './rateLimit.js'
+export {
+  LIMIT_KEYS, LIMIT_DEFAULTS, readLimitConfig, coolingOffEndsAt, limitsForWithdrawal, limitsForSavedAccount, kycTier, capInCoins, limitMessage,
+} from './withdrawalLimits.js'

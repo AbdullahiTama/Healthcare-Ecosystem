@@ -114,7 +114,7 @@ export function createPinSetup({ getToken, basePath = '/api' }) {
 //   busy ('' | 'verify' | 'otp' | 'add' | 'default' | 'remove') | error | code (server error code) | codeSent / sentTo
 export function createPayoutManager({ getToken, basePath = '/api' }) {
   const store = createStore({
-    loading: true, loadError: '', kyc: null, accounts: [], required: false,
+    loading: true, loadError: '', kyc: null, accounts: [], required: false, limits: null,
     busy: '', error: '', code: '', codeSent: false, sentTo: '',
   })
 
@@ -129,7 +129,7 @@ export function createPayoutManager({ getToken, basePath = '/api' }) {
     try {
       const [k, a] = await Promise.all([authed(api.kycStatus), authed(api.listPayoutAccounts)])
       if (!k.ok || !a.ok) throw new Error('load')
-      store.set({ loading: false, kyc: k.data, accounts: a.data.accounts || [], required: Boolean(a.data.required) })
+      store.set({ loading: false, kyc: k.data, accounts: a.data.accounts || [], required: Boolean(a.data.required), limits: a.data.limits || null })
     } catch {
       store.set({ loading: false, loadError: 'Could not load your payout details. Try again.' })
     }
@@ -160,6 +160,13 @@ export function createPayoutManager({ getToken, basePath = '/api' }) {
         return Promise.resolve(false)
       }
       return run('verify', () => authed(api.kycVerify, { bvn, nin }), (r) => store.set({ busy: '', kyc: r.data }), 'Could not verify your identity.')
+    },
+
+    /** Selfie match against the verified BVN (tier 2 = higher daily limit). The BVN is re-entered: we never keep it. */
+    verifySelfie: ({ bvn, selfieImage }) => {
+      if (!/^\d{11}$/.test(bvn || '')) { store.set({ error: 'Enter your 11-digit BVN.', code: 'invalid_id' }); return Promise.resolve(false) }
+      if (!selfieImage) { store.set({ error: 'Take or choose a photo of your face.', code: 'no_photo' }); return Promise.resolve(false) }
+      return run('selfie', () => authed(api.kycSelfie, { bvn, selfieImage }), async () => { await load(); store.set({ busy: '' }) }, 'Could not verify your selfie.')
     },
 
     sendCode: () => run('otp', () => authed(api.sendPayoutAccountOtp), (r) => store.set({ busy: '', codeSent: true, sentTo: r.data.sentTo || '' }), 'Could not send the code.'),

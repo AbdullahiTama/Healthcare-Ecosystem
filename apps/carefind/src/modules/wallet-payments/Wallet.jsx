@@ -433,6 +433,7 @@ function Wallet() {
               banksStatus={banksStatus}
               onRetryBanks={refetchBanks}
               isMobile={isMobile}
+              showSelfie
             />
             {(wallet?.balance || 0) >= 5 ? (
               <form onSubmit={handleWithdraw} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

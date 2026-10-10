@@ -14,7 +14,7 @@ afterEach(() => { act(() => root.unmount()); host.remove() })
 
 function fakeManager(state, over = {}) {
   const s = { loading: false, loadError: '', kyc: { verified: false }, accounts: [], required: false, busy: '', error: '', code: '', codeSent: false, sentTo: '', ...state }
-  return { getState: () => s, subscribe: () => () => {}, load: vi.fn(), clearError: vi.fn(), verifyIdentity: vi.fn(async () => true), sendCode: vi.fn(), addAccount: vi.fn(), setDefault: vi.fn(), remove: vi.fn(async () => true), ...over }
+  return { getState: () => s, subscribe: () => () => {}, load: vi.fn(), clearError: vi.fn(), verifyIdentity: vi.fn(async () => true), verifySelfie: vi.fn(async () => true), sendCode: vi.fn(), addAccount: vi.fn(), setDefault: vi.fn(), remove: vi.fn(async () => true), ...over }
 }
 const mount = async (manager, extra = {}) => act(async () => root.render(<PayoutAccountsPanel manager={manager} selectedId="" onSelect={vi.fn()} banks={[]} banksStatus="ready" onRetryBanks={vi.fn()} {...extra} />))
 const type = async (id, value) => {
@@ -71,5 +71,14 @@ describe('PayoutAccountsPanel (CareHub)', () => {
     await type('rm-pin-a1', '1234')
     await act(async () => { button('Remove account').click() })
     expect(m.remove).toHaveBeenCalledWith({ id: 'a1', pin: '1234' })
+  })
+
+  it('shows a new account\'s cooling-off cap, and never offers the selfie step to a business owner', async () => {
+    const ends = new Date(Date.now() + 3 * 3600_000).toISOString()
+    const accounts = [{ id: 'n1', bankName: 'GTBank', accountLast4: '6789', accountName: 'GRACE PHARMACY LIMITED', isDefault: true, coolingEndsAt: ends }]
+    await mount(fakeManager({ kyc: { verified: true, legalName: 'ADA OBI', bvnLast4: '1234' }, accounts, limits: { tier: 1, dailyCapKobo: null, nextTierCapKobo: null, cooloffHours: 24, cooloffCapKobo: 2000000 } }), { selectedId: 'n1' })
+    expect(host.querySelector('[role="note"]').textContent).toMatch(/limited to ₦20,000 in any 24 hours until/)
+    expect(host.querySelector('#selfie-file')).toBeNull()
+    expect(host.textContent).not.toContain('Verification limit')
   })
 })

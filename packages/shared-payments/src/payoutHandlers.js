@@ -51,7 +51,7 @@ export function createPayoutAccountsHandler({ supabase, authenticate, resolveAcc
 
     switch (subPath(req)) {
       case 'list':
-        return send(res, await listPayoutAccounts(supabase, owner))
+        return send(res, await listPayoutAccounts(supabase, { ...owner, userId: user.id }))
 
       case 'otp':
         return send(res, await sendPayoutAccountOtp({ supabase, user, mailer: await getMailer() }))
@@ -67,7 +67,9 @@ export function createPayoutAccountsHandler({ supabase, authenticate, resolveAcc
 
       case 'remove': {
         // Removing a payout account changes where money can go, so it needs the same second factor as withdrawing.
-        const pin = await checkWithdrawalPin(supabase, user.id, body.pin)
+        const pin = await checkWithdrawalPin(supabase, user.id, body.pin, {
+          onLocked: async () => (await getMailer()).sendPinLocked({ to: user.email }),
+        })
         if (!pin.ok) return res.status(pin.status).json({ error: pin.error, code: pin.code, ...(pin.code === 'pin_not_set' ? { needsPin: true } : {}) })
         return send(res, await removePayoutAccount({ supabase, user, ...owner, id: body.id, mailer: await getMailer() }))
       }

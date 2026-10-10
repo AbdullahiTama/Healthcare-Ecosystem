@@ -6,9 +6,11 @@ const h = vi.hoisted(() => {
   const builderFor = (table) => {
     let rows = s.tables[table] || []
     const b = {
-      select: () => b, or: () => b, in: () => b, is: () => b, order: () => b, limit: () => b,
+      select: () => b, or: () => b, is: () => b, order: () => b, limit: () => b,
+      in: (col, vals) => { rows = rows.filter((r) => vals.includes(r[col])); return b },
       eq: (col, val) => { rows = rows.filter((r) => r[col] === val); return b },
       maybeSingle: async () => ({ data: rows[0] ?? null }),
+      then: (resolve) => resolve({ data: rows, error: null }),
     }
     return b
   }
@@ -16,6 +18,8 @@ const h = vi.hoisted(() => {
   return s
 })
 
+const mailer = vi.hoisted(() => ({ sendPinLocked: vi.fn(async () => ({ ok: true })) }))
+vi.mock('../_lib/securityMailer.js', () => ({ getSecurityMailer: async () => mailer }))
 vi.mock('../_lib/supabase.js', () => ({ supabase: h.client }))
 vi.mock('../_lib/verifyBusiness.js', () => ({ verifyBusiness: async () => h.auth }))
 vi.mock('../_lib/paystack.js', () => ({ paystackFetch: vi.fn() }))
@@ -29,7 +33,7 @@ import handler from '../_handlers/initiate-business-withdrawal.js'
 
 const REF = 'ch_wd_0123456789abcdef0123456789abcdef'
 const SALT = '00112233445566778899aabbccddeeff'
-const SAVED = { id: 'pa-1', owner_type: 'business', owner_id: 'biz-1', status: 'verified', bank_code: '058', bank_name: 'Guaranty Trust Bank', account_number: '0123456789', account_name: 'GRACE PHARMACY LIMITED' }
+const SAVED = { id: 'pa-1', owner_type: 'business', owner_id: 'biz-1', status: 'verified', bank_code: '058', bank_name: 'Guaranty Trust Bank', account_number: '0123456789', account_name: 'GRACE PHARMACY LIMITED', verified_at: '2020-01-01T00:00:00Z' }
 const res = () => { const r = { statusCode: 0, body: null }; r.status = (c) => { r.statusCode = c; return r }; r.json = (b) => { r.body = b; return r }; return r }
 const calls = (n) => h.rpcCalls.filter(([name]) => name === n)
 
@@ -106,5 +110,52 @@ describe('payout_account_required (CareHub)', () => {
     expect(calls('create_business_withdrawal')).toHaveLength(0)
     r = res(); await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1' } }, r)
     expect(r.statusCode).toBe(200)
+  })
+})
+
+describe('Phase 4 (CareHub): cooling-off cap and alerts', () => {
+  const sent = () => calls('create_business_withdrawal')[0][1]
+
+  it('an established account passes NO extra cap: the engine\'s own business ceiling governs', async () => {
+    await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1' } }, res())
+    expect(sent()).not.toHaveProperty('p_daily_cap_kobo')
+  })
+
+  it('a NEW account caps the business\'s rolling 24h total (N20,000 by default), through the engine\'s own cap parameter', async () => {
+    h.tables.payout_accounts = [{ ...SAVED, verified_at: new Date(Date.now() - 3600_000).toISOString() }]
+    await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1' } }, res())
+    expect(sent().p_daily_cap_kobo).toBe(2_000_000)
+  })
+
+  it('the cooling-off cap can only LOWER the engine ceiling, never raise it', async () => {
+    h.tables.payout_accounts = [{ ...SAVED, verified_at: new Date(Date.now() - 3600_000).toISOString() }]
+    h.tables.financial_config.push({ key: 'business_withdrawal_daily_cap_kobo', value: 1_000_000 })
+    await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1' } }, res())
+    expect(sent().p_daily_cap_kobo).toBe(1_000_000)
+  })
+
+  it('tells the owner why a new account was limited', async () => {
+    h.tables.payout_accounts = [{ ...SAVED, verified_at: new Date(Date.now() - 3600_000).toISOString() }]
+    h.routes.create_business_withdrawal = { data: { outcome: 'daily_limit' } }
+    const r = res()
+    await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1' } }, r)
+    expect(r.statusCode).toBe(429)
+    expect(r.body).toMatchObject({ error: 'daily_limit', limitReason: 'new_account' })
+    expect(r.body.message).toMatch(/new, so withdrawals are limited/)
+  })
+
+  it('typed-in destinations get no extra cap (unchanged behaviour)', async () => {
+    await handler({ method: 'POST', body: { ...base, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'GRACE PHARMACY LIMITED' } }, res())
+    expect(sent()).not.toHaveProperty('p_daily_cap_kobo')
+  })
+
+  it('the wrong PIN that locks it warns the owner by email', async () => {
+    mailer.sendPinLocked.mockClear()
+    h.routes.verify_withdrawal_pin = { data: false }
+    h.routes.get_withdrawal_pin = { data: [{ pin_hash: hashPin('1234', SALT), pin_salt: SALT, locked_until: null, failed_attempts: 4 }] }
+    const r = res()
+    await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1', pin: '0000' } }, r)
+    expect(r.statusCode).toBe(403)
+    expect(mailer.sendPinLocked).toHaveBeenCalledWith({ to: 'b@example.com' })
   })
 })

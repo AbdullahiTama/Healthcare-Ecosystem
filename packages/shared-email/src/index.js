@@ -18,4 +18,4 @@ export { validateMessage, validateFrom, validateRecipients, validateSubject, val
 export { EMAIL_EVENTS, isKnownEvent } from './events.js'
 export { verifySvixSignature, applyResendEvent } from './resendWebhook.js'
 export { getTemplate as resolveTemplate } from './templates.js'
-export { renderOtpEmail, renderPinChangedEmail, renderPayoutAccountEmail, senderFor, createSecurityMailer } from './securityEmails.js'
+export { renderOtpEmail, renderPinChangedEmail, renderPinLockedEmail, renderPayoutAccountEmail, senderFor, createSecurityMailer } from './securityEmails.js'
