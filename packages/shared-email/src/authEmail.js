@@ -53,7 +53,7 @@ function renderDate(d) {
 // unauthenticated endpoints, so without a ceiling anyone can flood an address, and - because minting a recovery link
 // invalidates the previous one - keep a victim's own reset link permanently dead.
 // Keyed by the template_key the outbox stores (staff invitations are stored as staff_welcome).
-const RATE_LIMIT_PER_HOUR = { password_reset: 3, email_verification: 5, staff_welcome: 5 }
+export const RATE_LIMIT_PER_HOUR = { password_reset: 3, email_verification: 5, staff_welcome: 5, owner_setup: 5 }
 const RATE_WINDOW_MS = 60 * 60 * 1000
 const MAX_NAME_LENGTH = 80
 
@@ -94,7 +94,10 @@ async function isRateLimited(db, { toEmail, templateKey }) {
 // not an error, so it must not throw: callers answer every pre-session
 // request with a generic 200 to avoid leaking which addresses are registered.
 //
-// action: 'password_reset' | 'email_verification' | 'customer_registration' | 'staff_setup'
+// action: 'password_reset' | 'email_verification' | 'customer_registration' | 'staff_setup' | 'owner_setup'
+//   owner_setup is server-initiated only (the CareHub registration handler): it mints a recovery link so a new
+//   business owner verifies their email and sets their own password in one step. Like staff_setup it trusts the
+//   caller-supplied fullName/businessName, so it must never be reachable from a public endpoint.
 // supabase: optional pre-built service-role client. Callers should pass one —
 //   see getAdminClient for why resolving supabase-js from here is unsafe.
 // resolveDisplayName: optional async (authUser) => string. Called with the user
@@ -113,7 +116,7 @@ export async function sendAuthEmail({
 }) {
   if (!email) throw new Error('email is required')
 
-  const allowed = ['password_reset', 'email_verification', 'customer_registration', 'staff_setup']
+  const allowed = ['password_reset', 'email_verification', 'customer_registration', 'staff_setup', 'owner_setup']
   if (!allowed.includes(action)) throw new Error(`Unsupported auth action: ${action}`)
 
   const branding = APP_BRANDING[app] || APP_BRANDING.carefind
@@ -127,9 +130,9 @@ export async function sendAuthEmail({
   // For reset / verify we must mint a real action link via the admin API;
   // the client-facing app only swaps in the template. Plaintext links are
   // never passed from browser → server.
-  if (action === 'password_reset' || action === 'email_verification' || action === 'staff_setup') {
+  if (action === 'password_reset' || action === 'email_verification' || action === 'staff_setup' || action === 'owner_setup') {
     const admin = await getAdminClient(supabase)
-    const templateKey = action === 'password_reset' ? 'password_reset' : action === 'staff_setup' ? 'staff_welcome' : 'email_verification'
+    const templateKey = action === 'password_reset' ? 'password_reset' : action === 'staff_setup' ? 'staff_welcome' : action === 'owner_setup' ? 'owner_setup' : 'email_verification'
     // Checked before generateLink: every minted link invalidates the previous one.
     if (await isRateLimited(admin, { toEmail, templateKey })) {
       return { ok: true, sent: false, limited: true }
@@ -154,9 +157,10 @@ export async function sendAuthEmail({
     const resolved = cleanName(resolveDisplayName ? await resolveDisplayName(data.user) : '')
     // Public actions (reset / verification) never use a name the caller typed: it would let a stranger choose text in
     // another person's email. They use the name resolved from the account, then the name stored on the auth user.
-    // staff_setup is authorised and its name comes from the staff record, so the caller-supplied one is trusted there.
+    // staff_setup is authorised and its name comes from the staff record, so the caller-supplied one is trusted there;
+    // owner_setup is server-initiated and its names come from the registration the server just validated.
     const accountName = cleanName(data.user?.user_metadata?.full_name || data.user?.user_metadata?.name)
-    const displayName = (action === 'staff_setup'
+    const displayName = (action === 'staff_setup' || action === 'owner_setup'
       ? resolved || cleanName(fullName)
       : resolved || accountName) || toEmail.split('@')[0]
 
@@ -164,7 +168,9 @@ export async function sendAuthEmail({
       ? { fullName: displayName, resetLink: actionLink }
       : action === 'staff_setup'
         ? { fullName: displayName, businessName: cleanName(businessName), role: cleanName(role), setupLink: actionLink }
-        : { fullName: displayName, verifyLink: actionLink }
+        : action === 'owner_setup'
+          ? { fullName: displayName, businessName: cleanName(businessName), setupLink: actionLink }
+          : { fullName: displayName, verifyLink: actionLink }
 
     await emailService.enqueue({
       templateKey,
@@ -177,7 +183,9 @@ export async function sendAuthEmail({
         ? 'Reset your password'
         : action === 'staff_setup'
           ? 'CareHub: you have been invited'
-          : 'Verify your email address',
+          : action === 'owner_setup'
+            ? 'CareHub: verify your email and set your password'
+            : 'Verify your email address',
     })
   } else {
     // Welcome email — no link required, and no auth record to resolve a

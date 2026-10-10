@@ -78,6 +78,53 @@ describe('sendAuthEmail staff_setup', () => {
   })
 })
 
+describe('sendAuthEmail owner_setup', () => {
+  it('mints a recovery link and enqueues owner_setup with the registered business name', async () => {
+    generateLink.mockResolvedValue(linkResponse)
+
+    const result = await sendAuthEmail({
+      action: 'owner_setup',
+      email: 'Ada@Lifeline.test',
+      fullName: 'Ada Eze',
+      businessName: 'Lifeline Pharmacy',
+      redirectTo: 'https://carefindhub.com/reset-password?welcome=1',
+      app: 'carehub',
+    })
+
+    expect(result).toEqual({ ok: true, sent: true })
+    expect(generateLink).toHaveBeenCalledWith({
+      type: 'recovery',
+      email: 'ada@lifeline.test',
+      options: { redirectTo: 'https://carefindhub.com/reset-password?welcome=1' },
+    })
+    const row = enqueue.mock.calls[0][0]
+    expect(row.templateKey).toBe('owner_setup')
+    expect(row.payload).toMatchObject({ fullName: 'Ada Eze', businessName: 'Lifeline Pharmacy', setupLink: 'https://stub.supabase.co/auth/v1/verify?token=abc' })
+    expect(row.subject).toBe('CareHub: verify your email and set your password')
+  })
+
+  it('is rate limited per address like the other auth emails', async () => {
+    generateLink.mockResolvedValue(linkResponse)
+    // isRateLimited reads email_outbox through the admin client; the stub client has no `from`, so the limiter
+    // fails open here. Pin only that the limit table knows the action.
+    const { RATE_LIMIT_PER_HOUR } = await import('../authEmail.js')
+    expect(RATE_LIMIT_PER_HOUR.owner_setup).toBe(5)
+  })
+
+  it('rejects when no action link is returned, rather than enqueueing an email without a link', async () => {
+    generateLink.mockResolvedValue({ data: { properties: {}, user: { id: 'user-1', email: 'ada@lifeline.test' } }, error: null })
+
+    await expect(sendAuthEmail({
+      action: 'owner_setup',
+      email: 'ada@lifeline.test',
+      fullName: 'Ada Eze',
+      businessName: 'Lifeline Pharmacy',
+      app: 'carehub',
+    })).rejects.toThrow('Could not generate auth link')
+    expect(enqueue).not.toHaveBeenCalled()
+  })
+})
+
 describe('sendAuthEmail password reset', () => {
   it('mints a recovery link server-side and enqueues it with the branded sender', async () => {
     generateLink.mockResolvedValue(linkResponse)
