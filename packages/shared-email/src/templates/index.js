@@ -10,6 +10,7 @@ const HUB_TEMPLATE_MAP = {
   businessSuspended: 'business_suspended',
   businessStatusUpdate: 'business_status_update',
   staffWelcome: 'staff_welcome',
+  ownerSetup: 'owner_setup',
   subscriptionCreated: 'subscription_created',
   subscriptionExpiry: 'subscription_expiry',
   purchaseConfirmed: 'purchase_confirmed',

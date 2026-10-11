@@ -12,7 +12,8 @@ import {
   getAgentTiers, getAgentsDetailed, getAgentReferralsByAgent, getAgentEarningsByAgent, getAgentTransfers, transferAgentAccount, calculateAgentEarningsRpc,
   getApplications, reviewApplication, createApplication,
   getLedgerForEntity, getPayoutRequests, createPayoutRequest, updatePayoutRequest, markPayoutPaidAtomic,
-  getAgentApplications, reviewAgentApplication, getAgents, addAgentRow, updateAgentRow
+  getAgentApplications, reviewAgentApplication, getAgents, addAgentRow, updateAgentRow,
+  getUnverifiedOwnerBusinessIds, partitionByOwnerVerification, summarizeBulkApproval, collectBulkResults
 } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
 import { businessLucideIcon, DARK, fmt, fmtDate } from '../../lib/utils'
@@ -98,9 +99,22 @@ function StatusDot({ status }) {
   )
 }
 
+// Pending business whose owner has not confirmed their email: the database refuses approval until they do.
+// `id` lets the disabled Approve control reference this badge through aria-describedby.
+function AwaitingVerificationBadge({ id }) {
+  return (
+    <span id={id} title="The owner has not verified their email address yet, so this business cannot be approved." style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 700, color: 'var(--amber)', background: 'var(--amber-bg)', padding: '2px 8px', borderRadius: 9999, whiteSpace: 'nowrap' }}>Awaiting email verification</span>
+  )
+}
+
 // ── Daily Brief ───────────────────────────────────────────────────────────
-function DailyBrief({ businesses, payouts, onNavigate, onRefresh, lastSynced, loading }) {
-  const pending = (businesses || []).filter(b => b.status === 'pending' && !b.deleted_at).slice(0, 3)
+function DailyBrief({ businesses, payouts, onNavigate, onRefresh, lastSynced, loading, unverifiedIds }) {
+  const allPending = (businesses || []).filter(b => b.status === 'pending' && !b.deleted_at)
+  const pending = allPending.slice(0, 3)
+  // Only a business the database would let through is worth suggesting for approval.
+  const isAwaiting = (b) => !!(unverifiedIds && unverifiedIds.has(b.id))
+  const nextApprovable = allPending.find(b => !isAwaiting(b))
+  const awaitingCount = allPending.filter(isAwaiting).length
   const readyPayouts = (payouts || []).filter(p => p.status === 'processing' || p.status === 'pending').slice(0, 2)
   const staleness = lastSynced ? `Updated ${lastSynced}` : 'Updated just now'
   if (loading) {
@@ -138,6 +152,7 @@ function DailyBrief({ businesses, payouts, onNavigate, onRefresh, lastSynced, lo
           {pending.length > 0 && (
             <div style={{ fontSize: 13, color: 'var(--fg)', lineHeight: 1.5 }}>
               <b>{pending.length} pending</b> {pending.length === 1 ? 'business' : 'businesses'} • {pending.map(b=>b.name).join(', ')} — <button onClick={() => onNavigate('businesses')} style={{ color: 'var(--teal)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, padding: 0 }}>Review →</button>
+              {awaitingCount > 0 && <div style={{ marginTop: 4 }}><AwaitingVerificationBadge /> <span style={{ fontSize: 11, color: 'var(--muted)' }}>{awaitingCount} of {allPending.length} cannot be approved yet</span></div>}
             </div>
           )}
           {readyPayouts.length > 0 && (
@@ -146,7 +161,7 @@ function DailyBrief({ businesses, payouts, onNavigate, onRefresh, lastSynced, lo
             </div>
           )}
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, borderTop: '1px solid var(--hairline)', paddingTop: 8 }}>
-            Suggested next: <b style={{ color: 'var(--fg)' }}>{pending[0] ? `Approve ${pending[0].name}` : readyPayouts[0] ? 'Mark next payout Paid' : 'Check coverage'}</b> — source: businesses & payout_requests • <span style={{ fontFamily: 'var(--font-mono)' }}>{staleness}</span>
+            Suggested next: <b style={{ color: 'var(--fg)' }}>{nextApprovable ? `Approve ${nextApprovable.name}` : readyPayouts[0] ? 'Mark next payout Paid' : 'Check coverage'}</b> — source: businesses & payout_requests • <span style={{ fontFamily: 'var(--font-mono)' }}>{staleness}</span>
           </div>
         </div>
       )}
@@ -155,7 +170,7 @@ function DailyBrief({ businesses, payouts, onNavigate, onRefresh, lastSynced, lo
 }
 
 // ── Dashboard stats-only panel (capped 6 + one 30d trend) ─────────────────
-function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: statsLoading, error: statsError, onRetry, lastSynced, onRefresh }) {
+function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: statsLoading, error: statsError, onRetry, lastSynced, onRefresh, unverifiedIds }) {
   const [pendingAgents, setPendingAgents] = useState([])
   const [trend, setTrend] = useState([])
   const safeBusinesses = businesses || []
@@ -187,7 +202,7 @@ function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: stat
   if (!safeBusinesses.length) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <DailyBrief businesses={safeBusinesses} payouts={payouts} onNavigate={onNav} onRefresh={onRefresh} lastSynced={lastSynced} loading={statsLoading} />
+        <DailyBrief businesses={safeBusinesses} payouts={payouts} onNavigate={onNav} onRefresh={onRefresh} lastSynced={lastSynced} loading={statsLoading} unverifiedIds={unverifiedIds} />
         <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
           <div style={{ width: 64, height: 64, borderRadius: 16, background: 'var(--hairline)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}><Building2 size={28} /></div>
           <div style={{ fontWeight: 800, color: 'var(--fg)' }}>No businesses yet</div>
@@ -242,7 +257,7 @@ function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: stat
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <DailyBrief businesses={safeBusinesses} payouts={payouts} onNavigate={onNav} onRefresh={onRefresh} lastSynced={lastSynced} loading={statsLoading} />
+      <DailyBrief businesses={safeBusinesses} payouts={payouts} onNavigate={onNav} onRefresh={onRefresh} lastSynced={lastSynced} loading={statsLoading} unverifiedIds={unverifiedIds} />
 
       {/* 6-cap grid: 12-col auto-rows:minmax(200px,auto) per AD-4, but KPI row is dense */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
@@ -289,7 +304,7 @@ function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: stat
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
               {pendingBusinesses.slice(0, 6).map(b => (
                 <button key={b.id} onClick={() => onNav('businesses', b.id)} style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--panel)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div><div style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg)' }}>{b.name}</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{b.owner || b.owner_name} • {b.state || '—'} • {b.category || b.business_type}</div></div>
+                  <div><div style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg)' }}>{b.name}</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{b.owner || b.owner_name} • {b.state || '—'} • {b.category || b.business_type}</div>{unverifiedIds && unverifiedIds.has(b.id) && <div style={{ marginTop: 4 }}><AwaitingVerificationBadge /></div>}</div>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: 'var(--amber)', background: 'var(--amber-bg)', padding: '4px 8px', borderRadius: 9999 }}><StatusDot status="pending" /> pending</span>
                 </button>
               ))}
@@ -318,7 +333,7 @@ function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: stat
 }
 
 // ── Businesses panel — Stripe table (36px, sticky, dot, hover actions, bulk bar) ──
-function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusChange, highlightId }) {
+function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusChange, highlightId, unverifiedIds }) {
   const [search, setSearch] = useState('')
   const debounced = useDebounced(search, 300)
   const [filterStatus, setFilterStatus] = useState('')
@@ -378,8 +393,16 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  const handleStatus = async (id, next, prev) => {
-    if (busy) return
+  // True when the owner has not confirmed their email, so the database would refuse the approval.
+  const isAwaitingVerification = (b) => !!(unverifiedIds && b && b.status === 'pending' && unverifiedIds.has(b.id))
+
+  // Resolves true when the change was saved, 'unverified' when the database refused it because the owner has
+  // not verified their email, and false for any other failure or when busy. Failures are already toasted.
+  // `options.onError(message)` receives the same readable message that is toasted, so a bulk caller can report the cause.
+  const handleStatus = async (id, next, prev, options = {}) => {
+    if (busy) return false
+    let saved = false
+    let unverified = false
     setBusy(true)
     const prevRows = [...rows]
     // optimistic
@@ -394,16 +417,22 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
     }, duration: 5000 })
     try {
       await onStatusChange(id, next)
+      saved = true
     } catch (e) {
+      unverified = /not verified their email/i.test(e?.message || '')
       setRows(prevRows)
       if (selected?.id===id) setSelected(s=> ({...s, status: prev}))
-      showToast(e.message.includes('permission')||e.message.includes('42501') ? 'No permission' : e.message, { type: 'error' })
+      const readable = e.message.includes('permission')||e.message.includes('42501') ? 'No permission' : e.message
+      showToast(readable, { type: 'error' })
+      // An unverified refusal is reported through its own outcome, never as a failure reason.
+      if (!unverified) options.onError?.(readable)
       setUndo(null)
     }
     setTimeout(()=> setUndo(null), 5000)
     setBusy(false)
     fetchRows()
     onRefresh?.()
+    return saved ? true : (unverified ? 'unverified' : false)
   }
 
   const handleSuspend = (b) => handleStatus(b.id, 'suspended', b.status)
@@ -459,25 +488,34 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
     const ids = Array.from(selectedIds)
     const prevRowsSnapshot = [...rows]
     // audit trail: bulk approve is logged via agent_transfers/payout_requests audit pattern — here we reuse business status history
-    let approvedCount = 0
-    for (const id of ids) {
+    // Owners who have not verified their email cannot be approved: skip them up front, and count any
+    // per-row database refusal as skipped too (handleStatus reports it rather than throwing).
+    const { approvable, skipped: unverifiedSkipped } = partitionByOwnerVerification(ids, unverifiedIds)
+    const results = []
+    const approvedIds = []
+    for (const id of approvable) {
       const b = rows.find(r=>r.id===id) || prevRowsSnapshot.find(r=>r.id===id)
       if (b && b.status==='pending') {
-        await handleStatus(id, 'active', b.status)
-        approvedCount++
+        let message = ''
+        const outcome = await handleStatus(id, 'active', b.status, { onError: (m) => { message = m } })
+        results.push({ outcome, message })
+        if (outcome === true) approvedIds.push(id)
       }
     }
-    // undo toast 5s for bulk
-    if (approvedCount > 0) {
-      showToast(`Approved ${approvedCount} businesses — undo?`, { type: 'success', actionLabel: 'Undo', duration: 5000, onAction: async () => {
-        for (const id of ids) {
+    // Each bucket is reported truthfully: a permission or network failure is never labelled "unverified".
+    const { outcomes, failureMessages } = collectBulkResults(results)
+    const summary = summarizeBulkApproval(outcomes, unverifiedSkipped.length, failureMessages)
+    if (summary.approved > 0) {
+      showToast(summary.message, { type: 'success', actionLabel: 'Undo', duration: 5000, onAction: async () => {
+        for (const id of approvedIds) {
           const prev = prevRowsSnapshot.find(r=>r.id===id)
           if (prev && prev.status==='pending') await onStatusChange(id, 'pending').catch(()=>{})
         }
         showToast('Bulk undone', { type: 'info' })
         fetchRows()
       }})
-      setTimeout(()=>{}, 5000)
+    } else if (summary.message) {
+      showToast(summary.message, { type: summary.failed > 0 ? 'error' : 'info', duration: 6000 })
     }
     setSelectedIds(new Set())
     setShowBulkConfirm(false)
@@ -505,7 +543,8 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <GhostBtn onClick={()=>exportRows(rows)}><Download size={13} style={{ marginRight: 6 }} />Export filtered</GhostBtn>
-          <GhostBtn onClick={()=>fetchRows()}><RefreshCw size={13} style={{ marginRight: 6 }} />Refresh</GhostBtn>
+          {/* onRefresh reloads the unverified-owner set too: verification changes auth.users, which realtime never reports. */}
+          <GhostBtn onClick={()=>{ fetchRows(); onRefresh?.() }}><RefreshCw size={13} style={{ marginRight: 6 }} />Refresh</GhostBtn>
         </div>
       </div>
 
@@ -539,13 +578,14 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
                         <td style={{ padding: '0 12px', color: 'var(--muted)', fontSize: 13, whiteSpace: 'nowrap' }}>{b.category || b.business_type || '—'}</td>
                         <td style={{ padding: '0 12px', color: 'var(--muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{b.plan || 'basic'}</td>
                         <td style={{ padding: '0 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          {isAwaitingVerification(b) && <span style={{ marginRight: 8 }}><AwaitingVerificationBadge id={`awaiting-verification-table-${b.id}`} /></span>}
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: b.status==='pending' ? 'var(--amber)' : b.status==='active' ? 'var(--green)' : b.status==='suspended' ? 'var(--red)' : 'var(--muted)' }}>
                             <StatusDot status={b.status} /> {b.status}
                           </span>
                         </td>
                         <td style={{ padding: '0 12px', textAlign: 'right', whiteSpace: 'nowrap' }} onClick={e=>e.stopPropagation()}>
                           <span style={{ display: 'inline-flex', gap: 6, opacity: 0.9 }} className="row-hover-actions">
-                            {b.status==='pending' && <button disabled={busy} onClick={()=>handleApprove(b)} style={{ padding: '5px 10px', borderRadius: 8, border: 'none', background: 'var(--green)', color: 'white', fontWeight: 700, fontSize: 11, cursor: 'pointer' }} title="Approve"><Check size={11} style={{ marginRight: 4 }} />Approve</button>}
+                            {b.status==='pending' && <button disabled={busy || isAwaitingVerification(b)} aria-describedby={isAwaitingVerification(b) ? `awaiting-verification-table-${b.id}` : undefined} onClick={()=>handleApprove(b)} style={{ padding: '5px 10px', borderRadius: 8, border: 'none', background: 'var(--green)', color: 'white', fontWeight: 700, fontSize: 11, cursor: (busy || isAwaitingVerification(b)) ? 'not-allowed' : 'pointer', opacity: isAwaitingVerification(b) ? 0.5 : 1 }} title={isAwaitingVerification(b) ? 'The owner has not verified their email address yet' : 'Approve'}><Check size={11} style={{ marginRight: 4 }} />Approve</button>}
                             {b.status==='active' && <><button disabled={busy} onClick={()=>handleSuspend(b)} style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--amber)', fontWeight: 700, fontSize: 11, cursor: 'pointer' }} title="Suspend (temporary)">Suspend</button><button disabled={busy} onClick={()=>handleRevoke(b)} style={{ padding: '5px 10px', borderRadius: 8, border: 'none', background: 'var(--hairline)', color: 'var(--muted)', fontWeight: 700, fontSize: 11, cursor: 'pointer' }} title="Revoke (withdrawal)">Revoke</button></>}
                             {b.status==='suspended' && <button disabled={busy} onClick={()=>handleReactivate(b)} style={{ padding: '5px 10px', borderRadius: 8, border: 'none', background: 'var(--teal)', color: 'white', fontWeight: 700, fontSize: 11, cursor: 'pointer' }} title="Reactivate"><Play size={11} style={{ marginRight: 4 }} />Activate</button>}
                             {b.status==='revoked' && <button disabled={busy} onClick={()=>handleToPending(b)} style={{ padding: '5px 10px', borderRadius: 8, border: 'none', background: 'var(--panel)', color: 'var(--fg)', fontWeight: 700, fontSize: 11, cursor: 'pointer', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--border)' }}>To pending</button>}
@@ -569,12 +609,13 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
                       <div>
                         <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--fg)' }}>{b.name}</div>
                         <div style={{ fontSize: 11, color: 'var(--muted)' }}>{b.state || '—'} • {b.category || b.business_type || '—'} • {b.plan}</div>
+                        {isAwaitingVerification(b) && <div style={{ marginTop: 4 }}><AwaitingVerificationBadge id={`awaiting-verification-card-${b.id}`} /></div>}
                       </div>
                     </div>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: b.status==='pending' ? 'var(--amber)' : b.status==='active' ? 'var(--green)' : b.status==='suspended' ? 'var(--red)' : 'var(--muted)', background: b.status==='pending' ? 'var(--amber-bg)' : b.status==='active' ? 'var(--green-bg)' : b.status==='suspended' ? 'var(--red-bg)' : 'var(--hairline)', padding: '4px 8px', borderRadius: 9999 }}><StatusDot status={b.status} /> {b.status}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }} onClick={e=>e.stopPropagation()}>
-                    {b.status==='pending' && <><button disabled={busy} onClick={()=>handleApprove(b)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', background: 'var(--green)', color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Approve</button><button disabled={busy} onClick={()=>handleRevoke(b)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Revoke</button></>}
+                    {b.status==='pending' && <><button disabled={busy || isAwaitingVerification(b)} aria-describedby={isAwaitingVerification(b) ? `awaiting-verification-card-${b.id}` : undefined} onClick={()=>handleApprove(b)} title={isAwaitingVerification(b) ? 'The owner has not verified their email address yet' : undefined} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', background: 'var(--green)', color: 'white', fontWeight: 700, fontSize: 12, cursor: (busy || isAwaitingVerification(b)) ? 'not-allowed' : 'pointer', opacity: isAwaitingVerification(b) ? 0.5 : 1 }}>Approve</button><button disabled={busy} onClick={()=>handleRevoke(b)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Revoke</button></>}
                     {b.status==='active' && <><button disabled={busy} onClick={()=>handleSuspend(b)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', background: 'var(--amber-bg)', color: 'var(--amber)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Suspend (temp)</button><button disabled={busy} onClick={()=>handleRevoke(b)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', background: 'var(--hairline)', color: 'var(--muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Revoke</button></>}
                     {b.status==='suspended' && <button disabled={busy} onClick={()=>handleReactivate(b)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', background: 'var(--teal)', color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Reactivate</button>}
                   </div>
@@ -596,6 +637,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
           <ConfirmDialog show={showBulkConfirm} title={`Approve ${selectedIds.size} selected?`} onClose={()=>setShowBulkConfirm(false)} onConfirm={bulkApprove} confirmLabel={busy ? 'Approving...' : `Confirm approve ${selectedIds.size}`} variant="default" message={
             <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div>This will approve {selectedIds.size} pending businesses. Audited via business status history (agent_transfers/payout_requests pattern for financial trails).</div>
+              {partitionByOwnerVerification(Array.from(selectedIds), unverifiedIds).skipped.length > 0 && <div style={{ color: 'var(--amber)', fontSize: 12, fontWeight: 700 }}>{partitionByOwnerVerification(Array.from(selectedIds), unverifiedIds).skipped.length} will be skipped: owner has not verified their email.</div>}
               <div style={{ color: 'var(--muted)', fontSize: 12 }}>Undo available for 5s after confirm.</div>
             </div>
           } />
@@ -611,7 +653,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
       {/* Sheet replaces Modal — 40% / 50% mobile, drag handle, focus trap */}
       <Sheet show={!!selected} onClose={()=>setSelected(null)} title={selected?.name || 'Business Details'} footer={selected && (
         <div style={{ display: 'flex', gap: 8, width: '100%', flexWrap: 'wrap' }}>
-          {selected.status==='pending' && <><TealBtn disabled={busy} onClick={async()=>{ await handleApprove(selected); }} style={{ flex:1, padding:11 }}><Check size={14} /> Approve</TealBtn><button disabled={busy} onClick={async()=>{ await handleRevoke(selected); }} style={{ flex:1, padding:11, borderRadius:12, border:'none', background: 'var(--hairline)', color: 'var(--muted)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }}><X size={14} /> Reject (revoke)</button></>}
+          {selected.status==='pending' && <>{isAwaitingVerification(selected) && <div style={{ flexBasis: '100%' }}><AwaitingVerificationBadge id={`awaiting-verification-sheet-${selected.id}`} /> <span style={{ fontSize: 12, color: 'var(--muted)' }}>Approval is unavailable until the owner verifies their email.</span></div>}<TealBtn disabled={busy || isAwaitingVerification(selected)} aria-describedby={isAwaitingVerification(selected) ? `awaiting-verification-sheet-${selected.id}` : undefined} onClick={async()=>{ await handleApprove(selected); }} style={{ flex:1, padding:11 }}><Check size={14} /> Approve</TealBtn><button disabled={busy} onClick={async()=>{ await handleRevoke(selected); }} style={{ flex:1, padding:11, borderRadius:12, border:'none', background: 'var(--hairline)', color: 'var(--muted)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }}><X size={14} /> Reject (revoke)</button></>}
           {selected.status==='active' && <><button disabled={busy} onClick={()=>handleSuspend(selected)} style={{ flex:1, padding:11, borderRadius:12, border:'none', background:'var(--amber-bg)', color:'var(--amber)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }}><Pause size={14} /> Suspend (temporary)</button><button disabled={busy} onClick={()=>handleRevoke(selected)} style={{ flex:1, padding:11, borderRadius:12, border:'none', background: 'var(--hairline)', color: 'var(--muted)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }} title="Revoke withdraws approval — must reapply"><X size={14} /> Revoke (withdrawal)</button></>}
           {selected.status==='suspended' && <TealBtn disabled={busy} onClick={async()=>{ await handleReactivate(selected); }} style={{ flex:1, padding:11 }}><Play size={14} /> Reactivate</TealBtn>}
           {selected.status==='revoked' && <TealBtn disabled={busy} onClick={async()=>{ await handleToPending(selected); }} style={{ flex:1, padding:11 }}>Move to pending (reapply)</TealBtn>}
@@ -1398,6 +1440,9 @@ export default function AdminDashboard() {
   const [team, setTeam] = useState([])
   const [teamMembers, setTeamMembers] = useState([])
   const [payouts, setPayouts] = useState([])
+  // Ids of pending businesses whose owner has not verified their email. Empty on any failure: the console
+  // must stay usable and the database trigger remains the enforcement.
+  const [unverifiedIds, setUnverifiedIds] = useState(() => new Set())
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('dashboard')
   const [highlightBusinessId, setHighlightBusinessId] = useState(null)
@@ -1430,12 +1475,14 @@ export default function AdminDashboard() {
 
   const load = useCallback(async () => {
     try {
-      const [b, tLegacy, tNew, p] = await Promise.all([
+      const [b, tLegacy, tNew, p, unverified] = await Promise.all([
         getBusinesses().catch(()=>[]),
         getAdminTeam().catch(()=>[]),
         getAdminTeamMembers().catch(()=>[]),
         getPayoutRequests().catch(()=>[]),
+        getUnverifiedOwnerBusinessIds().catch(()=>[]),
       ])
+      setUnverifiedIds(new Set(unverified || []))
       setBusinesses(b || [])
       setTeam(tLegacy || [])
       setTeamMembers(tNew || [])
@@ -1665,10 +1712,10 @@ export default function AdminDashboard() {
 
           {loading ? <Loading /> : (
             <>
-              {tab==='dashboard' && isPermitted('Dashboard') && <DashboardStats businesses={businesses} teamMembers={teamMembers.length? teamMembers: team} payouts={payouts} onNav={handleNavFromDashboard} loading={loading} error={null} onRetry={load} lastSynced={lastSynced} onRefresh={load} />}
+              {tab==='dashboard' && isPermitted('Dashboard') && <DashboardStats businesses={businesses} teamMembers={teamMembers.length? teamMembers: team} payouts={payouts} onNav={handleNavFromDashboard} loading={loading} error={null} onRetry={load} lastSynced={lastSynced} onRefresh={load} unverifiedIds={unverifiedIds} />}
               {tab==='dashboard' && !isPermitted('Dashboard') && <Empty icon={<Shield size={28} />} message="No access to Dashboard" />}
 
-              {tab==='businesses' && (isPermitted('Businesses') ? <BusinessesPanel businesses={businesses} onRefresh={load} onStatusChange={handleStatusChange} highlightId={highlightBusinessId} /> : <Empty icon={<Shield size={28} />} message="No access to Businesses" />)}
+              {tab==='businesses' && (isPermitted('Businesses') ? <BusinessesPanel businesses={businesses} onRefresh={load} onStatusChange={handleStatusChange} highlightId={highlightBusinessId} unverifiedIds={unverifiedIds} /> : <Empty icon={<Shield size={28} />} message="No access to Businesses" />)}
 
               {(tab==='team' || tab==='team-agents' || tab==='team-platform') && (
                 <div style={{ display:'flex', flexDirection:'column', gap:12 }}>

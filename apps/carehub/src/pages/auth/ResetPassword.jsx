@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, AlertTriangle, CheckCircle } from 'lucide-react'
 import { authClient } from '../../lib/authClient'
 import { Card, TealBtn, Logo } from '../../components/ui/index'
@@ -9,6 +9,10 @@ const { tealDeep, fontDisplay, bg, navy, gray600, gray400, border } = theme
 
 export default function ResetPassword() {
   const navigate = useNavigate()
+  // ?welcome=1 is set by the registration email: a new owner choosing their
+  // first password. Copy differs; the session/updateUser logic is identical.
+  const [searchParams] = useSearchParams()
+  const welcome = searchParams.get('welcome') === '1'
   const [pass, setPass] = useState('')
   const [confirm, setConfirm] = useState('')
   const [show, setShow] = useState(false)
@@ -17,6 +21,10 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false)
   const [sessionReady, setSessionReady] = useState(null) // null loading, true ready, false expired
   const [checking, setChecking] = useState(true)
+  // Welcome variant only: whether the link really confirmed the address. A session alone does not prove it, and
+  // telling an owner "Email verified" when it is not leaves them unable to sign in with no idea why.
+  const [confirmChecked, setConfirmChecked] = useState(!welcome)
+  const [unconfirmed, setUnconfirmed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -58,6 +66,24 @@ export default function ResetPassword() {
     }
   }, [])
 
+  // Runs once the session is ready, whichever path made it ready (initial check or the PASSWORD_RECOVERY event).
+  // A failed or throwing lookup means "unknown", and unknown never blocks the owner: the form is shown as before.
+  useEffect(() => {
+    if (!welcome || sessionReady !== true) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await authClient.auth.getUser()
+        if (!cancelled && !error && data?.user && !data.user.email_confirmed_at) {
+          console.warn('[reset] welcome link did not confirm the email')
+          setUnconfirmed(true)
+        }
+      } catch { /* status unknown: proceed */ }
+      if (!cancelled) setConfirmChecked(true)
+    })()
+    return () => { cancelled = true }
+  }, [welcome, sessionReady])
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!pass || pass.length < 6) { setErr('Password must be at least 6 characters.'); return }
@@ -87,7 +113,7 @@ export default function ResetPassword() {
     fontSize: 14, outline: 'none', boxSizing: 'border-box', background: bg, color: navy, fontFamily: theme.fontFamily,
   }
 
-  if (checking) {
+  if (checking || (welcome && sessionReady === true && !confirmChecked)) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: 20 }}>
         <Card style={{ padding: 32, borderRadius: theme.radius.xl, textAlign: 'center' }}>
@@ -113,13 +139,28 @@ export default function ResetPassword() {
     )
   }
 
+  if (welcome && unconfirmed) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: 20 }}>
+        <div style={{ width: '100%', maxWidth: 440 }}>
+          <Card style={{ padding: 32, borderRadius: theme.radius.xl, border: 'none', boxShadow: theme.elevation[3], textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}><AlertTriangle size={48} color={theme.danger} aria-hidden="true" /></div>
+            <h1 style={{ fontFamily: fontDisplay, fontSize: 22, fontWeight: 700, color: navy, margin: '0 0 8px' }}>We could not verify your email</h1>
+            <p role="alert" style={{ fontSize: 13, color: gray600, lineHeight: 1.7, margin: '0 0 20px' }}>Open the link in your most recent email, or request a new one from the sign-in page.</p>
+            <Link to="/login" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: 15, borderRadius: theme.radius.full, background: tealDeep, color: 'white', fontWeight: 800, fontSize: 14, textDecoration: 'none', boxSizing: 'border-box' }}>Go to sign in</Link>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
   if (success) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: 20 }}>
         <Card style={{ padding: 32, borderRadius: theme.radius.xl, textAlign: 'center', maxWidth: 440, width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}><CheckCircle size={48} color={theme.success} /></div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: navy }}>Password updated!</div>
-          <div style={{ fontSize: 13, color: gray600, marginTop: 8 }}>Redirecting you to sign in…</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: navy }}>{welcome ? 'Password saved. Taking you to sign in…' : 'Password updated!'}</div>
+          {!welcome && <div style={{ fontSize: 13, color: gray600, marginTop: 8 }}>Redirecting you to sign in…</div>}
         </Card>
       </div>
     )
@@ -133,8 +174,8 @@ export default function ResetPassword() {
             <ChevronLeft size={15} /> Back to sign in
           </Link>
           <div style={{ margin: '0 auto 16px', display: 'flex', justifyContent: 'center' }}><Logo size={64} /></div>
-          <div style={{ fontFamily: fontDisplay, fontSize: 30, fontWeight: 700, color: navy }}>Set new password</div>
-          <div style={{ fontSize: 14, color: gray600, marginTop: 6 }}>Choose a strong password</div>
+          <div style={{ fontFamily: fontDisplay, fontSize: 30, fontWeight: 700, color: navy }}>{welcome ? 'Email verified' : 'Set new password'}</div>
+          <div style={{ fontSize: 14, color: gray600, marginTop: 6 }}>{welcome ? 'Choose a password to finish creating your account.' : 'Choose a strong password'}</div>
         </div>
 
         <Card style={{ padding: 32, borderRadius: theme.radius.xl, border: 'none', boxShadow: theme.elevation[3] }}>
@@ -158,7 +199,7 @@ export default function ResetPassword() {
                 )}
               </div>
               <TealBtn type="submit" disabled={loading} style={{ padding: '16px', borderRadius: theme.radius.full, fontSize: 15, fontWeight: 800, boxShadow: theme.elevation[2], ...(loading ? {} : { background: tealDeep }) }}>
-                {loading ? 'Updating…' : 'Update password'}
+                {loading ? (welcome ? 'Saving…' : 'Updating…') : (welcome ? 'Save password' : 'Update password')}
               </TealBtn>
             </div>
           </form>

@@ -25,27 +25,38 @@ const preferOf = (call) => call.options.headers.Prefer
 // ── Regression: anonymous public forms must not leak or fail on the row they
 // write ────────────────────────────────────────────────────────────────────────
 //
-// `registerBusiness` moved to the register_business RPC in C2: the businesses
-// password column is gone, and the RPC (SECURITY DEFINER, anon-executable)
-// mints the confirmed auth user + pending row atomically, forcing the
-// privileged defaults server-side. It returns a scalar business id, not a row.
+// `registerBusiness` posts to the server handler /api/register-business, not a
+// browser RPC: the handler creates the unconfirmed owner + pending business and
+// emails the verification link, and the form never carries a password (the owner
+// chooses it from that link).
 // `agent_applications` remains a write-only anon INSERT with no anon SELECT
 // policy at all, so it must keep return=minimal — asking for a representation
 // fails the whole INSERT with 42501, which is what broke that public form.
 describe('anonymous public-form registration', () => {
-  it('registerBusiness posts to the register_business RPC, password as a separate arg', async () => {
-    await registerBusiness({ name: 'HealthPlus', email: 'owner@example.com', password: 'secret123' })
+  // The handler answers JSON, unlike PostgREST's empty return=minimal body.
+  const answerWith = (ok, payload) => {
+    global.fetch = vi.fn(async (url, options) => {
+      calls.push({ url, options })
+      return { ok, status: ok ? 200 : 400, json: async () => payload }
+    })
+  }
+
+  it('registerBusiness posts the business fields to the server handler, never a password', async () => {
+    answerWith(true, { ok: true })
+    await registerBusiness({ name: 'HealthPlus', email: 'owner@example.com', password: 'secret123', confirmPassword: 'secret123' })
     expect(calls).toHaveLength(1)
     expect(calls[0].options.method).toBe('POST')
-    expect(calls[0].url).toContain('rpc/register_business')
+    expect(calls[0].url).toBe('/api/register-business')
     const body = JSON.parse(calls[0].options.body)
-    expect(body.p_business).toEqual({ name: 'HealthPlus', email: 'owner@example.com' })
-    expect(body.p_password).toBe('secret123')
-    expect(body.p_business).not.toHaveProperty('password')
+    expect(body).toMatchObject({ name: 'HealthPlus', email: 'owner@example.com' })
+    for (const k of ['password', 'confirmPassword', 'p_password', 'p_business']) expect(body).not.toHaveProperty(k)
   })
 
-  it('registerBusiness resolves the RPC result rather than throwing on an empty body', async () => {
-    await expect(registerBusiness({ name: 'HealthPlus', email: 'o@example.com', password: 'secret123' })).resolves.toBeUndefined()
+  it('registerBusiness resolves { ok: true } and rejects with the server message when refused', async () => {
+    answerWith(true, { ok: true })
+    await expect(registerBusiness({ name: 'HealthPlus', email: 'o@example.com' })).resolves.toEqual({ ok: true })
+    answerWith(false, { error: 'An account with this email already exists. Please sign in instead.' })
+    await expect(registerBusiness({ name: 'HealthPlus', email: 'o@example.com' })).rejects.toThrow('An account with this email already exists. Please sign in instead.')
   })
 
   it('submitAgentApplication asks for no representation', async () => {

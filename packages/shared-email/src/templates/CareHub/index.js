@@ -16,6 +16,7 @@ export const SUBJECTS = {
   appointment_confirmed: 'CareHub: your appointment is confirmed',
   credit_reminder: 'CareHub: payment reminder',
   staff_welcome: 'CareHub: you have been invited',
+  owner_setup: 'CareHub: verify your email and set your password',
   agent_approved: 'CareHub: referral agent application approved',
   agent_rejected: 'CareHub: referral agent application update',
 }
@@ -119,6 +120,19 @@ export function staffWelcome({ fullName, role, businessName, setupLink } = {}) {
     ],
     cta: { href: setupLink || siteLink(APP, '/login'), label: 'Set up your account' },
     showLink: Boolean(setupLink),
+  })
+}
+
+export function ownerSetup({ fullName, businessName, setupLink } = {}) {
+  return email({
+    title: 'Verify your email and choose a password',
+    preheader: 'One step to finish creating your CareHub account.',
+    body: [
+      paragraph(html`${hi(fullName)} thanks for registering <strong>${businessName || 'your business'}</strong> on CareHub.`),
+      paragraph('Confirm that this is your email address and choose a password. Your application is reviewed once you have done this.'),
+      smallPrint(IGNORE),
+    ],
+    cta: { href: setupLink, label: 'Verify email and choose a password' },
   })
 }
 
