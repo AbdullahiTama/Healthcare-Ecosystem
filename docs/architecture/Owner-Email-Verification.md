@@ -52,7 +52,7 @@ The `owner_setup` template lives in `packages/shared-email/src/templates/CareHub
 
 ### Payload keys
 
-The `owner_setup` payload is `{ fullName, businessName, setupLink }` (camelCase), which is what `sendAuthEmail` enqueues. The catalog `payload_schema` is written to match. Because the registration handler passes no names, `fullName` falls back to the local part of the address and `businessName` is an empty string; the template renders neutral copy. The schema is **not enforced at send time**: on live data, 13 sent `password_reset` outbox rows carry camelCase payload keys and non-matching links against a snake_case, `carefindhub.com`-pinned schema.
+The `owner_setup` payload is `{ fullName, businessName, setupLink }` (camelCase), which is what `sendAuthEmail` enqueues. The catalog `payload_schema` uses snake_case keys (`recipient_name`, `business_name`, `setup_link`), mirroring `staff_welcome`, because the live CHECK `email_event_catalog_payload_schema_check` (via `email_catalog_schema_is_valid`) rejects camelCase keys; the first apply attempt on 2026-10-11 failed on exactly that. Because the registration handler passes no names, `fullName` falls back to the local part of the address and `businessName` is an empty string; the template renders neutral copy. The schema is **not enforced at send time**: on live data, 13 sent `password_reset` outbox rows carry camelCase payload keys and non-matching links against a snake_case, `carefindhub.com`-pinned schema.
 
 ### The trigger and what it refuses
 

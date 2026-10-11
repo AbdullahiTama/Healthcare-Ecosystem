@@ -122,21 +122,25 @@ create trigger businesses_require_verified_owner
 
 -- 4. owner_setup needs a catalog row: email_outbox has a foreign key on (app, event_key). Sender, rollout and flags
 -- are copied from staff_welcome, which is the same kind of message (a recovery link to set a password).
--- The payload schema keys are the keys sendAuthEmail ACTUALLY enqueues (fullName, businessName, setupLink), not the
--- snake_case keys on the staff_welcome row: spike S2 showed the outbox accepts the camelCase staff_welcome payload at
--- insert, and whether the dispatcher validates against payload_schema at send time is unproven, so the schema is
--- written to match what is really sent.
+-- The payload schema MUST be snake_case: the live CHECK email_event_catalog_payload_schema_check calls
+-- email_catalog_schema_is_valid(), which requires every property key to match ^[a-z][a-z0-9_]{0,79}$ (so camelCase keys
+-- are rejected, as the first apply attempt on 2026-10-11 showed), every property to be {type: string, maxLength 1..4096},
+-- additionalProperties false, every required key to exist in properties, and no key containing words like auth, token,
+-- password, review or comment. Auth-category events do not go through enqueue_business_email_event (it raises
+-- auth_events_require_separate_path); sendAuthEmail inserts into email_outbox directly with camelCase payload keys and the
+-- payload is not validated against this schema (13 sent password_reset rows prove it), so the keys here mirror the
+-- staff_welcome row and are documentation of the contract rather than an enforced shape.
 insert into public.email_event_catalog
   (app, event_key, template_key, subject_template, from_email, reply_to, payload_schema,
    enabled, required_for_business, category, rollout_mode)
 select app, 'owner_setup', 'owner_setup', 'CareHub: verify your email and set your password', from_email, reply_to,
        jsonb_build_object(
          'type', 'object',
-         'required', jsonb_build_array('fullName', 'businessName', 'setupLink'),
+         'required', jsonb_build_array('recipient_name', 'business_name', 'setup_link'),
          'properties', jsonb_build_object(
-           'fullName',     jsonb_build_object('type', 'string', 'maxLength', 120),
-           'businessName', jsonb_build_object('type', 'string', 'maxLength', 160),
-           'setupLink',    jsonb_build_object('type', 'string', 'format', 'uri', 'pattern', '^https://carefindhub\.com/', 'maxLength', 2048)),
+           'recipient_name', jsonb_build_object('type', 'string', 'maxLength', 120),
+           'business_name',  jsonb_build_object('type', 'string', 'maxLength', 160),
+           'setup_link',     jsonb_build_object('type', 'string', 'format', 'uri', 'pattern', '^https://carefindhub\.com/', 'maxLength', 2048)),
          'additionalProperties', false),
        enabled, required_for_business, 'auth', rollout_mode
   from public.email_event_catalog
