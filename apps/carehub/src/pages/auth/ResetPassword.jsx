@@ -21,6 +21,10 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false)
   const [sessionReady, setSessionReady] = useState(null) // null loading, true ready, false expired
   const [checking, setChecking] = useState(true)
+  // Welcome variant only: whether the link really confirmed the address. A session alone does not prove it, and
+  // telling an owner "Email verified" when it is not leaves them unable to sign in with no idea why.
+  const [confirmChecked, setConfirmChecked] = useState(!welcome)
+  const [unconfirmed, setUnconfirmed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -62,6 +66,24 @@ export default function ResetPassword() {
     }
   }, [])
 
+  // Runs once the session is ready, whichever path made it ready (initial check or the PASSWORD_RECOVERY event).
+  // A failed or throwing lookup means "unknown", and unknown never blocks the owner: the form is shown as before.
+  useEffect(() => {
+    if (!welcome || sessionReady !== true) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await authClient.auth.getUser()
+        if (!cancelled && !error && data?.user && !data.user.email_confirmed_at) {
+          console.warn('[reset] welcome link did not confirm the email')
+          setUnconfirmed(true)
+        }
+      } catch { /* status unknown: proceed */ }
+      if (!cancelled) setConfirmChecked(true)
+    })()
+    return () => { cancelled = true }
+  }, [welcome, sessionReady])
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!pass || pass.length < 6) { setErr('Password must be at least 6 characters.'); return }
@@ -91,7 +113,7 @@ export default function ResetPassword() {
     fontSize: 14, outline: 'none', boxSizing: 'border-box', background: bg, color: navy, fontFamily: theme.fontFamily,
   }
 
-  if (checking) {
+  if (checking || (welcome && sessionReady === true && !confirmChecked)) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: 20 }}>
         <Card style={{ padding: 32, borderRadius: theme.radius.xl, textAlign: 'center' }}>
@@ -111,6 +133,21 @@ export default function ResetPassword() {
             <div style={{ fontSize: 13, color: gray600, lineHeight: 1.7, marginBottom: 20 }}>This reset link is invalid or has expired. Please request a new one.</div>
             <Link to="/forgot-password" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: 15, borderRadius: theme.radius.full, background: tealDeep, color: 'white', fontWeight: 800, fontSize: 14, textDecoration: 'none' }}>Request new link</Link>
             <div style={{ marginTop: 12 }}><Link to="/login" style={{ fontSize: 13, color: gray600, textDecoration: 'none' }}>Back to sign in</Link></div>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (welcome && unconfirmed) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: 20 }}>
+        <div style={{ width: '100%', maxWidth: 440 }}>
+          <Card style={{ padding: 32, borderRadius: theme.radius.xl, border: 'none', boxShadow: theme.elevation[3], textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}><AlertTriangle size={48} color={theme.danger} aria-hidden="true" /></div>
+            <h1 style={{ fontFamily: fontDisplay, fontSize: 22, fontWeight: 700, color: navy, margin: '0 0 8px' }}>We could not verify your email</h1>
+            <p role="alert" style={{ fontSize: 13, color: gray600, lineHeight: 1.7, margin: '0 0 20px' }}>Open the link in your most recent email, or request a new one from the sign-in page.</p>
+            <Link to="/login" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: 15, borderRadius: theme.radius.full, background: tealDeep, color: 'white', fontWeight: 800, fontSize: 14, textDecoration: 'none', boxSizing: 'border-box' }}>Go to sign in</Link>
           </Card>
         </div>
       </div>
