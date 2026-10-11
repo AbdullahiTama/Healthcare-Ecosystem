@@ -21,11 +21,12 @@
 -- THE CONTROL
 -- ---------------------------------------------------------------------------
 -- A BEFORE INSERT trigger that, for a non-privileged caller, only lets through
--- the two shapes the app legitimately produces:
---   root   (parent_business_id is null): status 'pending', plan 'basic' (or
---          null), no platform-admin flag, no plan expiry, no agent id. This is
---          the registration shape; registration itself goes through the
---          SECURITY DEFINER register_business() RPC, which is exempt.
+-- the one shape the app legitimately produces client-side:
+--   root   (parent_business_id is null): ALWAYS rejected. Registration goes
+--          only through the SECURITY DEFINER RPCs (register_business*), which
+--          are exempt. POLICY CHANGE: an ordinary signed-in user can no longer
+--          insert a root business directly. This also closes the case-variant
+--          second-root-row path that makes is_platform_admin() raise 21000.
 --   branch (parent_business_id set): the parent exists, is the caller's own
 --          (lower(email) = lower(auth.email())) and is 'active'; the branch is
 --          'active' or 'pending' on the parent's plan (or null); no admin flag,
@@ -58,6 +59,11 @@
 --    silently breaks any column added later. The trigger is the control.
 -- 4. Errors are 42501 (insufficient_privilege) and name the field class only,
 --    never a supplied value.
+--
+-- 5. Upserts (INSERT ... ON CONFLICT DO UPDATE): this BEFORE INSERT trigger
+--    fires on the proposed row first; if the row conflicts, the DO UPDATE
+--    path is covered by guard_business_privileged_columns (both proven in the
+--    test with the real UPDATE guard loaded).
 --
 -- Idempotent: create or replace + drop trigger if exists.
 -- ROLLBACK:   drop trigger if exists a_guard_business_insert on public.businesses;
@@ -98,16 +104,10 @@ begin
   end if;
 
   if new.parent_business_id is null then
-    -- Root business: the registration shape only.
-    if new.status is distinct from 'pending' then
-      raise exception 'A new business must start with status pending; only a platform administrator can set its status.'
-        using errcode = 'insufficient_privilege';
-    end if;
-    if new.plan is not null and new.plan <> 'basic' then
-      raise exception 'A new business must start on the basic plan; only a platform administrator can set its plan.'
-        using errcode = 'insufficient_privilege';
-    end if;
-    return new;
+    -- Root business: never by direct insert. Registration goes through the
+    -- SECURITY DEFINER RPCs (exempt above); no client code inserts a root row.
+    raise exception 'Businesses are created through registration, not by direct insert.'
+      using errcode = 'insufficient_privilege';
   end if;
 
   -- Branch: the caller must own an active parent (read under the caller's RLS).
@@ -139,9 +139,9 @@ end
 $$;
 
 comment on function public.guard_business_insert() is
-  'BEFORE INSERT guard on businesses: a non-privileged caller may only create a '
-  'pending/basic root business or an active/pending branch of their own active '
-  'business on its plan; never is_platform_admin, plan_expires_at or '
+  'BEFORE INSERT guard on businesses: a non-privileged caller may never create a '
+  'root business (registration RPCs only) and may only create an active/pending '
+  'branch of their own active business on its plan; never is_platform_admin, plan_expires_at or '
   'referring_agent_id. Service role, SECURITY DEFINER RPCs and platform admins '
   'pass through. Companion to guard_business_privileged_columns (UPDATE).';
 

@@ -27,69 +27,136 @@ Live facts at the time: `businesses_email_key` is UNIQUE on `email`, and `busine
 
 ## The control
 
+
 A `BEFORE INSERT` trigger `a_guard_business_insert` calls `public.guard_business_insert()`.
 
 - **Exempt:** `current_user` in `postgres, service_role, supabase_admin, supabase_auth_admin`, or
   `is_platform_admin()`. This covers server endpoints, migrations, platform admins and SECURITY DEFINER RPCs such as
   `register_business()`, where `current_user` is the function owner.
-- **Everyone else**, with errors raised as SQLSTATE 42501 that name the field class but never the value:
-  - `is_platform_admin` must be false or null, `plan_expires_at` must be null, and `referring_agent_id` must be null.
-  - Root business (`parent_business_id is null`): `status = 'pending'`, and `plan` must be `'basic'` or null.
-  - Branch: the parent must exist, be visible to the caller and owned by them (`lower(email) = lower(auth.email())`),
-    and be `active`. The branch must be `active` or `pending`, with `plan` equal to the parent's or null.
+- **Everyone else** gets SQLSTATE 42501. Messages name the field class, never the value.
+  - `is_platform_admin` must be false or null. `plan_expires_at` must be null. `referring_agent_id` must be null.
+  - **Root business (`parent_business_id is null`): always rejected**, with "Businesses are created through
+    registration, not by direct insert."
+  - Branch: the parent must exist, be visible to the caller, be owned by them (`lower(email) = lower(auth.email())`)
+    and be `active`. The branch must be `active` or `pending` (a null status is rejected). Its `plan` must equal the
+    parent's or be null.
+
+### Policy change
+
+After this migration, **an ordinary signed-in user can no longer insert a root business directly**, in any shape,
+including the old pending/basic registration shape. No client code does this: registration goes only through the
+SECURITY DEFINER RPCs (`register_business*`), which are exempt, and the only client-side insert is branch creation
+(`Locations.jsx`), which always has a parent. Rejecting root inserts also closes the case-variant second-root-row path
+described under "Known gaps".
 
 ### Design decisions
 
-1. **SECURITY INVOKER.** The trust test is `current_user`, the same as the UPDATE guard. Inside a SECURITY DEFINER
-   function, `current_user` is the owner, so a definer guard would exempt every caller and do nothing. The test suite
-   proved this: a DEFINER variant fails 11 of the 22 cases. `session_user` does not work either: under PostgREST it is
-   `authenticator` both for a direct INSERT and inside `register_business()`.
-
-   Postgres does not check EXECUTE on a trigger function when the trigger fires. So revoking EXECUTE stops the
-   function being called as an RPC, and the trigger still runs.
-
-   The parent lookup runs under the caller's RLS. An owner can see their own parent. Another user's parent is
-   invisible, so the lookup finds nothing and the insert is rejected.
-2. **Trigger ordering.** Postgres fires BEFORE triggers in name order, so `a_guard_business_insert` runs before
-   `resolve_referring_agent`. That way the guard sees only what the caller supplied and rejects any caller-supplied
-   `referring_agent_id`. The referral trigger then sets the id from `referral_code_used`.
-3. **No column-level `REVOKE INSERT`.** While `authenticated` holds table-level INSERT, revoking INSERT on individual
-   columns does nothing; the test proves it. Making the revoke effective would mean replacing the table grant with an
-   allow-list of column grants. Every column added later would then be silently un-insertable. The trigger is the
+1. **SECURITY INVOKER.** The trust test is `current_user`, the same as in the UPDATE guard. A DEFINER guard would see
+   the function owner as `current_user` and so exempt every caller. That was proven when a DEFINER variant failed 11
+   of 22 cases in round 0. `session_user` is no better: under PostgREST it is `authenticator` both for a direct INSERT
+   and inside `register_business()`.
+   - Postgres does not check EXECUTE on a trigger function when the trigger fires. Revoking EXECUTE therefore stops
+     direct RPC calls and leaves the trigger working.
+   - The parent lookup runs under the caller's RLS. An owner can see their own parent. Another user's parent is
+     invisible, so it counts as "not yours" and the insert is rejected.
+2. **Trigger ordering.** BEFORE triggers fire in name order, so `a_guard_business_insert` runs before
+   `resolve_referring_agent`. The guard therefore sees only what the caller supplied, and it rejects any
+   caller-supplied `referring_agent_id`. The referral trigger then sets the id from `referral_code_used`.
+3. **Upserts.** On `INSERT ... ON CONFLICT DO UPDATE`, this trigger checks the proposed row first. If that row passes
+   and conflicts with an existing one, the `DO UPDATE` path is caught by `guard_business_privileged_columns`. The test
+   proves both, with the real UPDATE guard loaded.
+4. **No column-level `REVOKE INSERT`.** While `authenticated` holds table-level INSERT, revoking INSERT on individual
+   columns does nothing (proven in the test). Making it effective would mean replacing the table grant with an
+   allow-list of column grants, and every column added later would then be silently un-insertable. The trigger is the
    control.
 
 ## Apply steps (human-run)
 
-1. Run the advisors (security and performance) and save the baseline.
-2. Apply as a **tracked** migration with `apply_migration`, named `businesses_insert_guard`, using the file content.
-   **Never use `execute_sql`**, because an untracked change is how earlier fixes were silently lost.
-3. Re-read the ACL and confirm there is exactly one signature, and that neither anon nor authenticated can execute it
-   (Supabase default privileges can re-grant EXECUTE at creation time):
-   ```sql
-   select p.oid::regprocedure, p.prosecdef, p.proacl
-     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'guard_business_insert';
-   -- expect one row, prosecdef = false, and no anon= / authenticated= / =X (PUBLIC) entries
-   select has_function_privilege('anon', 'public.guard_business_insert()', 'execute') as anon,
-          has_function_privilege('authenticated', 'public.guard_business_insert()', 'execute') as authenticated;
-   -- expect false, false. If either is true, re-run the final REVOKE line of the migration.
-   select tgname from pg_trigger where tgrelid = 'public.businesses'::regclass and not tgisinternal order by tgname;
-   -- expect a_guard_business_insert before resolve_referring_agent
-   ```
-4. Run the advisors again. Expect the baseline unchanged: the function is SECURITY INVOKER with a pinned search_path.
-5. Run the behavioural verification below.
+### 1. Pre-apply checks (stop on any unexpected result)
+
+```sql
+-- a) No owner already has two rows under one lower(email). Duplicates make is_platform_admin() raise 21000.
+select lower(email), count(*) from public.businesses group by 1 having count(*) > 1;
+-- expect: zero rows
+
+-- b) Every function that inserts into businesses. A SECURITY DEFINER one is exempt only if its OWNER is in
+--    (postgres, service_role, supabase_admin, supabase_auth_admin). Any other owner, or any INVOKER function called
+--    by signed-in users, will now be held to the guard and must be reviewed before applying.
+select p.oid::regprocedure, p.prosecdef, pg_get_userbyid(p.proowner) as owner
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname not in ('pg_catalog', 'information_schema')
+   and p.prosrc ilike '%insert into%businesses%';
+-- expect: register_business* (prosecdef = true, owner postgres); review every other row
+
+-- c) HARD GATE: the triggers on businesses must be exactly the two expected ones. The post-apply write test performs
+--    a real INSERT (rolled back), and that INSERT would fire any unknown trigger or webhook, including an AFTER INSERT
+--    one with side effects outside the transaction (an http request, for example).
+select tgname from pg_trigger where tgrelid = 'public.businesses'::regclass and not tgisinternal order by tgname;
+-- expect exactly: guard_business_privileged_columns, resolve_referring_agent
+-- If ANYTHING else is listed: STOP. Do not apply, and do not run the write test.
+```
+
+### 2. Baseline advisors
+
+Run the security and performance advisors and save the output.
+
+### 3. Apply
+
+Apply as a **tracked** migration with `apply_migration`, named `businesses_insert_guard`. **Never use
+`execute_sql`**: an untracked change is how earlier fixes were silently lost. Prefix the migration body with:
+
+```sql
+set local lock_timeout = '5s';
+```
+
+`CREATE TRIGGER` takes a lock on `businesses` that blocks writes. With the timeout, a busy table makes the apply fail
+fast instead of queueing every write behind it. **On a lock timeout, nothing was applied; just retry.**
+
+### 4. Post-apply catalogue checks
+
+```sql
+select p.oid::regprocedure, p.prosecdef, p.proacl
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.proname = 'guard_business_insert';
+-- expect: one row; prosecdef = false; no anon= / authenticated= / =X (PUBLIC) entries
+select has_function_privilege('anon', 'public.guard_business_insert()', 'execute') as anon,
+       has_function_privilege('authenticated', 'public.guard_business_insert()', 'execute') as authenticated;
+-- expect: false, false. Supabase default privileges can re-grant EXECUTE; if either is true, re-run the final
+-- REVOKE line of the migration and check again.
+select tgname from pg_trigger where tgrelid = 'public.businesses'::regclass and not tgisinternal order by tgname;
+-- HARD GATE, expect exactly: a_guard_business_insert, guard_business_privileged_columns, resolve_referring_agent
+```
+
+### 5. Advisors again
+
+Expect the saved baseline, unchanged. The new function is SECURITY INVOKER with a pinned search_path.
+
+### 6. Behavioural verification
+
+See the next section.
 
 ## Behavioural post-apply verification (human-run)
 
-Everything happens inside one `DO` block that ends in `raise exception`, so every write rolls back. The email is a
-throwaway address that owns no business row.
+Run this only after both trigger hard gates have passed. It runs as one `DO` block that ends in `raise exception`, so
+every write rolls back. It covers four cases:
+
+- the attack, which must fail;
+- an ordinary user's root insert, which must fail;
+- `service_role` inserting a pending root, which must succeed;
+- a platform admin inserting an active root, which must succeed.
+
+The platform-admin case uses a throwaway admin row that the block creates itself, as the owner (exempt), and that is
+rolled back with everything else. Every address is a throwaway that owns no real row.
 
 ```sql
 do $$
 declare
   v_attack text := 'INSERTED (VULNERABLE)';
-  v_legit  text := 'INSERTED';
+  v_root   text := 'INSERTED (POLICY NOT ENFORCED)';
+  v_svc    text := 'INSERTED';
+  v_admin  text := 'INSERTED';
 begin
+  -- Ordinary signed-in user with no business row.
   perform set_config('request.jwt.claims',
     '{"sub":"00000000-0000-4000-8000-00000000f00d","email":"insert-guard-selftest@example.invalid","role":"authenticated"}', true);
   execute 'set local role authenticated';
@@ -98,25 +165,48 @@ begin
   begin
     insert into public.businesses (name, owner, email, status, is_platform_admin)
     values ('SELFTEST attack', 'SELFTEST', 'insert-guard-selftest@example.invalid', 'active', true);
-  exception when others then
-    v_attack := sqlstate || ' ' || sqlerrm;
+  exception when others then v_attack := sqlstate || ' ' || sqlerrm;
   end;
 
-  -- 2. The registration shape: must succeed.
+  -- 2. The old registration shape by direct insert: must now fail with 42501.
   begin
     insert into public.businesses (name, owner, email, status, plan)
-    values ('SELFTEST legit', 'SELFTEST', 'insert-guard-selftest@example.invalid', 'pending', 'basic');
-  exception when others then
-    v_legit := 'FAILED ' || sqlstate || ' ' || sqlerrm;
+    values ('SELFTEST root', 'SELFTEST', 'insert-guard-selftest@example.invalid', 'pending', 'basic');
+  exception when others then v_root := sqlstate || ' ' || sqlerrm;
   end;
 
-  raise exception 'RESULT attack=[%] legit=[%]', v_attack, v_legit;
+  -- 3. service_role: must succeed.
+  execute 'reset role';
+  execute 'set local role service_role';
+  begin
+    insert into public.businesses (name, owner, email, status, plan)
+    values ('SELFTEST svc', 'SELFTEST', 'insert-guard-selftest-svc@example.invalid', 'pending', 'basic');
+  exception when others then v_svc := 'FAILED ' || sqlstate || ' ' || sqlerrm;
+  end;
+
+  -- 4. Platform admin: seed a throwaway admin row as the owner, then act as that admin.
+  execute 'reset role';
+  insert into public.businesses (name, owner, email, status, plan, is_platform_admin)
+  values ('SELFTEST admin', 'SELFTEST', 'insert-guard-selftest-admin@example.invalid', 'active', 'enterprise', true);
+  perform set_config('request.jwt.claims',
+    '{"sub":"00000000-0000-4000-8000-00000000fade","email":"insert-guard-selftest-admin@example.invalid","role":"authenticated"}', true);
+  execute 'set local role authenticated';
+  begin
+    insert into public.businesses (name, owner, email, status, plan)
+    values ('SELFTEST by admin', 'SELFTEST', 'insert-guard-selftest-byadmin@example.invalid', 'active', 'growth');
+  exception when others then v_admin := 'FAILED ' || sqlstate || ' ' || sqlerrm;
+  end;
+
+  raise exception 'RESULT attack=[%] root=[%] service_role=[%] admin=[%]', v_attack, v_root, v_svc, v_admin;
 end $$;
--- Expect: RESULT attack=[42501 Only a platform administrator can create a business with platform-admin access.]
---                legit=[INSERTED]
+-- Expect:
+--   attack=[42501 Only a platform administrator can create a business with platform-admin access.]
+--   root=[42501 Businesses are created through registration, not by direct insert.]
+--   service_role=[INSERTED]
+--   admin=[INSERTED]
 ```
 
-Residue check, run afterwards as the owner/superuser:
+Residue check, run afterwards as the owner:
 
 ```sql
 select count(*) from public.businesses where email ilike 'insert-guard-selftest%';      -- expect 0
@@ -132,21 +222,26 @@ drop trigger if exists a_guard_business_insert on public.businesses;
 
 ## What this does NOT cover
 
-- **UPDATE**: covered separately by `guard_business_privileged_columns` (C18). This migration leaves it unchanged; the
-  test asserts that no UPDATE trigger is added and that an owner's own-row UPDATE still works.
-- **anon UPDATE/DELETE**: `anon` still holds table-level UPDATE and DELETE grants on `businesses`. No policy applies to
-  anon, so RLS blocks those statements today. Recommended follow-up: revoke the grants so the protection does not rest
-  on RLS alone.
-- **Branch creation is already broken in production (out of scope, flagged).** `Locations.jsx` `saveBranch()` →
-  `locationsRepository.addBranch()` reuses the parent's exact `email`, and `businesses_email_key` is UNIQUE. Every
-  branch insert therefore fails today, which is why live has zero branch rows. Two related hazards apply to whatever
-  fix comes next:
-  - The unique key is case-sensitive, while RLS and `is_platform_admin()` compare `lower(email)`. A case-variant email
-    passes both the policy and the key. The guard allows that for the pending/basic root shape and for a legitimate
-    branch.
-  - Once an owner has two rows with the same `lower(email)`, `is_platform_admin()`'s scalar subquery fails with
-    SQLSTATE 21000 for that owner. Every RLS policy that ORs it, and this guard, then error for them. That breaks
-    their own access only; it is not an escalation. The test documents it.
+- **UPDATE** stays with `guard_business_privileged_columns` (C18), which this migration leaves unchanged. The test
+  loads the real UPDATE guard and asserts three things: an owner can still rename their business, a status PATCH is
+  rejected by the UPDATE guard, and upserts cannot escalate.
 
-  The branch model needs its own design, for example branches that do not carry the owner's login email, or an
-  `is_platform_admin()` that tolerates several rows. Do that before branches are re-enabled.
+## Known gaps (separate follow-ups)
+
+- **`ecommerce_enabled` and `branch_depth_limit` are unguarded on both INSERT and UPDATE.** An owner can turn on
+  e-commerce for their own business and skip admin vetting. This predates the change and is shared with the UPDATE
+  guard, whose protected list does not include these columns. Fix both guards together.
+- **anon holds table-level UPDATE and DELETE grants on `businesses`.** Today they are blocked only because no RLS
+  policy applies to anon. Revoke them so the protection does not rest on RLS alone.
+- **A branch inherits the parent's plan with `plan_expires_at` NULL.** A null expiry on a paid branch plan is a design
+  point to settle when branch creation is redesigned. Should a branch carry or derive the parent's expiry?
+- **Branch creation currently fails in production on `businesses_email_key`.** `Locations.jsx` `saveBranch()` →
+  `locationsRepository.addBranch()` reuses the parent's exact `email`, and the key is UNIQUE, so live has zero branch
+  rows.
+  - The key is case-sensitive, while RLS and `is_platform_admin()` compare `lower(email)`.
+  - A branch inserted under a case variant of the owner's email passes both the key and the policy. The owner then
+    has two rows, and `is_platform_admin()` raises 21000 for them. That breaks every policy that ORs it, and this
+    guard, for that owner only. It is self-harm, not escalation; the test proves it in a self-contained case.
+  - Root inserts are now rejected, so a branch insert is the only remaining route to it.
+  - The branch model needs its own design before branches are re-enabled, for example branches that do not carry the
+    owner's login email, or an `is_platform_admin()` that tolerates several rows.
