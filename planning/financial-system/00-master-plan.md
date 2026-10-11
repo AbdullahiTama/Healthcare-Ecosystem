@@ -689,3 +689,18 @@ Unresolved / owner actions:
 ## Track summary (H00-H07)
 
 All eight phases are written, tested and READY_FOR_REVIEW locally. Nothing has been applied to production, deployed, pushed, or sent through a provider.
+
+### Production apply log (2026-10-11, owner-authorized: "apply the migrations first")
+
+Project `szdybxmgmhndoytqanfb` (carehub, Postgres 17). Applied with `apply_migration`, in order, each verified against `pg_proc` / `proacl` / config rows afterwards:
+
+| Migration | Result |
+|---|---|
+| `carefind_20261028_otp_hardening` | applied; one `issue_otp` (5 args), ACL postgres + service_role |
+| `carefind_20261029_pin_and_payout_protection` | applied; `pin_set_at`, config row, both indexes |
+| `carefind_20261030_topup_processing_fee` | applied; `topup_processing_fee_rate = 0.10`; settle helpers owner-only |
+| `carefind_20261031_withdrawal_attempt_and_conflicts` | applied; mark/settle/reconcile functions correct; `reject_business_withdrawal` dropped |
+| `carefind_20261102_kyc_switch` | applied; `kyc_enabled = 0` |
+| `carefind_20261101_payment_email_events` | **failed once, atomically (nothing written)**: the production catalog CHECK `email_catalog_schema_is_valid` requires `additionalProperties = false`; the PGlite fixture did not carry it. Migration and fixture corrected (commit `5781525`), then applied; 21 events enabled |
+
+Security advisors before and after: identical (0 new findings, 0 resolved). Not done by me: setting `OTP_HMAC_SECRET` (Vercel), the Vault secrets, and the legacy-withdrawal runbook. **The application code is still not deployed**; until it is, the old code runs against the new schema (designed to be compatible: `issue_otp` keeps a 4-argument call working through the new default parameter).
