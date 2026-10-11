@@ -119,20 +119,45 @@ split, report status split) as small stacked bars with text labels.
 
 ## 5. Shell and UI
 
-- 240px sidebar, collapsible to 64px; off-canvas drawer under 1024px.
-- Topbar: breadcrumb/title, search (opens existing `CommandPalette`, Ctrl/Cmd+K),
-  alerts button with existing `roleNotifCount`, admin name and role, menu with sign out.
-  AI Copilot button moves into the topbar.
-- Fluid content, max 1440px (replaces the 960px cap).
-- Neutral canvas, white panels, 1px borders, teal for active state, primary actions
-  and key status only. Existing tokens from `tokens.css`; no new hard-coded colours.
+The owner approved a static mockup of the shell and Overview on 2026-10-12
+(https://claude.ai/artifact/LeTEjJFNdYMQzw3myZZPZe, sample figures). It is the
+visual reference for this phase; where this section and the mockup differ, the
+mockup wins.
+
+- Direction: a ledger. Mostly table and list, tabular numerals, almost no decoration.
+- Sidebar: 232px on the canvas colour with a hairline right border. Group labels
+  11px uppercase; items 32px tall, 13px label; active item has a 2px accent left bar
+  and a panel-coloured fill. Pending counts are plain grey numerals, right-aligned.
+  Collapsible to a 56px icon rail by the user; off-canvas under 900px, opened from a
+  topbar menu button.
+- Topbar: 52px, hairline bottom border. Breadcrumb left; a search field up to 360px
+  that opens the existing `CommandPalette` (Ctrl/Cmd+K); then alerts with the existing
+  `roleNotifCount`, AI Copilot (moved from the floating button), and the account menu
+  with name, role and sign out.
+- Content: fluid, 24px gutters (16px under 900px), max 1440px (replaces the 960px cap).
+- Metric strip: one panel divided by hairlines into 4 x 2 cells (2 x 4 under 900px),
+  not eight cards. Cell: 12px label, 26px semibold number, one context line. A failed
+  source shows "Couldn't load" with a Retry action in the number's place.
+- Lower row: Needs Attention takes two thirds, Current State one third; they stack
+  under 1100px. Queue rows are 52px with icon, title, one context line, severity chip
+  (dot plus word), relative time and a chevron; severity filter tabs with counts on top.
+  Under 560px the chip and time wrap to a second line.
+- Type scale: 11 / 12 / 13 / 15 / 20 / 26. `font-variant-numeric: tabular-nums`.
+- Colour: canvas `--color-bg`, panels white (`--color-surface` in dark), 1px borders,
+  10px radius, no shadows. Accent (`--color-primary`) only for the active nav item,
+  primary buttons, links and focus rings. Urgent is amber-brown, not red; red is kept
+  for destructive buttons. Use existing tokens from `tokens.css`; add admin-scoped
+  tokens only where none exists (severity washes), defined for light and dark.
+- Drawer: 480px from the right, header (title, status, close), scrolling body, sticky
+  footer with the primary action on the right; page behind dimmed. Full screen on phones.
 - Components: `MetricCard`, `StatusBadge` (single status-to-tone map), `DataTable`
   (compact, sortable only where the page holds full data, pagination, stacked rows
   under 768px), `Drawer` (right panel desktop, full-screen mobile, focus trap, Esc),
   `StateBlock` (loading / empty / error with retry). Reuse `ConfirmDialog`, `Toast`,
   `Loading`. Phase 1 uses `DataTable` and `Drawer` only in Needs Attention; Users and
   Businesses adopt them in Phase 2.
-- Motion: 150-200ms fade/slide/scale, all behind `prefers-reduced-motion`.
+- Motion: drawer slides 16px with a fade over 180ms, menus fade over 120ms, nothing
+  animates on load; all disabled under `prefers-reduced-motion`.
 - Accessibility: one `h1` per section, `nav` landmark with `aria-current`, visible
   focus, labelled icon buttons, status never by colour alone, WCAG AA contrast.
 
