@@ -60,15 +60,31 @@
 -- 4. Errors are 42501 (insufficient_privilege) and name the field class only,
 --    never a supplied value.
 --
--- 5. Upserts (INSERT ... ON CONFLICT DO UPDATE): this BEFORE INSERT trigger
---    fires on the proposed row first; if the row conflicts, the DO UPDATE
---    path is covered by guard_business_privileged_columns (both proven in the
---    test with the real UPDATE guard loaded).
+-- 5. Upserts (INSERT ... ON CONFLICT DO UPDATE) have two guarded paths, each
+--    proven separately in businessesInsertGuard.db.test.js (real C18 UPDATE
+--    guard loaded):
+--    path 1: this BEFORE INSERT trigger fires on the PROPOSED row before any
+--            conflict handling, so a proposed row carrying an escalation is
+--            rejected here ("upsert, path 1" tests: INSERT guard messages).
+--    path 2: when the proposed row passes this guard (a valid branch of the
+--            caller's own row, same id), the DO UPDATE runs and
+--            guard_business_privileged_columns rejects any change to
+--            is_platform_admin / plan / status ("upsert, path 2" tests: UPDATE
+--            guard messages, plus a control showing those upserts succeed when
+--            the UPDATE guard is absent).
 --
 -- Idempotent: create or replace + drop trigger if exists.
 -- ROLLBACK:   drop trigger if exists a_guard_business_insert on public.businesses;
 --             (optionally: drop function if exists public.guard_business_insert();)
 -- ============================================================================
+
+-- DROP TRIGGER IF EXISTS takes ACCESS EXCLUSIVE on public.businesses (even when
+-- the trigger is absent), which queues reads AND writes; CREATE TRIGGER takes
+-- SHARE ROW EXCLUSIVE, which queues writes. Fail fast
+-- instead; on a lock timeout nothing was applied, so retry. `set local` only
+-- takes effect inside a transaction (apply_migration is assumed to run the
+-- body as one); outside a transaction it is a no-op with a WARNING.
+set local lock_timeout = '5s';
 
 create or replace function public.guard_business_insert()
 returns trigger

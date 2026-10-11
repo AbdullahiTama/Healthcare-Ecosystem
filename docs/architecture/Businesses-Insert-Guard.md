@@ -62,9 +62,15 @@ described under "Known gaps".
 2. **Trigger ordering.** BEFORE triggers fire in name order, so `a_guard_business_insert` runs before
    `resolve_referring_agent`. The guard therefore sees only what the caller supplied, and it rejects any
    caller-supplied `referring_agent_id`. The referral trigger then sets the id from `referral_code_used`.
-3. **Upserts.** On `INSERT ... ON CONFLICT DO UPDATE`, this trigger checks the proposed row first. If that row passes
-   and conflicts with an existing one, the `DO UPDATE` path is caught by `guard_business_privileged_columns`. The test
-   proves both, with the real UPDATE guard loaded.
+3. **Upserts** (`INSERT ... ON CONFLICT DO UPDATE`) have two guarded paths. The test proves each separately, with the
+   real UPDATE guard loaded.
+   - **Path 1:** this trigger checks the *proposed* row before any conflict handling, so a proposed row that carries
+     an escalation is rejected here, with this guard's message.
+   - **Path 2:** a proposed row that passes this guard (a valid branch of the caller's own row, with the same id)
+     reaches the `DO UPDATE`. There, `guard_business_privileged_columns` rejects any change to `is_platform_admin`,
+     `plan` or `status`, with its own message.
+   - A control case shows the path-2 upserts succeed when the UPDATE guard is absent, so the path-2 tests depend on
+     that guard.
 4. **No column-level `REVOKE INSERT`.** While `authenticated` holds table-level INSERT, revoking INSERT on individual
    columns does nothing (proven in the test). Making it effective would mean replacing the table grant with an
    allow-list of column grants, and every column added later would then be silently un-insertable. The trigger is the
@@ -76,19 +82,32 @@ described under "Known gaps".
 
 ```sql
 -- a) No owner already has two rows under one lower(email). Duplicates make is_platform_admin() raise 21000.
-select lower(email), count(*) from public.businesses group by 1 having count(*) > 1;
+--    NULL emails are excluded; they match no caller.
+select lower(email), count(*) from public.businesses where email is not null group by 1 having count(*) > 1;
 -- expect: zero rows
 
--- b) Every function that inserts into businesses. A SECURITY DEFINER one is exempt only if its OWNER is in
---    (postgres, service_role, supabase_admin, supabase_auth_admin). Any other owner, or any INVOKER function called
---    by signed-in users, will now be held to the guard and must be reviewed before applying.
+-- b1) HEURISTIC scan: functions whose source matches "insert into ... businesses". It misses odd spacing or line
+--     breaks between INSERT and INTO, quoted or schema-less spellings it cannot see, and dynamic SQL (EXECUTE format(...)).
+--     A SECURITY DEFINER function is exempt from the guard only if its OWNER is one of postgres, service_role,
+--     supabase_admin or supabase_auth_admin. Any other owner, or any INVOKER function called by signed-in users, will
+--     now be held to the guard and must be reviewed before applying.
 select p.oid::regprocedure, p.prosecdef, pg_get_userbyid(p.proowner) as owner
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
  where n.nspname not in ('pg_catalog', 'information_schema')
    and p.prosrc ilike '%insert into%businesses%';
 -- expect: register_business* (prosecdef = true, owner postgres); review every other row
 
--- c) HARD GATE: the triggers on businesses must be exactly the two expected ones. The post-apply write test performs
+-- b2) Human review: EVERY SECURITY DEFINER function in public that mentions businesses at all. This covers what b1
+--     misses. For each one that can insert a business row, check the owner as in b1.
+select p.oid::regprocedure, pg_get_userbyid(p.proowner) as owner
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.prosecdef and p.prosrc ilike '%businesses%'
+ order by 1;
+
+-- c) Record the platform-admin count now. The residue check after verification compares against this number.
+select count(*) as platform_admins_before from public.businesses where is_platform_admin;
+
+-- d) HARD GATE: the triggers on businesses must be exactly the two expected ones. The post-apply write test performs
 --    a real INSERT (rolled back), and that INSERT would fire any unknown trigger or webhook, including an AFTER INSERT
 --    one with side effects outside the transaction (an http request, for example).
 select tgname from pg_trigger where tgrelid = 'public.businesses'::regclass and not tgisinternal order by tgname;
@@ -102,15 +121,27 @@ Run the security and performance advisors and save the output.
 
 ### 3. Apply
 
-Apply as a **tracked** migration with `apply_migration`, named `businesses_insert_guard`. **Never use
-`execute_sql`**: an untracked change is how earlier fixes were silently lost. Prefix the migration body with:
+Apply as a **tracked** migration with `apply_migration`, named `businesses_insert_guard`, using the repo file's
+content exactly. **Never use `execute_sql`**: an untracked change is how earlier fixes were silently lost.
 
-```sql
-set local lock_timeout = '5s';
-```
+**Locking.** The file begins with `set local lock_timeout = '5s';`.
 
-`CREATE TRIGGER` takes a lock on `businesses` that blocks writes. With the timeout, a busy table makes the apply fail
-fast instead of queueing every write behind it. **On a lock timeout, nothing was applied; just retry.**
+- `DROP TRIGGER IF EXISTS` takes an **ACCESS EXCLUSIVE** lock on `public.businesses`, even when the trigger does not
+  exist yet. While the apply waits for or holds that lock, **reads queue as well as writes**, for up to 5 seconds.
+  Every login and page that touches businesses stalls during that window.
+- `CREATE TRIGGER` then takes SHARE ROW EXCLUSIVE, which blocks writes.
+- Apply at a quiet time.
+
+**Transaction assumption.** This runbook assumes `apply_migration` runs the body as one transaction. `set local` only
+takes effect inside a transaction, and "on a lock timeout, nothing was applied; just retry" relies on the whole body
+rolling back together.
+
+If that assumption does not hold, choose one of these:
+
+- Run the body yourself inside an explicit `begin; ... commit;`, so the timeout applies and a failure rolls back
+  cleanly. The tracked migration must still be recorded.
+- Accept that `set local` is a no-op (Postgres emits a WARNING). The apply then waits for locks without a timeout.
+  Before retrying after a failure, check what state it left behind.
 
 ### 4. Post-apply catalogue checks
 
@@ -210,7 +241,7 @@ Residue check, run afterwards as the owner:
 
 ```sql
 select count(*) from public.businesses where email ilike 'insert-guard-selftest%';      -- expect 0
-select count(*) from public.businesses where is_platform_admin;                        -- expect 2 (unchanged)
+select count(*) from public.businesses where is_platform_admin;  -- expect = platform_admins_before (pre-check c)
 ```
 
 ## Rollback

@@ -105,10 +105,10 @@ const LIVE = `
     ('${FOXTROT}',  'Foxtrot',  'foxtrot@carehub.test', 'active',  'basic',      false);
 `
 
-const setup = async ({ migrate }) => {
+const setup = async ({ migrate, updateGuard = true }) => {
   const d = new PGlite()
   await d.exec(LIVE)
-  await d.exec(M(UPDATE_GUARD))
+  if (updateGuard) await d.exec(M(UPDATE_GUARD))
   if (migrate) await d.exec(M(MIGRATION))
   return d
 }
@@ -292,36 +292,76 @@ describe('businesses BEFORE INSERT guard', () => {
     })
   })
 
-  describe('upserts (INSERT ... ON CONFLICT DO UPDATE) against the owner\'s existing row, with the real UPDATE guard loaded', () => {
-    it('status + is_platform_admin escalation via upsert fails with 42501 and leaves the row unchanged', async () => {
+  // An upsert has two guarded paths. Each describe below states which one it proves.
+  describe('upsert, path 1: the INSERT guard rejects an escalating PROPOSED row before any conflict handling', () => {
+    it('a proposed root row carrying is_platform_admin = true is rejected by the INSERT guard; row unchanged', async () => {
       const beforeRow = await rowById(BRAVO)
       const err = await as('authenticated', 'bravo@carehub.test', () => failure(insert(
         { id: BRAVO, name: 'Bravo', email: 'bravo@carehub.test', status: 'active', is_platform_admin: true }, db,
         'on conflict (id) do update set status = excluded.status, is_platform_admin = excluded.is_platform_admin')))
       expect(err?.code).toBe('42501')
+      expect(err.message).toMatch(/Only a platform administrator can create a business with platform-admin access/)
       expect(await rowById(BRAVO)).toEqual(beforeRow)
     })
 
-    it('plan escalation via upsert fails with 42501 and leaves the row unchanged', async () => {
+    it('a proposed root row carrying plan = enterprise is rejected by the INSERT guard (root rule); row unchanged', async () => {
       const beforeRow = await rowById(BRAVO)
       const err = await as('authenticated', 'bravo@carehub.test', () => failure(insert(
         { id: BRAVO, name: 'Bravo', email: 'bravo@carehub.test', plan: 'enterprise' }, db,
         'on conflict (id) do update set plan = excluded.plan')))
       expect(err?.code).toBe('42501')
+      expect(err.message).toMatch(ROOT_MSG)
+      expect(await rowById(BRAVO)).toEqual(beforeRow)
+    })
+  })
+
+  describe('upsert, path 2: the proposed row PASSES the INSERT guard (a valid branch of the owner\'s own row, same id), so the DO UPDATE runs and the real C18 UPDATE guard rejects it', () => {
+    // The proposed row is a valid branch of Bravo, so a_guard_business_insert lets it through. It conflicts on id
+    // with Bravo's own row, and the DO UPDATE then tries to change a privileged column. A proposed branch must carry
+    // is_platform_admin false/null and the parent's plan, so excluded.* cannot escalate those two; the DO UPDATE
+    // sets them literally. For status, the proposed branch carries 'pending' (Bravo is 'active'), so
+    // excluded.status is a real change. The UPDATE guard rejects any change to status, whatever the direction.
+    const proposed = (extra = {}) => branchOf(BRAVO, 'Bravo@carehub.test', { id: BRAVO, plan: 'basic', ...extra })
+    const UPD = (col) => new RegExp(`Only a platform administrator can change these fields on a business: ${col}$`)
+
+    it('is_platform_admin self-grant on the DO UPDATE path -> UPDATE guard 42501; row unchanged', async () => {
+      const beforeRow = await rowById(BRAVO)
+      const err = await as('authenticated', 'bravo@carehub.test', () => failure(insert(proposed(), db,
+        'on conflict (id) do update set is_platform_admin = true')))
+      expect(err?.code).toBe('42501')
+      expect(err.message).toMatch(UPD('is_platform_admin'))
       expect(await rowById(BRAVO)).toEqual(beforeRow)
     })
 
-    it('an upsert whose proposed row passes this guard still hits the UPDATE guard on the DO UPDATE path', async () => {
-      // The proposed row is a valid branch of Bravo (passes a_guard_business_insert); it conflicts on id with
-      // Bravo's own row, and the DO UPDATE tries to self-grant admin + enterprise -> the C18 UPDATE guard rejects.
+    it('plan escalation on the DO UPDATE path -> UPDATE guard 42501; row unchanged', async () => {
       const beforeRow = await rowById(BRAVO)
-      const err = await as('authenticated', 'bravo@carehub.test', () => failure(insert(
-        branchOf(BRAVO, 'Bravo@carehub.test', { id: BRAVO, plan: 'basic' }), db,
-        `on conflict (id) do update set is_platform_admin = true, plan = 'enterprise'`)))
+      const err = await as('authenticated', 'bravo@carehub.test', () => failure(insert(proposed(), db,
+        `on conflict (id) do update set plan = 'enterprise'`)))
       expect(err?.code).toBe('42501')
-      expect(err.message).toMatch(/Only a platform administrator can change these fields on a business/)
+      expect(err.message).toMatch(UPD('plan'))
       expect(await rowById(BRAVO)).toEqual(beforeRow)
     })
+
+    it('status change via excluded.status on the DO UPDATE path -> UPDATE guard 42501; row unchanged', async () => {
+      const beforeRow = await rowById(BRAVO)
+      const err = await as('authenticated', 'bravo@carehub.test', () => failure(insert(proposed({ status: 'pending' }), db,
+        'on conflict (id) do update set status = excluded.status')))
+      expect(err?.code).toBe('42501')
+      expect(err.message).toMatch(UPD('status'))
+      expect(await rowById(BRAVO)).toEqual(beforeRow)
+    })
+
+    it('control: WITHOUT the UPDATE guard the same upserts succeed, so the three cases above depend on it', async () => {
+      const d = await setup({ migrate: true, updateGuard: false })
+      await as('authenticated', 'bravo@carehub.test', async () => {
+        await insert(proposed(), d, 'on conflict (id) do update set is_platform_admin = true')
+        await insert(proposed(), d, `on conflict (id) do update set plan = 'enterprise'`)
+        await insert(proposed({ status: 'pending' }), d, 'on conflict (id) do update set status = excluded.status')
+      }, d)
+      expect((await d.query(`select is_platform_admin, plan, status from public.businesses where id = $1`, [BRAVO])).rows[0])
+        .toEqual({ is_platform_admin: true, plan: 'enterprise', status: 'pending' })
+      await d.close()
+    }, 180_000)
   })
 
   it('a case-variant duplicate (via a BRANCH insert) makes is_platform_admin() raise 21000 for that owner only: self-harm, not escalation', async () => {
