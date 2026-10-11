@@ -50,9 +50,14 @@ beforeAll(async () => {
     create table public.email_outbox (id uuid primary key default gen_random_uuid(), idempotency_key text, app text, template_key text);
     create table public.email_event_catalog (
       app text not null, event_key text not null, template_key text not null, subject_template text not null, from_email text not null,
-      reply_to text, payload_schema jsonb not null default '{}'::jsonb, enabled boolean not null default false,
+      reply_to text, payload_schema jsonb not null default '{"type":"object","required":[],"properties":{},"additionalProperties":false}'::jsonb, enabled boolean not null default false,
       required_for_business boolean not null default false, category text not null default 'transactional', rollout_mode text not null default 'live',
-      primary key (app, event_key)
+      primary key (app, event_key),
+      -- the two production CHECKs that rejected the first version of this migration (found when it was applied):
+      -- the schema validator demands a strict empty-or-explicit schema, and the brand check ties sender and subject prefix to the app
+      constraint email_event_catalog_payload_schema_check check (payload_schema->'type' = '"object"'::jsonb and payload_schema->'additionalProperties' = 'false'::jsonb and payload_schema ? 'properties' and payload_schema ? 'required'),
+      constraint email_event_catalog_brand_check check ((app = 'carehub' and from_email = 'CareHub <support@mail.carefindhub.com>' and reply_to = 'support@mail.carefindhub.com' and subject_template like 'CareHub:%') or (app = 'carefind' and from_email = 'CareFind <support@mail.carefind.app>' and reply_to = 'support@mail.carefind.app' and subject_template like 'CareFind:%')),
+      constraint email_event_catalog_template_key_unprefixed_check check (template_key !~ '^(carehub|carefind)_')
     );
     insert into public.email_event_catalog (app, event_key, template_key, subject_template, from_email, reply_to) values
       ('carefind', 'withdrawal_requested', 'withdrawal_requested', 'CareFind: withdrawal requested', 'CareFind <support@mail.carefind.app>', 'support@mail.carefind.app'),
@@ -121,10 +126,10 @@ describe('the catalog', () => {
   })
 
   it('is re-runnable and does not duplicate or flip anything back', async () => {
-    await db.query(`update public.email_event_catalog set subject_template = 'custom subject' where app = 'carefind' and event_key = 'refund_failed'`)
+    await db.query(`update public.email_event_catalog set subject_template = 'CareFind: custom subject' where app = 'carefind' and event_key = 'refund_failed'`)
     await db.exec(M('carefind_20261101_payment_email_events'))
     const row = await one(`select subject_template, enabled from public.email_event_catalog where app = 'carefind' and event_key = 'refund_failed'`)
-    expect(row).toEqual({ subject_template: 'custom subject', enabled: true })
+    expect(row).toEqual({ subject_template: 'CareFind: custom subject', enabled: true })
     expect((await one(`select count(*)::int c from public.email_event_catalog where event_key = 'refund_failed'`)).c).toBe(2)
   })
 

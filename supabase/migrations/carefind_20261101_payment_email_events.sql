@@ -26,6 +26,9 @@
 
 -- ---------------------------------------------------------------------------------------------
 -- 1. Catalog (skipped where the e-mail system is not installed, e.g. the PGlite fixtures)
+-- payload_schema: production's CHECK (email_catalog_schema_is_valid) requires additionalProperties = false with explicit
+-- properties, so new rows use the same empty strict schema the existing rows have. (The application's sender does not
+-- validate against it; it writes the outbox directly.)
 -- ---------------------------------------------------------------------------------------------
 do $$
 declare
@@ -49,7 +52,7 @@ begin
     insert into public.email_event_catalog (app, event_key, template_key, subject_template, from_email, reply_to, payload_schema, enabled, required_for_business, category, rollout_mode)
     select c.app, v_key, v_key,
            c.app_name || ': ' || replace(v_key, '_', ' '),
-           c.from_email, c.reply_to, '{"type":"object","additionalProperties":true}'::jsonb, true, false, 'transactional', c.rollout_mode
+           c.from_email, c.reply_to, '{"type":"object","required":[],"properties":{},"additionalProperties":false}'::jsonb, true, false, 'transactional', c.rollout_mode
       from (select app, from_email, reply_to, rollout_mode, case app when 'carehub' then 'CareHub' else 'CareFind' end as app_name
               from public.email_event_catalog where app = v_app and event_key = 'withdrawal_requested') c
     on conflict (app, event_key) do nothing;
