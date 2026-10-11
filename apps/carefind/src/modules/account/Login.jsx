@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../providers/AuthContext'
 import { supabase } from '../../config/supabaseClient'
@@ -8,6 +8,10 @@ import { Button, Card, Inp } from '../../components/ui'
 import { AlertCircle, ArrowLeft, MailCheck } from 'lucide-react'
 import Logo from '../social-feed/Logo.jsx'
 import { TRUST_POINTS } from '../marketplace/trustPoints.js'
+
+// How long the resend control stays disabled after a click, so the
+// rate-limited endpoint is not hammered from the confirmation screen.
+const RESEND_COOLDOWN_MS = 60_000
 
 const PHOTO_ALT = 'A smiling pharmacist in a white coat checking her phone in a pharmacy'
 
@@ -64,6 +68,12 @@ function Login() {
   const [confirmationSent, setConfirmationSent] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resendBusy, setResendBusy] = useState(false)
+  const [resendCooling, setResendCooling] = useState(false)
+  const [resent, setResent] = useState(false)
+  const resendTimer = useRef(null)
+
+  useEffect(() => () => clearTimeout(resendTimer.current), [])
 
   const { signIn, signUp } = useAuth()
   const navigate = useNavigate()
@@ -108,6 +118,29 @@ function Login() {
     setLoading(false)
   }
 
+  // Same templated email_verification request AuthContext.signUp sends. The
+  // endpoint answers generically (and is rate limited per address), so the user
+  // sees the same confirmation whether or not the request succeeded. Neither
+  // the address nor the link is logged.
+  async function resendVerification() {
+    if (resendBusy || resendCooling) return
+    setResendBusy(true)
+    try {
+      await fetch('/api/auth-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'email_verification', email, redirectTo: `${window.location.origin}/verify-email` }),
+      })
+    } catch {
+      // Generic response either way; do not reveal delivery state.
+    }
+    setResendBusy(false)
+    setResent(true)
+    setResendCooling(true)
+    clearTimeout(resendTimer.current)
+    resendTimer.current = setTimeout(() => setResendCooling(false), RESEND_COOLDOWN_MS)
+  }
+
   const title = isSignUp ? 'Create your account' : 'Welcome back'
   const subtitle = isSignUp ? 'Join the CareFind community' : 'Log in to continue'
 
@@ -130,9 +163,28 @@ function Login() {
             <p style={{ margin: '0 0 12px 0', fontSize: 13.5, color: theme.textMid, lineHeight: 1.55 }}>
               We sent a confirmation link to <strong style={{ color: theme.navy }}>{email}</strong>. Click it to activate your account, then log in.
             </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              fullWidth
+              onClick={resendVerification}
+              disabled={resendCooling}
+              loading={resendBusy}
+              loadingText="Sending..."
+              style={{ borderRadius: theme.radius.full }}
+            >
+              Resend verification email
+            </Button>
+            <p
+              role="status"
+              style={{ margin: resent ? '10px 0 0 0' : 0, minHeight: resent ? undefined : 0, fontSize: 13, color: theme.textMid, lineHeight: 1.5 }}
+            >
+              {resent ? 'A new link is on its way. Check your spam folder if it does not arrive.' : ''}
+            </p>
             <button
               type="button"
-              onClick={() => { setConfirmationSent(false); setIsSignUp(false); setError('') }}
+              onClick={() => { setConfirmationSent(false); setIsSignUp(false); setError(''); setResent(false) }}
               style={{ background: 'none', border: 'none', color: theme.tealDeep, fontWeight: 700, fontSize: 13.5, padding: '10px 4px', minHeight: 44, cursor: 'pointer' }}
             >
               Back to log in

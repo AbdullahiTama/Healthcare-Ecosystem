@@ -8,6 +8,7 @@ export {
   businessSuspended,
   businessStatusUpdate,
   staffWelcome,
+  ownerSetup,
   subscriptionCreated,
   subscriptionExpiry,
   purchaseConfirmed,

@@ -150,22 +150,83 @@ export async function resolveAccountByEmail(email) {
 
 // BUSINESSES
 export async function getBusinesses() { return sbFetch('businesses?select=*&order=created_at.desc') }
-// Registration is an RPC, not an INSERT — businesses.password is gone (C2) and
-// register_business is the only way to create a business. It runs as SECURITY
-// DEFINER so an anon caller can do the two-phase (mint auth user + insert row)
-// atomically, and it FORCES status='pending' / is_platform_admin=false /
-// parent_business_id=null / plan='basic' regardless of what the payload claims
-// — the row it returns has no credential material. p_password is sent as a
-// separate argument and consumed by the RPC (it bcrypts it into auth.users);
-// it is never written to a table column. Returns the new business id,
-// unwrapped like the scalar RPCs.
+// Pending businesses whose owner has not confirmed their email. Approval of these is refused by the database
+// (businesses_require_verified_owner); this lets the console say so up front instead of failing on click.
+// Platform admins only (the RPC returns nothing for anyone else). Rejects on a failed request: callers
+// treat that as "none flagged", because the database trigger stays the enforcement either way.
+// PostgREST returns a bare array of uuids for a scalar setof function; single-key objects are tolerated.
+export async function getUnverifiedOwnerBusinessIds() {
+  const rows = await sbFetch('rpc/admin_unverified_owner_business_ids', { method: 'POST', body: '{}' })
+  return Array.isArray(rows) ? rows.map((r) => (typeof r === 'string' ? r : Object.values(r)[0])) : []
+}
+// Splits a bulk-approve selection into the ids that may be sent for approval and the ones to skip because
+// the owner has not verified their email. Pure: the caller still guards on each row's own status.
+export function partitionByOwnerVerification(ids, unverifiedIds) {
+  const blocked = unverifiedIds || new Set()
+  const approvable = []
+  const skipped = []
+  for (const id of ids || []) (blocked.has(id) ? skipped : approvable).push(id)
+  return { approvable, skipped }
+}
+// Turns per-id bulk-approve outcomes (true | 'unverified' | false, as returned by the panel's handleStatus)
+// plus the number already skipped up front into truthful counts and one toast message. Only 'unverified'
+// is labelled as an unverified owner; any other failure is counted separately and carries its real reason
+// (first distinct message, whitespace collapsed, capped at 120 characters).
+// Splits per-row bulk-approve results ({ outcome, message }) into the outcomes array and the failure reasons.
+// Only a row that truly failed (outcome false) contributes a reason: an 'unverified' refusal is counted under
+// its own outcome and its database message must never be attributed to a failed row.
+export function collectBulkResults(results) {
+  const list = results || []
+  return {
+    outcomes: list.map((r) => r.outcome),
+    failureMessages: list.filter((r) => r.outcome === false && r.message).map((r) => r.message),
+  }
+}
+export function summarizeBulkApproval(outcomes, preSkipped = 0, failureMessages = []) {
+  const list = outcomes || []
+  const approved = list.filter((o) => o === true).length
+  const skippedUnverified = (preSkipped || 0) + list.filter((o) => o === 'unverified').length
+  const failed = list.length - approved - list.filter((o) => o === 'unverified').length
+  const notes = []
+  if (skippedUnverified > 0) notes.push(`Skipped ${skippedUnverified}: owner has not verified their email`)
+  if (failed > 0) {
+    // The real cause goes in the text: the toast has one slot, so a per-row error toast is overwritten.
+    const clean = (failureMessages || []).map((m) => (typeof m === 'string' ? m : '').replace(/\s+/g, ' ').trim()).filter(Boolean)
+    const distinct = [...new Set(clean)]
+    let reason = 'the request was refused or could not be completed'
+    if (distinct.length > 0) {
+      reason = distinct[0].length > 120 ? distinct[0].slice(0, 119) + '…' : distinct[0]
+      if (distinct.length > 1) reason += ` (+${distinct.length - 1} more ${distinct.length - 1 === 1 ? 'reason' : 'reasons'})`
+    }
+    notes.push(`Failed ${failed}: ${reason}`)
+  }
+  const note = notes.join('; ')
+  let message = ''
+  if (approved > 0) message = `Approved ${approved} businesses — undo?` + (note ? ` (${note})` : '')
+  else message = note
+  return { approved, skippedUnverified, failed, message }
+}
+// Registration goes through the server handler POST /api/register-business, not
+// a direct RPC from the browser: the handler creates the pending business and
+// emails the owner a verification link. No password is collected or sent here;
+// the owner chooses it from that emailed link. The handler answers
+// 200 { ok: true } or 4xx { error } with a readable message, surfaced as-is.
 export async function registerBusiness(data) {
-  const { password, ...p_business } = data
-  const rows = await sbFetch('rpc/register_business', {
-    method: 'POST',
-    body: JSON.stringify({ p_business, p_password: password }),
-  })
-  return Array.isArray(rows) ? rows[0] : rows
+  // The password field is dropped on purpose: the owner chooses it after verifying their email.
+  const { password: _password, confirmPassword: _confirmPassword, ...business } = data
+  let res
+  try {
+    res = await fetch('/api/register-business', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(business),
+    })
+  } catch {
+    throw new Error('Connection error. Check your internet and try again.')
+  }
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(payload.error || 'Registration failed. Please try again.')
+  return { ok: true }
 }
 export async function updateBusiness(id, data) { return sbFetch('businesses?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function getBranches(parentId) { return sbFetch('businesses?parent_business_id=eq.' + parentId + '&select=*') }

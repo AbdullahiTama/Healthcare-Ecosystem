@@ -90,6 +90,14 @@ describe('public actions do not reveal whether an account exists', () => {
   })
 })
 
+describe('owner_setup is not a public action', () => {
+  it('is refused by /api/auth-email so only the registration handler can send it', async () => {
+    const res = await call({ action: 'owner_setup', email: 'someone@example.com' })
+    expect(res.statusCode).toBe(400)
+    expect(h.sendAuthEmail).not.toHaveBeenCalled()
+  })
+})
+
 describe('staff_setup requires the signed-in business owner', () => {
   const invite = { action: 'staff_setup', email: 'sam@clinic.test', businessName: 'FAKE BANK', role: 'Admin', fullName: 'Spoofed' }
 
