@@ -1,6 +1,13 @@
 // @vitest-environment node
-// supabase/migrations/carehub_20261031_businesses_insert_guard.sql, on real Postgres (PGlite), run as the real roles
-// under real RLS. The point is behaviour: what a signed-in caller can and cannot create in public.businesses.
+// supabase/migrations/carehub_20261031_businesses_insert_guard.sql followed by its corrective follow-up
+// carehub_20261101_businesses_insert_guard_expiry_default.sql, on real Postgres (PGlite), run as the real roles
+// under real RLS.
+//
+// !! THE REPLICA MUST CARRY THE LIVE COLUMN DEFAULTS of every column the guard reads. Column defaults are applied
+// !! BEFORE row triggers, so a default the replica lacks hides behaviour: the first migration passed here and then
+// !! refused every live branch insert, because live plan_expires_at defaults to now() + 30 days and the replica had no
+// !! default. The "replica defaults" test pins them. Re-read information_schema.columns on live (the runbook's
+// !! pre-apply defaults diff) and update both the schema and that test if they change. The point is behaviour: what a signed-in caller can and cannot create in public.businesses.
 //
 // The schema below is a minimal replica of production as read (read-only) on 2026-10-11: the columns the guards touch,
 // the UNIQUE email key, the status check, the "own business row" FOR ALL policy, is_platform_admin(), the table grants,
@@ -25,11 +32,14 @@ import { fileURLToPath } from 'node:url'
 const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 const M = (name) => read(`../../../../../supabase/migrations/${name}.sql`)
 const MIGRATION = 'carehub_20261031_businesses_insert_guard'
+const FOLLOW_UP = 'carehub_20261101_businesses_insert_guard_expiry_default'
 const UPDATE_GUARD = 'carehub_20260805_guard_business_privileged_columns'
 
 const STUB_AGENT = '00000000-0000-4000-8000-0000000a6e17'
 const id = (suffix) => `00000000-0000-4000-8000-0000000000${suffix}`
 const ALPHA = id('a1'), BRAVO = id('b1'), CHARLIE = id('c1'), DELTA = id('d1'), ECHO = id('e1'), FOXTROT = id('f1')
+const HOTEL = id('71'), INDIA = id('72'), JULIET = id('73')
+const PARENT_EXPIRY = '2027-03-01T00:00:00.000Z' // every seeded parent's expiry, except India's (null)
 
 const LIVE = `
   create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
@@ -50,7 +60,7 @@ const LIVE = `
     email text,
     status text default 'pending',
     plan text default 'basic',
-    plan_expires_at timestamptz,
+    plan_expires_at timestamptz default (now() + '30 days'::interval),  -- LIVE default
     parent_business_id uuid references public.businesses(id),
     is_platform_admin boolean default false,
     referring_agent_id uuid,
@@ -95,21 +105,26 @@ const LIVE = `
   end $$;
 
   -- Seed (as the superuser): a platform admin, owners with ACTIVE parents, one owner with a PENDING parent.
-  insert into public.businesses (id, name, email, status, plan, is_platform_admin) values
-    ('${id('ad')}', 'Admin HQ', 'admin@carehub.test',   'active',  'enterprise', true),
-    ('${ALPHA}',    'Alpha',    'alpha@carehub.test',   'active',  'growth',     false),
-    ('${BRAVO}',    'Bravo',    'bravo@carehub.test',   'active',  'basic',      false),
-    ('${CHARLIE}',  'Charlie',  'charlie@carehub.test', 'pending', 'growth',     false),
-    ('${DELTA}',    'Delta',    'delta@carehub.test',   'active',  'basic',      false),
-    ('${ECHO}',     'Echo',     'echo@carehub.test',    'active',  'basic',      false),
-    ('${FOXTROT}',  'Foxtrot',  'foxtrot@carehub.test', 'active',  'basic',      false);
+  insert into public.businesses (id, name, email, status, plan, is_platform_admin, plan_expires_at) values
+    ('${id('ad')}', 'Admin HQ', 'admin@carehub.test',   'active',  'enterprise', true,  '${PARENT_EXPIRY}'),
+    ('${ALPHA}',    'Alpha',    'alpha@carehub.test',   'active',  'growth',     false, '${PARENT_EXPIRY}'),
+    ('${BRAVO}',    'Bravo',    'bravo@carehub.test',   'active',  'basic',      false, '${PARENT_EXPIRY}'),
+    ('${CHARLIE}',  'Charlie',  'charlie@carehub.test', 'pending', 'growth',     false, '${PARENT_EXPIRY}'),
+    ('${DELTA}',    'Delta',    'delta@carehub.test',   'active',  'basic',      false, '${PARENT_EXPIRY}'),
+    ('${ECHO}',     'Echo',     'echo@carehub.test',    'active',  'basic',      false, '${PARENT_EXPIRY}'),
+    ('${FOXTROT}',  'Foxtrot',  'foxtrot@carehub.test', 'active',  'basic',      false, '${PARENT_EXPIRY}'),
+    ('${HOTEL}',    'Hotel',    'hotel@carehub.test',   'active',  'growth',     false, '${PARENT_EXPIRY}'),
+    ('${INDIA}',    'India',    'india@carehub.test',   'active',  'basic',      false, null),
+    ('${JULIET}',   'Juliet',   'juliet@carehub.test',  'active',  'basic',      false, '${PARENT_EXPIRY}');
 `
 
+// migrate: true loads BOTH migrations in production order; 'first-only' reproduces the live state between them.
 const setup = async ({ migrate, updateGuard = true }) => {
   const d = new PGlite()
   await d.exec(LIVE)
   if (updateGuard) await d.exec(M(UPDATE_GUARD))
   if (migrate) await d.exec(M(MIGRATION))
+  if (migrate === true) await d.exec(M(FOLLOW_UP))
   return d
 }
 
@@ -182,11 +197,26 @@ describe('businesses BEFORE INSERT guard', () => {
   })
 
   it('names the field class in the error and never echoes the value', async () => {
-    const err = await as('authenticated', 'mallory@carefind.test',
-      () => failure(insert(root('mallory@carefind.test', { plan_expires_at: '2099-01-01T00:00:00Z' }))))
+    const err = await as('authenticated', 'bravo@carehub.test',
+      () => failure(insert(branchOf(BRAVO, 'Bravo@carehub.test', { referring_agent_id: '00000000-0000-4000-8000-00000000ba0d' }))))
     expect(err.code).toBe('42501')
-    expect(err.message).toMatch(/plan_expires_at/)
-    expect(err.message).not.toMatch(/2099/)
+    expect(err.message).toMatch(/referring_agent_id/)
+    expect(err.message).not.toMatch(/ba0d/)
+  })
+
+  it('replica defaults match live for the guarded columns (see header)', async () => {
+    const rows = (await db.query(`select column_name, column_default from information_schema.columns
+      where table_schema = 'public' and table_name = 'businesses'
+        and column_name in ('status', 'plan', 'plan_expires_at', 'is_platform_admin', 'parent_business_id', 'referring_agent_id')
+      order by column_name`)).rows
+    expect(rows).toEqual([
+      { column_name: 'is_platform_admin', column_default: 'false' },
+      { column_name: 'parent_business_id', column_default: null },
+      { column_name: 'plan', column_default: "'basic'::text" },
+      { column_name: 'plan_expires_at', column_default: "(now() + '30 days'::interval)" },
+      { column_name: 'referring_agent_id', column_default: null },
+      { column_name: 'status', column_default: "'pending'::text" },
+    ])
   })
 
   it('rejects EVERY direct root insert by an ordinary signed-in user, including the old registration shape', async () => {
@@ -283,13 +313,46 @@ describe('businesses BEFORE INSERT guard', () => {
         ['00000000-0000-4000-8000-00000000dead', {}],
         [BRAVO, { status: 'suspended' }],
         [BRAVO, { is_platform_admin: true }],
-        [BRAVO, { plan_expires_at: '2099-01-01T00:00:00Z' }],
       ]) {
         expect(await as('authenticated', 'bravo@carehub.test',
           () => outcome(insert(branchOf(pid, 'Bravo@carehub.test', extra)))), JSON.stringify(extra)).toBe('guard')
       }
       expect(await branchesOf(BRAVO)).toEqual([])
     })
+  })
+
+  describe('branch plan_expires_at is always the parent\'s (corrective follow-up)', () => {
+    const expiryOf = async (pid) => (await db.query(`select plan_expires_at from public.businesses where parent_business_id = $1`, [pid])).rows.map((r) => r.plan_expires_at && r.plan_expires_at.toISOString())
+
+    it('a legitimate branch with NO expiry supplied succeeds and stores the PARENT\'s expiry, not the now()+30d default', async () => {
+      expect(await as('authenticated', 'hotel@carehub.test',
+        () => outcome(insert(branchOf(HOTEL, 'Hotel@carehub.test', { plan: 'growth' }))))).toBe('inserted')
+      expect(await expiryOf(HOTEL)).toEqual([PARENT_EXPIRY])
+    })
+
+    it('a branch supplying a far-future plan_expires_at succeeds but is stored with the parent\'s expiry (overwritten)', async () => {
+      expect(await as('authenticated', 'juliet@carehub.test',
+        () => outcome(insert(branchOf(JULIET, 'Juliet@carehub.test', { plan_expires_at: '2099-01-01T00:00:00Z' }))))).toBe('inserted')
+      expect(await expiryOf(JULIET)).toEqual([PARENT_EXPIRY])
+    })
+
+    it('a parent with NO expiry gives its branch none, even when the branch supplies one (cannot extend)', async () => {
+      expect(await as('authenticated', 'india@carehub.test',
+        () => outcome(insert(branchOf(INDIA, 'India@carehub.test', { plan_expires_at: '2099-01-01T00:00:00Z' }))))).toBe('inserted')
+      expect(await expiryOf(INDIA)).toEqual([null])
+    })
+
+    it('reproduces the live state between the two migrations: the first alone refuses every branch on plan_expires_at', async () => {
+      const d = await setup({ migrate: 'first-only' })
+      const err = await as('authenticated', 'hotel@carehub.test',
+        () => failure(insert(branchOf(HOTEL, 'Hotel@carehub.test', { plan: 'growth' }), d)), d)
+      expect(err?.code).toBe('42501')
+      expect(err.message).toMatch(/plan_expires_at/)
+      await d.exec(M(FOLLOW_UP))
+      expect(await as('authenticated', 'hotel@carehub.test',
+        () => outcome(insert(branchOf(HOTEL, 'Hotel@carehub.test', { plan: 'growth' }), d)), d)).toBe('inserted')
+      await d.close()
+    }, 180_000)
   })
 
   // An upsert has two guarded paths. Each describe below states which one it proves.
@@ -426,8 +489,13 @@ describe('businesses BEFORE INSERT guard', () => {
     expect((await rowById(BRAVO)).status).toBe('active')
   })
 
-  it('is safe to run twice', async () => {
+  it('is safe to run twice (both migrations, in order; the follow-up alone is also idempotent)', async () => {
     await db.exec(M(MIGRATION))
+    await db.exec(M(FOLLOW_UP))
+    await db.exec(M(FOLLOW_UP))
+    const src = (await db.query(`select prosrc from pg_proc where proname = 'guard_business_insert'`)).rows[0].prosrc
+    expect(src).toMatch(/new\.plan_expires_at := v_parent_expiry/)
+    expect(src).not.toMatch(/new\.plan_expires_at is not null/)
     expect(await triggers()).toEqual(['a_guard_business_insert', 'guard_business_privileged_columns', 'resolve_referring_agent'])
     expect((await db.query(`select count(*)::int as n from pg_proc where proname = 'guard_business_insert'`)).rows[0].n).toBe(1)
     expect(await as('authenticated', 'mallory@carefind.test',

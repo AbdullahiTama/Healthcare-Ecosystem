@@ -1,8 +1,17 @@
 # Businesses INSERT guard
 
-Migration: `supabase/migrations/carehub_20261031_businesses_insert_guard.sql`
-Test: `apps/carefind/src/test/payments/businessesInsertGuard.db.test.js` (PGlite, real roles and RLS)
-Status: **not applied**. Apply only by following the steps below.
+Migrations, in order:
+
+1. `supabase/migrations/carehub_20261031_businesses_insert_guard.sql` is **APPLIED** live as a tracked migration
+   (version `20261011040639`, 2026-10-11, with the user's explicit approval). The vulnerability is closed.
+2. `supabase/migrations/carehub_20261101_businesses_insert_guard_expiry_default.sql` is the **corrective follow-up**
+   and is **NOT YET APPLIED**. See "Corrective follow-up" below.
+
+Test: `apps/carefind/src/test/payments/businessesInsertGuard.db.test.js` (PGlite, real roles and RLS). It loads both
+migrations in order.
+
+**Never re-apply migration 1 on its own after migration 2.** Its `CREATE OR REPLACE` would restore the old function
+body, which refuses every branch.
 
 ## The vulnerability
 
@@ -34,12 +43,63 @@ A `BEFORE INSERT` trigger `a_guard_business_insert` calls `public.guard_business
   `is_platform_admin()`. This covers server endpoints, migrations, platform admins and SECURITY DEFINER RPCs such as
   `register_business()`, where `current_user` is the function owner.
 - **Everyone else** gets SQLSTATE 42501. Messages name the field class, never the value.
-  - `is_platform_admin` must be false or null. `plan_expires_at` must be null. `referring_agent_id` must be null.
+  - `is_platform_admin` must be false or null. `referring_agent_id` must be null.
   - **Root business (`parent_business_id is null`): always rejected**, with "Businesses are created through
     registration, not by direct insert."
   - Branch: the parent must exist, be visible to the caller, be owned by them (`lower(email) = lower(auth.email())`)
     and be `active`. The branch must be `active` or `pending` (a null status is rejected). Its `plan` must equal the
     parent's or be null.
+  - **After migration 2,** a branch's `plan_expires_at` is always overwritten with the parent's. A value the caller
+    supplies and the column default are both replaced, so the caller can neither choose nor extend an expiry.
+  - **With migration 1 only** (the live state today), any non-null `plan_expires_at` is refused. Live gives that
+    column a default, so every insert is refused. See "Corrective follow-up".
+
+## Corrective follow-up (migration 2)
+
+**What happened.** Running the behavioural verification on live after migration 1 gave these results:
+
+- the attack was blocked;
+- the exempt paths (service_role, platform admin) worked;
+- the UPDATE guard was intact, the advisors were unchanged, and nothing was left behind;
+- **but every ordinary non-privileged insert, including the legitimate branch shape, was refused** with "Only a
+  platform administrator can set a plan_expires_at on a new business".
+
+The cause is the live column default `businesses.plan_expires_at DEFAULT (now() + '30 days'::interval)`. Postgres
+fills in column defaults *before* row triggers run, so `new.plan_expires_at is not null` was true for every row. The
+PGlite replica had no such default, which is why its tests passed.
+
+This failed closed, so there was no security gap. Nothing regressed either: branch creation was already failing in
+production on `businesses_email_key`. But the intended branch shape is blocked.
+
+**The fix.** Migration 2 replaces the function body (`CREATE OR REPLACE`) and keeps the trigger as it is:
+
+- it drops the early `plan_expires_at` rejection (root inserts are rejected anyway);
+- for a branch, it overwrites `plan_expires_at` with the parent's, read in the same RLS-scoped parent lookup;
+- every other rule is unchanged.
+
+**The lesson.** A test replica must mirror the live **column defaults** of every column a trigger reads, because
+defaults are filled in before triggers fire. The test now pins those defaults in its "replica defaults match live"
+case. Pre-apply check (d) below diffs the live defaults against it. Run that check before applying anything that
+touches this guard.
+
+### Applying migration 2
+
+1. Run pre-apply checks (a) to (e) below. The trigger hard gate (e) now expects the three post-migration-1 triggers:
+   `a_guard_business_insert`, `guard_business_privileged_columns`, `resolve_referring_agent`.
+2. Run the advisors and save the baseline.
+3. Apply it as a tracked migration with `apply_migration`, named `businesses_insert_guard_expiry_default`, using the
+   repo file's content exactly. It does not touch the trigger, so it takes no ACCESS EXCLUSIVE lock on businesses;
+   its `lock_timeout` is precautionary.
+4. Run the step 4 catalogue checks below: one signature, no anon/authenticated/PUBLIC EXECUTE in `proacl`, and the
+   same three triggers. Also confirm the new body is live:
+   ```sql
+   select prosrc ilike '%new.plan_expires_at := v_parent_expiry%' as overwrites,
+          prosrc ilike '%new.plan_expires_at is not null%'       as old_rejection
+     from pg_proc where proname = 'guard_business_insert';
+   -- expect: overwrites = true, old_rejection = false
+   ```
+5. Run the advisors again (expect them unchanged), then the behavioural verification, where case 5 must now be
+   ACCEPTED.
 
 ### Policy change
 
@@ -78,6 +138,9 @@ described under "Known gaps".
 
 ## Apply steps (human-run)
 
+The steps below were written for migration 1, which is applied. They apply to migration 2 with the changes listed in
+"Applying migration 2" above.
+
 ### 1. Pre-apply checks (stop on any unexpected result)
 
 ```sql
@@ -107,7 +170,23 @@ select p.oid::regprocedure, pg_get_userbyid(p.proowner) as owner
 -- c) Record the platform-admin count now. The residue check after verification compares against this number.
 select count(*) as platform_admins_before from public.businesses where is_platform_admin;
 
--- d) HARD GATE: the triggers on businesses must be exactly the two expected ones. The post-apply write test performs
+-- d) Column defaults of the guarded columns must equal the test replica's ("replica defaults match live" in
+--    businessesInsertGuard.db.test.js). If ANY differs, STOP: update the replica and that test first, then re-run
+--    the suite, because a default the replica lacks hides behaviour (see "Corrective follow-up").
+select column_name, column_default from information_schema.columns
+ where table_schema = 'public' and table_name = 'businesses'
+   and column_name in ('status', 'plan', 'plan_expires_at', 'is_platform_admin', 'parent_business_id', 'referring_agent_id')
+ order by column_name;
+-- expect exactly:
+--   is_platform_admin   false
+--   parent_business_id  NULL
+--   plan                'basic'::text
+--   plan_expires_at     (now() + '30 days'::interval)
+--   referring_agent_id  NULL
+--   status              'pending'::text
+
+-- e) HARD GATE: the triggers on businesses must be exactly the two expected ones (before migration 1; before
+--    migration 2 they are the three listed in step 4). The post-apply write test performs
 --    a real INSERT (rolled back), and that INSERT would fire any unknown trigger or webhook, including an AFTER INSERT
 --    one with side effects outside the transaction (an http request, for example).
 select tgname from pg_trigger where tgrelid = 'public.businesses'::regclass and not tgisinternal order by tgname;
@@ -169,12 +248,16 @@ See the next section.
 ## Behavioural post-apply verification (human-run)
 
 Run this only after both trigger hard gates have passed. It runs as one `DO` block that ends in `raise exception`, so
-every write rolls back. It covers four cases:
+every write rolls back. It covers five cases:
 
 - the attack, which must fail;
 - an ordinary user's root insert, which must fail;
 - `service_role` inserting a pending root, which must succeed;
-- a platform admin inserting an active root, which must succeed.
+- a platform admin inserting an active root, which must succeed;
+- a legitimate branch of the caller's own active parent, supplying a far-future expiry. This must be ACCEPTED, and
+  stored with the parent's expiry, **only after migration 2**. With migration 1 alone it is REFUSED on
+  `plan_expires_at`. Like the other cases it uses a throwaway parent row seeded as the owner and rolled back. The
+  branch uses a case variant of the owner's email because `businesses_email_key` is case-sensitive (see Known gaps).
 
 The platform-admin case uses a throwaway admin row that the block creates itself, as the owner (exempt), and that is
 rolled back with everything else. Every address is a throwaway that owns no real row.
@@ -186,6 +269,9 @@ declare
   v_root   text := 'INSERTED (POLICY NOT ENFORCED)';
   v_svc    text := 'INSERTED';
   v_admin  text := 'INSERTED';
+  v_branch text := 'INSERTED';
+  v_parent uuid;
+  v_expiry timestamptz;
 begin
   -- Ordinary signed-in user with no business row.
   perform set_config('request.jwt.claims',
@@ -228,13 +314,33 @@ begin
   exception when others then v_admin := 'FAILED ' || sqlstate || ' ' || sqlerrm;
   end;
 
-  raise exception 'RESULT attack=[%] root=[%] service_role=[%] admin=[%]', v_attack, v_root, v_svc, v_admin;
+  -- 5. Legit branch of own active parent; the supplied expiry must be overwritten with the parent's.
+  execute 'reset role';
+  insert into public.businesses (name, owner, email, status, plan, plan_expires_at)
+  values ('SELFTEST parent', 'SELFTEST', 'insert-guard-selftest-owner@example.invalid', 'active', 'basic', '2030-01-01T00:00:00Z')
+  returning id into v_parent;
+  perform set_config('request.jwt.claims',
+    '{"sub":"00000000-0000-4000-8000-0000000b0a7d","email":"insert-guard-selftest-owner@example.invalid","role":"authenticated"}', true);
+  execute 'set local role authenticated';
+  begin
+    insert into public.businesses (name, owner, email, parent_business_id, status, plan, plan_expires_at)
+    values ('SELFTEST branch', 'SELFTEST', 'Insert-Guard-Selftest-Owner@example.invalid', v_parent, 'active', 'basic', '2099-01-01T00:00:00Z')
+    returning plan_expires_at into v_expiry;
+    v_branch := 'INSERTED expiry=' || v_expiry::text;
+  exception when others then v_branch := 'REFUSED ' || sqlstate || ' ' || sqlerrm;
+  end;
+
+  raise exception 'RESULT attack=[%] root=[%] service_role=[%] admin=[%] branch=[%]', v_attack, v_root, v_svc, v_admin, v_branch;
 end $$;
--- Expect:
+-- Expect AFTER migration 2:
 --   attack=[42501 Only a platform administrator can create a business with platform-admin access.]
 --   root=[42501 Businesses are created through registration, not by direct insert.]
 --   service_role=[INSERTED]
 --   admin=[INSERTED]
+--   branch=[INSERTED expiry=2030-01-01 00:00:00+00]   (the PARENT's expiry, not 2099 and not now()+30d)
+-- With migration 1 only (the live state on 2026-10-11): attack, service_role and admin are as above, but
+--   root=[42501 Only a platform administrator can set a plan_expires_at on a new business.]  (still refused)
+--   branch=[REFUSED 42501 Only a platform administrator can set a plan_expires_at on a new business.]
 ```
 
 Residue check, run afterwards as the owner:
@@ -247,9 +353,13 @@ select count(*) from public.businesses where is_platform_admin;  -- expect = pla
 ## Rollback
 
 ```sql
+-- Whole guard (re-opens the vulnerability; emergency only):
 drop trigger if exists a_guard_business_insert on public.businesses;
 -- optional: drop function if exists public.guard_business_insert();
 ```
+
+To undo migration 2 alone, re-run the function definition from migration 1. That restores the fail-closed body, which
+refuses every branch. Do not drop the trigger for that.
 
 ## What this does NOT cover
 
@@ -264,8 +374,9 @@ drop trigger if exists a_guard_business_insert on public.businesses;
   guard, whose protected list does not include these columns. Fix both guards together.
 - **anon holds table-level UPDATE and DELETE grants on `businesses`.** Today they are blocked only because no RLS
   policy applies to anon. Revoke them so the protection does not rest on RLS alone.
-- **A branch inherits the parent's plan with `plan_expires_at` NULL.** A null expiry on a paid branch plan is a design
-  point to settle when branch creation is redesigned. Should a branch carry or derive the parent's expiry?
+- **Branch expiry, resolved by migration 2:** a branch now always inherits its parent's `plan_expires_at`, copied at
+  insert time. Still open for the branch redesign: if the parent's expiry is later extended or renewed, the branch's
+  copy does not follow. Should renewals cascade to branches, or should a branch derive its expiry from the parent?
 - **Branch creation currently fails in production on `businesses_email_key`.** `Locations.jsx` `saveBranch()` →
   `locationsRepository.addBranch()` reuses the parent's exact `email`, and the key is UNIQUE, so live has zero branch
   rows.
