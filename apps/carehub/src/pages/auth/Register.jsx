@@ -109,10 +109,10 @@ export default function Register() {
           Thank you <strong>{data.firstName}</strong>! Check <strong>{data.ownerEmail}</strong> for an email from CareHub: open the link to verify your address and choose your password. Your business <strong>{data.businessName}</strong> is reviewed after that. If it does not arrive in a few minutes, check spam, or use "Forgot password" on the sign-in page to get a new link.
         </div>
         <div style={{ background: theme.tealMist, borderRadius: theme.radius.lg, padding: '16px', marginBottom: '24px', textAlign: 'left' }}>
-          {[['done', 'Registration submitted'], ['pending', 'Admin review in progress'], ['wait', 'Approval notification sent to your email'], ['wait2', 'Dashboard unlocked, start using CareHub']].map(([k, l]) => {
-            const Icon = k === 'done' ? CheckCircle : k === 'pending' ? Hourglass : Circle
+          {[['verify', 'Verify your email and choose a password'], ['done', 'Registration submitted'], ['pending', 'Admin review in progress'], ['wait', 'Approval notification sent to your email'], ['wait2', 'Dashboard unlocked, start using CareHub']].map(([k, l]) => {
+            const Icon = k === 'done' ? CheckCircle : (k === 'pending' || k === 'verify') ? Hourglass : Circle
             return (
-              <div key={k} style={{ display: 'flex', gap: '10px', marginBottom: '8px', fontSize: '13px', alignItems: 'center', color: k === 'done' ? theme.success : k === 'pending' ? theme.warning : gray400 }}>
+              <div key={k} style={{ display: 'flex', gap: '10px', marginBottom: '8px', fontSize: '13px', alignItems: 'center', color: k === 'done' ? theme.success : (k === 'pending' || k === 'verify') ? theme.warning : gray400 }}>
                 <Icon size={14} style={{ flexShrink: 0 }} /><span>{l}</span>
               </div>
             )
