@@ -18,7 +18,9 @@
 - After creating any function: re-read `pg_proc.proacl` (expect `postgres | service_role` only for the new functions) and check there is no differently-signed sibling. `REVOKE ... FROM PUBLIC` does not guarantee the ACL; follow with `REVOKE ... FROM anon, authenticated`.
 - Run `get_advisors` (security) before and after the migration and compare.
 - Migrations are named `carehub_YYYYMMDD_<name>.sql`, written to `supabase/migrations/` and mirrored in `apps/carefind/sql/` only if the neighbouring files are (check `ls` first).
-- Public auth endpoints never reveal whether an address has an account (generic `{ ok: true }`), except registration, which already returns a readable "already exists" error today.
+- Public auth endpoints never reveal whether an address has an account (generic `{ ok: true }`), except registration, which already returned a readable "already exists" error before this change. This is a stated residual risk, not an oversight: a signup form must say the address is taken, and it is parity with the old anonymous RPC.
+- There is no per-IP or global throttle on registration (CareHub has no IP limiter in its handlers). The per-address limits in `sendAuthEmail` are the backstop.
+- The public registration handler must not put caller-chosen text (`fullName`, `businessName`) into the `owner_setup` email; the template falls back to neutral copy.
 - Never log tokens, links or addresses; log error codes only.
 - Every new screen state needs loading, error and empty handling, keyboard access and responsive layout at 375/768/1280px.
 - Passwords are minimum 6 characters (existing rule), enforced by Supabase on `updateUser`.
@@ -26,7 +28,9 @@
 ## Review Focus
 
 - **Link opened twice / after expiry:** second click or expired link must land on `LinkExpired`, never a blank set-password form. (Task 6)
-- **Owner registers, never clicks, tries to sign in:** must see "verify your email" with a working resend, not "Incorrect email or password". (Task 6)
+- **Owner registers, never clicks, tries to sign in:** GoTrue checks the password before confirmation and the owner never learned the random password, so they get `invalid_credentials`. They must see `Incorrect email or password` WITH the "Just registered?" hint, and "Forgot password" must deliver a link that lands on the set-password page (`?welcome=1`). The "Verify your email to continue" state only appears when the password is known. (Task 6)
+- **Owner parks an unverified registration in `suspended`/`revoked`, then reactivates:** the trigger is destination-based, so no business can ENTER `active` while its owner is unconfirmed, from any prior status. `pending -> suspended/revoked` stays allowed. (Task 1)
+- **A link that produced a session but did not confirm the address:** the set-password page must not say "Email verified"; it shows "We could not verify your email". (Task 6)
 - **Two registrations for one address, differing only by case or whitespace:** second must be rejected and leave no orphan auth user. (Task 1)
 - **Setup email fails to enqueue:** registration still succeeds; the owner can recover via resend; no stack trace to the client. (Task 4)
 - **Admin approves in bulk with an unconfirmed owner in the selection:** the database must refuse that row and the UI must report which, not silently skip. (Task 7)
@@ -100,6 +104,8 @@ try {
 Run: `node --env-file=.env s1-recovery-confirms.mjs`
 Expected PASS: `before` is `null`, `after` is a timestamp, `status` is 302 or 303, `location` begins with the `redirectTo`. If `redirectTo` is not on the Supabase allow-list, `location` is the Site URL: record that and add the URL to the allow-list as a deploy step in Task 9.
 
+S1 proves recovery-confirms for a user made by `admin.createUser`. It does not prove it for the user shape `register_business_unconfirmed` produces (created through SQL, then un-confirmed). That is the **S1 second run**, a pass criterion that is part of the gate, run in Task 9 step 2 after the additive migration is applied and BEFORE merge/deploy: create a user with `register_business_unconfirmed` for an `@example.com` test address, follow the generated recovery link, and require `email_confirmed_at` to be set afterwards; then delete that auth user and the business row.
+
 - [ ] **Step 2: S2 - what does `email_outbox` require for a new event?**
 
 Run through `execute_sql` (it rolls back by raising). It tests the foreign key and the payload shape `authEmail.js` actually sends:
@@ -149,8 +155,8 @@ Append the two results to `docs/superpowers/specs/2026-10-10-email-verification-
 ```js
 // @vitest-environment node
 // Owner email verification: registration creates an UNCONFIRMED owner plus a pending business atomically, only the
-// service role can call it, the old RPC is revoked at cutover, and a pending business cannot leave `pending` while
-// its owner is unconfirmed.
+// service role can call it, the old RPC is revoked at cutover, and no business can ENTER `active` (from any status)
+// while its owner is unconfirmed.
 import { describe, it, expect, beforeAll } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { readFileSync } from 'node:fs'
@@ -279,6 +285,56 @@ describe('businesses_require_verified_owner', () => {
     await db.query(`update public.businesses set status = 'active' where email = 'legacy@x.test'`)
     expect((await db.query(`select status from public.businesses where email = 'legacy@x.test'`)).rows[0].status).toBe('active')
   })
+
+  // The invariant is about the DESTINATION: no business may ENTER `active` while its owner is unconfirmed, whatever
+  // status it comes from. Parking an unverified registration in suspended/revoked must not be a path to activation.
+  const statusOf = async (id) => (await db.query('select status from public.businesses where id = $1', [id])).rows[0].status
+  const setStatus = (id, status) => db.query('update public.businesses set status = $2 where id = $1', [id, status])
+
+  it('blocks suspended -> active and revoked -> active while the owner is unconfirmed, and allows both once confirmed', async () => {
+    const sus = (await register({ email: 'sus@lifeline.test', name: 'Suspended Clinic' })).rows[0].id
+    const rev = (await register({ email: 'rev@lifeline.test', name: 'Revoked Clinic Two' })).rows[0].id
+    await setStatus(sus, 'suspended')
+    await setStatus(rev, 'revoked')
+
+    await expect(setStatus(sus, 'active')).rejects.toThrow(/not verified/i)
+    await expect(setStatus(rev, 'active')).rejects.toThrow(/not verified/i)
+    expect(await statusOf(sus)).toBe('suspended')
+    expect(await statusOf(rev)).toBe('revoked')
+
+    await db.query(`update auth.users set email_confirmed_at = now() where email in ('sus@lifeline.test', 'rev@lifeline.test')`)
+    await setStatus(sus, 'active')
+    await setStatus(rev, 'active')
+    expect(await statusOf(sus)).toBe('active')
+    expect(await statusOf(rev)).toBe('active')
+  })
+
+  it('still allows pending -> suspended and pending -> revoked, and blocks pending -> active, while unconfirmed', async () => {
+    const a = (await register({ email: 'dispose1@lifeline.test', name: 'Dispose One' })).rows[0].id
+    const b = (await register({ email: 'dispose2@lifeline.test', name: 'Dispose Two' })).rows[0].id
+    const c = (await register({ email: 'dispose3@lifeline.test', name: 'Dispose Three' })).rows[0].id
+    await setStatus(a, 'suspended')
+    await setStatus(b, 'revoked')
+    await expect(setStatus(c, 'active')).rejects.toThrow(/not verified/i)
+    expect([await statusOf(a), await statusOf(b), await statusOf(c)]).toEqual(['suspended', 'revoked', 'pending'])
+    // Dispose of it so the admin listing test below sees only the pending rows it expects.
+    await setStatus(c, 'revoked')
+  })
+
+  it('does not block a no-op active -> active update even if the owner is (now) unconfirmed', async () => {
+    const id = (await register({ email: 'noop@lifeline.test', name: 'Noop Clinic' })).rows[0].id
+    await db.query(`update auth.users set email_confirmed_at = now() where email = 'noop@lifeline.test'`)
+    await setStatus(id, 'active')
+    await db.query(`update auth.users set email_confirmed_at = null where email = 'noop@lifeline.test'`)
+    await setStatus(id, 'active')
+    expect(await statusOf(id)).toBe('active')
+  })
+
+  it('lets a legacy business with no auth user activate from suspended', async () => {
+    await db.query(`insert into public.businesses (id, name, email, status) values (gen_random_uuid(), 'Legacy Two', 'legacy2@x.test', 'suspended')`)
+    await db.query(`update public.businesses set status = 'active' where email = 'legacy2@x.test'`)
+    expect((await db.query(`select status from public.businesses where email = 'legacy2@x.test'`)).rows[0].status).toBe('active')
+  })
 })
 
 describe('admin_unverified_owner_business_ids', () => {
@@ -366,7 +422,7 @@ begin
   end if;
   -- mint_confirmed_auth_user would silently CONFIRM an existing unconfirmed user; never let that happen here.
   if exists (select 1 from auth.users where lower(email) = v_email) then
-    raise exception 'An account with this email already exists. Please sign in instead.';
+    raise exception 'An account with this email already exists. Please sign in, or use "Forgot password" if you have not set a password yet.';
   end if;
 
   v_uid := public.mint_confirmed_auth_user(v_email, gen_random_uuid()::text || gen_random_uuid()::text);
@@ -434,9 +490,12 @@ end $function$;
 revoke all on function public.register_business_unconfirmed(jsonb) from public, anon, authenticated;
 grant execute on function public.register_business_unconfirmed(jsonb) to service_role;
 
--- 3. A business cannot leave `pending` (other than to `suspended` or `revoked`, the only non-activating statuses
--- businesses_status_check allows) while its owner has not confirmed the address. Both the old and the new email are
--- checked so a status change made together with an email change cannot slip past the gate.
+-- 3. No business can ENTER `active`, from any prior status, while its owner has not confirmed the address. The rule is
+-- about the destination, not the origin: pending -> suspended / revoked stays allowed (so an admin can dispose of an
+-- unverified registration), but suspended -> active ("Reactivate") or revoked -> active is blocked exactly like
+-- pending -> active. A no-op active -> active update is not a transition into `active` and is not blocked. A NULL
+-- status is not 'active', so it never reaches the check. Both the old and the new email are checked so a status change
+-- made together with an email change cannot slip past the gate.
 -- Enforced here because approval is a direct PATCH from the admin client; a UI filter would be bypassable.
 -- A business whose owner has no auth user (legacy rows) is not blocked.
 create or replace function public.guard_business_owner_email_confirmed()
@@ -446,7 +505,7 @@ security definer
 set search_path to 'public'
 as $function$
 begin
-  if old.status = 'pending' and new.status is distinct from old.status and new.status not in ('suspended', 'revoked') then
+  if new.status = 'active' and old.status is distinct from 'active' then
     if exists (select 1 from auth.users u
                 where lower(u.email) in (lower(old.email), lower(new.email)) and u.email_confirmed_at is null) then
       raise exception 'The owner has not verified their email address yet.';
@@ -719,7 +778,7 @@ git commit -m "feat(shared-email): owner_setup auth action (server-initiated rec
 
 **Interfaces:**
 - Consumes: RPC `register_business_unconfirmed(p_business jsonb) -> uuid` (Task 1); `sendAuthEmail({ action: 'owner_setup', ... })` (Task 3).
-- Produces: `POST /api/register-business` accepting `{ name, owner, email, phone?, whatsapp?, address?, state?, city?, business_type?, hours?, maps_link?, lat?, lng?, website?, visible_on_carefind?, referral_code_used? }` and answering `200 { ok: true }` or `400 { error: string }`.
+- Produces: `POST /api/register-business` accepting `{ name, owner, email, phone?, whatsapp?, address?, state?, city?, business_type?, hours?, maps_link?, lat?, lng?, website?, visible_on_carefind?, referral_code_used? }` and answering `200 { ok: true }`, `400 { error: string }` (invalid or missing fields, or a P0001 message from the RPC) or `500` (missing server configuration, including `CAREHUB_APP_URL`/`APP_URL`, or an unexpected database error). Validation (final-review wave): text fields must be strings (`name` <= 160, `owner` <= 120, `email` <= 254, others <= 500), `lat`/`lng` finite numbers in range, `visible_on_carefind` boolean, non-object bodies rejected; the redirect base is checked BEFORE the RPC. The code block below is the handler as committed; the test snippets in Step 1 predate the validation tests, which live in the committed `registerBusiness.test.js`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -769,13 +828,17 @@ describe('POST /api/register-business', () => {
     expect(Object.keys(args.p_business).sort()).toEqual(['email', 'name', 'owner', 'state'])
     expect(JSON.stringify(args)).not.toContain('hunter2')
     expect(h.sendAuthEmail).toHaveBeenCalledWith(expect.objectContaining({
-      action: 'owner_setup', email: 'ada@lifeline.test', fullName: 'Ada Eze', businessName: 'Lifeline Pharmacy',
+      action: 'owner_setup', email: 'ada@lifeline.test',
       redirectTo: 'https://carefindhub.com/reset-password?welcome=1', app: 'carehub',
     }))
+    // The endpoint is public: caller-chosen names must never reach a branded email.
+    const sent = h.sendAuthEmail.mock.calls[0][0]
+    expect(sent).not.toHaveProperty('fullName')
+    expect(sent).not.toHaveProperty('businessName')
   })
 
   it('passes readable RPC validation errors through, but hides unexpected database errors', async () => {
-    h.rpc.mockResolvedValueOnce({ data: null, error: { code: 'P0001', message: 'An account with this email already exists. Please sign in instead.' } })
+    h.rpc.mockResolvedValueOnce({ data: null, error: { code: 'P0001', message: 'An account with this email already exists. Please sign in, or use "Forgot password" if you have not set a password yet.' } })
     let res = await call(valid)
     expect(res.statusCode).toBe(400)
     expect(res.body.error).toMatch(/already exists/)
@@ -821,16 +884,52 @@ const BUSINESS_FIELDS = [
   'name', 'owner', 'email', 'phone', 'whatsapp', 'address', 'state', 'city', 'business_type', 'hours',
   'maps_link', 'lat', 'lng', 'website', 'visible_on_carefind', 'referral_code_used',
 ]
+// Text columns must be strings when present. Lengths: TEXT_MAX where listed, DEFAULT_TEXT_MAX otherwise.
+const TEXT_FIELDS = [
+  'name', 'owner', 'email', 'phone', 'whatsapp', 'address', 'state', 'city', 'business_type', 'hours',
+  'maps_link', 'website', 'referral_code_used',
+]
+const TEXT_MAX = { name: 160, owner: 120, email: 254 }
+const DEFAULT_TEXT_MAX = 500
+const COORD_RANGE = { lat: 90, lng: 180 }
+
+// Returns the field name of the first invalid value, or null. Coerces lat/lng in place to numbers.
+function invalidField(business) {
+  for (const key of TEXT_FIELDS) {
+    if (business[key] === undefined) continue
+    if (typeof business[key] !== 'string' || business[key].length > (TEXT_MAX[key] ?? DEFAULT_TEXT_MAX)) return key
+  }
+  for (const [key, limit] of Object.entries(COORD_RANGE)) {
+    if (business[key] === undefined) continue
+    const raw = business[key]
+    const n = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN
+    if (!Number.isFinite(n) || n < -limit || n > limit) return key
+    business[key] = n
+  }
+  if (business.visible_on_carefind !== undefined && typeof business.visible_on_carefind !== 'boolean') {
+    return 'visible_on_carefind'
+  }
+  return null
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return res.status(500).json({ error: 'Server misconfigured: missing Supabase env vars' })
   }
+  // Checked before anything is created: without it the emailed link cannot reach /reset-password, so the owner
+  // would be left with an account they cannot finish setting up.
+  const appBase = process.env.CAREHUB_APP_URL || process.env.APP_URL
+  if (!appBase) return res.status(500).json({ error: 'Server misconfigured: CAREHUB_APP_URL is not set' })
 
-  const body = req.body || {}
+  const raw = req.body
+  // A string, array or null body has no usable fields; it falls through to the missing-email error below.
+  const body = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
   const business = {}
   for (const key of BUSINESS_FIELDS) if (body[key] !== undefined && body[key] !== null) business[key] = body[key]
+
+  const bad = invalidField(business)
+  if (bad) return res.status(400).json({ error: `Invalid ${bad}` })
 
   const email = String(business.email || '').trim().toLowerCase()
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'A valid email is required.' })
@@ -851,15 +950,14 @@ export default async function handler(req, res) {
 
   // Best effort: registration has succeeded. If the email cannot be sent, the owner recovers through
   // "Forgot password", which sends the same kind of link and also confirms the address.
+  // The owner's and business's names are NOT passed: this is a public endpoint, so they are text a stranger chose,
+  // and they must not appear in a branded email sent to whatever address was typed. The template uses neutral copy.
   try {
     const { sendAuthEmail } = await import('@care-ecosystem/shared-email')
-    const base = process.env.CAREHUB_APP_URL || process.env.APP_URL || ''
     await sendAuthEmail({
       action: 'owner_setup',
       email,
-      fullName: String(business.owner).trim(),
-      businessName: String(business.name).trim(),
-      redirectTo: `${base}/reset-password?welcome=1`,
+      redirectTo: `${appBase}/reset-password?welcome=1`,
       app: 'carehub',
       supabase,
     })
@@ -989,6 +1087,11 @@ git commit -m "feat(carehub): register without a password; verification email se
 **Interfaces:**
 - Consumes: Supabase `signInWithPassword` error `code === 'email_not_confirmed'`; `POST /api/auth-email { action: 'password_reset', email }` for resend.
 - Produces: no new exports.
+
+**Amendments from the final review (as committed).**
+- `Login.jsx`: GoTrue checks the password before confirmation, so a real new owner gets `invalid_credentials`, not `email_not_confirmed`. For `invalid_credentials` the message is `Incorrect email or password. Just registered? Open the link we emailed you, or use "Forgot password" to get a new one.` (the same for every address). The `email_not_confirmed` branch remains for when the password is known. `resendLink` posts `{ action: 'password_reset', email, redirectTo: window.location.origin + '/reset-password?welcome=1' }` so the link lands on the set-password page.
+- `ResetPassword.jsx`: in the welcome variant only, after the session is ready the page calls `getUser()` and reads `email_confirmed_at`. Present: the normal welcome form. Absent: heading `We could not verify your email`, a link to `/login`, `console.warn('[reset] welcome link did not confirm the email')`, no password form. `getUser` error or throw: status unknown, proceed as before. The non-welcome flow is unchanged (so "logic unchanged" in the Files list above is superseded for the welcome variant).
+- The snippets below are the original tests; the committed test files also cover these amendments.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1131,6 +1234,8 @@ git commit -m "feat(carehub): welcome set-password page and unverified sign-in s
 ---
 
 ### Task 7: Admin sees which pending businesses await verification
+
+*Amendment (final review):* the badge has a stable id per surface (`awaiting-verification-table-<id>`, `-card-<id>`, `-sheet-<id>`) and each Approve control disabled for an unverified owner carries `aria-describedby` pointing at it, keeping the existing `title`. The Register done screen's progress list starts with "Verify your email and choose a password".
 
 **Files:**
 - Modify: `apps/carehub/src/services/supabase.js` (add after `getBusinesses`, line 152)
@@ -1306,21 +1411,23 @@ git commit -m "feat(carefind): resend verification email from the signup confirm
 
 1. Merge the PR containing Tasks 1-8 only when the user says so (`main` deploys).
 2. **Before deploy:** apply `carehub_20261029_owner_email_verification` with `apply_migration`. Then verify:
-   - `select proname, proacl from pg_proc where proname in ('mint_unconfirmed_auth_user','register_business_unconfirmed','guard_business_owner_email_confirmed')` shows `postgres | service_role` only; if `anon` or `authenticated` appears, apply `revoke ... from anon, authenticated` as a follow-up migration.
+   - `select proname, proacl from pg_proc where proname in ('mint_unconfirmed_auth_user','register_business_unconfirmed','guard_business_owner_email_confirmed')` shows `postgres | service_role` only (the admin RPC additionally `authenticated`); there must be **no PUBLIC entry** (`=X/...`, empty grantee) and no `anon`. If `anon`, `authenticated` or PUBLIC appears where it should not, apply `revoke ... from public, anon, authenticated` as a follow-up migration.
+   - **S1 second run (pass criterion, part of the gate):** create a user through `register_business_unconfirmed` for a clearly labelled `@example.com` test address, generate a recovery link for it and follow it as S1 does. Pass: `email_confirmed_at` is null before and set after following the link. Then delete that auth user and the business row. Do not merge or deploy if it fails.
    - `select count(*), array_agg(oid::regprocedure) from pg_proc where proname = 'register_business_unconfirmed'` returns 1 signature.
    - `select event_key from email_event_catalog where app='carehub' and event_key='owner_setup'` returns one row.
    - security advisors before/after: no new findings.
-3. Add `https://carefindhub.com/reset-password` to Supabase Auth, URL Configuration, Redirect URLs (S1 shows whether the `?welcome=1` URL is honoured or falls back to the Site URL).
+3. Add `https://carefindhub.com/reset-password` to Supabase Auth, URL Configuration, Redirect URLs (S1 shows whether the `?welcome=1` URL is honoured or falls back to the Site URL). First confirm the real production value of `CAREHUB_APP_URL` (Vercel env) and that `<that origin>/reset-password` is on the allow-list: the example env file shows a different domain than the allow-list entry, so verify rather than assume. The handler returns 500 before creating anything when neither `CAREHUB_APP_URL` nor `APP_URL` is set.
 4. Deploy; run the manual check below on production with a real inbox.
-5. **Only then** apply `carehub_20261030_revoke_register_business`, and re-read `proacl` for `register_business`.
+5. **Only then** apply `carehub_20261030_revoke_register_business`, and re-read `proacl` for `register_business` (no `anon`, no `authenticated`, no PUBLIC entry).
 6. Confirm in Supabase dashboard that CareFind has "Confirm email" enabled.
 
 - [ ] **Step 3: Manual verification (375, 768, 1280px)**
 
-- Register a new business with a real inbox: done screen copy; email arrives; link opens "Email verified"; set password; redirected to sign-in; sign in; sees pending-review state.
-- Sign in before clicking: sees "Verify your email" and resend; resend delivers a new link and the old link no longer works (each minted link invalidates the previous one).
+- Register a new business with a real inbox, using a clearly labelled test address that is disposed of afterwards (set the business `revoked`, then delete the auth user by hand): done screen copy (progress list starts with "Verify your email and choose a password"); email arrives; link opens "Email verified"; set password; redirected to sign-in; sign in; sees pending-review state.
+- Sign in before clicking: shows the `Incorrect email or password` message WITH the "Just registered?" hint (the owner never learned the random password, so GoTrue answers `invalid_credentials`). "Forgot password" for that address delivers a link that lands on the set-password page (`?welcome=1`); the first link no longer works (each minted link invalidates the previous one). The "Verify your email to continue" state only appears when the password is known.
 - Open the link a second time and an expired link: lands on `LinkExpired`.
 - Admin console: the new business shows "Awaiting email verification" and bulk approve skips it with a count; approve works after the owner verifies.
+- Trigger: a PATCH to `status=active` as admin on the unverified test business just created for this QA (never a real business) is refused with "The owner has not verified their email address yet.", including after moving it `suspended` first.
 - Call `rpc/register_business` directly with the anon key after step 5: expect `401/403` (permission denied).
 
 - [ ] **Step 4: Commit**
@@ -1340,6 +1447,10 @@ git commit -m "docs: owner email verification flow, rollout order and runbook"
 - The spec said "per-IP rate limit"; there is no existing IP limiter in CareHub's handlers and registration was already unauthenticated, so this plan keeps per-address limits only (parity with today). Flagged for the user.
 - The spec put the admin gate in "an admin RPC"; planning found approval is a direct PATCH, so enforcement is a trigger and the RPC is display-only.
 - The single migration became two so the old frontend keeps working until cutover.
+
+**Stranded owners and rollback:** owners registered through `register_business_unconfirmed` but unconfirmed after an hour are listed from `email_outbox` (`template_key = 'owner_setup'`) joined to `auth.users` with `email_confirmed_at is null`. Remediate by confirming ONLY owners who demonstrably completed the recovery link, or by sending a signup-type link per the S1 fallback. If the frontend is rolled back, owners registered while the new frontend was live are in the same state and are handled the same way. The query and steps are in `docs/architecture/Owner-Email-Verification.md`.
+
+**Residual risks (stated plainly):** registration discloses whether an address already has an account; there is no per-IP or global throttle on registration (per-address limits in `sendAuthEmail` are the backstop); the `owner_setup` email no longer includes the caller's name or business name.
 
 **Placeholder scan:** the two "confirm with grep / read live definition" notes (Task 1 admin guard, Task 3 rate-limit key) are explicit verification steps with the command to run and the fallback code already written, not deferred work.
 
