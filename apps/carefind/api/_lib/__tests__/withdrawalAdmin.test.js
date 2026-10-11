@@ -54,8 +54,20 @@ describe('decideAdminReject', () => {
     expect(getStatus).not.toHaveBeenCalled()
   })
 
-  it('no transfer code, old, Paystack has never heard of it: refunds', async () => {
-    expect((await run(auto({ paystack_transfer_code: null }), 'not_found')).action).toBe('refund')
+  it('no transfer call was made (reserved), old, Paystack has never heard of it: refunds', async () => {
+    expect((await run(auto({ status: 'reserved', paystack_transfer_code: null }), 'not_found')).action).toBe('refund')
+  })
+
+  it('a transfer call was made (processing), no code, marked recently: an admin cannot release it on "not found"', async () => {
+    const marked = new Date(NOW - 20 * 60_000).toISOString()
+    const d = await run(auto({ status: 'processing', paystack_transfer_code: null, updated_at: marked }), 'not_found')
+    expect(d.action).toBe('block')
+    expect(d.message).toMatch(/only treated as not sent after an hour/)
+  })
+
+  it('...and can once an hour has passed since the call was marked', async () => {
+    const marked = new Date(NOW - 61 * 60_000).toISOString()
+    expect((await run(auto({ status: 'processing', paystack_transfer_code: null, updated_at: marked }), 'not_found')).action).toBe('refund')
   })
 
   it('transfer code on file but Paystack says not found: blocks (inconsistent, do not refund)', async () => {

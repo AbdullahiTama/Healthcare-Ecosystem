@@ -7,7 +7,7 @@ import BankPicker from './BankPicker.jsx'
 
 const RESEND_SECONDS = 60
 
-// Save a bank account to be paid into. The bank tells us the account name; it must match the verified BVN name, and an
+// Save a bank account to be paid into. The bank tells us the account name; it is shown and saved as the bank reports it, and an
 // emailed code proves the inbox. The server enforces all of it - this form only walks the person through.
 export default function AddPayoutAccountModal({ show, onClose, manager, banks, banksStatus, onRetryBanks, isMobile }) {
   const resolver = useMemo(() => createAccountResolver({ getToken: async () => (await authClient.auth.getSession()).data.session?.access_token }), [])
@@ -50,7 +50,7 @@ export default function AddPayoutAccountModal({ show, onClose, manager, banks, b
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <p style={{ margin: 0, fontSize: 12.5, color: theme.gray600, lineHeight: 1.6 }}>
-          The account must be in <strong>your own name</strong> (as on your BVN) or the <strong>registered business name</strong>. You can save up to 5.
+          Add the bank account the business should be paid into. You can save up to 5. Withdrawals to a new account are limited for the first 24 hours.
         </p>
         <BankPicker banks={banks} status={banksStatus} selectedCode={acct.bankCode} onSelect={(b) => resolver.setBank(b ? b.code : '')} onRetry={onRetryBanks} />
         <Inp id="payout-acct-number" label="Account number" inputMode="numeric" maxLength={10} autoComplete="off" value={acct.accountNumber} onChange={(v) => resolver.setAccountNumber(v)} placeholder="10-digit account number" required />

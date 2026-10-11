@@ -7,7 +7,7 @@
 // settle_withdrawal(): replay-safe, at most once.
 import { reconcileWithdrawal as reconcile, sweepWithdrawals as sweep, getTransferStatus } from '@care-ecosystem/shared-payments'
 import { paystackFetch } from './paystack.js'
-import { applyWithdrawalResult } from './withdrawalEffects.js'
+import { applyWithdrawalResult, applyWithdrawalInFlight } from './withdrawalEffects.js'
 
 const getStatus = (reference) => getTransferStatus(reference, paystackFetch)
 
@@ -25,6 +25,7 @@ export function sweepWithdrawals(supabase, { limit = 50, ...opts } = {}) {
     // The hooks run only for changes THIS sweep made, so a webhook that settled first is never counted twice.
     onRefunded: (row, result) => applyWithdrawalResult(supabase, 'failed', { ...result, reference: row.paystack_reference }),
     onCompleted: (row, result) => applyWithdrawalResult(supabase, 'success', { ...result, reference: row.paystack_reference }),
+    onInFlight: (row) => applyWithdrawalInFlight(supabase, row),
     ...opts,
   })
 }

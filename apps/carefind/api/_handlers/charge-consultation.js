@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { createPaymentIntent, markIntentPending, markIntentFailed, newReference } from '@care-ecosystem/shared-payments'
+import { createPaymentIntent, markIntentPending, markIntentFailed, newReference, resolveCallbackUrl } from '@care-ecosystem/shared-payments'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
 
@@ -50,6 +50,10 @@ export default async function handler(req, res) {
     .maybeSingle()
   if (existing) return res.status(409).json({ error: 'You already have a booking with this professional', alreadyBooked: true })
 
+  // Where Paystack sends the customer back: only an origin this platform owns (audit F-27), never what the browser names.
+  const callback = resolveCallbackUrl({ requested: callback_url, req })
+  if (!callback.ok) return res.status(400).json({ error: 'Invalid return address', code: 'invalid_callback_url' })
+
   const reference = newReference('cf_consult', user.id)
   let intent
   try {
@@ -76,7 +80,7 @@ export default async function handler(req, res) {
       reference,
       amountKobo: intent.expected_amount,
       email: user.email,
-      callbackUrl: callback_url,
+      callbackUrl: callback.url,
       metadata: { intent_id: intent.id, purpose: 'consultation' },
     })
     await markIntentPending(supabase, intent.id)

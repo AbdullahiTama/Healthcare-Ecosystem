@@ -67,16 +67,19 @@ describe('cancel-appointment refunds through the refund engine', () => {
     const res = await call()
     expect(rpcs('settle_refund')[0]).toMatchObject({ p_outcome: 'processed', p_refund_id: 'rf1', p_amount_kobo: 1000000 })
     expect(res.body.refund).toEqual({ status: 'completed' })
-    expect(h.refundApplied).toHaveLength(1)
-    expect(h.refundApplied[0]).toMatchObject({ result: 'completed', id: 'rf1' })
+    // the payer hears twice, in order: it was requested, then it completed
+    expect(h.refundApplied.map((r) => [r.id, r.result])).toEqual([['rf1', 'requested'], ['rf1', 'completed']])
   })
 
-  it('nobody is notified while the refund is only in flight, and a CareCoin refund (completed in the database) notifies nobody', async () => {
+  it('a card refund still in flight is announced as REQUESTED only (completion comes later); a CareCoin refund completed in the database is announced once, as completed, in coins', async () => {
     await call()
-    expect(h.refundApplied).toEqual([])
-    h.routes.request_refund = { data: { outcome: 'completed', id: 'rf2', kind: 'carecoin', coins: 5 } }
+    expect(h.refundApplied.map((r) => r.result)).toEqual(['requested'])
+    expect(h.refundApplied[0]).toMatchObject({ id: 'rf1', entity_type: 'appointment', entity_id: 'a1' })
+    h.refundApplied.length = 0
+    h.routes.request_refund = { data: { outcome: 'completed', id: 'rf2', reference: 'rf_2', kind: 'carecoin', coins: 5 } }
     await call()
-    expect(h.refundApplied).toEqual([])
+    expect(h.refundApplied).toHaveLength(1)
+    expect(h.refundApplied[0]).toMatchObject({ result: 'completed', id: 'rf2', kind: 'carecoin', coins: 5, entity_type: 'appointment', entity_id: 'a1' })
   })
 
   it('a CareCoin booking is refunded entirely inside the database: Paystack is never called', async () => {

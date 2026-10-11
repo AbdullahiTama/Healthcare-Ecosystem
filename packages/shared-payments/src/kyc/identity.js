@@ -10,8 +10,13 @@ import { matchPersonName } from './nameMatch.js'
 // people's numbers. -> { status, body } for the HTTP layer.
 
 function hashSecret() {
-  const s = process.env.KYC_HASH_SECRET || process.env.OTP_HMAC_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!s) throw new Error('KYC_HASH_SECRET (or OTP_HMAC_SECRET / SUPABASE_SERVICE_ROLE_KEY) must be set')
+  const dedicated = process.env.KYC_HASH_SECRET
+  if (dedicated) return dedicated
+  // Production needs its own key (like the one-time-code key): the service-role key is not a hashing key. Outside production
+  // the older fallbacks keep local runs working.
+  if (process.env.NODE_ENV === 'production') throw new Error('KYC_HASH_SECRET must be set in production')
+  const s = process.env.OTP_HMAC_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!s) throw new Error('KYC_HASH_SECRET (or OTP_HMAC_SECRET / SUPABASE_SERVICE_ROLE_KEY outside production) must be set')
   return s
 }
 

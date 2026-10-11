@@ -51,6 +51,7 @@ beforeEach(() => {
   h.routes.verify_otp = { data: 'ok' }
   h.routes.create_business_withdrawal = created
   h.routes.attach_business_withdrawal_transfer = { data: 'ok' }
+  h.routes.mark_business_withdrawal_transfer_attempt = { data: 'ok' }
   h.routes.settle_business_withdrawal = (a) => ({ data: { result: a.p_outcome === 'success' ? 'completed' : 'refunded', id: 'bw-1', business_id: 'biz-1', amount: 500000, from_status: 'reserved', reference: REF } })
   h.initiateTransfer.mockReset()
   h.createTransferRecipient.mockReset().mockResolvedValue('RCP_1')
@@ -137,7 +138,7 @@ describe('initiate-business-withdrawal: reservation', () => {
     const r = res()
     await handler({ method: 'POST', body: { ...body, reference: 'mine', p_reference: 'mine' } }, r)
     const [[, args]] = calls('create_business_withdrawal')
-    expect(args).toEqual({ p_business_id: 'biz-1', p_amount_kobo: 500000, p_bank_name: 'GTB', p_bank_code: '058', p_account_number: '0123456789', p_account_name: 'Clinic Ltd', p_initiated_by: 'user-1' })
+    expect(args).toEqual({ p_business_id: 'biz-1', p_amount_kobo: 500000, p_bank_name: 'GTB', p_bank_code: '058', p_account_number: '0123456789', p_account_name: 'Clinic Ltd', p_initiated_by: 'user-1', p_daily_cap_kobo: 2_000_000 }) // a typed-in destination never paid before carries the cooling-off cap
     expect(JSON.stringify(args)).not.toContain('mine')
     expect(h.initiateTransfer).toHaveBeenCalledWith(expect.objectContaining({ reference: REF, amountKobo: 500000, recipientCode: 'RCP_1' }))
     expect(r.statusCode).toBe(200)
@@ -244,5 +245,42 @@ describe('initiate-business-withdrawal: recovery after the balance is reserved',
     const r = res(); await handler(req, r)
     expect(settles()).toHaveLength(0)
     expect(r.statusCode).toBe(200)
+  })
+})
+
+describe('H04: the attempt is recorded BEFORE the provider is asked, and nothing is asked without it', () => {
+  const settleCalls = () => h.rpcCalls.filter(([n]) => n === 'settle_business_withdrawal').map(([, a]) => a)
+
+  it('marks the exact request id as attempted, and only then calls Paystack', async () => {
+    const order = []
+    h.routes.mark_business_withdrawal_transfer_attempt = () => { order.push('mark'); return { data: 'ok' } }
+    h.initiateTransfer.mockImplementation(async () => { order.push('transfer'); return { transferCode: 'TRF_1' } })
+    const r = res()
+    await handler(req, r)
+    expect(order).toEqual(['mark', 'transfer'])
+    expect(h.rpcCalls.find(([n]) => n === 'mark_business_withdrawal_transfer_attempt')[1]).toEqual({ p_request_id: 'bw-1' })
+    expect(r.statusCode).toBe(200)
+  })
+
+  it.each([
+    ['the mark cannot be written', { data: null, error: { message: 'db down' } }],
+    ['the request was settled meanwhile', { data: 'already_failed' }],
+  ])('%s: Paystack is never called and the reservation is released at once', async (_label, answer) => {
+    h.routes.mark_business_withdrawal_transfer_attempt = answer
+    const r = res()
+    await handler(req, r)
+    expect(h.initiateTransfer).not.toHaveBeenCalled()
+    expect(r.statusCode).toBe(503)
+    expect(settleCalls()).toEqual([expect.objectContaining({ p_outcome: 'failed', p_request_id: 'bw-1', p_detail: 'attempt_not_recorded' })])
+  })
+
+  it('a timeout on the transfer call is NEVER refunded by the handler', async () => {
+    h.initiateTransfer.mockRejectedValue(Object.assign(new Error('timeout'), { code: 'timeout', ambiguous: true }))
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const r = res()
+    await handler(req, r)
+    err.mockRestore()
+    expect(settleCalls()).toHaveLength(0)
+    expect(r.body).toMatchObject({ pending: true })
   })
 })

@@ -6,7 +6,7 @@ vi.mock('../../config/supabaseClient.js', () => ({ supabase: { auth: { getSessio
 import PayoutAccountsPanel from './PayoutAccountsPanel.jsx'
 
 function fakeManager(state, over = {}) {
-  const base = { limits: null, loading: false, loadError: '', kyc: { verified: false }, accounts: [], required: false, busy: '', error: '', code: '', codeSent: false, sentTo: '' }
+  const base = { limits: null, loading: false, loadError: '', kycEnabled: true, kyc: { verified: false }, accounts: [], required: false, busy: '', error: '', code: '', codeSent: false, sentTo: '' }
   const s = { ...base, ...state }
   return {
     getState: () => s,
@@ -52,10 +52,12 @@ describe('PayoutAccountsPanel', () => {
     await waitFor(() => expect(screen.getByLabelText(/BVN/).value).toBe('')) // cleared after use
   })
 
-  it('unverified: adding an account is blocked and explained', () => {
+  it('unverified: adding an account is still possible, and identity verification is offered as optional', () => {
     render(<PayoutAccountsPanel {...props(fakeManager({}))} />)
-    expect(screen.getByRole('button', { name: '+ Add account' })).toBeDisabled()
-    expect(screen.getByText(/Verify your identity, then add/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Add account' })).not.toBeDisabled()
+    expect(screen.getByText(/No payout account yet/)).toBeInTheDocument()
+    expect(screen.getByText(/Verify your identity \(optional\)/)).toBeInTheDocument()
+    expect(screen.queryByText(/Verify your identity, then add/)).not.toBeInTheDocument()
   })
 
   it('verified: shows who is verified (last four only) and the empty state', () => {
@@ -136,5 +138,25 @@ describe('PayoutAccountsPanel', () => {
     const notes = screen.getAllByRole('note')
     expect(notes).toHaveLength(1)
     expect(notes[0]).toHaveTextContent(/limited to ₦20,000 in any 24 hours until/)
+  })
+})
+
+describe('PayoutAccountsPanel with identity verification switched OFF (H06)', () => {
+  it('shows no identity, limit or selfie UI at all, and the account list and "Add account" are all there is', () => {
+    const m = fakeManager({ kycEnabled: false, kyc: null, accounts: ACCOUNTS, limits: { tier: 0, dailyCapKobo: null } })
+    render(<PayoutAccountsPanel {...props(m, { showSelfie: true })} />)
+    expect(screen.queryByLabelText(/BVN/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/NIN/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Verify your identity/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Identity verified/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/selfie/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Add account' })).not.toBeDisabled()
+    expect(screen.getByText(/GTBank/)).toBeInTheDocument()
+  })
+
+  it('an empty list still explains how to add an account, with no mention of identity', () => {
+    render(<PayoutAccountsPanel {...props(fakeManager({ kycEnabled: false, kyc: null }))} />)
+    expect(screen.getByText(/No payout account yet/)).toBeInTheDocument()
+    expect(screen.queryByText(/identity/i)).not.toBeInTheDocument()
   })
 })

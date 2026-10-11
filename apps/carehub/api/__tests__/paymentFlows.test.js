@@ -31,7 +31,7 @@ beforeEach(() => {
 
 describe('initiate-plan-payment', () => {
   it('prices the plan on the server, records the intent for the verified business BEFORE Paystack, and charges exactly that', async () => {
-    const res = await post(initiatePlan, { months: 1, callback_url: 'https://app/cb' })
+    const res = await post(initiatePlan, { months: 1, callback_url: 'https://carehub.test/cb' })
     expect(res.statusCode).toBe(200)
     const intent = h.db.data.payment_intents[0]
     expect(intent).toMatchObject({ purpose: 'plan_renewal', application: 'carehub', business_id: 'biz-1', expected_amount: 8333 * 100, metadata: { months: 1, plan: 'growth' }, status: 'pending' })
@@ -41,17 +41,17 @@ describe('initiate-plan-payment', () => {
   })
 
   it('the annual option charges the yearly price (N100,000 for growth)', async () => {
-    await post(initiatePlan, { months: 12, callback_url: 'x' })
+    await post(initiatePlan, { months: 12, callback_url: 'https://carehub.test/cb' })
     expect(h.db.data.payment_intents[0].expected_amount).toBe(100000 * 100)
   })
 
   it('ignores any amount, plan, business or user the client tries to supply', async () => {
-    await post(initiatePlan, { months: 1, callback_url: 'x', amount: 1, price: 1, naira: 1, plan: 'enterprise', business_id: 'someone-else', businessId: 'someone-else' })
+    await post(initiatePlan, { months: 1, callback_url: 'https://carehub.test/cb', amount: 1, price: 1, naira: 1, plan: 'enterprise', business_id: 'someone-else', businessId: 'someone-else' })
     expect(h.db.data.payment_intents[0]).toMatchObject({ business_id: 'biz-1', expected_amount: 833300, metadata: { plan: 'growth' } })
   })
 
   it.each([[3], ['1'], [0], [24], [1.5], [-1], [null], [undefined]])('refuses months = %p without creating an intent or calling Paystack', async (months) => {
-    const res = await post(initiatePlan, { months, callback_url: 'x' })
+    const res = await post(initiatePlan, { months, callback_url: 'https://carehub.test/cb' })
     expect(res.statusCode).toBe(400)
     expect(h.db.data.payment_intents || []).toHaveLength(0)
     expect(h.provider.initializePayment).not.toHaveBeenCalled()
@@ -59,29 +59,29 @@ describe('initiate-plan-payment', () => {
 
   it('refuses a custom plan, an unknown plan, a missing callback and an unverified caller', async () => {
     h.auth = { business: { ...BIZ, plan: 'custom' } }
-    expect((await post(initiatePlan, { months: 1, callback_url: 'x' })).statusCode).toBe(400)
+    expect((await post(initiatePlan, { months: 1, callback_url: 'https://carehub.test/cb' })).statusCode).toBe(400)
     h.auth = { business: { ...BIZ, plan: 'mystery' } }
-    expect((await post(initiatePlan, { months: 1, callback_url: 'x' })).statusCode).toBe(400)
+    expect((await post(initiatePlan, { months: 1, callback_url: 'https://carehub.test/cb' })).statusCode).toBe(400)
     h.auth = { business: { ...BIZ } }
     expect((await post(initiatePlan, { months: 1 })).statusCode).toBe(400)
     h.auth = { error: 'not_logged_in' }
-    expect((await post(initiatePlan, { months: 1, callback_url: 'x' })).statusCode).toBe(401)
+    expect((await post(initiatePlan, { months: 1, callback_url: 'https://carehub.test/cb' })).statusCode).toBe(401)
     expect(h.provider.initializePayment).not.toHaveBeenCalled()
   })
 
   it('closes the intent when Paystack refuses, leaves it open on an ambiguous failure', async () => {
     h.provider.initializePayment.mockRejectedValue(Object.assign(new Error('Invalid key'), { code: 'provider_rejected', ambiguous: false }))
-    expect((await post(initiatePlan, { months: 1, callback_url: 'x' })).statusCode).toBe(502)
+    expect((await post(initiatePlan, { months: 1, callback_url: 'https://carehub.test/cb' })).statusCode).toBe(502)
     expect(h.db.data.payment_intents[0].status).toBe('failed')
     h.db = createFakeSupabase()
     h.provider.initializePayment.mockRejectedValue(Object.assign(new Error('timeout'), { code: 'timeout', ambiguous: true }))
-    await post(initiatePlan, { months: 1, callback_url: 'x' })
+    await post(initiatePlan, { months: 1, callback_url: 'https://carehub.test/cb' })
     expect(h.db.data.payment_intents[0].status).toBe('created')
   })
 
   it('every attempt gets its own reference', async () => {
-    await post(initiatePlan, { months: 1, callback_url: 'x' })
-    await post(initiatePlan, { months: 1, callback_url: 'x' })
+    await post(initiatePlan, { months: 1, callback_url: 'https://carehub.test/cb' })
+    await post(initiatePlan, { months: 1, callback_url: 'https://carehub.test/cb' })
     const [a, b] = h.db.data.payment_intents.map((i) => i.reference)
     expect(a).not.toBe(b)
   })
@@ -265,5 +265,29 @@ describe('verify-appointment-payment', () => {
     expect((await post(verifyAppt, {})).statusCode).toBe(400)
     h.auth = { error: 'no_business' }
     expect((await post(verifyAppt, { reference: REF })).statusCode).toBe(401)
+  })
+})
+
+describe('initiate-plan-payment: where the customer is sent back is never chosen by the browser (F-27)', () => {
+  it.each([
+  ['another host', 'https://evil.example/wallet'],
+  ['a look-alike host', 'https://carehub.test.evil.example/wallet'],
+  ['credentials in the URL', 'https://carehub.test@evil.example/wallet'],
+  ['javascript:', 'javascript:alert(1)'],
+  ['protocol-relative', '//evil.example/wallet'],
+  ['a relative path', '/wallet'],
+  ['plain http', 'http://carehub.test/wallet'],
+])('refuses %s before any intent is created or Paystack is called', async (_label, callback_url) => {
+    const res = await post(initiatePlan, { ...{ months: 1 }, callback_url })
+    expect(res.statusCode).toBe(400)
+    expect(res.body.code).toBe('invalid_callback_url')
+    expect(h.db.data.payment_intents || []).toHaveLength(0)
+    expect(h.provider.initializePayment).not.toHaveBeenCalled()
+  })
+
+  it('passes the validated address to Paystack unchanged', async () => {
+    const res = await post(initiatePlan, { ...{ months: 1 }, callback_url: 'https://carehub.test/wallet?tab=topup' })
+    expect(res.statusCode).toBe(200)
+    expect(h.provider.initializePayment).toHaveBeenCalledWith(expect.objectContaining({ callbackUrl: 'https://carehub.test/wallet?tab=topup' }))
   })
 })

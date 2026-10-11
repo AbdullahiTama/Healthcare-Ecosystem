@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { userOwnsBusiness } from '../_lib/businessOwnership.js'
-import { requestRefund, executeCardRefund } from '@care-ecosystem/shared-payments'
+import { requestRefund, executeCardRefund, notifyRefundRequested, notifyRefundCompletedInline } from '@care-ecosystem/shared-payments'
 import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
 import { applyRefundResult } from '../_lib/refundEffects.js'
 
@@ -157,9 +157,14 @@ export default async function handler(req, res) {
 async function refundCancelledBooking(appointmentId) {
   try {
     const r = await requestRefund(supabase, { cause: 'booking_cancelled', entityType: 'appointment', entityId: appointmentId, reason: 'appointment cancelled' })
-    if (r.outcome === 'completed') return { status: 'completed' }
+    if (r.outcome === 'completed') {
+      await notifyRefundCompletedInline((result) => applyRefundResult(supabase, result), r, { entity_type: 'appointment', entity_id: appointmentId }, paymentLogger)
+      return { status: 'completed' }
+    }
     if (r.outcome === 'requested') {
-      const sent = await executeCardRefund(supabase, getPaystackProvider(), r, { reason: 'Appointment cancelled', logger: paymentLogger, onSettled: (result) => applyRefundResult(supabase, result) })
+      const onSettled = (result) => applyRefundResult(supabase, result)
+      await notifyRefundRequested(onSettled, r, { entity_type: 'appointment', entity_id: appointmentId }, paymentLogger)
+      const sent = await executeCardRefund(supabase, getPaystackProvider(), r, { reason: 'Appointment cancelled', logger: paymentLogger, onSettled })
       return { status: sent.state }
     }
     if (r.outcome === 'already_requested' || r.outcome === 'already_refunded') return { status: 'already' }

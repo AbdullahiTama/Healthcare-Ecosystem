@@ -7,6 +7,8 @@
 // The app supplies `send(message)` (enqueue the email with ITS email service, stamped app 'carehub' so the drain
 // renders the CareHub brand), so this module depends on neither app's email wiring.
 const NGN = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' })
+// Only the last four digits ever reach the outbox (its payload is stored); the template masks again as a second guard.
+const last4 = (n) => { const d = String(n ?? '').replace(/\D/g, ''); return d ? `••••${d.slice(-4)}` : '' }
 
 /**
  * @param {object} deps
@@ -20,12 +22,13 @@ export function createBusinessWithdrawalEffects({ supabase, send, logger = { err
     try {
       await send(message)
     } catch (err) {
-      logger.error('businessWithdrawal.email.failed', { template: message.templateKey, message: err.message })
+      logger.error('email.enqueue_failed', { family: 'business_withdrawal', template: message.templateKey, id: message.sourceId, message: String(err.message).replace(/\S+@\S+/g, '[email]').slice(0, 120) })
     }
   }
 
+  // result.result: 'completed' | 'refunded' (settle_business_withdrawal) | 'in_flight' (the sweep: still moving at the provider)
   return async function applyBusinessWithdrawalResult(result) {
-    if (result?.result !== 'completed' && result?.result !== 'refunded') return
+    if (result?.result !== 'completed' && result?.result !== 'refunded' && result?.result !== 'in_flight') return
     if (!result?.id) return
 
     try {
@@ -43,22 +46,22 @@ export function createBusinessWithdrawalEffects({ supabase, send, logger = { err
         return
       }
 
-      const completed = result.result === 'completed'
+      const kind = result.result === 'completed' ? 'completed' : result.result === 'in_flight' ? 'processing' : 'failed'
       const reference = row.paystack_reference || result.reference || row.id
       await safeSend({
-        templateKey: completed ? 'withdrawal_completed' : 'withdrawal_failed',
+        templateKey: kind === 'completed' ? 'withdrawal_completed' : kind === 'processing' ? 'withdrawal_processing' : 'withdrawal_failed',
         toEmail,
         app: 'carehub',
         payload: {
-          businessName: business?.owner_name || business?.name || '',
+          businessName: business?.name || business?.owner_name || '',
           amount: NGN.format((row.amount || 0) / 100),
           reference,
           bankName: row.bank_name || '',
-          accountNumber: row.account_number || '',
+          accountNumber: last4(row.account_number),
         },
-        subject: completed ? 'CareHub: withdrawal settled' : 'CareHub: withdrawal failed',
+        subject: kind === 'completed' ? 'CareHub: withdrawal settled' : kind === 'processing' ? 'CareHub: your withdrawal is still processing' : 'CareHub: withdrawal failed',
         sourceId: row.id,
-        idempotencyKey: `business-withdrawal-${completed ? 'completed' : 'failed'}:${reference}`,
+        idempotencyKey: `business-withdrawal-${kind}:${reference}`,
       })
     } catch (err) {
       logger.error('businessWithdrawal.email.failed', { id: result.id, message: err.message })

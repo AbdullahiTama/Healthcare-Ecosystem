@@ -47,6 +47,7 @@ beforeEach(() => {
   h.routes.verify_otp = { data: 'ok' }
   h.routes.create_business_withdrawal = { data: { outcome: 'ok', id: 'bw-1', reference: REF, amount_kobo: 500000 } }
   h.routes.attach_business_withdrawal_transfer = { data: 'ok' }
+  h.routes.mark_business_withdrawal_transfer_attempt = { data: 'ok' }
   h.initiateTransfer.mockReset().mockResolvedValue({ transferCode: 'TRF_1' })
   h.createTransferRecipient.mockReset().mockResolvedValue('RCP_1')
   h.checkBalance.mockReset().mockResolvedValue(10_000_000_00)
@@ -146,9 +147,49 @@ describe('Phase 4 (CareHub): cooling-off cap and alerts', () => {
     expect(r.body.message).toMatch(/new, so withdrawals are limited/)
   })
 
-  it('typed-in destinations get no extra cap (unchanged behaviour)', async () => {
+  it('a typed-in destination never paid before is capped like a new account (H02: the saved-account-only bypass is closed)', async () => {
+    await handler({ method: 'POST', body: { ...base, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'GRACE PHARMACY LIMITED' } }, res())
+    expect(sent().p_daily_cap_kobo).toBe(2_000_000)
+  })
+
+  it('the cap is held under the engine ceiling for a typed-in destination too', async () => {
+    h.tables.financial_config.push({ key: 'business_withdrawal_daily_cap_kobo', value: 1_000_000 })
+    await handler({ method: 'POST', body: { ...base, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'GRACE PHARMACY LIMITED' } }, res())
+    expect(sent().p_daily_cap_kobo).toBe(1_000_000)
+  })
+
+  it('a destination this business has already been paid at (completed withdrawal) is known: no extra cap', async () => {
+    h.tables.business_withdrawal_requests = [{ business_id: 'biz-1', bank_code: '058', account_number: '0123456789', status: 'completed' }]
     await handler({ method: 'POST', body: { ...base, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'GRACE PHARMACY LIMITED' } }, res())
     expect(sent()).not.toHaveProperty('p_daily_cap_kobo')
+  })
+
+  it('history of ANOTHER business does not make the destination known', async () => {
+    h.tables.business_withdrawal_requests = [{ business_id: 'biz-9', bank_code: '058', account_number: '0123456789', status: 'completed' }]
+    await handler({ method: 'POST', body: { ...base, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'GRACE PHARMACY LIMITED' } }, res())
+    expect(sent().p_daily_cap_kobo).toBe(2_000_000)
+  })
+
+  it('the day after the owner changed the PIN, even an established saved account is capped, and the owner is told why', async () => {
+    h.tables.withdrawal_pins = [{ user_id: 'user-1', pin_set_at: new Date(Date.now() - 3_600_000).toISOString() }]
+    h.routes.create_business_withdrawal = { data: { outcome: 'daily_limit' } }
+    const r = res()
+    await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1' } }, r)
+    expect(sent().p_daily_cap_kobo).toBe(2_000_000)
+    expect(r.body).toMatchObject({ error: 'daily_limit', limitReason: 'pin_changed' })
+    expect(r.body.message).toMatch(/PIN was changed recently/)
+  })
+
+  it('a bank that cannot confirm names is accepted with the typed name but is always treated as new', async () => {
+    h.tables.business_withdrawal_requests = [{ business_id: 'biz-1', bank_code: '058', account_number: '0123456789', status: 'completed' }]
+    h.resolveAccount.mockRejectedValue(Object.assign(new Error('x'), { paystackMessage: 'bank does not support resolving' }))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const r = res()
+    await handler({ method: 'POST', body: { ...base, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'GRACE PHARMACY LIMITED' } }, r)
+    expect(warn.mock.calls.map((c) => c[0]).join(' ')).toContain('withdrawal.unverified_destination')
+    warn.mockRestore()
+    expect(r.statusCode).toBe(200)
+    expect(sent().p_daily_cap_kobo).toBe(2_000_000)
   })
 
   it('the wrong PIN that locks it warns the owner by email', async () => {

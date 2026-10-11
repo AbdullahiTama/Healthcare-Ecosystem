@@ -32,6 +32,15 @@ describe('security emails', () => {
     expect(m.html).toContain('Zenith Bank')
     expect(m.html).toContain('4321')
   })
+
+  it('a default-account change has its own wording, and still shows only the bank and last four digits', () => {
+    const m = renderPayoutAccountEmail({ app: 'carefind', event: 'default', bankName: 'Guaranty Trust Bank', accountLast4: '6789' })
+    expect(m.subject).toContain('default payout account')
+    expect(m.html).toContain('set as your default payout account')
+    expect(m.html).toContain('Guaranty Trust Bank')
+    expect(m.html).toContain('6789')
+    expect(m.html).not.toMatch(/\d{10}/)
+  })
 })
 
 describe('PIN-locked alert', () => {

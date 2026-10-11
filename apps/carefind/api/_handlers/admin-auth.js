@@ -350,7 +350,7 @@ async function handleRequest(req, res) {
 
     const { data: wdRow } = await supabase
       .from('withdrawal_requests')
-      .select('id, status, paystack_reference, paystack_transfer_code, created_at')
+      .select('id, status, paystack_reference, paystack_transfer_code, created_at, updated_at')
       .eq('id', id)
       .maybeSingle()
     if (!wdRow) return res.status(400).json({ error: 'Withdrawal request not found' })

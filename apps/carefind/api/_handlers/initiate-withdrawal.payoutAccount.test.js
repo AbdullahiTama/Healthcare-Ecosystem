@@ -26,19 +26,24 @@ vi.mock('../_lib/verifyUser.js', () => ({ verifyUser: async () => ({ id: 'user-1
 const mailer = vi.hoisted(() => ({ sendPinLocked: vi.fn(async () => ({ ok: true })) }))
 vi.mock('../_lib/securityMailer.js', () => ({ getSecurityMailer: async () => mailer }))
 vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
-vi.mock('../_lib/pinCrypto.js', () => ({ hashPin: () => 'h', verifyPin: () => true, isValidPin: () => true }))
-vi.mock('../_lib/trustLevels.js', () => ({ getRequiredAuth: () => ['pin'], isInstantEligible: () => false, getDailyCap: () => 50 }))
+vi.mock('../_lib/trustLevels.js', () => ({ getRequiredAuth: () => ['pin'], isInstantEligible: () => false, getDailyCap: () => h.trustCap ?? 50 }))
 vi.mock('../_lib/paystackTransfer.js', () => ({
   createTransferRecipient: vi.fn(async () => 'RCP_1'),
   initiateTransfer: vi.fn(async () => ({ transferCode: 'TRF_1' })),
   checkBalance: vi.fn(async () => 10_000_000_00),
   normalizeAccountName: (n) => String(n).trim().toLowerCase(),
-  resolveAccount: async () => h.resolved,
+  resolveAccount: async () => { if (h.resolveError) throw h.resolveError; return h.resolved },
 }))
 
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from './initiate-withdrawal.js'
+import { hashPin, randomPinSalt } from '@care-ecosystem/shared-payments'
+
+// The shared PIN gate (checkWithdrawalPin) compares against a real scrypt hash, so the stored row must be a real one.
+const SALT = randomPinSalt()
+const pinRow = (extra = {}) => ({ pin_hash: hashPin('1234', SALT), pin_salt: SALT, locked_until: null, failed_attempts: 0, ...extra })
 import { enqueue } from '../_lib/emailService.js'
+import { clearFinancialConfigCache } from '../_lib/financialConfig.js'
 
 const REF = 'cf_wd_0123456789abcdef0123456789abcdef'
 const SAVED = { id: 'pa-1', owner_type: 'user', owner_id: 'user-12345678', status: 'verified', bank_code: '058', bank_name: 'Guaranty Trust Bank', account_number: '0123456789', account_name: 'ADA CHINYERE OBI', verified_at: '2020-01-01T00:00:00Z' }
@@ -47,14 +52,18 @@ const created = (name) => h.rpcCalls.filter(([n]) => n === name)
 
 beforeEach(() => {
   h.rpcCalls.length = 0
+  h.trustCap = undefined
+  h.resolveError = undefined
+  clearFinancialConfigCache() // the 60 s cache would hide a changed financial_config table between tests
   h.tables = { payout_accounts: [SAVED], financial_config: [{ key: 'payout_account_required', value: 0 }, { key: 'coin_value_kobo', value: 20000 }], kyc_verifications: [{ user_id: 'user-12345678', tier: 2 }] }
   h.resolved = { accountName: 'ADA CHINYERE OBI' }
   h.routes.get_withdrawal_trust = { data: { trust_level: 'new' } }
-  h.routes.get_withdrawal_pin = { data: [{ pin_hash: 'x', pin_salt: 's', locked_until: null }] }
+  h.routes.get_withdrawal_pin = { data: [pinRow()] }
   h.routes.verify_withdrawal_pin = { data: true }
   h.routes.verify_otp = { data: 'ok' }
   h.routes.create_withdrawal = { data: { outcome: 'ok', id: 'wd-1', reference: REF, coins: 10, payout_kobo: 160000 } }
   h.routes.attach_withdrawal_transfer = { data: 'ok' }
+  h.routes.mark_withdrawal_transfer_attempt = { data: 'ok' }
 })
 
 describe('initiate-withdrawal with a saved payout account', () => {
@@ -128,10 +137,12 @@ describe('payout_account_required', () => {
   })
 })
 
-describe('Phase 4: a verified identity lifts the trust ladder; a new account lowers it (all via the engine cap)', () => {
+// Identity verification is OFF by default (H06). These cases are for the optional mode: financial_config.kyc_enabled = 1.
+describe('Phase 4 (identity verification switched ON): a verified identity lifts the trust ladder; a new account lowers it (all via the engine cap)', () => {
   const body = { amount: 10, pin: '1234', otp: '123456', payoutAccountId: 'pa-1' }
   const capSent = () => created('create_withdrawal')[0][1].p_daily_cap_coins
-  const withLimits = (rows) => { h.tables.financial_config = [{ key: 'payout_account_required', value: 0 }, { key: 'coin_value_kobo', value: 20000 }, ...rows] }
+  const withLimits = (rows) => { h.tables.financial_config = [{ key: 'payout_account_required', value: 0 }, { key: 'coin_value_kobo', value: 20000 }, { key: 'kyc_enabled', value: 1 }, ...rows] }
+  beforeEach(() => { withLimits([]) })
 
   it('tier 2: a new user (trust cap 50) is lifted to N500,000 = 2500 coins', async () => {
     await handler({ method: 'POST', body }, res())
@@ -203,10 +214,10 @@ describe('Phase 4: alerts', () => {
   it('the wrong PIN that locks it (5th in a row) emails the owner; earlier wrong PINs do not', async () => {
     mailer.sendPinLocked.mockClear()
     h.routes.verify_withdrawal_pin = { data: false }
-    h.routes.get_withdrawal_pin = { data: [{ pin_hash: 'x', pin_salt: 's', locked_until: null, failed_attempts: 3 }] }
+    h.routes.get_withdrawal_pin = { data: [pinRow({ failed_attempts: 3 })] }
     await handler({ method: 'POST', body: { amount: 10, pin: '0000', payoutAccountId: 'pa-1' } }, res())
     expect(mailer.sendPinLocked).not.toHaveBeenCalled()
-    h.routes.get_withdrawal_pin = { data: [{ pin_hash: 'x', pin_salt: 's', locked_until: null, failed_attempts: 4 }] }
+    h.routes.get_withdrawal_pin = { data: [pinRow({ failed_attempts: 4 })] }
     const r = res()
     await handler({ method: 'POST', body: { amount: 10, pin: '0000', payoutAccountId: 'pa-1' } }, r)
     expect(r.statusCode).toBe(403)
@@ -253,5 +264,149 @@ describe('the emailed withdrawal code (third factor)', () => {
     await handler({ method: 'POST', body: { ...body, otp: '123456' } }, r)
     expect(r.statusCode).toBe(403)
     expect(created('verify_otp')).toHaveLength(0)
+  })
+})
+
+// H02: the cooling-off cap follows the DESTINATION and the PIN age. A typed-in destination used to skip it entirely.
+describe('H02: no request shape avoids the new-destination and PIN-change caps', () => {
+  const COIN = 20000
+  const HOUR = 3_600_000
+  const typed = { amount: 10, pin: '1234', otp: '123456', bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'ADA CHINYERE OBI' }
+  const paidBefore = { user_id: 'user-12345678', bank_code: '058', account_number: '0123456789', status: 'completed' }
+  const capOf = () => created('create_withdrawal')[0][1].p_daily_cap_coins
+  const send = async (body = typed) => { const r = res(); await handler({ method: 'POST', body }, r); return r }
+
+  beforeEach(() => {
+    h.trustCap = 1000 // a veteran, so the cooling-off cap is the binding number when it applies
+    h.tables.withdrawal_requests = []
+    h.tables.withdrawal_pins = []
+  })
+
+  it('a typed-in destination never paid before is capped at N20,000 (100 coins)', async () => {
+    const r = await send()
+    expect(r.statusCode).toBe(200)
+    expect(capOf()).toBe(2_000_000 / COIN)
+  })
+
+  it('the person is told why when the engine says daily_limit', async () => {
+    h.routes.create_withdrawal = { data: { outcome: 'daily_limit' } }
+    const r = await send()
+    expect(r.statusCode).toBe(429)
+    expect(r.body.limitReason).toBe('new_destination')
+    expect(r.body.message).toMatch(/first withdrawal to this bank account/)
+  })
+
+  it('a destination already paid (completed withdrawal in history) keeps the trust cap', async () => {
+    h.tables.withdrawal_requests = [paidBefore]
+    await send()
+    expect(capOf()).toBe(1000)
+  })
+
+  it('a different account number, or a failed earlier withdrawal, does not make it known', async () => {
+    h.tables.withdrawal_requests = [{ ...paidBefore, account_number: '0999999999' }, { ...paidBefore, status: 'failed' }]
+    await send()
+    expect(capOf()).toBe(100)
+  })
+
+  it('the day after a PIN change even a known destination is capped, and the message names the PIN', async () => {
+    h.tables.withdrawal_requests = [paidBefore]
+    h.tables.withdrawal_pins = [{ user_id: 'user-12345678', pin_set_at: new Date(Date.now() - 2 * HOUR).toISOString() }]
+    h.routes.create_withdrawal = { data: { outcome: 'daily_limit' } }
+    const r = await send()
+    expect(created('create_withdrawal')[0][1].p_daily_cap_coins).toBe(100)
+    expect(r.body.limitReason).toBe('pin_changed')
+  })
+
+  it('an old PIN change no longer caps', async () => {
+    h.tables.withdrawal_requests = [paidBefore]
+    h.tables.withdrawal_pins = [{ user_id: 'user-12345678', pin_set_at: new Date(Date.now() - 30 * HOUR).toISOString() }]
+    await send()
+    expect(capOf()).toBe(1000)
+  })
+
+  it('a bank that cannot confirm names is accepted with the typed name but always treated as new', async () => {
+    h.tables.withdrawal_requests = [paidBefore]
+    h.resolveError = Object.assign(new Error('x'), { paystackMessage: 'bank does not support resolving' })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const r = await send()
+    expect(warn.mock.calls.map((c) => c[0]).join(' ')).toContain('withdrawal.unverified_destination')
+    warn.mockRestore()
+    h.resolveError = undefined
+    expect(r.statusCode).toBe(200)
+    expect(capOf()).toBe(100)
+  })
+
+  it('a saved account past its window with no history is known; a young one is capped', async () => {
+    const old = res()
+    await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', payoutAccountId: 'pa-1' } }, old)
+    expect(capOf()).toBe(1000) // identity verification is off (default): no tier lift, the veteran trust cap stands; the account is settled so nothing lowers it
+    h.rpcCalls.length = 0
+    h.tables.payout_accounts = [{ ...SAVED, verified_at: new Date(Date.now() - HOUR).toISOString() }]
+    await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', payoutAccountId: 'pa-1' } }, res())
+    expect(capOf()).toBe(100)
+  })
+
+  it('the payoutAccountId of an account the person does not have is refused, never treated as typed-in', async () => {
+    const r = await send({ ...typed, payoutAccountId: 'someone-elses' })
+    expect(r.statusCode).toBe(400)
+    expect(r.body.code).toBe('payout_account_not_found')
+    expect(created('create_withdrawal')).toHaveLength(0)
+  })
+
+  it('if the limits cannot be decided nothing is reserved (fail closed, 503)', async () => {
+    h.tables.financial_config = []
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const r = await send()
+    err.mockRestore()
+    expect(r.statusCode).toBe(503)
+    expect(r.body.code).toBe('limits_unavailable')
+    expect(created('create_withdrawal')).toHaveLength(0)
+  })
+})
+
+// H06: with identity verification OFF (the default) a withdrawal needs no KYC row, no Dojah configuration, and no KYC row can
+// change what a person may withdraw.
+describe('H06: identity verification switched OFF (the default)', () => {
+  const body = { amount: 10, pin: '1234', otp: '123456', payoutAccountId: 'pa-1' }
+  const capSent = () => created('create_withdrawal')[0][1].p_daily_cap_coins
+
+  beforeEach(() => {
+    delete process.env.DOJAH_APP_ID
+    delete process.env.DOJAH_SECRET_KEY
+    delete process.env.KYC_HASH_SECRET
+  })
+
+  it('a withdrawal to a saved account works with no KYC row at all and no Dojah configuration', async () => {
+    h.tables.kyc_verifications = []
+    const r = res()
+    await handler({ method: 'POST', body }, r)
+    expect(r.statusCode).toBe(200)
+    expect(capSent()).toBe(50) // the trust ladder, nothing else
+  })
+
+  it('a person whose KYC row says tier 2 gets NO lift: the number is the trust cap, and the KYC table is never read', async () => {
+    h.tables.kyc_verifications = [{ user_id: 'user-12345678', tier: 2 }]
+    let kycRead = false
+    const from = h.client.from
+    h.client.from = (t) => { if (t === 'kyc_verifications') kycRead = true; return from(t) }
+    await handler({ method: 'POST', body }, res())
+    h.client.from = from
+    expect(capSent()).toBe(50)
+    expect(kycRead).toBe(false)
+  })
+
+  it('a typed-in destination works the same way (KYC is not part of it)', async () => {
+    h.tables.kyc_verifications = []
+    const r = res()
+    await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'ADA CHINYERE OBI' } }, r)
+    expect(r.statusCode).toBe(200)
+  })
+
+  it('and with payout_account_required = 1 a saved account is all that is needed: no identity step anywhere', async () => {
+    h.tables.financial_config = [{ key: 'payout_account_required', value: 1 }, { key: 'coin_value_kobo', value: 20000 }]
+    h.tables.kyc_verifications = []
+    const r = res()
+    await handler({ method: 'POST', body }, r)
+    expect(r.statusCode).toBe(200)
   })
 })

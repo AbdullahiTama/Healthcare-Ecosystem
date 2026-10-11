@@ -148,12 +148,18 @@ describe('refund webhooks settle through the refund engine', () => {
     expect(h.refundApplied[0]).toMatchObject({ result: 'completed', id: 'rf1', reference: 'rf_1' })
   })
 
-  it('only THIS delivery flipping the refund completed notifies the payer; replays and failures notify nobody', async () => {
-    for (const result of ['already_completed', 'failed', 'not_found']) {
+  it('only THIS delivery flipping the refund (completed, or failed) notifies the payer; replays and unknown refunds notify nobody', async () => {
+    for (const result of ['already_completed', 'already_failed', 'not_found']) {
       h.rpcImpl = answer(result)
       await post(ev('refund.processed'))
     }
     expect(h.refundApplied).toEqual([])
+    // the delivery that flips it completed, and the one that flips it failed, each notify once, with what changed
+    h.rpcImpl = answer('completed')
+    await post(ev('refund.processed'))
+    h.rpcImpl = answer('failed')
+    await post(ev('refund.failed'))
+    expect(h.refundApplied.map((r) => r.result)).toEqual(['completed', 'failed'])
   })
 
   it('refund.failed fails it (the business is restored by the database); pending/processing only mark it in flight', async () => {

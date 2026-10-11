@@ -1,5 +1,8 @@
 import { checkWithdrawalPin } from './pin.js'
+import { clientIp } from './otp.js'
+import { sendSecurityAlert } from './alerts.js'
 import { kycStatus, verifyIdentity, verifySelfie } from './kyc/identity.js'
+import { isKycEnabled } from './withdrawalLimits.js'
 import {
   addPayoutAccount, listPayoutAccounts, removePayoutAccount, sendPayoutAccountOtp, setDefaultPayoutAccount,
 } from './payoutAccounts.js'
@@ -25,8 +28,17 @@ export function createKycHandler({ supabase, authenticate, getProvider }) {
     if (auth.error) return res.status(auth.status || 401).json({ error: auth.error })
     const { user } = auth
     const body = req.body || {}
+    const action = subPath(req)
 
-    switch (subPath(req)) {
+    // H06: identity verification is OFF unless financial_config.kyc_enabled = 1. While it is off nothing here reads a KYC
+    // row, constructs the provider or can cost a paid lookup; status answers "not enabled" so an older client keeps working.
+    if (!(await isKycEnabled(supabase))) {
+      if (action === 'status') return res.status(200).json({ enabled: false, verified: false, tier: 0, bvnLast4: null, ninLast4: null, legalName: null, selfieVerified: false })
+      if (action === 'verify' || action === 'selfie') return res.status(404).json({ error: 'Identity verification is not available.', code: 'kyc_disabled' })
+      return res.status(404).json({ error: 'Unknown verification action' })
+    }
+
+    switch (action) {
       case 'status':
         return send(res, await kycStatus(supabase, user.id))
       case 'verify':
@@ -45,7 +57,7 @@ export function createPayoutAccountsHandler({ supabase, authenticate, resolveAcc
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const auth = await authenticate(req)
     if (auth.error) return res.status(auth.status || 401).json({ error: auth.error })
-    const { user, ownerType, ownerId, businessName } = auth
+    const { user, ownerType, ownerId } = auth
     const body = req.body || {}
     const owner = { ownerType, ownerId }
 
@@ -54,21 +66,21 @@ export function createPayoutAccountsHandler({ supabase, authenticate, resolveAcc
         return send(res, await listPayoutAccounts(supabase, { ...owner, userId: user.id }))
 
       case 'otp':
-        return send(res, await sendPayoutAccountOtp({ supabase, user, mailer: await getMailer() }))
+        return send(res, await sendPayoutAccountOtp({ supabase, user, mailer: await getMailer(), ip: clientIp(req) }))
 
       case 'add':
         return send(res, await addPayoutAccount({
-          supabase, user, ...owner, businessName, resolveAccount, banks, mailer: await getMailer(),
+          supabase, user, ...owner, resolveAccount, banks, mailer: await getMailer(),
           bankCode: body.bankCode, accountNumber: body.accountNumber, otp: body.otp,
         }))
 
       case 'default':
-        return send(res, await setDefaultPayoutAccount({ supabase, ...owner, id: body.id }))
+        return send(res, await setDefaultPayoutAccount({ supabase, user, ...owner, id: body.id, mailer: await getMailer() }))
 
       case 'remove': {
         // Removing a payout account changes where money can go, so it needs the same second factor as withdrawing.
         const pin = await checkWithdrawalPin(supabase, user.id, body.pin, {
-          onLocked: async () => (await getMailer()).sendPinLocked({ to: user.email }),
+          onLocked: () => sendSecurityAlert('pin_locked', async () => (await getMailer()).sendPinLocked({ to: user.email })),
         })
         if (!pin.ok) return res.status(pin.status).json({ error: pin.error, code: pin.code, ...(pin.code === 'pin_not_set' ? { needsPin: true } : {}) })
         return send(res, await removePayoutAccount({ supabase, user, ...owner, id: body.id, mailer: await getMailer() }))

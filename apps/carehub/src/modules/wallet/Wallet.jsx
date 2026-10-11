@@ -9,7 +9,7 @@ import BankPicker from './BankPicker.jsx'
 import { createPayoutManager, rankBanks } from '@care-ecosystem/shared-payout-ui'
 import { startBusinessWithdrawal, withdrawalErrorMessage } from './withdrawalApi'
 import { authClient } from '../../lib/authClient'
-import { initiateWalletTopup, verifyWalletTopup, goToPaystack, MIN_TOPUP_KOBO, MAX_TOPUP_KOBO } from './topupApi'
+import { initiateWalletTopup, verifyWalletTopup, goToPaystack, fetchTopupFeeRate, MIN_TOPUP_KOBO, MAX_TOPUP_KOBO } from './topupApi'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Pill, Inp, GhostBtn, TealBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
@@ -36,6 +36,8 @@ export default function Wallet({ brand, role }) {
   const [showTopup, setShowTopup] = useState(false)
   const [topupAmount, setTopupAmount] = useState('')
   const [topupStarting, setTopupStarting] = useState(false)
+  // The processing fee rate on top-ups as the server reports it (null until known; the server decides the charge).
+  const [topupFeeRate, setTopupFeeRate] = useState(null)
   const [banks, setBanks] = useState([])
   const [banksStatus, setBanksStatus] = useState('loading')
   // Saved, identity-verified payout accounts (the safe way to say where the money goes).
@@ -202,6 +204,17 @@ export default function Wallet({ brand, role }) {
     } catch (e) { showToast('Network error.', { type: 'error' }) }
     setWithdrawing(false)
   }
+
+  // Ask the server for the current fee rate when the top-up dialog opens (nothing is created).
+  useEffect(() => {
+    if (!showTopup || topupFeeRate !== null) return undefined
+    let cancelled = false
+    fetchTopupFeeRate().then((out) => {
+      const rate = out?.data?.fee_rate
+      if (!cancelled && out?.ok && typeof rate === 'number' && rate >= 0 && rate <= 1) setTopupFeeRate(rate)
+    })
+    return () => { cancelled = true }
+  }, [showTopup, topupFeeRate])
 
   async function handleTopup() {
     const amountKobo = Math.round(parseFloat(topupAmount) * 100)
@@ -414,6 +427,19 @@ export default function Wallet({ brand, role }) {
                 helperText={topupHint}
                 required
               />
+              {topupValid && topupFeeRate !== null && topupFeeRate > 0 && (() => {
+                const feeKobo = Math.round(topupKobo * topupFeeRate)
+                return (
+                  <div role="status" aria-live="polite" style={{ fontSize: '12px', color: gray500, background: tealMist, borderRadius: '10px', padding: '10px 12px', lineHeight: 1.7 }}>
+                    <div>Wallet receives: <strong>{naira(topupKobo)}</strong></div>
+                    <div>Processing fee ({Math.round(topupFeeRate * 1000) / 10}%): <strong>{naira(feeKobo)}</strong></div>
+                    <div>You pay: <strong>{naira(topupKobo + feeKobo)}</strong></div>
+                  </div>
+                )
+              })()}
+              {topupFeeRate !== null && topupFeeRate > 0 && !topupValid && (
+                <div style={{ fontSize: '12px', color: gray500 }}>A {Math.round(topupFeeRate * 1000) / 10}% processing fee is added to the amount at checkout.</div>
+              )}
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
                 <GhostBtn onClick={() => { setShowTopup(false); setTopupAmount(''); setTopupStarting(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
                 <TealBtn onClick={handleTopup} disabled={!topupValid || topupStarting} style={{ flex: 1, padding: '12px', opacity: (!topupValid || topupStarting) ? 0.6 : 1 }}>{topupStarting ? 'Opening Paystack...' : 'Continue'}</TealBtn>

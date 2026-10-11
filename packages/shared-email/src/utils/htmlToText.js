@@ -2,9 +2,9 @@
 // renderer; it preserves link destinations and paragraph breaks, strips tags,
 // and decodes the entities templates actually emit.
 export function htmlToText(html) {
-  if (!html) return ''
+  if (!html) return '' // If the input is empty or null, return an empty string
   return String(html)
-    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<!--[\s\S]*?-->/g, '') 
     .replace(/<head[\s\S]*?<\/head>/gi, '')
     .replace(/<div[^>]*display:none[^>]*>[\s\S]*?<\/div>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')

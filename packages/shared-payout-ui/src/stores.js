@@ -114,7 +114,7 @@ export function createPinSetup({ getToken, basePath = '/api' }) {
 //   busy ('' | 'verify' | 'otp' | 'add' | 'default' | 'remove') | error | code (server error code) | codeSent / sentTo
 export function createPayoutManager({ getToken, basePath = '/api' }) {
   const store = createStore({
-    loading: true, loadError: '', kyc: null, accounts: [], required: false, limits: null,
+    loading: true, loadError: '', kyc: null, kycEnabled: false, accounts: [], required: false, limits: null,
     busy: '', error: '', code: '', codeSent: false, sentTo: '',
   })
 
@@ -127,9 +127,19 @@ export function createPayoutManager({ getToken, basePath = '/api' }) {
   async function load() {
     store.set({ loading: true, loadError: '' })
     try {
-      const [k, a] = await Promise.all([authed(api.kycStatus), authed(api.listPayoutAccounts)])
-      if (!k.ok || !a.ok) throw new Error('load')
-      store.set({ loading: false, kyc: k.data, accounts: a.data.accounts || [], required: Boolean(a.data.required), limits: a.data.limits || null })
+      // The account list IS the screen. Identity verification is a switch-gated extra (H06): it is asked about only when the
+      // server says it is on, and a failure there never stops the accounts from loading.
+      const a = await authed(api.listPayoutAccounts)
+      if (!a.ok) throw new Error('load')
+      const kycEnabled = Boolean(a.data.kycEnabled)
+      let kyc = null
+      if (kycEnabled) {
+        try {
+          const k = await authed(api.kycStatus)
+          if (k.ok) kyc = k.data
+        } catch { /* optional */ }
+      }
+      store.set({ loading: false, kyc, kycEnabled, accounts: a.data.accounts || [], required: Boolean(a.data.required), limits: a.data.limits || null })
     } catch {
       store.set({ loading: false, loadError: 'Could not load your payout details. Try again.' })
     }

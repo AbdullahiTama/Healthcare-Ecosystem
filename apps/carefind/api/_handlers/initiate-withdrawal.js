@@ -1,11 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
-import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
-import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount } from '../_lib/paystackTransfer.js'
+import { createTransferRecipient, initiateTransfer, checkBalance, resolveAccount } from '../_lib/paystackTransfer.js'
 import { getRequiredAuth, isInstantEligible, getDailyCap } from '../_lib/trustLevels.js'
 import { reconcileWithdrawal } from '../_lib/withdrawalRecovery.js'
-import { settleWithdrawal, checkOtp, OTP_PURPOSES, PIN_LOCK_AFTER, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForSavedAccount, applyLimits, limitMessage } from '@care-ecosystem/shared-payments'
+import { settleWithdrawal, checkOtp, checkWithdrawalPin, verifyBankAccount, sendSecurityAlert, OTP_PURPOSES, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForDestination, applyLimits, limitMessage } from '@care-ecosystem/shared-payments'
 import { getFinancialConfig } from '../_lib/financialConfig.js'
 import { getSecurityMailer } from '../_lib/securityMailer.js'
 
@@ -45,54 +44,20 @@ export default async function handler(req, res) {
   const trustLevel = trust?.trust_level || 'new'
   const requiredAuth = getRequiredAuth(trustLevel, coins)
 
-  // The PIN is the second factor; the email OTP below is the third. Device trust used to stand in
-  // for the PIN, but the client's `deviceToken` was never compared with a stored device, so any
-  // non-empty string passed (financial audit F-02). Re-introduce it only with a server-stored,
-  // hashed, expiring token.
-  const hasPin = !!pin
-
-  if (!hasPin) {
+  // The PIN is the second factor; the email OTP below is the third. The gate is the shared one (CareHub uses the same):
+  // format, lockout, constant-time compare, and the owner alert when THIS wrong attempt locks the PIN.
+  if (!pin) {
     return res.status(400).json({
       error: 'Authentication required',
       trustLevel,
       requiredAuth,
     })
   }
-
-  if (hasPin) {
-    if (!isValidPin(pin)) {
-      return res.status(400).json({ error: 'Withdrawal PIN must be 4-6 digits' })
-    }
-
-    const { data: pinRows, error: pinFetchError } = await supabase.rpc('get_withdrawal_pin', {
-      p_user_id: user.id,
-    })
-    if (pinFetchError) {
-      return res.status(500).json({ error: 'Could not verify withdrawal PIN' })
-    }
-    const storedPin = Array.isArray(pinRows) ? pinRows[0] : undefined
-    if (!storedPin || !storedPin.pin_hash) {
-      return res.status(400).json({ error: 'Set a withdrawal PIN first' })
-    }
-    if (storedPin.locked_until && new Date(storedPin.locked_until).getTime() > Date.now()) {
-      const minutes = Math.max(1, Math.ceil((new Date(storedPin.locked_until).getTime() - Date.now()) / 60000))
-      return res.status(403).json({ error: `Too many failed attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` })
-    }
-
-    const attemptHash = hashPin(pin, storedPin.pin_salt)
-    const locallyMatches = verifyPin(pin, storedPin.pin_salt, storedPin.pin_hash)
-    const { data: pinVerified, error: pinVerifyError } = await supabase.rpc('verify_withdrawal_pin', {
-      p_user_id: user.id,
-      p_pin_hash: attemptHash,
-      p_pin_salt: storedPin.pin_salt,
-    })
-    if (pinVerifyError || !locallyMatches || pinVerified !== true) {
-      // This wrong attempt was the one that locked the PIN (verify_withdrawal_pin locks on the 5th): warn the owner.
-      if (!pinVerifyError && Number(storedPin.failed_attempts) + 1 >= PIN_LOCK_AFTER && user.email) {
-        getSecurityMailer().then((m) => m.sendPinLocked({ to: user.email })).catch(() => {})
-      }
-      return res.status(403).json({ error: 'Incorrect withdrawal PIN.' })
-    }
+  const pinCheck = await checkWithdrawalPin(supabase, user.id, pin, {
+    onLocked: () => (user.email ? sendSecurityAlert('pin_locked', async () => (await getSecurityMailer()).sendPinLocked({ to: user.email })) : null),
+  })
+  if (!pinCheck.ok) {
+    return res.status(pinCheck.status).json({ error: pinCheck.error, code: pinCheck.code, ...(pinCheck.code === 'pin_not_set' ? { needsPin: true } : {}) })
   }
 
   // Third factor: a fresh code emailed to the account, checked LAST - after the PIN and before the account is resolved
@@ -101,53 +66,39 @@ export default async function handler(req, res) {
   const otpCheck = await checkOtp({ supabase, userId: user.id, purpose: OTP_PURPOSES.WITHDRAWAL, code: otp })
   if (!otpCheck.ok) return res.status(otpCheck.status).json({ error: otpCheck.error, code: otpCheck.code })
 
-  // Verify the typed account name actually belongs to the account number BEFORE any money is reserved.
-  // If Paystack reports the bank does not support / cannot resolve the account, allow the manually-entered
-  // name (same UX as /api/resolve-account's unsupportedBank branch).
-  let verifiedAccountName
-  try {
-    let resolved
-    let isUnsupportedBank = false
-    try {
-      resolved = await resolveAccount({ bankCode, accountNumber })
-    } catch (err) {
-      const msg = err.paystackMessage || err.message || ''
-      isUnsupportedBank = /not supported|does not support|unable to resolve|cannot resolve/i.test(msg)
-      if (!isUnsupportedBank) {
-        return res.status(400).json({ error: 'Could not verify account details. Check the bank and account number and try again.' })
-      }
-      verifiedAccountName = String(accountName).trim()
-    }
-    if (!isUnsupportedBank) {
-      if (!resolved || !resolved.accountName) {
-        return res.status(400).json({ error: 'Could not verify account details. Check the bank and account number and try again.' })
-      }
-      const submitted = normalizeAccountName(accountName)
-      const resolvedName = normalizeAccountName(resolved.accountName)
-      if (!submitted || submitted !== resolvedName) {
-        return res.status(400).json({ error: 'Account name does not match the account number. Use the name registered with your bank.' })
-      }
-      verifiedAccountName = resolved.accountName
-    }
-  } catch (err) {
-    return res.status(502).json({ error: err.message || 'Payment provider error' })
+  // Verify the account name belongs to the account number BEFORE any money is reserved (shared with CareHub). A bank that
+  // cannot confirm names is accepted with the typed name, but that destination is then treated as NEW below.
+  const account = await verifyBankAccount(resolveAccount, { bankCode, accountNumber, accountName })
+  if (!account.ok) return res.status(account.status).json({ error: account.error })
+  const verifiedAccountName = account.accountName
+  const unverifiedDestination = account.unverified === true
+  if (unverifiedDestination) {
+    console.warn(JSON.stringify({ event: 'withdrawal.unverified_destination', app: 'carefind', bankCode: String(bankCode) }))
   }
 
   // Reserve: ONE atomic database step checks the balance and the rolling 24h cap, debits the coins through the
   // ledger, creates the request and derives its Paystack reference from the request id. The amount paid out
   // (after the fee) is computed there from financial_config, not here. No Paystack call happens while any lock
   // is held: the reservation has committed before the first provider call below.
-  // Limits for money sent to a SAVED account. A verified identity LIFTS the trust ladder (the cap is the higher of the
-  // person's trust cap and their KYC-tier ceiling); a NEW account then lowers it for the cooling-off period. The result
-  // is handed to the engine as its own rolling-24h cap, so it is enforced atomically under the wallet lock.
+  // Limits for this destination (H02). The trust ladder is the base; a verified identity can LIFT it (saved accounts only,
+  // as before); a destination the person has never been paid at, and the day after a PIN change, LOWER it to the
+  // cooling-off cap. This applies to a typed-in destination exactly as to a saved one: there is no request shape that
+  // avoids it. The result goes to the engine as its own rolling-24h cap, enforced atomically under the wallet lock.
   let dailyCapCoins = getDailyCap(trustLevel)
   let extraLimit = null
-  if (saved) {
-    const limits = await limitsForSavedAccount(supabase, { ownerType: 'user', userId: user.id, account: saved })
+  try {
+    const limits = await limitsForDestination(supabase, {
+      ownerType: 'user', userId: user.id, historyOwnerId: user.id,
+      destination: { bankCode, accountNumber }, saved, unverified: unverifiedDestination,
+    })
     const coinValueKobo = await getFinancialConfig(supabase, 'coin_value_kobo')
     const applied = applyLimits({ trustCapCoins: dailyCapCoins, limits, coinValueKobo })
     dailyCapCoins = applied.capCoins
     if (applied.reason) extraLimit = { reason: applied.reason, capKobo: applied.capCoins * coinValueKobo, coolingEndsAt: limits.coolingEndsAt, tier: limits.tier }
+  } catch (err) {
+    // The cap could not be decided. Failing open would let a withdrawal skip the cooling-off rules, so nothing is reserved.
+    console.error(JSON.stringify({ event: 'withdrawal.limits_unavailable', app: 'carefind', message: String(err.message).slice(0, 120) }))
+    return res.status(503).json({ error: 'Withdrawals are temporarily unavailable. Try again shortly.', code: 'limits_unavailable' })
   }
 
   const { data: created, error: createError } = await supabase.rpc('create_withdrawal', {
@@ -172,39 +123,6 @@ export default async function handler(req, res) {
         : `Daily withdrawal limit reached. Your ${trustLevel} level allows up to ${getDailyCap(trustLevel)} CareCoins in any 24 hours.`,
       dailyCapCoins,
       ...(extraLimit ? { limitReason: extraLimit.reason, coolingEndsAt: extraLimit.coolingEndsAt } : {}),
-    })
-  }
-  if (created.outcome === 'untraceable_credits') {
-    // Plan D1: some credits on this wallet do not trace to a confirmed payment. The reservation
-    // already refused them; nothing was debited, no provider call happens, and the reconciliation
-    // carries the same finding for the finance team.
-    console.warn('[initiate-withdrawal] untraceable credits refused reservation', {
-      userId: user.id,
-      coins,
-      withdrawable: created.withdrawable_coins,
-      held: created.untraceable_coins,
-    })
-    try {
-      if (user.email) {
-        await enqueueOutbox({
-          templateKey: 'wallet_needs_attention',
-          toEmail: user.email,
-          payload: {
-            fullName: user.user_metadata?.full_name || user.email,
-            heldCoins: String(created.untraceable_coins ?? ''),
-            withdrawableCoins: String(created.withdrawable_coins ?? ''),
-          },
-          subject: 'CareFind: your wallet needs attention',
-          idempotencyKey: 'wallet-needs-attention:' + user.id,
-        })
-        flushOutbox().catch((e) => console.error('[initiate-withdrawal] outbox flush error:', e))
-      }
-    } catch (e) { console.error('[initiate-withdrawal] email enqueue error:', e) }
-    return res.status(403).json({
-      error: 'untraceable_credits',
-      message: `Part of your balance (${created.untraceable_coins ?? 0} CareCoins) cannot be traced to a confirmed payment and is on hold while we review it. You can withdraw up to ${created.withdrawable_coins ?? 0} CareCoins.`,
-      withdrawableCoins: created.withdrawable_coins,
-      heldCoins: created.untraceable_coins,
     })
   }
   if (created.outcome === 'untraceable_credits') {
@@ -278,6 +196,15 @@ export default async function handler(req, res) {
 
     const recipientCode = await createTransferRecipient({ bankCode, accountNumber, accountName: verifiedAccountName, userId: user.id })
 
+    // Record that a transfer call is about to be made BEFORE making it, and make no call unless that was recorded: from here
+    // on "processing" means a call may have created the transfer (a timeout proves nothing), and only a provider-confirmed
+    // non-payment may release the coins. If the mark cannot be written nothing was sent, so the reservation is released.
+    const marked = await supabase.rpc('mark_withdrawal_transfer_attempt', { p_request_id: requestId })
+    if (marked.error || marked.data !== 'ok') {
+      const refunded = await releaseUnsent('attempt_not_recorded')
+      return res.status(503).json({ error: 'Could not start the transfer. Please try again shortly.', refunded })
+    }
+
     transferAttempted = true
     const { transferCode } = await initiateTransfer({
       recipientCode,
@@ -304,7 +231,14 @@ export default async function handler(req, res) {
         await enqueueOutbox({
           templateKey: 'withdrawal_requested',
           toEmail: user.email,
-          payload: { fullName: user.user_metadata?.full_name || user.email, amount: 'Requested withdrawal', reference, bankName, accountNumber: `••••${String(accountNumber).slice(-4)}` },
+          payload: {
+            fullName: user.user_metadata?.full_name || 'there',
+            amount: payoutNaira.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }),
+            coins: String(coins),
+            reference,
+            bankName,
+            accountNumber: `••••${String(accountNumber).slice(-4)}`,
+          },
           subject: 'CareFind: withdrawal requested',
           idempotencyKey: 'withdrawal-requested:' + reference,
         })
@@ -336,8 +270,10 @@ export default async function handler(req, res) {
     // (timeout, dropped connection) may still have created the transfer, so it is only refunded once Paystack
     // confirms it did not (the sweep waits out the grace period before believing "not found").
     try {
-      const row = { id: requestId, paystack_reference: reference, paystack_transfer_code: null, created_at: new Date().toISOString() }
-      const recovery = await reconcileWithdrawal(supabase, row, err.paystackRejected ? { graceMs: 0 } : {})
+      const now = new Date().toISOString()
+      const row = { id: requestId, status: 'processing', paystack_reference: reference, paystack_transfer_code: null, created_at: now, updated_at: now }
+      // Only a DEFINITE Paystack refusal (the request was understood and declined) is confirmed-not-sent; a timeout is not.
+      const recovery = await reconcileWithdrawal(supabase, row, err.paystackRejected ? { graceMs: 0, confirmedNotSent: true } : {})
       if (recovery.outcome === 'refunded') {
         return res.status(502).json({ error: `${err.message || 'Payment provider error'}. Your CareCoins have been returned to your wallet.`, refunded: true })
       }

@@ -28,22 +28,26 @@ beforeEach(() => {
 
 describe('initiate-wallet-topup', () => {
   it('records the intent for the verified business BEFORE Paystack and charges exactly that amount', async () => {
-    const res = await post(initiateTopup, { amount: 500_000, callback_url: 'https://app/dashboard/wallet' })
+    const res = await post(initiateTopup, { amount: 500_000, callback_url: 'https://carehub.test/dashboard/wallet' })
     expect(res.statusCode).toBe(200)
     const intent = h.db.data.payment_intents[0]
-    expect(intent).toMatchObject({ purpose: 'business_wallet_topup', application: 'carehub', business_id: 'biz-1', expected_amount: 500_000, status: 'pending' })
+    // N5,000 for the wallet; the card is charged N5,000 + the 10% processing fee = N5,500.
+    expect(intent).toMatchObject({
+      purpose: 'business_wallet_topup', application: 'carehub', business_id: 'biz-1', expected_amount: 550_000, status: 'pending',
+      metadata: { base_amount_kobo: 500_000, fee_kobo: 50_000, fee_rate: 0.1 },
+    })
     expect(intent.reference).toMatch(/^ch_topup_biz1_[0-9a-f]{12}$/)
-    expect(h.provider.initializePayment).toHaveBeenCalledWith(expect.objectContaining({ amountKobo: 500_000, email: 'owner@clinic.com', reference: intent.reference, callbackUrl: 'https://app/dashboard/wallet' }))
-    expect(res.body).toEqual({ authorization_url: expect.stringContaining('https://checkout.test/'), reference: intent.reference })
+    expect(h.provider.initializePayment).toHaveBeenCalledWith(expect.objectContaining({ amountKobo: 550_000, email: 'owner@clinic.com', reference: intent.reference, callbackUrl: 'https://carehub.test/dashboard/wallet' }))
+    expect(res.body).toEqual({ authorization_url: expect.stringContaining('https://checkout.test/'), reference: intent.reference, base_kobo: 500_000, fee_kobo: 50_000, total_kobo: 550_000 })
   })
 
   it('ignores any purpose, business, application or amount the client tries to supply', async () => {
-    await post(initiateTopup, { amount: 500_000, callback_url: 'x', purpose: 'plan_renewal', business_id: 'someone-else', application: 'carefind', expected_amount: 1 })
-    expect(h.db.data.payment_intents[0]).toMatchObject({ purpose: 'business_wallet_topup', application: 'carehub', business_id: 'biz-1', expected_amount: 500_000 })
+    await post(initiateTopup, { amount: 500_000, callback_url: 'https://carehub.test/cb', purpose: 'plan_renewal', business_id: 'someone-else', application: 'carefind', expected_amount: 1 })
+    expect(h.db.data.payment_intents[0]).toMatchObject({ purpose: 'business_wallet_topup', application: 'carehub', business_id: 'biz-1', expected_amount: 550_000 })
   })
 
   it.each([[9_999], [10_000_001], [1.5], [-100], [0], [null], [undefined], ['']])('refuses amount = %p without creating an intent or calling Paystack', async (amount) => {
-    const res = await post(initiateTopup, { amount, callback_url: 'x' })
+    const res = await post(initiateTopup, { amount, callback_url: 'https://carehub.test/cb' })
     expect(res.statusCode).toBe(400)
     expect(h.db.data.payment_intents || []).toHaveLength(0)
     expect(h.provider.initializePayment).not.toHaveBeenCalled()
@@ -55,13 +59,13 @@ describe('initiate-wallet-topup', () => {
     await initiateTopup({ method: 'GET', body: {}, headers: {} }, res)
     expect(res.statusCode).toBe(405)
     h.auth = { error: 'not_logged_in' }
-    expect((await post(initiateTopup, { amount: 50_000, callback_url: 'x' })).statusCode).toBe(401)
+    expect((await post(initiateTopup, { amount: 50_000, callback_url: 'https://carehub.test/cb' })).statusCode).toBe(401)
     expect(h.db.data.payment_intents || []).toHaveLength(0)
   })
 
   it('closes the intent when Paystack refuses', async () => {
     h.provider.initializePayment.mockRejectedValue(Object.assign(new Error('Invalid key'), { code: 'provider_rejected', ambiguous: false }))
-    expect((await post(initiateTopup, { amount: 50_000, callback_url: 'x' })).statusCode).toBe(502)
+    expect((await post(initiateTopup, { amount: 50_000, callback_url: 'https://carehub.test/cb' })).statusCode).toBe(502)
     expect(h.db.data.payment_intents[0].status).toBe('failed')
   })
 })
@@ -122,5 +126,67 @@ describe('verify-wallet-topup', () => {
     expect((await post(verifyTopup, { reference: REF })).statusCode).toBe(401)
     h.auth = { business: { ...BIZ } }
     expect((await post(verifyTopup, {})).statusCode).toBe(400)
+  })
+})
+
+describe('initiate-wallet-topup: the 10% processing fee is added on top, server-side', () => {
+  it('the bounds apply to the amount the wallet RECEIVES: the minimum and maximum top-up are charged with the fee', async () => {
+    await post(initiateTopup, { amount: 10_000, callback_url: 'https://carehub.test/cb' })
+    expect(h.db.data.payment_intents[0]).toMatchObject({ expected_amount: 11_000, metadata: { base_amount_kobo: 10_000, fee_kobo: 1_000 } })
+    h.db = createFakeSupabase()
+    await post(initiateTopup, { amount: 10_000_000, callback_url: 'https://carehub.test/cb' })
+    expect(h.db.data.payment_intents[0]).toMatchObject({ expected_amount: 11_000_000, metadata: { base_amount_kobo: 10_000_000, fee_kobo: 1_000_000 } })
+  })
+
+  it('a client-supplied fee or total is ignored', async () => {
+    await post(initiateTopup, { amount: 500_000, callback_url: 'https://carehub.test/cb', fee: 0, fee_kobo: 0, fee_rate: 0, total: 500_000 })
+    expect(h.db.data.payment_intents[0]).toMatchObject({ expected_amount: 550_000, metadata: { fee_kobo: 50_000, fee_rate: 0.1 } })
+  })
+
+  it('the rate comes from financial_config; 0 means no fee; an unreadable rate falls back to 10%', async () => {
+    h.db = createFakeSupabase({ tables: { financial_config: [{ key: 'topup_processing_fee_rate', value: 0.02 }] } })
+    await post(initiateTopup, { amount: 500_000, callback_url: 'https://carehub.test/cb' })
+    expect(h.db.data.payment_intents[0].expected_amount).toBe(510_000)
+    h.db = createFakeSupabase({ tables: { financial_config: [{ key: 'topup_processing_fee_rate', value: 0 }] } })
+    await post(initiateTopup, { amount: 500_000, callback_url: 'https://carehub.test/cb' })
+    expect(h.db.data.payment_intents[0].expected_amount).toBe(500_000)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    h.db = createFakeSupabase()
+    await post(initiateTopup, { amount: 500_000, callback_url: 'https://carehub.test/cb' })
+    expect(h.db.data.payment_intents[0].expected_amount).toBe(550_000)
+    warn.mockRestore()
+  })
+
+  it('{ quote: true } returns the rate, creates nothing, and still needs a verified business', async () => {
+    const res = await post(initiateTopup, { quote: true })
+    expect(res.body).toEqual({ fee_rate: 0.1 })
+    expect(h.db.data.payment_intents || []).toHaveLength(0)
+    expect(h.provider.initializePayment).not.toHaveBeenCalled()
+    h.auth = { error: 'not_logged_in' }
+    expect((await post(initiateTopup, { quote: true })).statusCode).toBe(401)
+  })
+})
+
+describe('initiate-wallet-topup: where the customer is sent back is never chosen by the browser (F-27)', () => {
+  it.each([
+  ['another host', 'https://evil.example/wallet'],
+  ['a look-alike host', 'https://carehub.test.evil.example/wallet'],
+  ['credentials in the URL', 'https://carehub.test@evil.example/wallet'],
+  ['javascript:', 'javascript:alert(1)'],
+  ['protocol-relative', '//evil.example/wallet'],
+  ['a relative path', '/wallet'],
+  ['plain http', 'http://carehub.test/wallet'],
+])('refuses %s before any intent is created or Paystack is called', async (_label, callback_url) => {
+    const res = await post(initiateTopup, { ...{ amount: 500_000 }, callback_url })
+    expect(res.statusCode).toBe(400)
+    expect(res.body.code).toBe('invalid_callback_url')
+    expect(h.db.data.payment_intents || []).toHaveLength(0)
+    expect(h.provider.initializePayment).not.toHaveBeenCalled()
+  })
+
+  it('passes the validated address to Paystack unchanged', async () => {
+    const res = await post(initiateTopup, { ...{ amount: 500_000 }, callback_url: 'https://carehub.test/wallet?tab=topup' })
+    expect(res.statusCode).toBe(200)
+    expect(h.provider.initializePayment).toHaveBeenCalledWith(expect.objectContaining({ callbackUrl: 'https://carehub.test/wallet?tab=topup' }))
   })
 })

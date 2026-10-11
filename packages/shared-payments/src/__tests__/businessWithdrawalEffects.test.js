@@ -46,8 +46,28 @@ describe('createBusinessWithdrawalEffects', () => {
       templateKey: 'withdrawal_completed', toEmail: 'ada@example.com', app: 'carehub',
       subject: 'CareHub: withdrawal settled', sourceId: 'bw-1', idempotencyKey: 'business-withdrawal-completed:ch_wd_1',
     })
-    expect(sent[0].payload).toMatchObject({ businessName: 'Ada', reference: 'ch_wd_1', bankName: 'GTB', accountNumber: '0123456789' })
+    // the business name, and ONLY the last four digits of the account ever reach the (stored) outbox payload
+    expect(sent[0].payload).toMatchObject({ businessName: 'Sunrise Clinic', reference: 'ch_wd_1', bankName: 'GTB', accountNumber: '••••6789' })
+    expect(JSON.stringify(sent[0])).not.toContain('0123456789')
     expect(sent[0].payload.amount).toContain('5,000')
+  })
+
+  it('in_flight (the sweep sees it still moving): one reassuring processing email, keyed by the reference, never a settlement', async () => {
+    const { apply, sent } = setup({ row: request() })
+    await apply({ id: 'bw-1', reference: 'ch_wd_1', result: 'in_flight' })
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({
+      templateKey: 'withdrawal_processing', toEmail: 'ada@example.com', app: 'carehub',
+      subject: 'CareHub: your withdrawal is still processing', idempotencyKey: 'business-withdrawal-processing:ch_wd_1',
+    })
+    expect(sent[0].payload.accountNumber).toBe('••••6789')
+  })
+
+  it('an enqueue that fails is logged as email.enqueue_failed, never thrown', async () => {
+    const { apply, logger } = setup({ row: request() }, async () => { throw new Error('boom ada@example.com') })
+    await expect(apply(settled('completed'))).resolves.toBeUndefined()
+    expect(logger.error).toHaveBeenCalledWith('email.enqueue_failed', expect.objectContaining({ family: 'business_withdrawal', template: 'withdrawal_completed' }))
+    expect(JSON.stringify(logger.error.mock.calls)).not.toContain('ada@example.com')
   })
 
   it('refunded: the failure email, keyed by the same reference', async () => {

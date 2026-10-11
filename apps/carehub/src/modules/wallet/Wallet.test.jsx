@@ -52,6 +52,9 @@ const mount = async ({ entries = ['/dashboard/wallet'], role = 'Owner' } = {}) =
   await act(async () => {}) // let the verify/load promise chains settle
 }
 const callsTo = (path) => fetchMock.mock.calls.filter(([u]) => String(u).includes(path))
+// The dialog asks the server for the fee rate ({ quote: true }, creates nothing); a real initiation is any other call.
+const isQuote = ([, init]) => String(init?.body || '').includes('"quote"')
+const initiations = () => callsTo('/api/initiate-wallet-topup').filter((c) => !isQuote(c))
 
 beforeEach(() => {
   host = document.createElement('div')
@@ -85,7 +88,7 @@ describe('Wallet top-up flow', () => {
     await type('topup-amount', '1500')
     expect(button('Continue').disabled).toBe(false)
     expect(host.querySelector('#topup-amount-help')).toBeNull()
-    expect(callsTo('/api/initiate-wallet-topup')).toHaveLength(0)
+    expect(initiations()).toHaveLength(0)
   })
 
   it('initiates with the whole-kobo amount and hands the owner to Paystack', async () => {
@@ -99,7 +102,7 @@ describe('Wallet top-up flow', () => {
     await type('topup-amount', '1500')
     await click('Continue')
 
-    const [url, init] = callsTo('/api/initiate-wallet-topup')[0]
+    const [url, init] = initiations()[0]
     expect(url).toBe('/api/initiate-wallet-topup')
     expect(init.headers.Authorization).toBe('Bearer tok-test')
     expect(JSON.parse(init.body)).toEqual({ amount: 150_000, callback_url: `${window.location.origin}/dashboard/wallet` })
@@ -146,5 +149,51 @@ describe('Wallet top-up flow', () => {
     await mount({ entries: ['/dashboard/wallet?reference=ch_topup_b1_abcdef123456'], role: 'Staff' })
     expect(callsTo('/api/verify-wallet-topup')).toHaveLength(0)
     expect(host.textContent).toContain('restricted to the business Owner')
+  })
+})
+
+describe('Wallet top-up: the processing fee is shown before checkout (the server decides the charge)', () => {
+  const withRate = (rate) => async (url) => {
+    if (String(url).includes('/api/banks')) return reply(200, [])
+    if (String(url).includes('/api/initiate-wallet-topup')) return reply(200, { fee_rate: rate })
+    return reply(404, {})
+  }
+
+  it('asks the server for the rate when the dialog opens and shows what the wallet receives, the fee and the total', async () => {
+    fetchMock.mockImplementation(withRate(0.1))
+    await mount()
+    await click('Top Up')
+    await act(async () => {})
+    const quotes = callsTo('/api/initiate-wallet-topup').filter(isQuote)
+    expect(quotes).toHaveLength(1)
+    expect(JSON.parse(quotes[0][1].body)).toEqual({ quote: true })
+    expect(quotes[0][1].headers.Authorization).toBe('Bearer tok-test')
+
+    await type('topup-amount', '10000')
+    const box = host.querySelector('[role="status"]')
+    expect(box.textContent).toMatch(/Wallet receives:\s*₦10,000/)
+    expect(box.textContent).toMatch(/Processing fee \(10%\):\s*₦1,000/)
+    expect(box.textContent).toMatch(/You pay:\s*₦11,000/)
+    expect(initiations()).toHaveLength(0) // a quote never starts a payment
+  })
+
+  it('a changed rate is shown as the server reports it', async () => {
+    fetchMock.mockImplementation(withRate(0.025))
+    await mount()
+    await click('Top Up')
+    await act(async () => {})
+    await type('topup-amount', '4000')
+    const box = host.querySelector('[role="status"]')
+    expect(box.textContent).toMatch(/Processing fee \(2.5%\):\s*₦100/)
+    expect(box.textContent).toMatch(/You pay:\s*₦4,100/)
+  })
+
+  it('no fee line when the rate is 0 or the quote could not be read (checkout still shows the exact total)', async () => {
+    fetchMock.mockImplementation(withRate(0))
+    await mount()
+    await click('Top Up')
+    await act(async () => {})
+    await type('topup-amount', '4000')
+    expect(host.querySelector('[role="status"]')).toBeNull()
   })
 })

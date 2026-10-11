@@ -13,7 +13,7 @@ import verify from '../../../api/_handlers/verify-consultation-payment.js'
 import createSubaccount from '../../../api/_handlers/create-subaccount.js'
 import { createFakeSupabase, createFakeProvider, createRes, verifiedPayment } from './fixtures/fakeSupabase.js'
 
-const post = (handler, body) => { const res = createRes(); return handler({ method: 'POST', body, headers: {} }, res).then(() => res) }
+const post = (handler, body) => { const res = createRes(); return handler({ method: 'POST', body, headers: { host: 'carefind.test' } }, res).then(() => res) }
 const offer = (fee, over = {}) => ({ id: 'o1', professional_id: 'pro-1', patient_id: 'pro-1', status: 'setup', fee, type: 'video', ...over })
 
 beforeEach(() => {
@@ -24,7 +24,7 @@ beforeEach(() => {
 
 describe('charge-consultation: the fee is the professional\'s offer', () => {
   it('creates an intent in kobo for the offered fee and charges exactly that', async () => {
-    const res = await post(charge, { professionalId: 'pro-1', callback_url: 'https://app/cb' })
+    const res = await post(charge, { professionalId: 'pro-1', callback_url: 'https://carefind.test/cb' })
     expect(res.statusCode).toBe(200)
     const intent = h.db.data.payment_intents[0]
     expect(intent).toMatchObject({ purpose: 'consultation', customer_id: h.user.id, entity_type: 'professional', entity_id: 'pro-1', expected_amount: 500000, status: 'pending' })
@@ -32,36 +32,36 @@ describe('charge-consultation: the fee is the professional\'s offer', () => {
   })
 
   it.each([[1], ['1'], [0], [-5], [{ $gt: 0 }]])('ignores a client fee of %p', async (fee) => {
-    await post(charge, { professionalId: 'pro-1', fee, amount: fee, price: fee, callback_url: 'x' })
+    await post(charge, { professionalId: 'pro-1', fee, amount: fee, price: fee, callback_url: 'https://carefind.test/cb' })
     expect(h.db.data.payment_intents[0].expected_amount).toBe(500000)
   })
 
   it('rounds a fractional-naira offer to whole kobo (N1,049.99 = 104999 kobo)', async () => {
     h.db = createFakeSupabase({ tables: { professional_consultations: [offer(1049.99)] } })
-    await post(charge, { professionalId: 'pro-1', callback_url: 'x' })
+    await post(charge, { professionalId: 'pro-1', callback_url: 'https://carefind.test/cb' })
     expect(h.db.data.payment_intents[0].expected_amount).toBe(104999)
   })
 
   it.each([[null], [0], [-100], ['abc'], [0.001]])('refuses an offer with fee %p', async (fee) => {
     h.db = createFakeSupabase({ tables: { professional_consultations: [offer(fee)] } })
-    const res = await post(charge, { professionalId: 'pro-1', callback_url: 'x' })
+    const res = await post(charge, { professionalId: 'pro-1', callback_url: 'https://carefind.test/cb' })
     expect(res.statusCode).toBe(400)
     expect(h.db.data.payment_intents || []).toHaveLength(0)
     expect(h.provider.initializePayment).not.toHaveBeenCalled()
   })
 
   it('refuses a professional with no offer, booking yourself, and malformed input', async () => {
-    expect((await post(charge, { professionalId: 'nobody', callback_url: 'x' })).statusCode).toBe(400)
-    expect((await post(charge, { professionalId: h.user.id, callback_url: 'x' })).statusCode).toBe(400)
-    expect((await post(charge, { professionalId: { $ne: null }, callback_url: 'x' })).statusCode).toBe(400)
-    expect((await post(charge, { callback_url: 'x' })).statusCode).toBe(400)
+    expect((await post(charge, { professionalId: 'nobody', callback_url: 'https://carefind.test/cb' })).statusCode).toBe(400)
+    expect((await post(charge, { professionalId: h.user.id, callback_url: 'https://carefind.test/cb' })).statusCode).toBe(400)
+    expect((await post(charge, { professionalId: { $ne: null }, callback_url: 'https://carefind.test/cb' })).statusCode).toBe(400)
+    expect((await post(charge, { callback_url: 'https://carefind.test/cb' })).statusCode).toBe(400)
     h.user = null
-    expect((await post(charge, { professionalId: 'pro-1', callback_url: 'x' })).statusCode).toBe(401)
+    expect((await post(charge, { professionalId: 'pro-1', callback_url: 'https://carefind.test/cb' })).statusCode).toBe(401)
   })
 
   it('does not take money for a booking the patient already has', async () => {
     h.db = createFakeSupabase({ tables: { professional_consultations: [offer(5000), { id: 'b1', professional_id: 'pro-1', patient_id: h.user.id, status: 'paid', fee: 5000 }] } })
-    const res = await post(charge, { professionalId: 'pro-1', callback_url: 'x' })
+    const res = await post(charge, { professionalId: 'pro-1', callback_url: 'https://carefind.test/cb' })
     expect(res.statusCode).toBe(409)
     expect(res.body.alreadyBooked).toBe(true)
     expect(h.db.data.payment_intents || []).toHaveLength(0)
@@ -69,7 +69,7 @@ describe('charge-consultation: the fee is the professional\'s offer', () => {
   })
 
   it('never splits the payment at Paystack, and never reads or writes the patient\'s CareCoin wallet', async () => {
-    await post(charge, { professionalId: 'pro-1', callback_url: 'x' })
+    await post(charge, { professionalId: 'pro-1', callback_url: 'https://carefind.test/cb' })
     expect(JSON.stringify(h.provider.initializePayment.mock.calls[0][0])).not.toMatch(/subaccount|split|transaction_charge/i)
     expect(h.db.calls.some((c) => c.table === 'wallets' || (c.op === 'rpc' && /wallet|pay_/.test(c.name)))).toBe(false)
   })
@@ -123,5 +123,29 @@ describe('verify-consultation-payment', () => {
     expect((await post(verify, { reference: ref })).statusCode).toBe(403)
     h.db = createFakeSupabase({ tables: { payment_intents: [seed({ purpose: 'booking' })] } })
     expect((await post(verify, { reference: ref })).statusCode).toBe(400)
+  })
+})
+
+describe('charge-consultation: where the customer is sent back is never chosen by the browser (F-27)', () => {
+  it.each([
+  ['another host', 'https://evil.example/wallet'],
+  ['a look-alike host', 'https://carefind.test.evil.example/wallet'],
+  ['credentials in the URL', 'https://carefind.test@evil.example/wallet'],
+  ['javascript:', 'javascript:alert(1)'],
+  ['protocol-relative', '//evil.example/wallet'],
+  ['a relative path', '/wallet'],
+  ['plain http', 'http://carefind.test/wallet'],
+])('refuses %s before any intent is created or Paystack is called', async (_label, callback_url) => {
+    const res = await post(charge, { ...{ professionalId: 'pro-1' }, callback_url })
+    expect(res.statusCode).toBe(400)
+    expect(res.body.code).toBe('invalid_callback_url')
+    expect(h.db.data.payment_intents || []).toHaveLength(0)
+    expect(h.provider.initializePayment).not.toHaveBeenCalled()
+  })
+
+  it('passes the validated address to Paystack unchanged', async () => {
+    const res = await post(charge, { ...{ professionalId: 'pro-1' }, callback_url: 'https://carefind.test/wallet?tab=topup' })
+    expect(res.statusCode).toBe(200)
+    expect(h.provider.initializePayment).toHaveBeenCalledWith(expect.objectContaining({ callbackUrl: 'https://carefind.test/wallet?tab=topup' }))
   })
 })

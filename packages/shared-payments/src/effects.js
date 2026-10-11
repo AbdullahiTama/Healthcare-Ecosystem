@@ -86,10 +86,13 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
         templateKey: 'payment_success',
         toEmail: user.email,
         payload: {
-          fullName: user.user_metadata?.full_name || user.email,
+          fullName: user.user_metadata?.full_name || 'there',
+          // What the card was charged (price + processing fee); the fee is named so the receipt adds up.
           amount: (intent.expected_amount / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }),
           reference: intent.reference,
-          purpose: 'CareCoin top-up',
+          purpose: Number(intent.metadata?.fee_kobo) > 0
+            ? `CareCoin top-up (includes ${(Number(intent.metadata.fee_kobo) / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })} processing fee)`
+            : 'CareCoin top-up',
         },
         subject: 'CareFind: payment received',
         idempotencyKey: `payment-success:${intent.reference}`,
@@ -122,7 +125,7 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
       await safeSend({
         templateKey: 'consultation_confirmed',
         toEmail: user.email,
-        payload: { fullName: user.user_metadata?.full_name || user.email, service: 'Consultation' },
+        payload: { fullName: user.user_metadata?.full_name || 'there', service: 'Consultation' },
         subject: 'Your CareFind consultation is confirmed',
         idempotencyKey: `consultation-confirmed:${intent.reference}`,
       })
@@ -193,7 +196,8 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
         payload: {
           fullName: biz.owner_name || 'Business Owner',
           businessName: biz.name || '',
-          amount: ((intent.expected_amount || 0) / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }),
+          // The amount CREDITED to the wallet (the card was charged this plus the processing fee).
+          amount: ((Number(intent.metadata?.base_amount_kobo) || intent.expected_amount || 0) / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }),
           reference: intent.reference,
           newBalance,
         },
@@ -272,7 +276,61 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
   }
   effects.appointment = effects.booking
 
+  // A payment the provider DECLINED (verify status 'failed'; an abandoned checkout is not announced): one "your payment did not go
+  // through" email, only for the call that closed the intent (it was still created/pending when read), keyed by the reference so
+  // the redirect, the sweep and a retry cannot send it twice.
+  const PURPOSE_LABELS = {
+    wallet_topup: 'CareCoin top-up', creator_subscription: 'Creator subscription', consultation: 'Consultation', booking: 'Appointment booking',
+    appointment: 'Appointment fee', shop_order: 'Order', plan_renewal: 'Plan renewal', business_wallet_topup: 'Wallet top-up',
+  }
+  async function paymentFailed(result) {
+    const intent = result?.intent
+    if (result?.providerStatus !== 'failed' || !intent || !['created', 'pending'].includes(intent.status)) return
+    const purpose = PURPOSE_LABELS[intent.purpose]
+    if (!purpose) return
+    let toEmail = null
+    let fullName = 'there'
+    let app = intent.application === 'carehub' ? 'carehub' : 'carefind'
+    if (intent.customer_id) {
+      const user = await emailOf(intent.customer_id)
+      toEmail = user?.email || null
+      fullName = user?.user_metadata?.full_name || 'there'
+    } else if (intent.business_id) {
+      const { data: biz } = await supabase.from('businesses').select('name, owner_name, owner_email, email').eq('id', intent.business_id).maybeSingle()
+      toEmail = biz?.owner_email || biz?.email || null
+      fullName = biz?.owner_name || biz?.name || 'there'
+      app = 'carehub'
+    } else if (intent.entity_type === 'appointment' && intent.entity_id) {
+      const { data: appt } = await supabase.from('appointments').select('client_email, client_name').eq('id', intent.entity_id).maybeSingle()
+      toEmail = appt?.client_email || null
+      fullName = appt?.client_name || 'there'
+    }
+    if (!toEmail) return
+    await safeSend({
+      templateKey: 'payment_failed',
+      toEmail,
+      app,
+      payload: {
+        fullName,
+        amount: (intent.expected_amount / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }),
+        reference: intent.reference,
+        purpose,
+      },
+      subject: `${app === 'carehub' ? 'CareHub' : 'CareFind'}: your payment did not go through`,
+      sourceId: intent.id,
+      idempotencyKey: `payment-failed:${intent.reference}`,
+    })
+  }
+
   return async function runSettlementEffects(result) {
+    if (result?.outcome === 'not_paid') {
+      try {
+        await paymentFailed(result)
+      } catch (err) {
+        logger.error('settlement.effects.failed', { purpose: result.purpose, message: err.message })
+      }
+      return
+    }
     if (result?.outcome !== 'settled') return
     const run = effects[result.purpose]
     if (!run) return

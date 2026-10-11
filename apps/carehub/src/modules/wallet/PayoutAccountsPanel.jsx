@@ -58,8 +58,9 @@ export default function PayoutAccountsPanel({ manager, selectedId, onSelect, ban
 
   return (
     <section aria-label="Payout accounts" style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14 }}>
-      {/* 1. identity */}
-      {verified ? (
+      {/* 1. identity: shown ONLY when the server has identity verification switched on (H06). It is never needed to add an
+          account or to withdraw. */}
+      {s.kycEnabled && (verified ? (
         <div style={{ ...box, display: 'flex', alignItems: 'center', gap: 10, background: theme.tealMist }}>
           <ShieldCheck size={18} color={theme.tealDeep} aria-hidden="true" />
           <div style={{ fontSize: 12.5, color: theme.tealDeep }}>
@@ -69,9 +70,9 @@ export default function PayoutAccountsPanel({ manager, selectedId, onSelect, ban
         </div>
       ) : (
         <form onSubmit={verify} style={{ ...box, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>Verify your identity</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>Verify your identity (optional)</div>
           <p style={{ margin: 0, fontSize: 12, color: theme.gray600, lineHeight: 1.6 }}>
-            To keep your money safe, withdrawals only go to a verified bank account. As the owner, enter your BVN and NIN once.
+            Optional: verifying your identity raises your daily withdrawal limit. As the owner, enter your BVN and NIN once.
             We check them with our identity partner and never store the numbers.
           </p>
           <Inp id="kyc-bvn" label="BVN (11 digits)" type="password" inputMode="numeric" autoComplete="off" maxLength={11} value={bvn} onChange={(v) => setBvn(digits(v))} />
@@ -79,11 +80,11 @@ export default function PayoutAccountsPanel({ manager, selectedId, onSelect, ban
           {s.error && s.busy === '' && !adding && <p role="alert" style={{ margin: 0, fontSize: 12, color: theme.danger, fontWeight: 700 }}>{s.error}</p>}
           <TealBtn type="submit" disabled={s.busy === 'verify' || bvn.length !== 11 || nin.length !== 11}>{s.busy === 'verify' ? 'Verifying…' : 'Verify identity'}</TealBtn>
         </form>
-      )}
+      ))}
 
 
       {/* 1b. what the person can withdraw, and how to raise it */}
-      {verified && s.limits && s.limits.dailyCapKobo !== null && s.limits.dailyCapKobo !== undefined && (
+      {s.kycEnabled && verified && s.limits && s.limits.dailyCapKobo !== null && s.limits.dailyCapKobo !== undefined && (
         <div style={{ ...box, fontSize: 12.5, color: theme.gray600 }}>
           <strong>Daily withdrawal limit: {formatKobo(s.limits.dailyCapKobo)}</strong>
           {s.limits.tier >= 2 && <span> · selfie verified</span>}
@@ -107,13 +108,13 @@ export default function PayoutAccountsPanel({ manager, selectedId, onSelect, ban
       <div style={box}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>Payout accounts</div>
-          <button type="button" style={{ ...linkBtn, opacity: verified ? 1 : 0.5 }} disabled={!verified} onClick={() => { manager.clearError(); setAdding(true) }}>+ Add account</button>
+          <button type="button" style={linkBtn} onClick={() => { manager.clearError(); setAdding(true) }}>+ Add account</button>
         </div>
 
         {s.accounts.length === 0 ? (
           <p style={{ margin: 0, fontSize: 12.5, color: theme.gray400, display: 'flex', gap: 8, alignItems: 'center' }}>
             <Landmark size={16} aria-hidden="true" />
-            {verified ? 'No payout account yet. Add the bank account you want to be paid into.' : 'Verify your identity, then add your bank account.'}
+            No payout account yet. Add the bank account you want to be paid into.
           </p>
         ) : (
           <div role="radiogroup" aria-label="Withdraw to" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

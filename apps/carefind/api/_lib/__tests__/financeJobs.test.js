@@ -1,8 +1,9 @@
 // The cron endpoint's financial work: named steps with intervals, one shared deadline, one failing step never blocks the others.
-const h = vi.hoisted(() => ({ sweepWithdrawals: vi.fn(), runRefundSweeps: vi.fn(), runFinanceReconciliation: vi.fn(), provider: { name: 'paystack' }, refundApplied: [] }))
+const h = vi.hoisted(() => ({ backfill: vi.fn(), sweepWithdrawals: vi.fn(), runRefundSweeps: vi.fn(), runFinanceReconciliation: vi.fn(), provider: { name: 'paystack' }, refundApplied: [] }))
 vi.mock('../withdrawalRecovery.js', () => ({ sweepWithdrawals: h.sweepWithdrawals }))
 vi.mock('../payments.js', () => ({ getPaystackProvider: () => h.provider, paymentLogger: { info() {}, warn() {}, error() {} } }))
 vi.mock('../financeReconcile.js', () => ({ runFinanceReconciliation: h.runFinanceReconciliation }))
+vi.mock('../moneyNotifications.js', () => ({ runNotificationBackfill: h.backfill }))
 vi.mock('../refundEffects.js', () => ({ applyRefundResult: async (_s, result) => { h.refundApplied.push(result) } }))
 vi.mock('@care-ecosystem/shared-payments', async (importOriginal) => ({ ...(await importOriginal()), runRefundSweeps: h.runRefundSweeps }))
 
@@ -13,6 +14,7 @@ const client = ({ due = () => true, release = { data: { released: 2, released_ko
   const calls = []
   return {
     calls,
+    from: (table) => ({ delete: () => ({ lt: async () => { calls.push([`delete:${table}`]); return { error: null, count: 4 } } }) }),
     rpc: async (name, args) => {
       calls.push([name, args])
       if (name === 'claim_job_slot') return { data: due(args.p_job), error: null }
@@ -27,6 +29,7 @@ beforeEach(() => {
   h.sweepWithdrawals.mockReset().mockResolvedValue({ checked: 0 })
   h.runRefundSweeps.mockReset().mockResolvedValue({ sweep: { checked: 0 } })
   h.runFinanceReconciliation.mockReset().mockResolvedValue({ failed: [] })
+  h.backfill.mockReset().mockResolvedValue({ found: 0, sent: 0, errors: 0, byKind: {} })
 })
 
 describe('runFinanceJobs', () => {
@@ -34,7 +37,9 @@ describe('runFinanceJobs', () => {
     const s = client()
     const { report, failed } = await runFinanceJobs(s, { budget: createBudget(50_000) })
     expect(failed).toEqual([])
-    expect(Object.keys(report)).toEqual(['vendor_release', 'shop_order_expiry', 'withdrawals', 'refunds', 'reconciliation'])
+    expect(Object.keys(report)).toEqual(['vendor_release', 'shop_order_expiry', 'withdrawals', 'refunds', 'reconciliation', 'payment_notifications', 'otp_purge'])
+    expect(report.otp_purge).toEqual({ purged: 4 })
+    expect(s.calls).toContainEqual(['delete:otp_challenges'])
     expect(report.vendor_release).toEqual({ released: 2, released_kobo: 100, partial: 0 })
     expect(report.shop_order_expiry).toEqual({ expired: 3 })
     expect(s.calls).toContainEqual(['expire_unpaid_shop_orders', { p_limit: 200 }])
@@ -42,6 +47,7 @@ describe('runFinanceJobs', () => {
     expect(asked).toEqual({
       job_vendor_release: FINANCE_STEPS_EVERY_MINUTES.vendor_release, job_shop_order_expiry: FINANCE_STEPS_EVERY_MINUTES.shop_order_expiry, job_withdrawals: FINANCE_STEPS_EVERY_MINUTES.withdrawals,
       job_refunds: FINANCE_STEPS_EVERY_MINUTES.refunds, job_reconciliation: FINANCE_STEPS_EVERY_MINUTES.reconciliation,
+      job_otp_purge: FINANCE_STEPS_EVERY_MINUTES.otp_purge, job_payment_notifications: FINANCE_STEPS_EVERY_MINUTES.payment_notifications,
     })
     expect(FINANCE_STEPS_EVERY_MINUTES.reconciliation).toBe(1)           // its own sub-steps are gated inside (replay 5, provider 30, ...)
   })
@@ -109,5 +115,30 @@ describe('runFinanceJobs', () => {
     await runFinanceJobs(s, { budget: createBudget(50_000), force: true })
     expect(s.calls.some(([n]) => n === 'claim_job_slot')).toBe(false)
     expect(h.sweepWithdrawals).toHaveBeenCalled()
+  })
+})
+
+describe('H05: the money-notification backfill step', () => {
+  it('runs every 15 minutes behind its own slot and hands the shared deadline to the backfill', async () => {
+    expect(FINANCE_STEPS_EVERY_MINUTES.payment_notifications).toBe(15)
+    const budget = createBudget(50_000)
+    const s = client()
+    const { report } = await runFinanceJobs(s, { budget })
+    expect(report.payment_notifications).toEqual({ found: 0, sent: 0, errors: 0, byKind: {} })
+    expect(h.backfill).toHaveBeenCalledWith(expect.anything(), { deadline: budget.deadline })
+  })
+
+  it('a failing backfill is a failed step and never blocks the others', async () => {
+    h.backfill.mockRejectedValue(new Error('list_unnotified_money_events: permission denied'))
+    const { report, failed } = await runFinanceJobs(client(), { budget: createBudget(50_000) })
+    expect(failed).toEqual(['payment_notifications'])
+    expect(report.payment_notifications).toEqual({ error: 'list_unnotified_money_events: permission denied' })
+    expect(h.runFinanceReconciliation).toHaveBeenCalled()
+  })
+
+  it('a step that is not due is not run', async () => {
+    const { report } = await runFinanceJobs(client({ due: (job) => job !== 'job_payment_notifications' }), { budget: createBudget(50_000) })
+    expect(report.payment_notifications).toEqual({ skipped: 'not_due' })
+    expect(h.backfill).not.toHaveBeenCalled()
   })
 })

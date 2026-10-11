@@ -1,15 +1,15 @@
 const isValidAccountNumber = (v) => typeof v === 'string' && /^\d{10}$/.test(v)
 import { OTP_PURPOSES, checkOtp, sendOtp } from './otp.js'
-import { matchBusinessName, matchPersonName } from './kyc/nameMatch.js'
+import { sendSecurityAlert } from './alerts.js'
 import { accountCooling, kycTier, readLimitConfig } from './withdrawalLimits.js'
 
-// Saved payout accounts: a bank account an owner (a person on CareFind, a business on CareHub) has PROVEN is theirs.
-// To save one the API requires, in this order (cheapest and safest first, all before any row is written):
-//   1. a verified identity (BVN + NIN)                         -> else 403 kyc_required
-//   2. the account resolves at the bank (Paystack); the NAME is the bank's, never typed
-//   3. that name matches the verified legal name               -> else 422 name_mismatch
-//      (a business may also match its registered business name)
-//   4. a fresh emailed one-time code (purpose payout_account)  -> else 400 otp_*
+// Saved payout accounts: a bank account an owner (a person on CareFind, a business on CareHub) has saved to be paid into.
+// To save one the API requires, in this order (cheapest first, all before any row is written):
+//   1. the account resolves at the bank (Paystack); the NAME is the bank's, never typed
+//   2. a fresh emailed one-time code (purpose payout_account)  -> else 400 otp_*
+// No identity verification is required (H02, owner decision D1a): the bank's own account name is stored and shown, and the
+// protection against a hijacked session is the emailed code, the withdrawal PIN and code on every withdrawal, the owner
+// alert below, and the cooling-off cap on any destination the owner has not been paid at before (withdrawalLimits.js).
 // The database then refuses duplicates and more than 5 active accounts. Withdrawals read the account from the
 // database, so a browser can never choose where money goes by sending bank details. -> { status, body }
 
@@ -37,16 +37,18 @@ export async function listPayoutAccounts(supabase, { ownerType, ownerId, userId 
   // `required` tells the UI whether typing in a destination is still allowed (the server enforces it regardless);
   // `limits` lets it show what the person can withdraw (the server enforces these too).
   const config = await readLimitConfig(supabase)
-  const tier = ownerType === 'user' && userId ? await kycTier(supabase, userId) : 0
+  // H06: identity verification is off unless switched on; then no KYC row is read and no tier figure is shown.
+  const tier = config.kycEnabled && ownerType === 'user' && userId ? await kycTier(supabase, userId) : 0
   return {
     status: 200,
     body: {
       accounts: (data || []).map((r) => publicShape(r, config)),
       required: await payoutAccountRequired(supabase),
+      kycEnabled: config.kycEnabled,
       limits: {
         tier,
-        dailyCapKobo: ownerType === 'user' ? (tier >= 2 ? config.tier2CapKobo : tier === 1 ? config.tier1CapKobo : null) : null,
-        nextTierCapKobo: ownerType === 'user' && tier === 1 ? config.tier2CapKobo : null,
+        dailyCapKobo: config.kycEnabled && ownerType === 'user' ? (tier >= 2 ? config.tier2CapKobo : tier === 1 ? config.tier1CapKobo : null) : null,
+        nextTierCapKobo: config.kycEnabled && ownerType === 'user' && tier === 1 ? config.tier2CapKobo : null,
         cooloffHours: config.cooloffHours,
         cooloffCapKobo: ownerType === 'business' ? Math.min(config.cooloffCapKobo, config.businessCapKobo) : config.cooloffCapKobo,
       },
@@ -71,32 +73,21 @@ export async function payoutAccountRequired(supabase) {
   return Number(data?.value) === 1
 }
 
-export function sendPayoutAccountOtp({ supabase, user, mailer }) {
-  return sendOtp({ supabase, user, purpose: OTP_PURPOSES.PAYOUT_ACCOUNT, mailer })
+export function sendPayoutAccountOtp({ supabase, user, mailer, ip = null }) {
+  return sendOtp({ supabase, user, purpose: OTP_PURPOSES.PAYOUT_ACCOUNT, mailer, ip })
 }
 
 /**
  * @param {object} p
  * @param {(a:{bankCode:string,accountNumber:string}) => Promise<{accountName:string}>} p.resolveAccount  throws if it cannot
  * @param {{ nameFor(code:string): Promise<string|null> }} p.banks
- * @param {string} [p.businessName]  CareHub only: the registered name the account may also match
  */
-export async function addPayoutAccount({ supabase, user, ownerType, ownerId, bankCode, accountNumber, otp, resolveAccount, banks, businessName, mailer }) {
+export async function addPayoutAccount({ supabase, user, ownerType, ownerId, bankCode, accountNumber, otp, resolveAccount, banks, mailer }) {
   if (!bankCode || !isValidAccountNumber(accountNumber)) {
     return { status: 400, body: { error: 'Choose a bank and enter a valid 10-digit account number.', code: 'invalid_account' } }
   }
 
-  // 1. identity
-  const { data: kyc, error: kycError } = await supabase
-    .from('kyc_verifications')
-    .select('tier, legal_first_name, legal_middle_name, legal_last_name')
-    .eq('user_id', user.id).maybeSingle()
-  if (kycError) return { status: 500, body: { error: 'Could not check your verification' } }
-  if (!kyc || kyc.tier < 1) {
-    return { status: 403, body: { error: 'Verify your identity (BVN and NIN) before adding a payout account.', code: 'kyc_required' } }
-  }
-
-  // 2. the account, at the bank
+  // 1. the account, at the bank
   const bankName = await banks.nameFor(bankCode).catch(() => null)
   if (!bankName) return { status: 400, body: { error: 'Unknown bank.', code: 'unknown_bank' } }
   let resolved
@@ -116,45 +107,35 @@ export async function addPayoutAccount({ supabase, user, ownerType, ownerId, ban
   }
   if (!resolved?.accountName) return { status: 422, body: { error: 'Could not verify this account. Check the bank and account number.', code: 'account_not_found' } }
 
-  // 3. the name
-  const person = matchPersonName(resolved.accountName, { first: kyc.legal_first_name, middle: kyc.legal_middle_name, last: kyc.legal_last_name })
-  const business = ownerType === 'business' && businessName ? matchBusinessName(resolved.accountName, businessName) : { matches: false, score: 0 }
-  const match = person.matches ? person : business.matches ? business : null
-  if (!match) {
-    return {
-      status: 422,
-      body: {
-        error: ownerType === 'business'
-          ? 'The account name must match the verified owner or the registered business name.'
-          : 'The account name must match the name on your verified BVN.',
-        code: 'name_mismatch',
-        accountName: resolved.accountName,
-      },
-    }
-  }
-
-  // 4. the inbox (checked last so a rejected account does not burn the code)
+  // 2. the inbox (checked last so a rejected account does not burn the code)
   const code = await checkOtp({ supabase, userId: user.id, purpose: OTP_PURPOSES.PAYOUT_ACCOUNT, code: otp })
   if (!code.ok) return { status: code.status, body: { error: code.error, code: code.code } }
 
   const { data: added, error } = await supabase.rpc('payout_account_add', {
     p_owner_type: ownerType, p_owner_id: ownerId, p_created_by: user.id,
     p_bank_code: String(bankCode), p_bank_name: bankName, p_account_number: accountNumber,
-    p_account_name: resolved.accountName, p_score: match.score,
+    p_account_name: resolved.accountName, p_score: null,
   })
   if (error) return { status: 500, body: { error: 'Could not save the payout account' } }
   if (added?.outcome === 'duplicate') return { status: 409, body: { error: 'This account is already saved.', code: 'duplicate_account' } }
   if (added?.outcome === 'limit') return { status: 409, body: { error: 'You can save up to 5 payout accounts. Remove one first.', code: 'account_limit' } }
   if (added?.outcome !== 'ok') return { status: 500, body: { error: 'Could not save the payout account' } }
 
-  if (mailer && user.email) await mailer.sendPayoutAccount({ to: user.email, event: 'added', bankName, accountLast4: MASK(accountNumber) }).catch(() => {})
+  if (mailer && user.email) await sendSecurityAlert('payout_account_added', () => mailer.sendPayoutAccount({ to: user.email, event: 'added', bankName, accountLast4: MASK(accountNumber) }))
   return { status: 201, body: { ok: true, id: added.id, accountName: resolved.accountName, bankName } }
 }
 
-export async function setDefaultPayoutAccount({ supabase, ownerType, ownerId, id }) {
+/** Changing the default only changes what the app preselects (a withdrawal always names its account), but it is still
+ *  a change to where money is offered to go, so the owner is told. */
+export async function setDefaultPayoutAccount({ supabase, user, ownerType, ownerId, id, mailer }) {
+  const existing = await getPayoutAccountForWithdrawal(supabase, { ownerType, ownerId, id })
   const { data, error } = await supabase.rpc('payout_account_set_default', { p_owner_type: ownerType, p_owner_id: ownerId, p_id: id })
   if (error) return { status: 500, body: { error: 'Could not update the default account' } }
-  return data === 'ok' ? { status: 200, body: { ok: true } } : { status: 404, body: { error: 'Payout account not found' } }
+  if (data !== 'ok') return { status: 404, body: { error: 'Payout account not found' } }
+  if (mailer && user?.email && existing) {
+    await sendSecurityAlert('payout_account_default', () => mailer.sendPayoutAccount({ to: user.email, event: 'default', bankName: existing.bank_name, accountLast4: MASK(existing.account_number) }))
+  }
+  return { status: 200, body: { ok: true } }
 }
 
 /** Removing an account is a security-relevant change: it needs the withdrawal PIN (checked by the handler) and alerts the owner. */
@@ -164,7 +145,7 @@ export async function removePayoutAccount({ supabase, user, ownerType, ownerId, 
   if (error) return { status: 500, body: { error: 'Could not remove the payout account' } }
   if (data !== 'ok') return { status: 404, body: { error: 'Payout account not found' } }
   if (mailer && user.email && existing) {
-    await mailer.sendPayoutAccount({ to: user.email, event: 'removed', bankName: existing.bank_name, accountLast4: MASK(existing.account_number) }).catch(() => {})
+    await sendSecurityAlert('payout_account_removed', () => mailer.sendPayoutAccount({ to: user.email, event: 'removed', bankName: existing.bank_name, accountLast4: MASK(existing.account_number) }))
   }
   return { status: 200, body: { ok: true } }
 }

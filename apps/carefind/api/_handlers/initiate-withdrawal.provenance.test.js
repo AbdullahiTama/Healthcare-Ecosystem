@@ -3,12 +3,13 @@
 const h = vi.hoisted(() => {
   const s = {
     rpcCalls: [],
+    pinRow: null,
     trust: { trust_level: 'trusted', device_trust_enabled: false },
     created: { outcome: 'untraceable_credits', withdrawable_coins: 10, untraceable_coins: 5 },
   }
   const builder = () => {
     const b = {
-      select: () => b, eq: () => b, is: () => b, order: () => b, limit: () => b, update: () => b,
+      select: () => b, eq: () => b, in: () => b, is: () => b, order: () => b, limit: () => b, update: () => b,
       maybeSingle: async () => ({ data: { balance: 150 } }),
       then: (resolve) => resolve({ error: null }),
     }
@@ -19,7 +20,7 @@ const h = vi.hoisted(() => {
     rpc: async (name, args) => {
       s.rpcCalls.push([name, args])
       if (name === 'get_withdrawal_trust') return { data: [s.trust] }
-      if (name === 'get_withdrawal_pin') return { data: [{ pin_hash: 'h', pin_salt: 's' }] }
+      if (name === 'get_withdrawal_pin') return { data: [s.pinRow] }
       if (name === 'verify_withdrawal_pin') return { data: true }
       if (name === 'verify_otp') return { data: 'ok' }
       if (name === 'create_withdrawal') return { data: s.created }
@@ -32,7 +33,7 @@ const h = vi.hoisted(() => {
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => h.client }))
 vi.mock('../_lib/verifyUser.js', () => ({ verifyUser: async () => ({ id: 'user-12345678', email: 'u@example.com', user_metadata: { full_name: 'Ada Obi' } }) }))
 vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
-vi.mock('../_lib/pinCrypto.js', () => ({ hashPin: () => 'h', verifyPin: () => true, isValidPin: () => true }))
+vi.mock('../_lib/financialConfig.js', () => ({ getFinancialConfig: async () => 20000 }))
 vi.mock('../_lib/trustLevels.js', () => ({ getRequiredAuth: () => ['pin'], isInstantEligible: () => false, getDailyCap: () => 500 }))
 vi.mock('../_lib/paystackTransfer.js', () => ({
   createTransferRecipient: vi.fn(), initiateTransfer: vi.fn(), checkBalance: vi.fn(),
@@ -42,6 +43,12 @@ vi.mock('../_lib/withdrawalRecovery.js', () => ({ reconcileWithdrawal: vi.fn() }
 
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from './initiate-withdrawal.js'
+import { hashPin, randomPinSalt } from '@care-ecosystem/shared-payments'
+
+// The shared PIN gate (checkWithdrawalPin) compares against a real scrypt hash, so the stored row must be a real one.
+const SALT = randomPinSalt()
+const pinRow = (extra = {}) => ({ pin_hash: hashPin('1234', SALT), pin_salt: SALT, locked_until: null, failed_attempts: 0, ...extra })
+h.pinRow = pinRow()
 import { enqueue, processBatch } from '../_lib/emailService.js'
 import { checkBalance, createTransferRecipient, initiateTransfer } from '../_lib/paystackTransfer.js'
 

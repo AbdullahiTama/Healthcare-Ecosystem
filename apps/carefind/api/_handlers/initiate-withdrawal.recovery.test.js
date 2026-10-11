@@ -11,7 +11,7 @@ const h = vi.hoisted(() => {
     rpcCalls: [],
   }
   const builderFor = () => {
-    const b = { select: () => b, eq: () => b, is: () => b, order: () => b, limit: () => b, update: () => b, maybeSingle: async () => ({ data: null }), then: (resolve) => resolve({ error: null }) }
+    const b = { select: () => b, eq: () => b, in: () => b, is: () => b, order: () => b, limit: () => b, update: () => b, maybeSingle: async () => ({ data: null }), then: (resolve) => resolve({ error: null }) }
     return b
   }
   s.routes = {}
@@ -25,7 +25,7 @@ const h = vi.hoisted(() => {
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => h.client }))
 vi.mock('../_lib/verifyUser.js', () => ({ verifyUser: async () => ({ id: 'user-12345678', email: 'u@example.com' }) }))
 vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
-vi.mock('../_lib/pinCrypto.js', () => ({ hashPin: () => 'h', verifyPin: () => true, isValidPin: () => true }))
+vi.mock('../_lib/financialConfig.js', () => ({ getFinancialConfig: async () => 20000 }))
 vi.mock('../_lib/trustLevels.js', () => ({ getRequiredAuth: () => ['pin'], isInstantEligible: () => false, getDailyCap: () => 50 }))
 vi.mock('../_lib/paystack.js', () => ({ paystackFetch: h.paystackFetch }))
 vi.mock('../_lib/paystackTransfer.js', () => ({
@@ -38,6 +38,11 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
 
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from './initiate-withdrawal.js'
+import { hashPin, randomPinSalt } from '@care-ecosystem/shared-payments'
+
+// The shared PIN gate (checkWithdrawalPin) compares against a real scrypt hash, so the stored row must be a real one.
+const SALT = randomPinSalt()
+const pinRow = (extra = {}) => ({ pin_hash: hashPin('1234', SALT), pin_salt: SALT, locked_until: null, failed_attempts: 0, ...extra })
 
 const REF = 'cf_wd_0123456789abcdef0123456789abcdef'
 const req = { method: 'POST', body: { amount: 10, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'Ada Obi', pin: '1234', otp: '123456' } }
@@ -49,11 +54,12 @@ const created = { data: { outcome: 'ok', id: 'wd-1', reference: REF, coins: 10, 
 beforeEach(() => {
   h.rpcCalls.length = 0
   h.routes.get_withdrawal_trust = { data: { trust_level: 'new' } }
-  h.routes.get_withdrawal_pin = { data: [{ pin_hash: 'x', pin_salt: 's', locked_until: null }] }
+  h.routes.get_withdrawal_pin = { data: [pinRow()] }
   h.routes.verify_withdrawal_pin = { data: true }
   h.routes.verify_otp = { data: 'ok' }
   h.routes.create_withdrawal = created
   h.routes.attach_withdrawal_transfer = { data: 'ok' }
+  h.routes.mark_withdrawal_transfer_attempt = { data: 'ok' }
   h.routes.settle_withdrawal = (a) => ({ data: { result: a.p_outcome === 'success' ? 'completed' : 'refunded', id: 'wd-1', user_id: 'user-12345678', amount: 10, from_status: 'reserved', reference: REF } })
   h.initiateTransfer.mockReset()
   h.createTransferRecipient.mockReset().mockResolvedValue('RCP_1')
@@ -214,5 +220,53 @@ describe('initiate-withdrawal: recovery after the coins are reserved', () => {
     h.paystackFetch.mockResolvedValue({ status: false, message: 'Transfer not found' })
     await handler(req, res())
     expect(trustUpdates()).toHaveLength(0)
+  })
+})
+
+describe('H04: the attempt is recorded BEFORE the provider is asked, and nothing is asked without it', () => {
+  it('marks the exact request id as attempted, and only then calls Paystack', async () => {
+    const order = []
+    h.routes.mark_withdrawal_transfer_attempt = () => { order.push('mark'); return { data: 'ok' } }
+    h.initiateTransfer.mockImplementation(async () => { order.push('transfer'); return { transferCode: 'TRF_1' } })
+    const r = res()
+    await handler(req, r)
+    expect(order).toEqual(['mark', 'transfer'])
+    expect(calls('mark_withdrawal_transfer_attempt')[0][1]).toEqual({ p_request_id: 'wd-1' })
+    expect(r.statusCode).toBe(200)
+  })
+
+  it.each([
+    ['the mark cannot be written', { data: null, error: { message: 'db down' } }],
+    ['the request was settled meanwhile', { data: 'already_failed' }],
+    ['the request is unknown', { data: 'not_found' }],
+  ])('%s: Paystack is never called and the reservation is released at once', async (_label, answer) => {
+    h.routes.mark_withdrawal_transfer_attempt = answer
+    const r = res()
+    await handler(req, r)
+    expect(h.initiateTransfer).not.toHaveBeenCalled()
+    expect(r.statusCode).toBe(503)
+    expect(settles()).toEqual([expect.objectContaining({ p_outcome: 'failed', p_request_id: 'wd-1', p_detail: 'attempt_not_recorded' })])
+  })
+
+  it('a timeout on the transfer call is NEVER refunded by the handler: the request stays processing for the provider-confirmed sweep', async () => {
+    h.initiateTransfer.mockRejectedValue(Object.assign(new Error('timeout'), { code: 'timeout', ambiguous: true }))
+    h.paystackFetch.mockResolvedValue({ status: false, message: 'Transfer not found' })
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const r = res()
+    await handler(req, r)
+    err.mockRestore()
+    expect(settles()).toHaveLength(0)
+    expect(r.body).toMatchObject({ pending: true })
+    expect(h.paystackFetch).not.toHaveBeenCalled() // not even asked inside the grace window
+  })
+
+  it('a DEFINITE refusal is checked at once and released only because Paystack confirms it never existed', async () => {
+    h.initiateTransfer.mockRejectedValue(Object.assign(new Error('Invalid account'), { paystackRejected: true }))
+    h.paystackFetch.mockResolvedValue({ status: false, message: 'Transfer not found' })
+    const r = res()
+    await handler(req, r)
+    expect(h.paystackFetch).toHaveBeenCalled()
+    expect(settles()).toEqual([expect.objectContaining({ p_outcome: 'failed', p_request_id: 'wd-1' })])
+    expect(r.body).toMatchObject({ refunded: true })
   })
 })

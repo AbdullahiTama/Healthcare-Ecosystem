@@ -100,3 +100,39 @@ order by created_at desc limit 50;
 - The unread badge is not refreshed live and the list is not paginated.
 - `record_shop_notification` is dead code (execute revoked in F-43); remove it in a cleanup migration.
 - The notifications UPDATE policy is not column-restricted (section 5).
+
+## H05 - the payment e-mail system (2026-10-10)
+
+Migration `carefind_20261101_payment_email_events` (written and tested, **not applied**).
+
+### The e-mails, who sends them, when, and under which key
+
+| Moment | Template (both brands unless noted) | Sent by | Idempotency key |
+|---|---|---|---|
+| One-time code | not a template: sent directly, never queued (`securityEmails.js`) | `sendOtp` | n/a (a code is never stored) |
+| PIN set or changed | `renderPinChangedEmail` (direct) | `setWithdrawalPin` | n/a |
+| PIN reset with "forgot PIN" | `renderPinResetEmail` (direct, louder, names the 24 h limit) | `setWithdrawalPin` with `forgot` | n/a |
+| PIN locked, payout account added / removed / default changed | `renderPinLockedEmail`, `renderPayoutAccountEmail` (direct) | the handlers, via `sendSecurityAlert` (a failure is logged as `alert.failed`) | n/a |
+| Payment received (top-up receipt) | `payment_success` (CareFind), `business_wallet_topup` (CareHub) | settlement effects | `payment-success:<ref>` / `wallet-topped-up:<ref>` |
+| Payment declined by the provider | `payment_failed` | the redirect handler or the sweep that closed the intent (not for an abandoned checkout) | `payment-failed:<ref>` |
+| Withdrawal requested | `withdrawal_requested` | the withdrawal handler | `withdrawal-requested:<ref>` |
+| Withdrawal slow | `withdrawal_processing` (once, only when Paystack still reports it in flight after the grace period) | the withdrawal sweep | `withdrawal-processing:<ref>` / `business-withdrawal-processing:<ref>` |
+| Withdrawal completed / failed | `withdrawal_completed`, `withdrawal_failed` | the settle effect (webhook, sweep, request path, backfill) | `withdrawal-completed:<ref>`, `withdrawal-failed:<ref>` / `business-withdrawal-completed:<ref>`, `business-withdrawal-failed:<ref>` |
+| Refund requested / completed / failed | `refund_requested`, `refund_completed`, `refund_failed` | the refund effect (cancel call, webhook, cron, backfill) | `refund-requested:<id>`, `refund-completed:<id>`, `refund-failed:<id>` |
+
+### What a money e-mail may contain
+
+* The person's real name (never their e-mail address), the naira actually paid, the coins, the bank name and **only the last four digits** of an account (`maskAccount`, applied by the effect before the payload is stored and again by the template).
+* Never a one-time code, a PIN, a password, an API key or a token. The central guard in `EmailService.enqueue` refuses any payload with a credential-like key at any depth (`otp`, `code`, `pin`, `password`, `secret`, `api_key`, `token`, `session` ...) before a row is written; the `withdrawal_pin_otp` template is gone from both registries.
+* Every interpolated value is escaped by the `html` tagged template; links go through `safeUrl`.
+
+### Delivery guarantee
+
+1. The send path is the outbox (lease claim, attempt count, max attempts, backoff, `dead` status, `email_logs`, dispatch pause) and the provider call carries the row id as its idempotency key.
+2. The effects that queue these e-mails run once, in the call that changed state. If that call dies or the enqueue fails, it is logged as `email.enqueue_failed` (and written to `email_logs` with stage `enqueue` for settlement effects).
+3. The cron step `payment_notifications` (every 15 minutes) then asks `list_unnotified_money_events` for money events that settled in the last 48 hours and have **no outbox row under that e-mail's key**, and sends them through the same effects. A lost enqueue becomes a late e-mail; a replay cannot duplicate it (the key is unique in the outbox).
+4. For any e-mail to leave production the application must be deployed and the three Vault secrets set (the outbox cron currently fails every minute with "Vault secret ... is not set").
+
+### Catalog
+
+The migration registers and enables the payment, withdrawal, refund and wallet events for the brand that sends them (modelled on that app's `withdrawal_requested` row) and leaves every other event untouched. The application's own sender inserts into the outbox directly and does not consult the catalog; the catalog state matters to database-side producers and now tells the truth.

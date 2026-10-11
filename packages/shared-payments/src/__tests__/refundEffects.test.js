@@ -72,10 +72,58 @@ describe('createRefundEffects', () => {
     expect(sent[0].payload.fullName).toBe('there')
   })
 
-  it('results that changed nothing (replays, failures, not_found) send nothing', async () => {
+  it('results that changed nothing (replays, still-processing, not_found) send nothing', async () => {
     const { apply, sent } = setup({ appt: { client_email: 'c@example.com', client_name: 'C', source: 'carefind' } })
-    for (const r of ['already_completed', 'failed', 'processing', 'not_found', 'amount_mismatch', undefined]) await apply(settled(r))
+    for (const r of ['already_completed', 'already_failed', 'processing', 'not_found', 'amount_mismatch', undefined]) await apply(settled(r))
     expect(sent).toEqual([])
+  })
+
+  it('a refund the provider failed tells the payer once: refund_failed, keyed by the refund id, same brand rule', async () => {
+    const { apply, sent } = setup({ appt: { client_email: 'c@example.com', client_name: 'Chidi', source: 'carehub' } })
+    await apply(settled('failed'))
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({
+      templateKey: 'refund_failed', toEmail: 'c@example.com', app: 'carehub', sourceId: 'rf1',
+      subject: 'CareHub: refund needs attention', idempotencyKey: 'refund-failed:rf1',
+    })
+    expect(sent[0].payload).toMatchObject({ fullName: 'Chidi', reference: 'rf_abc' })
+  })
+
+  it('a requested refund tells the payer why, for an appointment and for a payment that could not be applied', async () => {
+    const appt = setup({ appt: { client_email: 'c@example.com', client_name: 'C', source: 'carefind', patient_user_id: null } })
+    await appt.apply(settled('requested', { customer_id: undefined, amount_kobo: 250000 }))
+    expect(appt.sent[0]).toMatchObject({ templateKey: 'refund_requested', app: 'carefind', idempotencyKey: 'refund-requested:rf1', subject: 'CareFind: refund requested' })
+    expect(appt.sent[0].payload).toMatchObject({ reason: 'Appointment cancelled' })
+    expect(appt.sent[0].payload.amount).toContain('2,500')
+
+    const intent = setup({ intent: { application: 'carefind', customer_id: 'u1' }, authUser: { email: 'p@example.com', user_metadata: { full_name: 'Pat' } } })
+    await intent.apply(settled('requested', { entity_type: 'payment_intent', entity_id: 'i1' }))
+    expect(intent.sent[0]).toMatchObject({ toEmail: 'p@example.com', templateKey: 'refund_requested' })
+    expect(intent.sent[0].payload).toMatchObject({ fullName: 'Pat', reason: 'Your payment could not be applied' })
+  })
+
+  it('requested, then completed, are two emails with two different keys; a replay of either changes nothing downstream', async () => {
+    const { apply, sent } = setup({ appt: { client_email: 'c@example.com', client_name: 'C', source: 'carefind' } })
+    await apply(settled('requested'))
+    await apply(settled('completed'))
+    expect(sent.map((m) => m.idempotencyKey)).toEqual(['refund-requested:rf1', 'refund-completed:rf1'])
+    await apply(settled('requested'))
+    await apply(settled('completed'))
+    // the same keys again: the outbox's unique key makes these no-ops (asserted in the EmailService suite)
+    expect(new Set(sent.map((m) => m.idempotencyKey)).size).toBe(2)
+  })
+
+  it('a CareCoin refund (no kobo) is described in coins, not as N0', async () => {
+    const { apply, sent } = setup({ appt: { client_email: 'c@example.com', client_name: 'C', source: 'carefind' } })
+    await apply(settled('completed', { kind: 'carecoin', amount_kobo: null, coins: 5 }))
+    expect(sent[0].payload.amount).toBe('5 CareCoins')
+  })
+
+  it('an enqueue that fails is logged as email.enqueue_failed without the address, never thrown', async () => {
+    const { apply, logger } = setup({ appt: { client_email: 'c@example.com', client_name: 'C', source: 'carefind' } }, async () => { throw new Error('outbox rejected c@example.com') })
+    await expect(apply(settled('completed'))).resolves.toBeUndefined()
+    expect(logger.error).toHaveBeenCalledWith('email.enqueue_failed', expect.objectContaining({ family: 'refund', template: 'refund_completed', id: 'rf1' }))
+    expect(JSON.stringify(logger.error.mock.calls)).not.toContain('c@example.com')
   })
 
   it('no address anywhere: nothing is sent, nothing throws, and it is logged', async () => {

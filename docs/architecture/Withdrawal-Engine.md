@@ -89,3 +89,62 @@ Contradictory provider signals are **reported, never auto-fixed**: `conflict_pai
 ## 10. Update: a fresh emailed code on every withdrawal
 
 `initiate-withdrawal` (CareFind) and `initiate-business-withdrawal` (CareHub) check, in order: PIN, then a single-use emailed code (`checkOtp`, purpose `withdrawal`), then the bank re-check, limits and the reservation. The code is requested through `POST /api/withdrawal-pin/otp {"purpose":"withdrawal"}`. See `Payout-Accounts-and-KYC.md` (Withdrawal code) and migration `carefind_20261027_withdrawal_otp_purpose` (not yet applied to production).
+
+## H04 - the attempt marker, provider conflicts and the legacy rows (2026-10-10)
+
+Migration `carefind_20261031_withdrawal_attempt_and_conflicts` (written and tested, **not applied** until the owner says so).
+
+### What each state means now
+
+```
+                      mark_*_transfer_attempt            transfer.success / sweep sees success
+   (reservation) ──▶ reserved ───────────────▶ processing ───────────────────────────────▶ completed
+                         │                          │  ▲ attach_*_transfer records the codes   │
+                         │ failed / provider-        │  │ (no state change)                     │ transfer.reversed
+                         │ confirmed not sent        │ failed / reversed / provider-            ▼
+                         ▼                          ▼ confirmed not paid                    reversed
+                       failed ──────────────────▶ failed ──────────────────────────────────────▶ (all) refunded   (coins / balance back, once)
+```
+
+* **reserved**: the funds are held and **no transfer call was ever made**. It can be released at once. The API marks the attempt immediately before it calls the provider, and does not call the provider if the mark was not recorded (it releases the reservation instead).
+* **processing**: a transfer call was made or is in flight. A timeout proves nothing, because the transfer may have been created anyway. It is released **only** on provider-confirmed non-payment: Paystack reporting `failed`, `reversed`, `abandoned`, `blocked` or `rejected`; or `not found` with no transfer code, believed only **60 minutes after the mark** (`AMBIGUOUS_GRACE_MS`), or at once after a definite Paystack refusal of the request itself.
+* **completed / failed / reversed / refunded** are unchanged. A request that is `reserved` and unmarked is judged by the shorter 10-minute rule (`IN_FLIGHT_GRACE_MS`), because Paystack not knowing the reference is proof that no call was made.
+* There is **no persisted `requested` state**: the request row, the reference and the reservation are created in one transaction, so such a state could never be observed.
+* The reference (`cf_wd_<32 hex>` / `ch_wd_<32 hex>`) is derived from the request id before any provider call; the provider linkage is attached by that exact id and cannot be changed once set.
+
+### Provider conflicts are durable
+
+When the provider's report contradicts the books, the settle functions leave the state alone and stamp `failure_reason` once with `conflict:paid_after_refund`, `conflict:failed_after_completed` or `conflict:amount_mismatch`. `reconcile_withdrawals` reports each stamped request as kind `provider_conflict` (critical by default, so the finance alert e-mail fires and the "Money Checks" screen shows it). A human decides; nothing is reversed automatically. `processing_without_transfer` is raised only when a marked transfer is more than the stale window + 30 minutes old with no code.
+
+### Runbook: the three legacy withdrawals (41 coins) - for the owner to run, NOT run by the assistant
+
+Three requests from before the engine were debited and never produced a transfer. They are `reserved`, ids below. **Run only after you have checked the evidence in step 1, in the Supabase SQL editor.**
+
+| id | coins | filed | reference | what to check |
+|---|---|---|---|---|
+| `269b24aa-5cb4-49a3-b65f-242e1129cc29` | 5 | 2026-07-17 | none | no transfer in the Paystack dashboard (Transfers, 2026-07-17..19) to the GTBank account ending 6789 |
+| `1be53481-be93-4461-a186-a4e0bd9b76e4` | 10 | 2026-07-19 | none | no transfer to the opay account ending 9323 around 2026-07-19 |
+| `80dfdb36-6fa0-407d-a3fe-ae639d3a1b03` | 26 | 2026-09-04 | `cf_wd_c128ee0a_dec82be0b628` | `GET /transfer/verify/cf_wd_c128ee0a_dec82be0b628` returns "not found" (or look the reference up in the dashboard). Once the code is deployed the sweep does exactly this check by itself and refunds it |
+
+If a transfer **did** go out, do not refund: mark it completed instead (`'success'` below), which closes the request without moving coins.
+
+```sql
+-- 1. look first (read-only)
+select id, user_id, amount, status, paystack_reference, paystack_transfer_code, created_at
+  from public.withdrawal_requests
+ where id in ('269b24aa-5cb4-49a3-b65f-242e1129cc29', '1be53481-be93-4461-a186-a4e0bd9b76e4', '80dfdb36-6fa0-407d-a3fe-ae639d3a1b03');
+
+-- 2. refund each one the evidence shows was never paid. One statement per request; each is atomic and safe to repeat
+--    (a second run answers 'already_refunded'). Coins go back through the ledger exactly once.
+select public.settle_withdrawal('failed', null, '269b24aa-5cb4-49a3-b65f-242e1129cc29'::uuid, null, 'legacy_never_sent');
+select public.settle_withdrawal('failed', null, '1be53481-be93-4461-a186-a4e0bd9b76e4'::uuid, null, 'legacy_never_sent');
+select public.settle_withdrawal('failed', null, '80dfdb36-6fa0-407d-a3fe-ae639d3a1b03'::uuid, null, 'legacy_never_sent');
+
+-- 3. verify (read-only): each request is 'refunded', and the books still balance
+select id, status, refunded_at from public.withdrawal_requests
+ where id in ('269b24aa-5cb4-49a3-b65f-242e1129cc29', '1be53481-be93-4461-a186-a4e0bd9b76e4', '80dfdb36-6fa0-407d-a3fe-ae639d3a1b03');
+select * from public.reconcile_coin_wallets();          -- no rows
+select * from public.reconcile_withdrawals(60);         -- the three 'stuck' rows are gone
+```
+
+The admin screen's "reject withdrawal" does the same for the two requests with no reference (it refunds those without asking Paystack, because there is nothing to ask about); the 26-coin request needs the Paystack check first, so the screen refuses it until Paystack says the transfer does not exist.

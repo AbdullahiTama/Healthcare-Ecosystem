@@ -27,6 +27,7 @@ export function reconcileBusinessWithdrawals(supabase, { limit = 50, ...opts } =
     // The hooks run only for changes THIS sweep made, so a webhook that settled first is never counted twice.
     onRefunded: (row, result) => applyBusinessWithdrawalResult(supabase, { ...result, reference: row.paystack_reference }),
     onCompleted: (row, result) => applyBusinessWithdrawalResult(supabase, { ...result, reference: row.paystack_reference }),
+    onInFlight: (row) => applyBusinessWithdrawalResult(supabase, { result: 'in_flight', id: row.id, reference: row.paystack_reference }),
     ...opts,
   })
 }

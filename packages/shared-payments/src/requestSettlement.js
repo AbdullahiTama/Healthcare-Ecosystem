@@ -36,6 +36,8 @@ export async function settleIntentForRequest({ supabase, provider, reference, pu
       return { http: 200, body: { alreadyProcessed: true }, outcome: 'already_settled', result }
     case 'not_paid':
       return { http: 400, body: { error: 'Payment not confirmed by Paystack' }, outcome: 'not_paid', result }
+    case 'not_provider_payment':
+      return { http: 400, body: { error: 'This payment is not made by card' }, outcome: 'not_provider_payment', result }
     case 'needs_refund':
       return {
         http: 409,

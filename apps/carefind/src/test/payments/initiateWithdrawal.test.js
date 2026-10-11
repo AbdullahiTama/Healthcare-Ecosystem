@@ -15,6 +15,7 @@ const { mockSupabase, mockVerifyUser, mockPaystack } = vi.hoisted(() => ({
 
 vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn(() => mockSupabase) }))
 vi.mock('../../../api/_lib/verifyUser.js', () => ({ verifyUser: mockVerifyUser }))
+vi.mock('../../../api/_lib/financialConfig.js', () => ({ getFinancialConfig: async () => 20000 }))
 vi.mock('../../../api/_lib/paystackTransfer.js', () => mockPaystack)
 
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
@@ -64,6 +65,7 @@ describe('initiate-withdrawal PIN gate', () => {
       if (fn === 'verify_otp') return { data: otpResult, error: null }
       if (fn === 'create_withdrawal') return { data: { outcome: 'ok', id: 'wd-1', reference: 'cf_wd_00112233445566778899aabbccddeeff', coins: 10, payout_kobo: 160000 }, error: null }
       if (fn === 'attach_withdrawal_transfer') return { data: 'ok', error: null }
+      if (fn === 'mark_withdrawal_transfer_attempt') return { data: 'ok', error: null }
       if (fn === 'update_withdrawal_trust_after_withdrawal') return { data: 'new', error: null }
       return { data: null, error: null }
     })
@@ -77,6 +79,7 @@ describe('initiate-withdrawal PIN gate', () => {
       const chain = Object.assign(result, {
         select: () => chain,
         eq: () => chain,
+        in: () => chain,
         is: () => chain,
         order: () => chain,
         limit: () => chain,

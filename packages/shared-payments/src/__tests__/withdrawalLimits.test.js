@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
-  LIMIT_DEFAULTS, readLimitConfig, coolingOffEndsAt, limitsForWithdrawal, limitsForSavedAccount, applyLimits, capInCoins, limitMessage, kycTier,
+  LIMIT_DEFAULTS, readLimitConfig, coolingOffEndsAt, limitsForWithdrawal, limitsForDestination, hasCompletedWithdrawalTo, isKycEnabled, applyLimits, capInCoins, limitMessage, kycTier,
 } from '../withdrawalLimits.js'
 import { checkWithdrawalPin, hashPin, randomPinSalt } from '../pin.js'
 import { listPayoutAccounts } from '../payoutAccounts.js'
@@ -8,8 +8,11 @@ import { listPayoutAccounts } from '../payoutAccounts.js'
 const NOW = Date.parse('2026-10-10T12:00:00Z')
 const hoursAgo = (h) => new Date(NOW - h * 3_600_000).toISOString()
 
-function db({ config = [], kyc = null, accounts = [] } = {}) {
-  const table = { financial_config: config, kyc_verifications: kyc ? [kyc] : [], payout_accounts: accounts }
+function db({ config = [], kyc = null, accounts = [], pins = [], paid = [], businessPaid = [], failHistory = false } = {}) {
+  const table = {
+    financial_config: config, kyc_verifications: kyc ? [kyc] : [], payout_accounts: accounts,
+    withdrawal_pins: pins, withdrawal_requests: paid, business_withdrawal_requests: businessPaid,
+  }
   const query = (rows) => {
     let result = rows
     const q = {
@@ -17,7 +20,8 @@ function db({ config = [], kyc = null, accounts = [] } = {}) {
       in: (c, vals) => { result = result.filter((r) => vals.includes(r[c])); return q },
       eq: (c, v) => { result = result.filter((r) => r[c] === v); return q },
       order: () => q,
-      maybeSingle: async () => ({ data: result[0] ?? null }),
+      limit: () => q,
+      maybeSingle: async () => (failHistory ? { data: null, error: { message: 'boom' } } : { data: result[0] ?? null }),
       then: (r) => r({ data: result, error: null }),
     }
     return q
@@ -27,7 +31,7 @@ function db({ config = [], kyc = null, accounts = [] } = {}) {
 
 describe('readLimitConfig', () => {
   it('uses the seeded defaults when nothing is configured', async () => {
-    expect(await readLimitConfig(db())).toEqual({ tier1CapKobo: 5_000_000, tier2CapKobo: 50_000_000, cooloffHours: 24, cooloffCapKobo: 2_000_000, businessCapKobo: 100_000_000 })
+    expect(await readLimitConfig(db())).toEqual({ tier1CapKobo: 5_000_000, tier2CapKobo: 50_000_000, cooloffHours: 24, cooloffCapKobo: 2_000_000, businessCapKobo: 100_000_000, pinCooloffHours: 24, kycEnabled: false })
   })
   it('reads overrides, and ignores junk rows', async () => {
     const c = await readLimitConfig(db({ config: [
@@ -72,11 +76,104 @@ describe('limitsForWithdrawal', () => {
     expect(lowEngine.coolingCapKobo).toBe(1_000_000)
   })
 
-  it('limitsForSavedAccount looks the tier up (people only)', async () => {
-    const d = db({ kyc: { user_id: 'u1', tier: 2 } })
-    expect((await limitsForSavedAccount(d, { ownerType: 'user', userId: 'u1', account: { verified_at: hoursAgo(100) }, now: NOW })).tierCapKobo).toBe(50_000_000)
-    expect((await limitsForSavedAccount(d, { ownerType: 'user', userId: 'nobody', account: { verified_at: hoursAgo(100) }, now: NOW })).tierCapKobo).toBeNull()
+  it('limitsForDestination looks the tier up for a saved account (people only) when identity verification is switched on', async () => {
+    const d = db({ kyc: { user_id: 'u1', tier: 2 }, config: [{ key: 'kyc_enabled', value: 1 }] })
+    const dest = { bankCode: '058', accountNumber: '0123456789' }
+    const saved = { verified_at: hoursAgo(100) }
+    expect((await limitsForDestination(d, { ownerType: 'user', userId: 'u1', destination: dest, saved, now: NOW })).tierCapKobo).toBe(50_000_000)
+    expect((await limitsForDestination(d, { ownerType: 'user', userId: 'nobody', destination: dest, saved, now: NOW })).tierCapKobo).toBeNull()
     expect(await kycTier(d, 'u1')).toBe(2)
+  })
+})
+
+// H02: the cooling-off cap follows the DESTINATION and the PIN age, not only a saved account.
+describe('limitsForDestination', () => {
+  const DEST = { bankCode: '058', accountNumber: '0123456789' }
+  const CAP = 2_000_000
+  const user = (db_, over = {}) => limitsForDestination(db_, { ownerType: 'user', userId: 'u1', historyOwnerId: 'u1', destination: DEST, now: NOW, ...over })
+  const paidTo = { user_id: 'u1', bank_code: '058', account_number: '0123456789', status: 'completed' }
+
+  it('a typed-in destination never paid before is capped (the saved-account-only bypass is closed)', async () => {
+    const l = await user(db())
+    expect(l).toMatchObject({ coolingCapKobo: CAP, coolingReason: 'new_destination', coolingEndsAt: null, destinationKnown: false })
+  })
+
+  it('a typed-in destination with a completed withdrawal in the owner history is known: no cap', async () => {
+    const l = await user(db({ paid: [paidTo] }))
+    expect(l).toMatchObject({ coolingCapKobo: null, coolingReason: null, destinationKnown: true })
+  })
+
+  it('history of ANOTHER owner, another account number, another bank or a non-completed status does not count', async () => {
+    for (const row of [{ ...paidTo, user_id: 'u2' }, { ...paidTo, account_number: '0999999999' }, { ...paidTo, bank_code: '057' }, { ...paidTo, status: 'failed' }]) {
+      expect((await user(db({ paid: [row] }))).coolingCapKobo).toBe(CAP)
+    }
+  })
+
+  it('a saved account inside its window is capped as new_account with an end; past the window it is known', async () => {
+    const young = await user(db(), { saved: { verified_at: hoursAgo(2) } })
+    expect(young).toMatchObject({ coolingCapKobo: CAP, coolingReason: 'new_account' })
+    expect(young.coolingEndsAt.getTime()).toBe(NOW + 22 * 3_600_000)
+    expect((await user(db(), { saved: { verified_at: hoursAgo(25) } })).coolingCapKobo).toBeNull()
+  })
+
+  it('a saved account still inside its window is known once a withdrawal to it has completed', async () => {
+    expect((await user(db({ paid: [paidTo] }), { saved: { verified_at: hoursAgo(2) } })).coolingCapKobo).toBeNull()
+  })
+
+  it('a destination the bank could not confirm is always new, even with history or a settled saved account', async () => {
+    expect((await user(db({ paid: [paidTo] }), { unverified: true })).coolingReason).toBe('new_destination')
+    expect((await user(db(), { saved: { verified_at: hoursAgo(100) }, unverified: true })).coolingCapKobo).toBe(CAP)
+  })
+
+  it('after a PIN change every destination is capped until the window ends, known or not', async () => {
+    const pins = [{ user_id: 'u1', pin_set_at: hoursAgo(3) }]
+    const l = await user(db({ paid: [paidTo], pins }))
+    expect(l).toMatchObject({ coolingCapKobo: CAP, coolingReason: 'pin_changed', destinationKnown: true })
+    expect(l.coolingEndsAt.getTime()).toBe(NOW + 21 * 3_600_000)
+  })
+
+  it('an old PIN, a never-changed PIN (null) and no PIN row do not cap', async () => {
+    for (const pins of [[{ user_id: 'u1', pin_set_at: hoursAgo(30) }], [{ user_id: 'u1', pin_set_at: null }], []]) {
+      expect((await user(db({ paid: [paidTo], pins }))).coolingCapKobo).toBeNull()
+    }
+  })
+
+  it('new destination AND recent PIN change: the open-ended rule names the message, the cap is applied once', async () => {
+    const l = await user(db({ pins: [{ user_id: 'u1', pin_set_at: hoursAgo(1) }] }))
+    expect(l).toMatchObject({ coolingCapKobo: CAP, coolingReason: 'new_destination' })
+  })
+
+  it('configuration turns each rule off independently, without a deploy', async () => {
+    const pins = [{ user_id: 'u1', pin_set_at: hoursAgo(1) }]
+    const noPin = await user(db({ paid: [paidTo], pins, config: [{ key: 'pin_change_cooloff_hours', value: 0 }] }))
+    expect(noPin.coolingCapKobo).toBeNull()
+    const noDest = await user(db({ config: [{ key: 'payout_account_cooloff_hours', value: 0 }] }))
+    expect(noDest.coolingCapKobo).toBeNull()
+    const pinStillOn = await user(db({ pins, config: [{ key: 'payout_account_cooloff_hours', value: 0 }] }))
+    expect(pinStillOn.coolingReason).toBe('pin_changed')
+  })
+
+  it('a history lookup that FAILS counts as unknown: it caps, never uncaps', async () => {
+    expect((await user(db({ paid: [paidTo], failHistory: true }))).coolingCapKobo).toBe(CAP)
+    expect(await hasCompletedWithdrawalTo(db({ paid: [paidTo], failHistory: true }), { ownerType: 'user', historyOwnerId: 'u1', bankCode: '058', accountNumber: '0123456789' })).toBe(false)
+  })
+
+  it('a business: history is the business, the cap sits under the engine ceiling, and the PIN is the owners', async () => {
+    const bizPaid = { business_id: 'b1', bank_code: '058', account_number: '0123456789', status: 'completed' }
+    const base = { ownerType: 'business', userId: 'u1', historyOwnerId: 'b1', destination: DEST, now: NOW }
+    expect((await limitsForDestination(db({ businessPaid: [bizPaid] }), base)).coolingCapKobo).toBeNull()
+    expect((await limitsForDestination(db({ businessPaid: [{ ...bizPaid, business_id: 'b2' }] }), base)).coolingCapKobo).toBe(CAP)
+    const low = db({ config: [{ key: 'business_withdrawal_daily_cap_kobo', value: 1_000_000 }] })
+    expect((await limitsForDestination(low, base)).coolingCapKobo).toBe(1_000_000)
+    const pinned = await limitsForDestination(db({ businessPaid: [bizPaid], pins: [{ user_id: 'u1', pin_set_at: hoursAgo(1) }] }), base)
+    expect(pinned.coolingReason).toBe('pin_changed')
+  })
+
+  it('applyLimits and limitMessage carry the new reasons', async () => {
+    const l = await user(db())
+    expect(applyLimits({ trustCapCoins: 1000, limits: l, coinValueKobo: 20_000 })).toEqual({ capCoins: 100, reason: 'new_destination' })
+    expect(limitMessage({ reason: 'new_destination', capKobo: CAP })).toMatch(/first withdrawal to this bank account.*N20,000/)
+    expect(limitMessage({ reason: 'pin_changed', capKobo: CAP, coolingEndsAt: new Date('2026-10-11T00:00:00Z') })).toMatch(/PIN was changed recently.*N20,000.*Oct 2026/)
   })
 })
 
@@ -153,7 +250,7 @@ describe('listPayoutAccounts exposes what the screen needs to explain limits', (
   it('marks a new account as cooling off and returns the person\'s tier ceiling and the next one up', async () => {
     const d = db({
       kyc: { user_id: 'u1', tier: 1 },
-      config: [{ key: 'payout_account_required', value: 0 }],
+      config: [{ key: 'payout_account_required', value: 0 }, { key: 'kyc_enabled', value: 1 }],
       accounts: [
         { id: 'new', owner_type: 'user', owner_id: 'u1', status: 'verified', bank_code: '1', bank_name: 'B', account_number: '0123456789', account_name: 'N', is_default: true, verified_at: new Date(Date.now() - 3_600_000).toISOString() },
         { id: 'old', owner_type: 'user', owner_id: 'u1', status: 'verified', bank_code: '2', bank_name: 'B', account_number: '0123456780', account_name: 'N', is_default: false, verified_at: '2020-01-01T00:00:00Z' },
@@ -167,5 +264,54 @@ describe('listPayoutAccounts exposes what the screen needs to explain limits', (
   it('businesses get no tier numbers', async () => {
     const r = await listPayoutAccounts(db({ accounts: [] }), { ownerType: 'business', ownerId: 'b1', userId: 'u1' })
     expect(r.body.limits).toMatchObject({ tier: 0, dailyCapKobo: null, nextTierCapKobo: null })
+  })
+})
+
+// H06: with identity verification OFF (the default) no KYC row can touch any money number.
+describe('H06: identity verification switched OFF', () => {
+  const DEST = { bankCode: '058', accountNumber: '0123456789' }
+  const verified = { user_id: 'u1', tier: 2 }
+  const old = { verified_at: hoursAgo(100) }
+
+  it('isKycEnabled: only exactly 1 turns it on; a missing row, 0, junk and a failing read are all off', async () => {
+    expect(await isKycEnabled(db())).toBe(false)
+    expect(await isKycEnabled(db({ config: [{ key: 'kyc_enabled', value: 0 }] }))).toBe(false)
+    expect(await isKycEnabled(db({ config: [{ key: 'kyc_enabled', value: 'abc' }] }))).toBe(false)
+    expect(await isKycEnabled(db({ config: [{ key: 'kyc_enabled', value: 2 }] }))).toBe(false)
+    expect(await isKycEnabled(db({ config: [{ key: 'kyc_enabled', value: 1 }] }))).toBe(true)
+    expect(await isKycEnabled({ from: () => { throw new Error('db down') } })).toBe(false)
+  })
+
+  it('a verified tier-2 person gets NO ceiling lift and the KYC table is not even read', async () => {
+    let read = false
+    const base = db({ kyc: verified })
+    const spy = { from: (t) => { if (t === 'kyc_verifications') read = true; return base.from(t) } }
+    const l = await limitsForDestination(spy, { ownerType: 'user', userId: 'u1', historyOwnerId: 'u1', destination: DEST, saved: old, now: NOW })
+    expect(l.tierCapKobo).toBeNull()
+    expect(l.tier).toBe(0)
+    expect(read).toBe(false)
+  })
+
+  it('the same person IS lifted once the switch is on (the behaviour is preserved, not removed)', async () => {
+    const l = await limitsForDestination(db({ kyc: verified, config: [{ key: 'kyc_enabled', value: 1 }] }), { ownerType: 'user', userId: 'u1', historyOwnerId: 'u1', destination: DEST, saved: old, now: NOW })
+    expect(l.tierCapKobo).toBe(50_000_000)
+  })
+
+  it('the cooling-off rules do not depend on the switch', async () => {
+    const l = await limitsForDestination(db({ kyc: verified }), { ownerType: 'user', userId: 'u1', historyOwnerId: 'u1', destination: DEST, saved: null, now: NOW })
+    expect(l).toMatchObject({ coolingCapKobo: 2_000_000, coolingReason: 'new_destination' })
+  })
+
+  it('the account list says KYC is off and shows no tier figures, whatever a KYC row says', async () => {
+    const d = db({ kyc: verified, accounts: [{ id: 'a', owner_type: 'user', owner_id: 'u1', status: 'verified', bank_code: '1', bank_name: 'B', account_number: '0123456789', account_name: 'N', is_default: true, verified_at: '2020-01-01T00:00:00Z' }] })
+    const r = await listPayoutAccounts(d, { ownerType: 'user', ownerId: 'u1', userId: 'u1' })
+    expect(r.body.kycEnabled).toBe(false)
+    expect(r.body.limits).toMatchObject({ tier: 0, dailyCapKobo: null, nextTierCapKobo: null })
+    expect(r.body.accounts).toHaveLength(1)
+  })
+
+  it('the account list says KYC is on when it is', async () => {
+    const r = await listPayoutAccounts(db({ config: [{ key: 'kyc_enabled', value: 1 }], accounts: [] }), { ownerType: 'user', ownerId: 'u1', userId: 'u1' })
+    expect(r.body.kycEnabled).toBe(true)
   })
 })

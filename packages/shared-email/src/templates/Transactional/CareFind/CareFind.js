@@ -2,7 +2,7 @@
 // link built from the environment.
 
 import { layout, html, paragraph, smallPrint, detailsTable, notice, itemsTable, siteLink } from '../../layout.js'
-import { fmtDate } from '../../../utils/formatters.js'
+import { fmtDate, maskAccount } from '../../../utils/formatters.js'
 
 const APP = 'carefind'
 
@@ -232,6 +232,30 @@ export function paymentFailed({ fullName, amount, reference, purpose } = {}) {
   })
 }
 
+export function refundRequested({ fullName, amount, reference, reason } = {}) {
+  return email({
+    title: 'We are refunding your payment',
+    preheader: 'Your refund has been requested.',
+    body: [
+      paragraph(html`${hi(fullName)} a refund of your payment has been requested and is being processed. We will email you again when it is complete.`),
+      detailsTable([['Amount', amount], ['Reference', reference], ['Reason', reason]]),
+      paragraph('You do not need to do anything. If you have questions, reply to this email and our team will help.'),
+    ],
+  })
+}
+
+export function refundFailed({ fullName, amount, reference } = {}) {
+  return email({
+    title: 'Your refund needs attention',
+    preheader: 'We could not complete your refund yet.',
+    body: [
+      paragraph(html`${hi(fullName)} we could not complete the refund of your payment yet. Your money is safe and our team has been alerted.`),
+      detailsTable([['Amount', amount], ['Reference', reference]]),
+      paragraph('Reply to this email with the reference above if you do not hear from us within two working days.'),
+    ],
+  })
+}
+
 export function refundCompleted({ fullName, amount, reference } = {}) {
   return email({
     title: 'Your refund is complete',
@@ -244,49 +268,49 @@ export function refundCompleted({ fullName, amount, reference } = {}) {
   })
 }
 
-export function withdrawalRequested({ fullName, amount, reference, bankName, accountNumber } = {}) {
+export function withdrawalRequested({ fullName, amount, coins, reference, bankName, accountNumber } = {}) {
   return email({
     title: 'Withdrawal requested',
     preheader: 'We are processing your withdrawal.',
     body: [
       paragraph(html`${hi(fullName)} your withdrawal request has been received and is being processed.`),
-      detailsTable([['Amount', amount], ['Reference', reference], ['Bank', bankName], ['Account', accountNumber]]),
-      notice('warn', 'If you did not request this withdrawal, reply to this email immediately.'),
+      detailsTable([['You will receive', amount], ['CareCoins withdrawn', coins], ['Reference', reference], ['Bank', bankName], ['Account', maskAccount(accountNumber)]]),
+      notice('warn', 'If you did not request this withdrawal, change your password and reply to this email immediately.'),
     ],
   })
 }
 
-export function withdrawalPinOtp({ fullName, code, minutes } = {}) {
+// Sent once, only when a transfer is STILL in flight well after it was sent. Nothing for the customer to do.
+export function withdrawalProcessing({ fullName, amount, reference, bankName, accountNumber } = {}) {
   return email({
-    title: 'Your withdrawal security code',
-    preheader: 'Use this one-time code to continue.',
+    title: 'Your withdrawal is taking longer than usual',
+    preheader: 'Your withdrawal is still being processed. No action is needed.',
     body: [
-      paragraph(html`${hi(fullName)} here is the one-time code you asked for:`),
-      paragraph(html`<strong style="font-size:20px;letter-spacing:2px">${code}</strong>`),
-      notice('warn', `This code expires in ${minutes || 10} minutes. Never share it.`),
-      smallPrint(IGNORE),
+      paragraph(html`${hi(fullName)} your withdrawal has been sent for payment and is still being processed by the bank network. This sometimes takes longer than usual. You do not need to do anything.`),
+      detailsTable([['Amount', amount], ['Reference', reference], ['Bank', bankName], ['Account', maskAccount(accountNumber)]]),
+      paragraph('We will email you again when it is completed, or if it could not be completed and your CareCoins are returned.'),
     ],
   })
 }
 
-export function withdrawalCompleted({ fullName, amount, reference, bankName, accountNumber } = {}) {
+export function withdrawalCompleted({ fullName, amount, coins, reference, bankName, accountNumber } = {}) {
   return email({
     title: 'Your withdrawal has been sent',
     preheader: 'Your withdrawal has been sent to your bank.',
     body: [
       paragraph(html`${hi(fullName)} your withdrawal has been sent to your bank account. Depending on your bank, it may take a short while to appear.`),
-      detailsTable([['Amount', amount], ['Reference', reference], ['Bank', bankName], ['Account', accountNumber]]),
+      detailsTable([['Amount sent', amount], ['CareCoins withdrawn', coins], ['Reference', reference], ['Bank', bankName], ['Account', maskAccount(accountNumber)]]),
     ],
   })
 }
 
-export function withdrawalFailed({ fullName, amount, reference } = {}) {
+export function withdrawalFailed({ fullName, amount, coins, reference } = {}) {
   return email({
     title: 'Your withdrawal could not be completed',
     preheader: 'Your withdrawal did not go through.',
     body: [
       paragraph(html`${hi(fullName)} your withdrawal could not be completed. If the amount was taken from your wallet, it has been returned.`),
-      detailsTable([['Amount', amount], ['Reference', reference]]),
+      detailsTable([['Amount', amount], ['CareCoins returned to your wallet', coins], ['Reference', reference]]),
       paragraph('Please check your bank details and try again. If the problem continues, reply to this email and our team will help.'),
     ],
   })
@@ -316,7 +340,7 @@ export function payoutAccountReview({ fullName, outcome, bankName, accountNumber
       paragraph(verified
         ? html`${hi(fullName)} your payout account has been reviewed and verified. Future withdrawals can be sent to it.`
         : html`${hi(fullName)} your payout account could not be verified. You can update your payout details and submit them for review again.`),
-      detailsTable([['Bank', bankName], ['Account', accountNumber]]),
+      detailsTable([['Bank', bankName], ['Account', maskAccount(accountNumber)]]),
       paragraph('If you believe this is wrong, reply to this email and our team will help.'),
     ],
   })

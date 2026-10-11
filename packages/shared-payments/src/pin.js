@@ -9,6 +9,7 @@
 //   pin_salt = 16 random bytes, hex (32 chars);  pin_hash = scrypt(pin, salt, 64 bytes), hex (128 chars)
 import crypto from 'node:crypto'
 import { OTP_PURPOSES, checkOtp } from './otp.js'
+import { sendSecurityAlert } from './alerts.js'
 
 export const PIN_LOCK_AFTER = 5 // consecutive wrong PINs that lock it (verify_withdrawal_pin)
 const SCRYPT_KEYLEN = 64
@@ -102,7 +103,11 @@ export async function setWithdrawalPin(supabase, user, { pin, otp, currentPin, f
   const { error } = await supabase.rpc('set_withdrawal_pin', { p_user_id: user.id, p_pin_hash: hashPin(pin, salt), p_pin_salt: salt })
   if (error) return { status: 500, body: { error: 'Could not set withdrawal PIN' } }
 
-  if (mailer && user.email) await mailer.sendPinChanged({ to: user.email }).catch(() => {})
+  if (mailer && user.email) {
+    // Recovering with "forgot PIN" (an emailed code was the only proof) gets the louder reset notice.
+    const reset = forgot && typeof mailer.sendPinReset === 'function'
+    await sendSecurityAlert(reset ? 'pin_reset' : 'pin_changed', () => (reset ? mailer.sendPinReset({ to: user.email }) : mailer.sendPinChanged({ to: user.email })))
+  }
   return { status: 200, body: { ok: true, hadPin: hasPin } }
 }
 

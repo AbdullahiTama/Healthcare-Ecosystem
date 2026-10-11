@@ -1,12 +1,16 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
-  decideTransferAction, getTransferStatus, verifyBankAccount, normalizeAccountName, settleWithdrawal, settleTransferWebhook, reconcileWithdrawal, sweepWithdrawals, IN_FLIGHT_GRACE_MS,
+  decideTransferAction, getTransferStatus, verifyBankAccount, normalizeAccountName, settleWithdrawal, settleTransferWebhook, reconcileWithdrawal, sweepWithdrawals, IN_FLIGHT_GRACE_MS, AMBIGUOUS_GRACE_MS,
 } from '../withdrawals.js'
 
 const NOW = Date.parse('2026-10-04T12:00:00Z')
 const old = new Date(NOW - 20 * 60 * 1000).toISOString()
 const fresh = new Date(NOW - 60 * 1000).toISOString()
-const row = (over = {}) => ({ id: 'r1', paystack_reference: 'cf_wd_abc', paystack_transfer_code: null, created_at: old, ...over })
+// A request whose transfer call was never made ('reserved'): Paystack not knowing it is proof after the short grace.
+const row = (over = {}) => ({ id: 'r1', status: 'reserved', paystack_reference: 'cf_wd_abc', paystack_transfer_code: null, created_at: old, ...over })
+// A request whose transfer call WAS made (marked at updated_at) with no code back: a timeout proves nothing.
+const hoursAgo = (h) => new Date(NOW - h * 3_600_000).toISOString()
+const attempted = (over = {}) => row({ status: 'processing', created_at: hoursAgo(3), updated_at: hoursAgo(0.5), ...over })
 const st = (s) => ({ getStatus: async () => s, now: NOW })
 
 // A fake supabase whose rpc() answers per function name (a value, or a function of the args).
@@ -48,6 +52,63 @@ describe('decideTransferAction', () => {
     expect((await decideTransferAction(row(), st('not_found'))).action).toBe('refund')
     expect((await decideTransferAction(row({ created_at: fresh }), st('not_found'))).action).toBe('wait')
     expect((await decideTransferAction(row({ paystack_transfer_code: 'T' }), st('not_found'))).action).toBe('wait')
+  })
+
+  describe('H04: a transfer call that was made is not "not sent" just because it timed out', () => {
+    it('the ambiguous window is one hour', () => {
+      expect(AMBIGUOUS_GRACE_MS).toBe(60 * 60 * 1000)
+    })
+
+    it('processing, no code, marked 30 minutes ago: Paystack "not found" is NOT believed yet; nothing is refunded', async () => {
+      const r = await decideTransferAction(attempted(), st('not_found'))
+      expect(r.action).toBe('wait')
+      expect(r.message).toMatch(/only treated as not sent after an hour/)
+    })
+
+    it('processing, no code, marked an hour ago: Paystack "not found" now releases it', async () => {
+      expect((await decideTransferAction(attempted({ updated_at: hoursAgo(1.01) }), st('not_found'))).action).toBe('refund')
+    })
+
+    it('the hour runs from the MARK (updated_at), not from when the request was filed', async () => {
+      // filed 3 hours ago but marked 5 minutes ago
+      expect((await decideTransferAction(attempted({ created_at: hoursAgo(3), updated_at: hoursAgo(0.08) }), st('not_found'))).action).toBe('wait')
+    })
+
+    it('a row with no status is treated as attempted (the safe reading)', async () => {
+      const r = row({ created_at: hoursAgo(3), updated_at: hoursAgo(0.5) })
+      delete r.status
+      expect((await decideTransferAction(r, st('not_found'))).action).toBe('wait')
+    })
+
+    it('a DEFINITE refusal from Paystack (confirmedNotSent) releases at once', async () => {
+      const r = await decideTransferAction(attempted({ created_at: fresh, updated_at: fresh }), { ...st('not_found'), graceMs: 0, confirmedNotSent: true })
+      expect(r.action).toBe('refund')
+    })
+
+    it.each(['failed', 'reversed', 'abandoned', 'blocked', 'rejected'])('a provider-reported %s releases an attempted transfer without waiting the hour', async (status) => {
+      expect((await decideTransferAction(attempted({ updated_at: hoursAgo(0.2) }), st(status))).action).toBe('refund')
+    })
+
+    it.each(['pending', 'otp', 'processing', 'queued', 'received'])('a transfer Paystack reports as %s is waited for, whatever the age', async (status) => {
+      expect((await decideTransferAction(attempted({ updated_at: hoursAgo(5) }), st(status))).action).toBe('wait')
+    })
+
+    it('success completes it, never refunds', async () => {
+      expect((await decideTransferAction(attempted(), st('success'))).action).toBe('complete')
+    })
+
+    it('with a transfer code on file "not found" never refunds, however old', async () => {
+      expect((await decideTransferAction(attempted({ paystack_transfer_code: 'TRF_1', updated_at: hoursAgo(9) }), st('not_found'))).action).toBe('wait')
+    })
+
+    it('an unknown Paystack status never refunds', async () => {
+      expect((await decideTransferAction(attempted({ updated_at: hoursAgo(9) }), st('something_new'))).action).toBe('wait')
+    })
+
+    it('a timed-out lookup never refunds', async () => {
+      const r = await decideTransferAction(attempted({ updated_at: hoursAgo(9) }), { getStatus: async () => { throw new Error('socket hang up') }, now: NOW })
+      expect(r.action).toBe('wait')
+    })
   })
   it('a request filed moments ago with no code is left alone WITHOUT asking Paystack', async () => {
     const getStatus = vi.fn()
@@ -123,6 +184,10 @@ describe('reconcileWithdrawal', () => {
   it('refund decision -> settles as failed by exact id and reports refunded only when this call did it', async () => {
     const s = fake({ settle_withdrawal: { result: 'refunded' } })
     expect(await reconcileWithdrawal(s, 'carefind', row(), st('not_found'))).toMatchObject({ outcome: 'refunded' })
+    // the same answer for an attempted transfer inside its hour is a wait, and nothing is written
+    const ambiguous = fake({ settle_withdrawal: { result: 'refunded' } })
+    expect(await reconcileWithdrawal(ambiguous, 'carefind', attempted(), st('not_found'))).toMatchObject({ outcome: 'waiting' })
+    expect(ambiguous.calls).toEqual([])
     expect(s.calls[0].args).toMatchObject({ p_outcome: 'failed', p_request_id: 'r1', p_reference: null })
     const late = fake({ settle_withdrawal: { result: 'already_refunded' } })
     expect(await reconcileWithdrawal(late, 'carefind', row(), st('not_found'))).toMatchObject({ outcome: 'waiting', detail: 'already_refunded' })

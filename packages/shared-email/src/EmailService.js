@@ -158,6 +158,25 @@ async function getSupabase() {
   return _supabase
 }
 
+// The outbox STORES every payload (and e-mail logs reference the row), so a one-time code, a PIN, a password or a key must never be
+// queued: one-time codes go out directly (securityEmails.js) and are never persisted. The check is on KEY NAMES at any depth, exact
+// match, so legitimate fields (resetLink, orderRef ...) pass and a field that is plainly a credential cannot be added by mistake.
+const CREDENTIAL_PAYLOAD_KEY = /^(otp|otp_?code|verification_?code|one_?time_?code|code|pin|password|passwd|pwd|secret|api_?key|access_?token|refresh_?token|token|session)$/i
+
+export function findCredentialField(value, path = 'payload') {
+  if (!value || typeof value !== 'object') return null
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) { const hit = findCredentialField(value[i], `${path}[${i}]`); if (hit) return hit }
+    return null
+  }
+  for (const [k, v] of Object.entries(value)) {
+    if (CREDENTIAL_PAYLOAD_KEY.test(k)) return `${path}.${k}`
+    const hit = findCredentialField(v, `${path}.${k}`)
+    if (hit) return hit
+  }
+  return null
+}
+
 export class EmailService {
   constructor(options = {}) {
     this._options = options
@@ -211,6 +230,8 @@ export class EmailService {
 
   async enqueue({ templateKey, toEmail, payload, fromEmail, subject, app, eventKey, sourceId, idempotencyKey }) {
     if (!templateKey || !toEmail) throw new Error('templateKey and toEmail are required')
+    const credentialAt = findCredentialField(payload)
+    if (credentialAt) throw new Error(`credential-like field ${credentialAt} is not allowed in an e-mail payload (the outbox stores payloads)`)
     const db = await this._getDb()
     // Sender precedence: what the caller named, then the deployment's configured sender, then the app's own
     // verified identity. The last step is new and only fills a gap: a purchase confirmation enqueued with no

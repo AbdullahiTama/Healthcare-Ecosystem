@@ -89,6 +89,8 @@ export async function sweepOpenIntents(supabase, provider, { olderThanMinutes = 
       else if (result.outcome === 'needs_refund') { summary.needsRefund++; logger.error('payment.needs_refund', { reference: row.reference, reason: result.reason }) }
       else if (result.outcome === 'not_paid') {
         summary.notPaid++
+        // a payment the provider DECLINED gets one "did not go through" email (the effect ignores every other not_paid)
+        if (onSettled && result.providerStatus === 'failed') { try { await onSettled(result) } catch { /* a notice never fails the sweep */ } }
         // never paid and past its expiry: close it (the state machine allows created/pending -> expired)
         if (['created', 'pending'].includes(row.status) && new Date(row.expires_at) < new Date() && ['pending', 'abandoned', 'failed'].includes(result.providerStatus)) {
           const { error } = await supabase.from('payment_intents').update({ status: 'expired' }).eq('id', row.id).in('status', ['created', 'pending'])

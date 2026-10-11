@@ -152,11 +152,11 @@ describe('createPayoutManager', () => {
     return log
   }
   const KYC = { status: 200, body: { verified: true, tier: 1, legalName: 'ADA OBI', bvnLast4: '1234', ninLast4: '5678' } }
-  const LIST = { status: 200, body: { accounts: [{ id: 'a1', bankName: 'GTBank', accountLast4: '6789', accountName: 'ADA OBI', isDefault: true }], required: true } }
+  const LIST = { status: 200, body: { accounts: [{ id: 'a1', bankName: 'GTBank', accountLast4: '6789', accountName: 'ADA OBI', isDefault: true }], required: true, kycEnabled: true } }
 
   beforeEach(() => vi.unstubAllGlobals())
 
-  it('loads identity and accounts together, with the bearer token', async () => {
+  it('loads the accounts, and identity status when the server says verification is on, with the bearer token', async () => {
     const log = routes({ '/api/kyc/status': KYC, '/api/payout-accounts/list': LIST })
     const m = make()
     expect(m.getState().loading).toBe(true)
@@ -254,5 +254,59 @@ describe('createPayoutManager', () => {
     const m = make()
     expect(await m.sendCode()).toBe(false)
     expect(m.getState()).toMatchObject({ busy: '', code: 'network' })
+  })
+})
+
+describe('createPayoutManager: identity verification is optional (H06)', () => {
+  const make = () => createPayoutManager({ getToken: async () => 'tok' })
+  const ACCOUNTS = [{ id: 'a1', bankName: 'GTBank', accountLast4: '6789', accountName: 'ADA OBI', isDefault: true }]
+  function routes(table) {
+    const log = []
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      log.push(url)
+      const r = table[url]
+      if (r instanceof Error) throw r
+      return { ok: r.status < 400, status: r.status, json: async () => r.body }
+    }))
+    return log
+  }
+  beforeEach(() => vi.unstubAllGlobals())
+
+  it('switched off: the account list is the whole load, /api/kyc/status is never requested, kyc stays null', async () => {
+    const log = routes({ '/api/payout-accounts/list': { status: 200, body: { accounts: ACCOUNTS, required: false, kycEnabled: false } } })
+    const m = make()
+    await m.load()
+    expect(log).toEqual(['/api/payout-accounts/list'])
+    expect(m.getState()).toMatchObject({ loading: false, loadError: '', kycEnabled: false, kyc: null })
+    expect(m.getState().accounts).toHaveLength(1)
+  })
+
+  it('an old server that does not send kycEnabled is treated as off', async () => {
+    const log = routes({ '/api/payout-accounts/list': { status: 200, body: { accounts: ACCOUNTS } } })
+    await make().load()
+    expect(log).toEqual(['/api/payout-accounts/list'])
+  })
+
+  it('switched on but the KYC endpoint is down: the accounts STILL load (K1: KYC can never block the screen)', async () => {
+    routes({ '/api/payout-accounts/list': { status: 200, body: { accounts: ACCOUNTS, kycEnabled: true } }, '/api/kyc/status': { status: 500, body: {} } })
+    const m = make()
+    await m.load()
+    expect(m.getState()).toMatchObject({ loading: false, loadError: '', kycEnabled: true, kyc: null })
+    expect(m.getState().accounts).toHaveLength(1)
+  })
+
+  it('switched on and the KYC call throws: still loads', async () => {
+    routes({ '/api/payout-accounts/list': { status: 200, body: { accounts: ACCOUNTS, kycEnabled: true } }, '/api/kyc/status': new Error('network') })
+    const m = make()
+    await m.load()
+    expect(m.getState().loadError).toBe('')
+    expect(m.getState().accounts).toHaveLength(1)
+  })
+
+  it('only a failing ACCOUNT list is a load error', async () => {
+    routes({ '/api/payout-accounts/list': { status: 500, body: {} } })
+    const m = make()
+    await m.load()
+    expect(m.getState().loadError).toMatch(/Could not load/)
   })
 })

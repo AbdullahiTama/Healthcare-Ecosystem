@@ -183,10 +183,10 @@ describe('refundUnappliedPayments', () => {
   })
 })
 
-describe('onSettled: the seam that emails the payer after a refund flips to completed', () => {
+describe('onSettled: the seam that emails the payer when a refund is requested, flips to completed, or fails', () => {
   const row = (over = {}) => ({ id: 'rf1', reference: 'rf_a', status: 'requested', kind: 'card', amount_kobo: 100000, provider_transaction_reference: 'chapp_1_abcdefgh', created_at: old, ...over })
 
-  it('executeCardRefund fires it exactly when the settle flips completed - not on already_completed, failed, or processing', async () => {
+  it('executeCardRefund fires it exactly when the settle flips the refund (completed or failed) - not on already_completed or processing', async () => {
     const fired = []
     const onSettled = vi.fn((r) => { fired.push(r) })
     const provider = { refundPayment: vi.fn(async ({ ...o }) => ({ providerRefundId: '9', status: 'completed', amountKobo: 1000000 })) }
@@ -196,9 +196,14 @@ describe('onSettled: the seam that emails the payer after a refund flips to comp
     expect(onSettled.mock.calls[0][0]).toMatchObject({ result: 'completed' })
 
     await executeCardRefund(fake({ settle_refund: { result: 'already_completed' } }), provider, refund, { logger: quiet, onSettled })
-    await executeCardRefund(fake({ settle_refund: { result: 'failed' } }), { refundPayment: async () => ({ providerRefundId: '9', status: 'failed' }) }, refund, { logger: quiet, onSettled })
-    await executeCardRefund(fake(), { refundPayment: async () => ({ providerRefundId: '9', status: 'processing' }) }, refund, { logger: quiet, onSettled })
     expect(onSettled).toHaveBeenCalledTimes(1)
+    await executeCardRefund(fake({ settle_refund: { result: 'failed' } }), { refundPayment: async () => ({ providerRefundId: '9', status: 'failed' }) }, refund, { logger: quiet, onSettled })
+    expect(onSettled).toHaveBeenCalledTimes(2)
+    expect(onSettled.mock.calls[1][0]).toMatchObject({ result: 'failed' })
+    await executeCardRefund(fake(), { refundPayment: async () => ({ providerRefundId: '9', status: 'processing' }) }, refund, { logger: quiet, onSettled })
+    expect(onSettled).toHaveBeenCalledTimes(2)
+    // a definite provider refusal that settles as failed tells the payer too
+    await executeCardRefund(fake({ settle_refund: { result: 'failed' } }), { refundPayment: async () => { throw Object.assign(new Error('declined'), { name: 'ProviderError', code: 'provider_rejected', ambiguous: false }) } }, refund, { logger: quiet, onSettled })
   })
 
   it('executeCardRefund: a throwing onSettled is logged and never fails the settle that already committed', async () => {
@@ -210,14 +215,17 @@ describe('onSettled: the seam that emails the payer after a refund flips to comp
     expect(logger.error).toHaveBeenCalledWith('refund.on_settled_failed', expect.objectContaining({ message: 'mailer down' }))
   })
 
-  it('settleRefundWebhook fires it only when refund.processed flips the row completed', async () => {
+  it('settleRefundWebhook fires it when refund.processed flips the row completed or refund.failed fails it, never on a replay', async () => {
     const onSettled = vi.fn()
     const event = { event: 'refund.processed', data: { id: 77, transaction_reference: 'chapp_1_abcdefgh', amount: 1000000 } }
     await settleRefundWebhook(fake({ settle_refund: { result: 'completed' } }), event, { logger: quiet, onSettled })
     expect(onSettled).toHaveBeenCalledTimes(1)
     await settleRefundWebhook(fake({ settle_refund: { result: 'already_completed' } }), event, { logger: quiet, onSettled })
-    await settleRefundWebhook(fake({ settle_refund: { result: 'failed' } }), { event: 'refund.failed', data: { transaction_reference: 'chapp_1_abcdefgh' } }, { logger: quiet, onSettled })
+    await settleRefundWebhook(fake({ settle_refund: { result: 'already_failed' } }), { event: 'refund.failed', data: { transaction_reference: 'chapp_1_abcdefgh' } }, { logger: quiet, onSettled })
     expect(onSettled).toHaveBeenCalledTimes(1)
+    await settleRefundWebhook(fake({ settle_refund: { result: 'failed' } }), { event: 'refund.failed', data: { transaction_reference: 'chapp_1_abcdefgh' } }, { logger: quiet, onSettled })
+    expect(onSettled).toHaveBeenCalledTimes(2)
+    expect(onSettled.mock.calls[1][0]).toMatchObject({ result: 'failed' })
   })
 
   it('sweepRefunds fires it for the direct settle AND for a re-send that completes in this pass; a provider still thinking does not fire', async () => {
@@ -235,7 +243,7 @@ describe('onSettled: the seam that emails the payer after a refund flips to comp
     expect(onSettled).toHaveBeenCalledTimes(2)
   })
 
-  it('refundCancelledAppointments forwards it into the card refund; a refund that was already completed at request time does not re-fire', async () => {
+  it('refundCancelledAppointments: a CareCoin refund completed at request time is announced once as completed; a card refund as requested then completed', async () => {
     const onSettled = vi.fn()
     const provider = { refundPayment: vi.fn(async () => ({ providerRefundId: '1', status: 'completed', amountKobo: 5 })) }
     const answers = [
@@ -245,8 +253,8 @@ describe('onSettled: the seam that emails the payer after a refund flips to comp
     let i = 0
     const s = fake({ request_refund: () => answers[i++], mark_refund_processing: 'ok', settle_refund: { result: 'completed', id: 'r2' } }, { appointments: [{ id: 'a1' }, { id: 'a2' }] })
     await refundCancelledAppointments(s, provider, { logger: quiet, onSettled })
-    expect(onSettled).toHaveBeenCalledTimes(1)
-    expect(onSettled.mock.calls[0][0]).toMatchObject({ id: 'r2', result: 'completed' })
+    expect(onSettled.mock.calls.map(([r]) => [r.id, r.result])).toEqual([['r1', 'completed'], ['r2', 'requested'], ['r2', 'completed']])
+    expect(onSettled.mock.calls[1][0]).toMatchObject({ entity_type: 'appointment', entity_id: 'a2', amount_kobo: 5 })
   })
 
   it('refundUnappliedPayments forwards it; runRefundSweeps passes it to every job', async () => {
@@ -258,8 +266,10 @@ describe('onSettled: the seam that emails the payer after a refund flips to comp
       mark_refund_processing: 'ok', settle_refund: { result: 'completed', id: 'rf1' },
     }, { payment_intents: [{ id: 'i1', reference: 'r1' }, { id: 'i2', reference: 'r2' }] })
     await runRefundSweeps(s, provider, { logger: quiet, onSettled })
-    expect(onSettled).toHaveBeenCalledTimes(1)
-    expect(onSettled.mock.calls[0][0]).toMatchObject({ id: 'rf1', result: 'completed' })
+    // requested, then completed, for the one refund that was created; the already-requested one is not announced again
+    expect(onSettled.mock.calls.map(([r]) => [r.id, r.result])).toEqual([['rf1', 'requested'], ['rf1', 'completed']])
+    expect(onSettled.mock.calls[0][0]).toMatchObject({ entity_type: 'payment_intent', entity_id: 'i1' })
+    expect(onSettled.mock.calls[1][0]).toMatchObject({ id: 'rf1', result: 'completed' })
   })
 })
 

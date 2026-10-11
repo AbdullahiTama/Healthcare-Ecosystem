@@ -7,7 +7,7 @@ import { layout, paragraph, smallPrint, notice, html, brandFor } from './templat
 const CODE_STYLE = 'margin:4px 0 20px;font-size:34px;line-height:1.2;font-weight:800;letter-spacing:10px;color:#0f172a;font-family:SFMono-Regular,Menlo,Consolas,monospace'
 
 // What each OTP purpose is for, in the words the reader will recognise.
-const PURPOSES = {
+export const OTP_EMAIL_PURPOSES = {
   pin_set: 'set or change your withdrawal PIN',
   payout_account: 'add a payout bank account',
   withdrawal: 'confirm a withdrawal',
@@ -21,7 +21,7 @@ export const senderFor = (app) => {
 /** -> { subject, html, from } */
 export function renderOtpEmail({ app = 'carefind', code, minutes = 5, purpose = 'pin_set' }) {
   const brand = brandFor(app)
-  const what = PURPOSES[purpose] || 'confirm a sensitive change'
+  const what = OTP_EMAIL_PURPOSES[purpose] || 'confirm a sensitive change'
   return {
     subject: `Your ${brand.name} verification code`,
     from: senderFor(app),
@@ -60,6 +60,26 @@ export function renderPinChangedEmail({ app = 'carefind', changedAt = new Date()
   }
 }
 
+/** Sent after the withdrawal PIN was RESET with the "forgot PIN" flow (an emailed code was the only proof): louder than a change. */
+export function renderPinResetEmail({ app = 'carefind', changedAt = new Date() }) {
+  const brand = brandFor(app)
+  return {
+    subject: `Your ${brand.name} withdrawal PIN was reset`,
+    from: senderFor(app),
+    html: layout({
+      app,
+      title: 'Withdrawal PIN reset',
+      preheader: 'Your withdrawal PIN was reset with an emailed code.',
+      body: [
+        paragraph('Your withdrawal PIN was just reset using a code sent to this email address, without entering the old PIN.'),
+        smallPrint(`Time: ${new Date(changedAt).toUTCString()}`),
+        notice('danger', `If this was not you, someone may have access to your email. Change your email password and your ${brand.name} password now and contact ${brand.support}. Withdrawals are limited for the next 24 hours as a precaution.`),
+      ],
+      reason: `You received this security alert because it concerns your ${brand.name} account.`,
+    }),
+  }
+}
+
 /** Sent when the PIN gets locked by repeated wrong guesses: someone may be trying to withdraw from this account. */
 export function renderPinLockedEmail({ app = 'carefind', minutes = 15 }) {
   const brand = brandFor(app)
@@ -83,16 +103,18 @@ export function renderPinLockedEmail({ app = 'carefind', minutes = 15 }) {
 /** Sent when a payout bank account is saved or removed. */
 export function renderPayoutAccountEmail({ app = 'carefind', event = 'added', bankName, accountLast4 }) {
   const brand = brandFor(app)
-  const verb = event === 'removed' ? 'removed' : 'added'
+  const verb = event === 'removed' ? 'removed' : event === 'default' ? 'set as your default' : 'added'
   return {
-    subject: `A payout account was ${verb} on your ${brand.name} account`,
+    subject: event === 'default' ? `Your default payout account was changed on your ${brand.name} account` : `A payout account was ${verb} on your ${brand.name} account`,
     from: senderFor(app),
     html: layout({
       app,
-      title: `Payout account ${verb}`,
+      title: event === 'default' ? 'Default payout account changed' : `Payout account ${verb}`,
       preheader: `${bankName || 'A bank'} account ending ${accountLast4 || ''} was ${verb}.`,
       body: [
-        paragraph(`${bankName || 'A bank account'} ending in ${accountLast4 || '----'} was ${verb} as a payout account.`),
+        paragraph(event === 'default'
+          ? `${bankName || 'A bank account'} ending in ${accountLast4 || '----'} was set as your default payout account.`
+          : `${bankName || 'A bank account'} ending in ${accountLast4 || '----'} was ${verb} as a payout account.`),
         notice('danger', `If this was not you, change your password now and contact ${brand.support}.`),
       ],
       reason: `You received this security alert because it concerns your ${brand.name} account.`,
@@ -114,6 +136,7 @@ export function createSecurityMailer({ app = 'carefind', send = sendEmail } = {}
   return {
     sendOtp: ({ to, code, minutes, purpose }) => deliver(to, renderOtpEmail({ app, code, minutes, purpose })),
     sendPinChanged: ({ to }) => deliver(to, renderPinChangedEmail({ app })),
+    sendPinReset: ({ to }) => deliver(to, renderPinResetEmail({ app })),
     sendPinLocked: ({ to }) => deliver(to, renderPinLockedEmail({ app })),
     sendPayoutAccount: ({ to, event, bankName, accountLast4 }) => deliver(to, renderPayoutAccountEmail({ app, event, bankName, accountLast4 })),
   }

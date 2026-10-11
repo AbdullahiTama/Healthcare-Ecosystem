@@ -15,6 +15,8 @@ import { isProviderError } from './errors.js'
 //   needs_refund        paid, but cannot be applied (amount mismatch, already booked, ...): reason given
 //   not_paid            the provider does not report a successful payment (yet)
 //   rejected            the engine refused to touch it (transaction id conflict, ...)
+//   not_provider_payment  a wallet-funded purpose (booking_wallet ...): there is no provider payment to ask about, and asking would
+//                       get 'not_found' and wrongly close the intent, so the provider path never touches it
 
 /**
  * @param {object} p
@@ -26,6 +28,7 @@ import { isProviderError } from './errors.js'
 export async function settleByReference({ supabase, provider, reference, logger = { info() {}, warn() {} } }) {
   const intent = await findIntent(supabase, reference)
   if (!intent) return { outcome: 'unknown_reference', reference }
+  if (String(intent.purpose).endsWith('_wallet')) return { outcome: 'not_provider_payment', intent_id: intent.id, purpose: intent.purpose, intent }
 
   if (intent.status === 'settled' || intent.status === 'refunded') {
     return { outcome: 'already_settled', intent_id: intent.id, purpose: intent.purpose, status: intent.status, intent }

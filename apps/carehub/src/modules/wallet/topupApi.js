@@ -47,6 +47,24 @@ export async function verifyWalletTopup(reference) {
   }
 }
 
+// The processing fee rate the server will add to a top-up (a ratio, 0.1 = 10%). Nothing is created; the server still
+// decides the charge. -> { ok, data: { fee_rate }, sessionExpired?, networkError? }
+export async function fetchTopupFeeRate() {
+  const { data: { session } } = await authClient.auth.getSession()
+  if (!session) return { ok: false, sessionExpired: true, data: {} }
+  try {
+    const res = await fetch('/api/initiate-wallet-topup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ quote: true }),
+    })
+    const data = await res.json().catch(() => ({}))
+    return { ok: res.ok, data }
+  } catch {
+    return { ok: false, networkError: true, data: {} }
+  }
+}
+
 // Leaves the SPA for Paystack's hosted checkout. Its own seam so tests can
 // assert the hand-off without jsdom attempting a real navigation.
 export function goToPaystack(authorizationUrl) {

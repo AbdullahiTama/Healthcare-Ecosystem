@@ -2,6 +2,7 @@
 // link built from the environment. Subjects live in SUBJECTS so call sites stay consistent.
 
 import { layout, html, paragraph, smallPrint, detailsTable, notice, itemsTable, siteLink, brandFor } from '../layout.js'
+import { maskAccount } from '../../utils/formatters.js'
 
 const APP = 'carehub'
 
@@ -264,7 +265,20 @@ export function agentRejected({ agentName, reason } = {}) {
 
 // ── Withdrawals ──────────────────────────────────────────────────────────────────────────────────────────────────────
 const withdrawalRows = ({ businessName, amount, reference, bankName, accountNumber }) =>
-  [['Business', businessName], ['Amount', amount], ['Reference', reference], ['Bank', bankName], ['Account', accountNumber]]
+  [['Business', businessName], ['Amount', amount], ['Reference', reference], ['Bank', bankName], ['Account', maskAccount(accountNumber)]]
+
+// Sent once, only when a transfer is STILL in flight well after it was sent. Nothing for the owner to do.
+export function withdrawalProcessing(payload = {}) {
+  return email({
+    title: 'Your withdrawal is taking longer than usual',
+    preheader: 'Your CareHub withdrawal is still being processed. No action is needed.',
+    body: [
+      paragraph('Your withdrawal has been sent for payment and is still being processed by the bank network. This sometimes takes longer than usual. You do not need to do anything.'),
+      detailsTable(withdrawalRows(payload)),
+      paragraph('We will email you again when it is completed, or if it could not be completed and the amount is returned to your wallet.'),
+    ],
+  })
+}
 
 export function withdrawalRequested(payload = {}) {
   return email({
@@ -289,19 +303,6 @@ export function withdrawalCompleted(payload = {}) {
   })
 }
 
-export function withdrawalPinOtp(payload = {}) {
-  return email({
-    title: 'Your withdrawal security code',
-    preheader: 'Use this one-time code to continue.',
-    body: [
-      paragraph('Here is the one-time code you asked for:'),
-      paragraph(`<strong style="font-size:20px;letter-spacing:2px">${payload.code || ''}</strong>`),
-      notice('warn', `This code expires in ${payload.minutes || 10} minutes. Never share it.`),
-      paragraph('If you did not ask for this, you can safely ignore this email.'),
-    ],
-  })
-}
-
 export function withdrawalFailed(payload = {}) {
   return email({
     title: 'Your withdrawal could not be completed',
@@ -314,6 +315,18 @@ export function withdrawalFailed(payload = {}) {
   })
 }
 
+export function paymentFailed(payload = {}) {
+  return email({
+    title: 'Your payment did not go through',
+    preheader: 'We could not confirm your CareHub payment.',
+    body: [
+      paragraph('We could not confirm your payment.'),
+      detailsTable([['For', payload.purpose], ['Amount', payload.amount], ['Reference', payload.reference]]),
+      notice('warn', 'If money left your account, it is normally returned by your bank. Reply to this email with the reference above if it is not.'),
+    ],
+  })
+}
+
 export function businessWalletTopup(payload = {}) {
   return email({
     title: 'Your wallet was topped up',
@@ -322,6 +335,30 @@ export function businessWalletTopup(payload = {}) {
       paragraph('A payment was confirmed and your CareHub business wallet has been credited.'),
       detailsTable([['Business', payload.businessName], ['Amount', payload.amount], ['Reference', payload.reference], ['New balance', payload.newBalance]]),
       paragraph('The balance above already includes this top-up.'),
+    ],
+  })
+}
+
+export function refundRequested(payload = {}) {
+  return email({
+    title: 'We are refunding your payment',
+    preheader: 'Your CareHub refund has been requested.',
+    body: [
+      paragraph('A refund of your CareHub payment has been requested and is being processed. We will email you again when it is complete.'),
+      detailsTable([['Amount', payload.amount], ['Reference', payload.reference], ['Reason', payload.reason]]),
+      paragraph('You do not need to do anything. If you have questions, reply to this email and our team will help.'),
+    ],
+  })
+}
+
+export function refundFailed(payload = {}) {
+  return email({
+    title: 'Your refund needs attention',
+    preheader: 'We could not complete your CareHub refund yet.',
+    body: [
+      paragraph('We could not complete the refund of your payment yet. The money is safe and our team has been alerted.'),
+      detailsTable([['Amount', payload.amount], ['Reference', payload.reference]]),
+      paragraph('Reply to this email with the reference above if you do not hear from us within two working days.'),
     ],
   })
 }
@@ -347,7 +384,7 @@ export function payoutAccountReview(payload = {}) {
       paragraph(verified
         ? 'Your payout account has been reviewed and verified. Future withdrawals can be sent to it.'
         : 'Your payout account could not be verified. You can update your payout details and submit them for review again.'),
-      detailsTable([['Bank', payload.bankName], ['Account', payload.accountNumber]]),
+      detailsTable([['Bank', payload.bankName], ['Account', maskAccount(payload.accountNumber)]]),
       paragraph('If you believe this is wrong, reply to this email and our team will help.'),
     ],
   })

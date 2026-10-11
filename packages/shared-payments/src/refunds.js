@@ -24,15 +24,40 @@ export const REFUND_ATTENTION_RESULTS = new Set(['conflict_processed_after_faile
 // A provider that refuses a refund because it already exists/has happened has NOT failed it.
 const ALREADY_DONE = /already|fully (refunded|reversed)|has been (refunded|reversed)|duplicate/i
 
-// After the database flipped a refund to `completed`, the app gets one chance to tell the payer (their email).
-// Fires ONLY on the flip - a replay that found the row already completed was not the changer - and never throws:
+// After the database flipped a refund to `completed` or `failed`, the app gets one chance to tell the payer (their email).
+// Fires ONLY on the flip - a replay that found the row already settled was not the changer - and never throws:
 // the settle already committed, so a broken effect may be logged but must not turn success into failure.
 async function notifySettled(onSettled, result, logger) {
-  if (!onSettled || result?.result !== 'completed') return
+  if (!onSettled || (result?.result !== 'completed' && result?.result !== 'failed')) return
   try {
     await onSettled(result)
   } catch (err) {
     logger?.error?.('refund.on_settled_failed', { id: result?.id, message: err?.message })
+  }
+}
+
+/**
+ * Tell the payer a refund was REQUESTED. Called by every seam that gets `outcome: 'requested'` from request_refund (the cancel
+ * call and the two cron jobs); `already_requested` and `completed` answers are not new requests and send nothing. The email key is
+ * the refund id, so a seam that runs twice still sends one. Never throws.
+ * @param {{ entity_type: string, entity_id: string }} entity  what the refund is for (request_refund's answer does not say)
+ */
+export async function notifyRefundRequested(onSettled, refund, entity, logger) {
+  if (!onSettled || refund?.outcome !== 'requested' || !refund?.id) return
+  try {
+    await onSettled({ result: 'requested', id: refund.id, reference: refund.reference, kind: refund.kind, amount_kobo: refund.amount_kobo, entity_type: entity?.entity_type, entity_id: entity?.entity_id })
+  } catch (err) {
+    logger?.error?.('refund.on_requested_failed', { id: refund?.id, message: err?.message })
+  }
+}
+
+/** A CareCoin refund completes inside request_refund itself (`outcome: 'completed'`): the payer is told "complete" through the same effect. */
+export async function notifyRefundCompletedInline(onSettled, refund, entity, logger) {
+  if (!onSettled || refund?.outcome !== 'completed' || !refund?.id) return
+  try {
+    await onSettled({ result: 'completed', id: refund.id, reference: refund.reference, kind: refund.kind, coins: refund.coins, entity_type: entity?.entity_type, entity_id: entity?.entity_id })
+  } catch (err) {
+    logger?.error?.('refund.on_completed_inline_failed', { id: refund?.id, message: err?.message })
   }
 }
 
@@ -88,6 +113,7 @@ export async function executeCardRefund(supabase, provider, refund, { reason = '
       // network, auth, config, rate limit) is retried later, never turned into a failure.
       if (!err.ambiguous && (err.code === 'provider_rejected' || err.code === 'invalid_request' || err.code === 'not_found')) {
         const result = await settleRefund(supabase, { outcome: 'failed', id: refund.id, detail: `provider_refused: ${err.message}`.slice(0, 300) })
+        await notifySettled(onSettled, result, logger)
         return { state: 'failed', result, detail: err.message }
       }
       logger.error?.('refund.provider_call_unresolved', { refund: refund.reference, code: err.code, ambiguous: err.ambiguous, message: err.message })
@@ -104,6 +130,7 @@ export async function executeCardRefund(supabase, provider, refund, { reason = '
   }
   if (answer.status === 'failed') {
     const result = await settleRefund(supabase, { outcome: 'failed', id: refund.id, providerRefundId: answer.providerRefundId, detail: 'provider_failed' })
+    await notifySettled(onSettled, result, logger)
     return { state: 'failed', result }
   }
   await markProcessing(supabase, refund.id, answer.providerRefundId, 'processing')
@@ -181,6 +208,7 @@ export async function sweepRefunds(supabase, provider, { limit = 50, now = Date.
         summary[r.result === 'completed' ? 'completed' : 'pending']++
       } else if (answer.status === 'failed') {
         const r = await settleRefund(supabase, { outcome: 'failed', id: row.id, providerRefundId: answer.providerRefundId, detail: 'provider_failed' })
+        await notifySettled(onSettled, r, logger)
         summary[r.result === 'failed' ? 'failed' : 'pending']++
       } else {
         if (row.status === 'requested') await markProcessing(supabase, row.id, answer.providerRefundId, 'processing')
@@ -217,9 +245,14 @@ export async function refundCancelledAppointments(supabase, provider, { limit = 
     try {
       const refund = await requestRefund(supabase, { cause: 'booking_cancelled', entityType: 'appointment', entityId: a.id, reason: 'appointment cancelled' })
       if (refund.outcome === 'already_requested') { summary.alreadyRequested++; continue }
-      if (refund.outcome === 'completed') { summary.requested++; summary.completed++; continue }
+      if (refund.outcome === 'completed') {
+        summary.requested++; summary.completed++
+        await notifyRefundCompletedInline(onSettled, refund, { entity_type: 'appointment', entity_id: a.id }, logger)
+        continue
+      }
       if (refund.outcome !== 'requested') continue
       summary.requested++
+      await notifyRefundRequested(onSettled, refund, { entity_type: 'appointment', entity_id: a.id }, logger)
       const r = await executeCardRefund(supabase, provider, refund, { reason: 'Appointment cancelled', logger, onSettled })
       summary[r.state]++
     } catch (err) {
@@ -262,6 +295,7 @@ export async function refundUnappliedPayments(supabase, provider, { limit = 25, 
       if (refund.outcome === 'already_requested') { summary.alreadyRequested++; continue }
       if (refund.outcome !== 'requested') continue
       summary.requested++
+      await notifyRefundRequested(onSettled, refund, { entity_type: 'payment_intent', entity_id: intent.id }, logger)
       const r = await executeCardRefund(supabase, provider, refund, { reason: 'Payment could not be applied', logger, onSettled })
       summary[r.state]++
     } catch (err) {

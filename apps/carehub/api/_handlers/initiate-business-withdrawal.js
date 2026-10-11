@@ -1,4 +1,4 @@
-import { checkOtp, OTP_PURPOSES, checkWithdrawalPin, verifyBankAccount, settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForSavedAccount, limitMessage } from '@care-ecosystem/shared-payments'
+import { checkOtp, OTP_PURPOSES, checkWithdrawalPin, verifyBankAccount, settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForDestination, sendSecurityAlert, limitMessage } from '@care-ecosystem/shared-payments'
 import { getSecurityMailer } from '../_lib/securityMailer.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { supabase } from '../_lib/supabase.js'
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
   // Second factor. Nothing below runs without it.
   const pinCheck = await checkWithdrawalPin(supabase, user.id, pin, {
     // the wrong PIN that locks it: tell the owner someone is guessing
-    onLocked: async () => (await getSecurityMailer()).sendPinLocked({ to: user.email }),
+    onLocked: () => sendSecurityAlert('pin_locked', async () => (await getSecurityMailer()).sendPinLocked({ to: user.email })),
   })
   if (!pinCheck.ok) {
     return res.status(pinCheck.status).json({ error: pinCheck.error, code: pinCheck.code, ...(pinCheck.code === 'pin_not_set' ? { needsPin: true } : {}) })
@@ -70,9 +70,17 @@ export default async function handler(req, res) {
   const account = await verifyBankAccount(resolveAccount, { bankCode, accountNumber, accountName })
   if (!account.ok) return res.status(account.status).json({ error: account.error })
 
-  // A NEW saved account (inside the cooling-off window) caps the business's rolling-24h total at a small amount. It is
-  // passed as the engine's own per-call cap (never above the engine's business ceiling), so it is enforced atomically.
-  const extraLimit = saved ? await limitsForSavedAccount(supabase, { ownerType: 'business', userId: user.id, account: saved }) : null
+  // A destination this business has not been paid at before (a NEW saved account inside its cooling-off window, a typed-in
+  // account, or one the bank could not confirm), and the day after the owner's PIN changed, cap the business's rolling-24h
+  // total at a small amount. It is passed as the engine's own per-call cap (never above the engine's business ceiling), so it
+  // is enforced atomically; no request shape avoids it (H02).
+  const extraLimit = await limitsForDestination(supabase, {
+    ownerType: 'business', userId: user.id, historyOwnerId: businessId,
+    destination: { bankCode, accountNumber }, saved, unverified: account.unverified === true,
+  })
+  if (account.unverified === true) {
+    console.warn(JSON.stringify({ event: 'withdrawal.unverified_destination', app: 'carehub', bankCode: String(bankCode) }))
+  }
 
   const { data: created, error: createError } = await supabase.rpc('create_business_withdrawal', {
     p_business_id: businessId,
@@ -89,7 +97,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Could not process withdrawal request' })
   }
   if (created.outcome === 'daily_limit') {
-    return res.status(429).json({ error: 'daily_limit', message: extraLimit?.coolingCapKobo != null ? limitMessage({ reason: 'new_account', capKobo: extraLimit.coolingCapKobo, coolingEndsAt: extraLimit.coolingEndsAt }) : 'Daily withdrawal limit reached for this business. Try again later or contact support.', ...(extraLimit?.coolingCapKobo != null ? { limitReason: 'new_account', coolingEndsAt: extraLimit.coolingEndsAt } : {}) })
+    return res.status(429).json({ error: 'daily_limit', message: extraLimit?.coolingCapKobo != null ? limitMessage({ reason: extraLimit.coolingReason || 'new_account', capKobo: extraLimit.coolingCapKobo, coolingEndsAt: extraLimit.coolingEndsAt }) : 'Daily withdrawal limit reached for this business. Try again later or contact support.', ...(extraLimit?.coolingCapKobo != null ? { limitReason: extraLimit.coolingReason || 'new_account', coolingEndsAt: extraLimit.coolingEndsAt } : {}) })
   }
   if (created.outcome === 'below_minimum') {
     return res.status(400).json({ error: 'below_minimum', message: 'That is below the minimum withdrawal amount.' })
@@ -127,6 +135,15 @@ export default async function handler(req, res) {
 
     const recipientCode = await createTransferRecipient({ bankCode, accountNumber, accountName: account.accountName, businessId })
 
+    // Record that a transfer call is about to be made BEFORE making it, and make no call unless that was recorded (see the
+    // CareFind handler): "processing" means a call may have created the transfer, and only a provider-confirmed
+    // non-payment may release the funds. If the mark cannot be written nothing was sent, so the reservation is released.
+    const marked = await supabase.rpc('mark_business_withdrawal_transfer_attempt', { p_request_id: requestId })
+    if (marked.error || marked.data !== 'ok') {
+      const refunded = await releaseUnsent('attempt_not_recorded')
+      return res.status(503).json({ error: 'Could not start the transfer. Please try again shortly.', refunded })
+    }
+
     transferAttempted = true
     const { transferCode } = await initiateTransfer({
       recipientCode,
@@ -147,7 +164,13 @@ export default async function handler(req, res) {
       await emailService.enqueue({
         templateKey: 'withdrawal_requested',
         toEmail: business.email,
-        payload: { businessName: '', amount: 'Your withdrawal request is being processed', reference, bankName, accountNumber: `••••${String(accountNumber).slice(-4)}` },
+        payload: {
+          businessName: business.name || '',
+          amount: (amountKobo / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }),
+          reference,
+          bankName,
+          accountNumber: `••••${String(accountNumber).slice(-4)}`,
+        },
         subject: 'CareHub: withdrawal requested',
         idempotencyKey: `withdrawal-requested:${reference}`,
       })
@@ -171,8 +194,10 @@ export default async function handler(req, res) {
     // (timeout, dropped connection) may still have created the transfer, so it is only refunded once Paystack
     // confirms it did not (the cron waits out the grace period before believing "not found").
     try {
-      const row = { id: requestId, paystack_reference: reference, paystack_transfer_code: null, created_at: new Date().toISOString() }
-      const recovery = await reconcileBusinessWithdrawal(supabase, row, err.paystackRejected ? { graceMs: 0 } : {})
+      const now = new Date().toISOString()
+      const row = { id: requestId, status: 'processing', paystack_reference: reference, paystack_transfer_code: null, created_at: now, updated_at: now }
+      // Only a DEFINITE Paystack refusal is confirmed-not-sent; a timeout is not.
+      const recovery = await reconcileBusinessWithdrawal(supabase, row, err.paystackRejected ? { graceMs: 0, confirmedNotSent: true } : {})
       // An outcome the reconciliation actually changed tells the owner; 'waiting' changed nothing and says nothing.
       if (recovery.outcome === 'completed' || recovery.outcome === 'refunded') {
         await applyBusinessWithdrawalResult(supabase, recovery.result)

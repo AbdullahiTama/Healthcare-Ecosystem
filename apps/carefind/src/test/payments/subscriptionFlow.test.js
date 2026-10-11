@@ -17,7 +17,7 @@ const config = [
   { key: 'coin_value_kobo', value: 20000 },
   { key: 'subscription_max_coins', value: 12 },
 ]
-const post = (handler, body) => { const res = createRes(); return handler({ method: 'POST', body, headers: {} }, res).then(() => res) }
+const post = (handler, body) => { const res = createRes(); return handler({ method: 'POST', body, headers: { host: 'carefind.test' } }, res).then(() => res) }
 const world = (price, extra = {}) => createFakeSupabase({ tables: { profiles: [{ id: 'creator-1', subscription_price: price }], financial_config: config, ...extra } })
 
 beforeEach(() => {
@@ -29,7 +29,7 @@ beforeEach(() => {
 
 describe('charge-subscription: the price is the creator\'s, not the caller\'s', () => {
   it('creates an intent for the creator\'s LISTED price and charges exactly that', async () => {
-    const res = await post(charge, { creatorId: 'creator-1', callback_url: 'https://app/cb' })
+    const res = await post(charge, { creatorId: 'creator-1', callback_url: 'https://carefind.test/cb' })
     expect(res.statusCode).toBe(200)
     const intent = h.db.data.payment_intents[0]
     expect(intent).toMatchObject({ purpose: 'creator_subscription', customer_id: h.user.id, entity_type: 'creator', entity_id: 'creator-1', expected_amount: 12 * 20000, metadata: { coins: 12 }, status: 'pending' })
@@ -38,7 +38,7 @@ describe('charge-subscription: the price is the creator\'s, not the caller\'s', 
 
   it.each([[1], [5.5], ['1'], [0], [-3], [99999], [{ $gt: 0 }]])('ignores a client price of %p', async (priceCoins) => {
     h.db = world(7)
-    await post(charge, { creatorId: 'creator-1', priceCoins, price: priceCoins, amount: priceCoins, callback_url: 'https://app/cb' })
+    await post(charge, { creatorId: 'creator-1', priceCoins, price: priceCoins, amount: priceCoins, callback_url: 'https://carefind.test/cb' })
     expect(h.db.data.payment_intents[0].expected_amount).toBe(7 * 20000)
     expect(h.db.data.payment_intents[0].metadata.coins).toBe(7)
   })
@@ -47,38 +47,38 @@ describe('charge-subscription: the price is the creator\'s, not the caller\'s', 
     ['not listed (null)', null], ['zero', 0], ['negative', -5], ['above the cap (13)', 13], ['absurd (100)', 100], ['fractional', 5.5], ['a string', '5'],
   ])('refuses a creator whose listed price is %s, creating nothing and not calling Paystack', async (_l, price) => {
     h.db = world(price)
-    const res = await post(charge, { creatorId: 'creator-1', callback_url: 'https://app/cb' })
+    const res = await post(charge, { creatorId: 'creator-1', callback_url: 'https://carefind.test/cb' })
     expect(res.statusCode).toBe(400)
     expect(h.db.data.payment_intents || []).toHaveLength(0)
     expect(h.provider.initializePayment).not.toHaveBeenCalled()
   })
 
   it('allows the cap exactly (12) and the minimum (1)', async () => {
-    expect((await post(charge, { creatorId: 'creator-1', callback_url: 'x' })).statusCode).toBe(200)
+    expect((await post(charge, { creatorId: 'creator-1', callback_url: 'https://carefind.test/cb' })).statusCode).toBe(200)
     h.db = world(1)
     clearFinancialConfigCache()
-    expect((await post(charge, { creatorId: 'creator-1', callback_url: 'x' })).statusCode).toBe(200)
+    expect((await post(charge, { creatorId: 'creator-1', callback_url: 'https://carefind.test/cb' })).statusCode).toBe(200)
     expect(h.db.data.payment_intents[0].expected_amount).toBe(20000)
   })
 
   it('refuses an unknown creator, subscribing to yourself, and missing fields', async () => {
-    expect((await post(charge, { creatorId: 'nobody', callback_url: 'x' })).statusCode).toBe(400)
-    expect((await post(charge, { creatorId: h.user.id, callback_url: 'x' })).statusCode).toBe(400)
-    expect((await post(charge, { callback_url: 'x' })).statusCode).toBe(400)
+    expect((await post(charge, { creatorId: 'nobody', callback_url: 'https://carefind.test/cb' })).statusCode).toBe(400)
+    expect((await post(charge, { creatorId: h.user.id, callback_url: 'https://carefind.test/cb' })).statusCode).toBe(400)
+    expect((await post(charge, { callback_url: 'https://carefind.test/cb' })).statusCode).toBe(400)
     expect((await post(charge, { creatorId: 'creator-1' })).statusCode).toBe(400)
-    expect((await post(charge, { creatorId: { $ne: null }, callback_url: 'x' })).statusCode).toBe(400)
+    expect((await post(charge, { creatorId: { $ne: null }, callback_url: 'https://carefind.test/cb' })).statusCode).toBe(400)
     h.user = null
-    expect((await post(charge, { creatorId: 'creator-1', callback_url: 'x' })).statusCode).toBe(401)
+    expect((await post(charge, { creatorId: 'creator-1', callback_url: 'https://carefind.test/cb' })).statusCode).toBe(401)
   })
 
   it('reads the cap and the coin value from financial_config, not from constants', async () => {
     h.db = world(13, { financial_config: [{ key: 'coin_value_kobo', value: 30000 }, { key: 'subscription_max_coins', value: 20 }] })
-    await post(charge, { creatorId: 'creator-1', callback_url: 'x' })
+    await post(charge, { creatorId: 'creator-1', callback_url: 'https://carefind.test/cb' })
     expect(h.db.data.payment_intents[0].expected_amount).toBe(13 * 30000)
   })
 
   it('never sends a Paystack subaccount split (the creator is paid through the CareCoin wallet)', async () => {
-    await post(charge, { creatorId: 'creator-1', callback_url: 'x' })
+    await post(charge, { creatorId: 'creator-1', callback_url: 'https://carefind.test/cb' })
     const sent = JSON.stringify(h.provider.initializePayment.mock.calls[0][0])
     expect(sent).not.toMatch(/subaccount|split/i)
   })
@@ -117,5 +117,29 @@ describe('verify-subscription-payment', () => {
     const res = await post(verify, { reference: ref })
     expect(res.statusCode).toBe(409)
     expect(res.body.success).toBeUndefined()
+  })
+})
+
+describe('charge-subscription: where the customer is sent back is never chosen by the browser (F-27)', () => {
+  it.each([
+  ['another host', 'https://evil.example/wallet'],
+  ['a look-alike host', 'https://carefind.test.evil.example/wallet'],
+  ['credentials in the URL', 'https://carefind.test@evil.example/wallet'],
+  ['javascript:', 'javascript:alert(1)'],
+  ['protocol-relative', '//evil.example/wallet'],
+  ['a relative path', '/wallet'],
+  ['plain http', 'http://carefind.test/wallet'],
+])('refuses %s before any intent is created or Paystack is called', async (_label, callback_url) => {
+    const res = await post(charge, { ...{ creatorId: 'creator-1' }, callback_url })
+    expect(res.statusCode).toBe(400)
+    expect(res.body.code).toBe('invalid_callback_url')
+    expect(h.db.data.payment_intents || []).toHaveLength(0)
+    expect(h.provider.initializePayment).not.toHaveBeenCalled()
+  })
+
+  it('passes the validated address to Paystack unchanged', async () => {
+    const res = await post(charge, { ...{ creatorId: 'creator-1' }, callback_url: 'https://carefind.test/wallet?tab=topup' })
+    expect(res.statusCode).toBe(200)
+    expect(h.provider.initializePayment).toHaveBeenCalledWith(expect.objectContaining({ callbackUrl: 'https://carefind.test/wallet?tab=topup' }))
   })
 })

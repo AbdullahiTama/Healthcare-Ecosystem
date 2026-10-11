@@ -1,8 +1,9 @@
-import { runRefundSweeps, runScheduled } from '@care-ecosystem/shared-payments'
+import { runRefundSweeps, runScheduled, purgeOtpChallenges } from '@care-ecosystem/shared-payments'
 import { sweepWithdrawals } from './withdrawalRecovery.js'
 import { applyRefundResult } from './refundEffects.js'
 import { getPaystackProvider, paymentLogger } from './payments.js'
 import { runFinanceReconciliation } from './financeReconcile.js'
+import { runNotificationBackfill } from './moneyNotifications.js'
 
 // The financial work the cron endpoint does after the email outbox, as named steps with intervals (see packages/shared-payments
 // scheduler.js). The endpoint is driven EVERY MINUTE by Supabase Cron, and a function has a hard time limit, so:
@@ -12,7 +13,7 @@ import { runFinanceReconciliation } from './financeReconcile.js'
 //     loops inside the steps stop at the deadline;
 //   * a failing step is reported and never blocks the others.
 // Every step is idempotent, so being stopped half way, or running in two places, is safe.
-export const FINANCE_STEPS_EVERY_MINUTES = Object.freeze({ vendor_release: 5, shop_order_expiry: 5, withdrawals: 5, refunds: 5, reconciliation: 1 })
+export const FINANCE_STEPS_EVERY_MINUTES = Object.freeze({ vendor_release: 5, shop_order_expiry: 5, withdrawals: 5, refunds: 5, reconciliation: 1, otp_purge: 60, payment_notifications: 15 })
 
 export async function runFinanceJobs(supabase, { budget, force = false } = {}) {
   const provider = getPaystackProvider()
@@ -44,6 +45,21 @@ export async function runFinanceJobs(supabase, { budget, force = false } = {}) {
     { name: 'refunds', everyMinutes: FINANCE_STEPS_EVERY_MINUTES.refunds, run: ({ deadline }) => runRefundSweeps(supabase, provider, { logger: paymentLogger, deadline, onSettled: (result) => applyRefundResult(supabase, result) }) },
     // replay failed webhooks, settle payments Paystack says were paid, compare with Paystack, database checks, alerts (each has its own slot)
     { name: 'reconciliation', everyMinutes: FINANCE_STEPS_EVERY_MINUTES.reconciliation, run: ({ deadline }) => runFinanceReconciliation(supabase, { deadline }) },
+    {
+      // money e-mails (withdrawal / refund / top-up) whose settlement committed but whose enqueue never happened: queued late,
+      // under the same keys, so nothing is duplicated (see moneyNotifications.js)
+      name: 'payment_notifications', everyMinutes: FINANCE_STEPS_EVERY_MINUTES.payment_notifications,
+      run: ({ deadline }) => runNotificationBackfill(supabase, { deadline }),
+    },
+    {
+      // one-time codes older than a day (consumed, expired or abandoned): database only, no provider
+      name: 'otp_purge', everyMinutes: FINANCE_STEPS_EVERY_MINUTES.otp_purge,
+      run: async () => {
+        const r = await purgeOtpChallenges(supabase)
+        if (r.purged > 0) paymentLogger.info('otp.purged', { purged: r.purged })
+        return r
+      },
+    },
   ]
   return runScheduled(supabase, steps, { budget, force, logger: paymentLogger })
 }

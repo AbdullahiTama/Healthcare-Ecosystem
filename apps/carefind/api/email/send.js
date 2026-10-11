@@ -20,6 +20,11 @@ export default async function handler(req, res) {
   if (!templateKey || !toEmail) return res.status(400).json({ error: 'templateKey and toEmail are required' })
   if (!isValidEmail(toEmail)) return res.status(400).json({ error: 'toEmail must be a valid email address' })
 
+  // Credentials must never travel through an email payload (the outbox stores it): reject any key that names one.
+  const CREDENTIAL_KEY = /password|passwd|pwd|token|secret|otp|api[_-]?key|access[_-]?token|refresh[_-]?token|session|\bpin\b|\bcode\b/i
+  const hasCredential = (v) => !!v && typeof v === 'object' && (Array.isArray(v) ? v.some(hasCredential) : Object.entries(v).some(([k, x]) => CREDENTIAL_KEY.test(k) || hasCredential(x)))
+  if (hasCredential(payload)) return res.status(400).json({ error: 'payload must not contain credentials' })
+
   const allowedTemplates = ['customer_registration', 'order_confirmation', 'purchase_confirmed', 'subscription_created', 'subscription_expiry', 'password_reset', 'email_verification', 'appointment_confirmed']
   if (!allowedTemplates.includes(templateKey)) return res.status(400).json({ error: `Invalid templateKey. Allowed: ${allowedTemplates.join(', ')}` })
 

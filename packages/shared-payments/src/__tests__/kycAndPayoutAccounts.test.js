@@ -154,7 +154,7 @@ describe('addPayoutAccount', () => {
   })
   const add = (over = {}) => addPayoutAccount({ supabase: db, user, ownerType: 'user', ownerId: 'u1', bankCode: '058', accountNumber: '0123456789', otp: '123456', resolveAccount: resolve, banks, mailer: m, ...over })
 
-  it('saves an account whose bank-reported name matches the verified legal name, using the bank name from the directory', async () => {
+  it('saves an account under the name the BANK reports, using the bank name from the directory', async () => {
     const r = await add()
     expect(r.status).toBe(201)
     expect(db.calls.find(([n]) => n === 'payout_account_add')[1]).toMatchObject({
@@ -164,19 +164,31 @@ describe('addPayoutAccount', () => {
     expect(m.sendPayoutAccount).toHaveBeenCalledWith(expect.objectContaining({ event: 'added', accountLast4: '6789', bankName: 'Guaranty Trust Bank' }))
   })
 
-  it('refuses without a verified identity, before resolving or spending the code', async () => {
-    db = fakeDb({ tables: { kyc_verifications: [{ ...KYC_ROW, tier: 0 }] }, rpc: { verify_otp: 'ok' } })
+  it('needs no verified identity (H02, owner decision D1a): a person with no KYC row saves an account with a code', async () => {
+    db = fakeDb({ tables: { kyc_verifications: [] }, rpc: { verify_otp: 'ok', payout_account_add: { outcome: 'ok', id: 'pa-2' } } })
     const r = await add()
-    expect(r).toMatchObject({ status: 403, body: { code: 'kyc_required' } })
-    expect(resolve).not.toHaveBeenCalled()
-    expect(db.calls.some(([n]) => n === 'verify_otp')).toBe(false)
+    expect(r.status).toBe(201)
+    expect(db.calls.some(([n]) => n === 'verify_otp')).toBe(true)
+    expect(db.calls.some(([n]) => n === 'payout_account_add')).toBe(true)
+    // nothing about identity is read at all
+    expect(db.calls.some(([n]) => /kyc/.test(n))).toBe(false)
   })
 
-  it("refuses someone else's account (name mismatch), tells them the bank's name, and does NOT burn the code", async () => {
+  it("stores the bank's name whatever it is (no name-match gate), still behind the emailed code", async () => {
     resolve.mockResolvedValue({ accountName: 'TUNDE BELLO' })
     const r = await add()
-    expect(r).toMatchObject({ status: 422, body: { code: 'name_mismatch', accountName: 'TUNDE BELLO' } })
-    expect(db.calls.some(([n]) => n === 'verify_otp' || n === 'payout_account_add')).toBe(false)
+    expect(r.status).toBe(201)
+    expect(db.calls.find(([n]) => n === 'payout_account_add')[1]).toMatchObject({ p_account_name: 'TUNDE BELLO', p_score: null })
+    // and without the right code nothing is saved, whatever the name
+    db = fakeDb({ tables: { kyc_verifications: [] }, rpc: { verify_otp: 'invalid' } })
+    expect((await add()).status).toBe(400)
+    expect(db.calls.some(([n]) => n === 'payout_account_add')).toBe(false)
+  })
+
+  it('the account must still resolve at the bank first, and a refusal does not burn the code', async () => {
+    resolve.mockRejectedValue(Object.assign(new Error('x'), { paystackMessage: 'Could not resolve account name' }))
+    expect((await add()).body.code).toBe('account_not_found')
+    expect(db.calls.some(([n]) => n === 'verify_otp')).toBe(false)
   })
 
   it('a wrong or missing code saves nothing', async () => {
@@ -195,13 +207,22 @@ describe('addPayoutAccount', () => {
     expect((await add()).body.code).toBe('bank_unsupported')
   })
 
-  it('a business account may match the verified owner OR the registered business name', async () => {
-    resolve.mockResolvedValue({ accountName: 'GRACE PHARMACY LIMITED' })
-    expect((await add({ ownerType: 'business', ownerId: 'biz-1', businessName: 'Grace Pharmacy' })).status).toBe(201)
-    expect((await add({ ownerType: 'business', ownerId: 'biz-1', businessName: 'Mercy Pharmacy' })).body.code).toBe('name_mismatch')
-    expect((await add({ ownerType: 'user', ownerId: 'u1', businessName: 'Grace Pharmacy' })).body.code).toBe('name_mismatch') // CareFind users never use the business rule
-    resolve.mockResolvedValue({ accountName: 'ADA OBI' })
-    expect((await add({ ownerType: 'business', ownerId: 'biz-1', businessName: 'Grace Pharmacy' })).status).toBe(201) // the verified owner's own account
+  it('a business account is saved under the bank name too: no business-name match is applied', async () => {
+    resolve.mockResolvedValue({ accountName: 'SOME OTHER LIMITED' })
+    const r = await add({ ownerType: 'business', ownerId: 'biz-1' })
+    expect(r.status).toBe(201)
+    expect(db.calls.find(([n]) => n === 'payout_account_add')[1]).toMatchObject({ p_owner_type: 'business', p_owner_id: 'biz-1', p_account_name: 'SOME OTHER LIMITED' })
+  })
+
+  it('a failing owner alert never fails the save, and is logged as alert.failed without the address', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    m.sendPayoutAccount.mockResolvedValue({ ok: false, error: 'rejected a@x.com' })
+    const r = await add()
+    expect(r.status).toBe(201)
+    const line = warn.mock.calls.map((c) => c[0]).find((l) => l.includes('alert.failed'))
+    expect(JSON.parse(line)).toMatchObject({ event: 'alert.failed', alert: 'payout_account_added' })
+    expect(line).not.toContain('a@x.com')
+    warn.mockRestore()
   })
 
   it('maps duplicate and limit outcomes from the database', async () => {

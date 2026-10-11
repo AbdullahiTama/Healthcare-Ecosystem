@@ -67,6 +67,8 @@ function Wallet() {
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [useTyped, setUseTyped] = useState(false)
   const [wdSubmitting, setWdSubmitting] = useState(false)
+  // The processing fee rate on top-ups, as the server reports it (null until known; the server still decides the charge).
+  const [topupFeeRate, setTopupFeeRate] = useState(null)
   const [wdAccountResolving, setWdAccountResolving] = useState(false)
   const [wdAccountResolved, setWdAccountResolved] = useState(false)
   const [pinModalOpen, setPinModalOpen] = useState(false)
@@ -166,6 +168,28 @@ function Wallet() {
 
     return () => { if (resolveTimer.current) clearTimeout(resolveTimer.current) }
   }, [wdBankCode, wdAccountNumber])
+
+  // Ask the server for the current top-up fee rate (nothing is created) so the price shown matches what is charged.
+  useEffect(() => {
+    if (!user || tab !== 'wallet') return undefined
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) return
+        const response = await fetch('/api/initiate-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ quote: true }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!cancelled && typeof data.fee_rate === 'number' && data.fee_rate >= 0 && data.fee_rate <= 1) setTopupFeeRate(data.fee_rate)
+      } catch {
+        // the fee line simply stays generic; the checkout page shows the exact total
+      }
+    })()
+    return () => { cancelled = true }
+  }, [user, tab])
 
   async function handleTopUp(pkg) {
     if (!user) return
@@ -344,13 +368,22 @@ function Wallet() {
                     <p style={{ margin: 0, fontSize: 11, color: theme.success, fontWeight: 700 }}>Save ₦{pkg.savings.toLocaleString()}</p>
                   )}
                 </div>
-                <p style={{ margin: 0, fontWeight: 900, fontSize: 17, color: theme.tealDeep }}>
-                  ₦{pkg.naira.toLocaleString()}
-                </p>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ margin: 0, fontWeight: 900, fontSize: 17, color: theme.tealDeep }}>
+                    ₦{pkg.naira.toLocaleString()}
+                  </p>
+                  {topupFeeRate !== null && topupFeeRate > 0 && (
+                    <p style={{ margin: '2px 0 0 0', fontSize: 11, color: theme.textMid }}>
+                      + ₦{(Math.round(pkg.naira * 100 * topupFeeRate) / 100).toLocaleString()} fee · pay ₦{((pkg.naira * 100 + Math.round(pkg.naira * 100 * topupFeeRate)) / 100).toLocaleString()}
+                    </p>
+                  )}
+                </div>
               </button>
             ))}
             <p style={{ fontSize: 11, color: theme.textLight, textAlign: 'center', marginTop: 4 }}>
-              Tapping a package will open Paystack to complete payment
+              {topupFeeRate !== null && topupFeeRate > 0
+                ? `A ${Math.round(topupFeeRate * 1000) / 10}% processing fee is added at checkout. Tapping a package will open Paystack to complete payment`
+                : 'Tapping a package will open Paystack to complete payment'}
             </p>
           </div>
         )}

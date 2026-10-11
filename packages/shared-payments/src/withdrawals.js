@@ -9,13 +9,16 @@ import { rpcWithRetry } from './rpcRetry.js'
 import { createLoopGuard } from './scheduler.js'
 
 export const IN_FLIGHT_GRACE_MS = 10 * 60 * 1000
+// A transfer call was MADE (status 'processing') but no transfer code came back, so the call may have created the transfer
+// anyway (a timeout proves nothing). "Paystack has no such transfer" is believed only this long after the attempt was marked.
+export const AMBIGUOUS_GRACE_MS = 60 * 60 * 1000
 
 const IN_FLIGHT = new Set(['pending', 'otp', 'processing', 'queued', 'received'])
 const NOT_PAID = new Set(['failed', 'reversed', 'abandoned', 'blocked', 'rejected'])
 
 export const WITHDRAWAL_KINDS = {
-  carefind: { settleRpc: 'settle_withdrawal', table: 'withdrawal_requests', columns: 'id, user_id, amount, payout_kobo, status, paystack_reference, paystack_transfer_code, created_at' },
-  carehub: { settleRpc: 'settle_business_withdrawal', table: 'business_withdrawal_requests', columns: 'id, business_id, amount, status, paystack_reference, paystack_transfer_code, created_at' },
+  carefind: { settleRpc: 'settle_withdrawal', table: 'withdrawal_requests', columns: 'id, user_id, amount, payout_kobo, status, paystack_reference, paystack_transfer_code, created_at, updated_at' },
+  carehub: { settleRpc: 'settle_business_withdrawal', table: 'business_withdrawal_requests', columns: 'id, business_id, amount, status, paystack_reference, paystack_transfer_code, created_at, updated_at' },
 }
 
 export const TRANSFER_EVENT_OUTCOMES = {
@@ -42,16 +45,22 @@ export async function getTransferStatus(reference, fetcher) {
  * Decide what to do about a request that is not settled. -> { action: 'refund' | 'complete' | 'wait', message?, providerStatus? }
  * A refund is only ever chosen once Paystack itself says the transfer did not (and will not) happen: a timeout can
  * mean the transfer was created anyway, and refunding then pays twice.
- * @param {object} row  { paystack_reference, paystack_transfer_code, created_at }
- * @param {object} opts { getStatus(reference), now, graceMs, referenceless: 'wait' | 'refund' }
+ *
+ * The request's status says whether a transfer call was ever made (H04):
+ *   'reserved'    no call was made: Paystack not knowing the reference is proof, believed after graceMs
+ *   'processing'  a call was made (or is in flight) and no transfer code came back: the call may have created the transfer,
+ *                 so "not found" is believed only ambiguousGraceMs after the attempt was marked (updated_at), unless the
+ *                 caller already holds a definite refusal (confirmedNotSent). A row with no status is treated as processing.
+ * @param {object} row  { status?, paystack_reference, paystack_transfer_code, created_at, updated_at? }
+ * @param {object} opts { getStatus(reference), now, graceMs, ambiguousGraceMs, confirmedNotSent, referenceless: 'wait' | 'refund' }
  */
-export async function decideTransferAction(row, { getStatus, now = Date.now(), graceMs = IN_FLIGHT_GRACE_MS, referenceless = 'wait' } = {}) {
+export async function decideTransferAction(row, { getStatus, now = Date.now(), graceMs = IN_FLIGHT_GRACE_MS, ambiguousGraceMs = AMBIGUOUS_GRACE_MS, confirmedNotSent = false, referenceless = 'wait' } = {}) {
   if (!row?.paystack_reference) {
     return referenceless === 'refund' ? { action: 'refund' } : { action: 'wait', message: 'No transfer reference on this request.' }
   }
   const ageMs = now - new Date(row.created_at).getTime()
   const hasCode = Boolean(row.paystack_transfer_code)
-  if (!hasCode && !(ageMs >= graceMs)) {
+  if (!hasCode && !confirmedNotSent && !(ageMs >= graceMs)) {
     return { action: 'wait', message: 'Filed moments ago; its transfer may still be sending. Try again in a few minutes.' }
   }
 
@@ -67,7 +76,13 @@ export async function decideTransferAction(row, { getStatus, now = Date.now(), g
   if (NOT_PAID.has(status)) return { action: 'refund', providerStatus: status }
   // 'not_found' is only believable once the transfer call has had time to finish and never saved a code;
   // with a code on file Paystack must know the transfer.
-  if (status === 'not_found' && !hasCode) return { action: 'refund', providerStatus: status }
+  if (status === 'not_found' && !hasCode) {
+    const attempted = row.status !== 'reserved'
+    if (!attempted || confirmedNotSent) return { action: 'refund', providerStatus: status }
+    const markedAt = new Date(row.updated_at || row.created_at).getTime()
+    if (now - markedAt >= ambiguousGraceMs) return { action: 'refund', providerStatus: status }
+    return { action: 'wait', providerStatus: status, message: 'A transfer call was made and Paystack has no record yet. It is only treated as not sent after an hour; nothing was refunded.' }
+  }
   return { action: 'wait', providerStatus: status, message: `Unrecognised Paystack transfer status "${status}". Nothing was refunded.` }
 }
 
@@ -114,7 +129,10 @@ export async function settleTransferWebhook(supabase, event, { logger = console 
  */
 export async function reconcileWithdrawal(supabase, kind, row, opts = {}) {
   const decision = await decideTransferAction(row, opts)
-  if (decision.action === 'wait') return { outcome: 'waiting', detail: decision.message }
+  if (decision.action === 'wait') {
+    // inFlight: Paystack itself says the transfer is still moving (pending / otp / processing / queued / received)
+    return { outcome: 'waiting', detail: decision.message, providerStatus: decision.providerStatus, inFlight: IN_FLIGHT.has(decision.providerStatus) }
+  }
 
   const outcome = decision.action === 'refund' ? 'failed' : 'success'
   let result
@@ -130,7 +148,7 @@ export async function reconcileWithdrawal(supabase, kind, row, opts = {}) {
 }
 
 /** Sweep every request still reserved/processing after the grace period. Hooks run only for changes this sweep made. */
-export async function sweepWithdrawals(supabase, kind, { limit = 50, now = Date.now(), graceMs = IN_FLIGHT_GRACE_MS, getStatus, onRefunded, onCompleted, logger = console, deadline = null } = {}) {
+export async function sweepWithdrawals(supabase, kind, { limit = 50, now = Date.now(), graceMs = IN_FLIGHT_GRACE_MS, getStatus, onRefunded, onCompleted, onInFlight, logger = console, deadline = null } = {}) {
   const def = WITHDRAWAL_KINDS[kind]
   const cutoff = new Date(now - graceMs).toISOString()
   const { data: rows, error } = await supabase
@@ -157,6 +175,16 @@ export async function sweepWithdrawals(supabase, kind, { limit = 50, now = Date.
         await onRefunded?.(row, r.result)
       }
       if (r.outcome === 'completed') await onCompleted?.(row, r.result)
+      if (r.outcome === 'waiting' && r.inFlight && onInFlight) {
+        // Past the grace period and still moving at Paystack: a single "taking longer than usual" notice (the email key is
+        // the reference, so every later sweep that sees it still in flight sends nothing more). Never affects the sweep.
+        try {
+          await onInFlight(row, r)
+          summary.inFlight = (summary.inFlight || 0) + 1
+        } catch (hookErr) {
+          logger.error?.('withdrawal.sweep.on_in_flight_failed', { kind, id: row.id, message: hookErr?.message })
+        }
+      }
     } catch (err) {
       summary.errors++
       guard.failure(err)

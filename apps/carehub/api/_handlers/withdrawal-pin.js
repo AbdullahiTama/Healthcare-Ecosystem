@@ -1,4 +1,4 @@
-import { OTP_PURPOSES, sendOtp, setWithdrawalPin, withdrawalPinStatus } from '@care-ecosystem/shared-payments'
+import { issueOtpFromRequest, setWithdrawalPin, withdrawalPinStatus } from '@care-ecosystem/shared-payments'
 import { supabase } from '../_lib/supabase.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { getSecurityMailer } from '../_lib/securityMailer.js'
@@ -35,13 +35,9 @@ export default async function handler(req, res) {
   }
 
   if (action === 'otp') {
-    // Two things need a code: arming the PIN (default) and confirming a withdrawal ({ purpose: 'withdrawal' }). Anything
-    // else is refused, so this endpoint cannot be used to mint codes for the other purposes.
-    const wanted = (req.body || {}).purpose
-    if (wanted !== undefined && wanted !== OTP_PURPOSES.PIN_SET && wanted !== OTP_PURPOSES.WITHDRAWAL) {
-      return res.status(400).json({ error: 'Unknown code purpose' })
-    }
-    const r = await sendOtp({ supabase, user, purpose: wanted || OTP_PURPOSES.PIN_SET, mailer: await getSecurityMailer() })
+    // Two things need a code here: arming the PIN (default) and confirming a withdrawal ({ purpose: 'withdrawal' }).
+    // Anything else is refused by the shared helper, so this endpoint cannot mint codes for other purposes.
+    const r = await issueOtpFromRequest({ supabase, user, req, mailer: await getSecurityMailer() })
     return res.status(r.status).json(r.body)
   }
 
