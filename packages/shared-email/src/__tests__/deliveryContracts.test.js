@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -29,7 +29,15 @@ const rel = (p) => relative(REPO, p).split(sep).join('/')
 // Tests are excluded from the source scans: they name tables and call methods
 // in string literals purely to assert on them, and this file does the same.
 const SOURCE = ALL.filter((f) => !rel(f).includes('__tests__') && rel(f) !== SELF)
-const read = (f) => readFileSync(f, 'utf8')
+// Each source file is read once and shared by every contract (the scans used to re-read the whole tree per test, which took
+// 20-29 s under load and tripped the default test timeout). The timeout below is for the same reason: this file scans the
+// repository, so its runtime depends on the machine, not on the code. Assertions are unchanged.
+vi.setConfig({ testTimeout: 60_000 })
+const cache = new Map()
+const read = (f) => {
+  if (!cache.has(f)) cache.set(f, readFileSync(f, 'utf8'))
+  return cache.get(f)
+}
 
 // Return the single statement starting at `index`, bounded by the first
 // semicolon at depth zero, or by a line break that is not a method chain. A

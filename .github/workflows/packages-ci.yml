@@ -1,0 +1,52 @@
+name: Shared packages CI
+
+# H07: the shared packages carry the money, e-mail, notification and payout-screen logic that both apps depend on. Until now only
+# shared-payments ran in CI (inside the CareFind workflow); shared-email, shared-notifications and shared-payout-ui never ran, and
+# the CareHub workflow did not run shared-payments at all. This workflow runs every package suite on every change under packages/,
+# so a regression in a package cannot reach main through whichever app workflow happened to be skipped.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'packages/**'
+      - '.github/workflows/packages-ci.yml'
+  pull_request:
+    paths:
+      - 'packages/**'
+      - '.github/workflows/packages-ci.yml'
+
+concurrency:
+  group: packages-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [shared-payments, shared-email, shared-notifications, shared-payout-ui]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: packages/${{ matrix.package }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: packages/${{ matrix.package }}
+        run: npm ci
+
+      # Production dependencies only: the packages' dev tooling (vitest) has advisories that never ship. The apps' own audit steps
+      # cover everything the apps bundle.
+      - name: Security audit (production dependencies)
+        working-directory: packages/${{ matrix.package }}
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Run tests
+        working-directory: packages/${{ matrix.package }}
+        run: npm test

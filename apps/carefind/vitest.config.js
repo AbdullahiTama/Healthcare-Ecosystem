@@ -35,5 +35,9 @@ export default defineConfig({
     // than vitest's generic "test timed out" — which only holds while the test
     // timeout stays clear of the async-util one. A hung test still fails in 15s.
     testTimeout: 15000,
+    // The PGlite suites boot an in-process Postgres and replay migrations in beforeAll. Under a loaded machine (CI, or the full
+    // suite running in parallel) that exceeds the 10 s default and the whole FILE fails to start, which reads as a flaky test.
+    // A hook that really hangs still fails, after two minutes. Test assertions and the per-test timeout are unchanged.
+    hookTimeout: 120000,
   },
 })

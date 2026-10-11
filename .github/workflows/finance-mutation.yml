@@ -1,0 +1,61 @@
+name: Financial mutation gate
+
+# H07: a green test suite only proves the tests pass. This job proves they would FAIL if the money code were wrong: each mutant is
+# one deliberate defect (a check removed, a cap raised, a fee dropped), and the run fails if any mutant survives. It is blocking, and
+# runs only when money code, migrations or the financial tests change (about 15 minutes: 46 mutants, each a PGlite or package run), so unrelated PRs are not slowed down.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'packages/shared-payments/**'
+      - 'packages/shared-email/**'
+      - 'supabase/**'
+      - 'apps/carefind/api/**'
+      - 'apps/carefind/src/test/payments/**'
+      - '.github/workflows/finance-mutation.yml'
+  pull_request:
+    paths:
+      - 'packages/shared-payments/**'
+      - 'packages/shared-email/**'
+      - 'supabase/**'
+      - 'apps/carefind/api/**'
+      - 'apps/carefind/src/test/payments/**'
+      - '.github/workflows/finance-mutation.yml'
+
+concurrency:
+  group: finance-mutation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutation:
+    name: Mutation gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            apps/carefind/package-lock.json
+            packages/shared-payments/package-lock.json
+            packages/shared-email/package-lock.json
+
+      - name: Install CareFind
+        working-directory: apps/carefind
+        run: npm ci
+
+      - name: Install shared-payments
+        working-directory: packages/shared-payments
+        run: npm ci
+
+      - name: Install shared-email
+        working-directory: packages/shared-email
+        run: npm ci
+
+      - name: Run the mutants (fails if any survives)
+        working-directory: apps/carefind
+        run: npm run test:mutation

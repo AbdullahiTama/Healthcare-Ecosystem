@@ -244,3 +244,448 @@ Completed work (originally by Joepuils, merged onto the payout-accounts branch; 
 
 Migration: `carefind_20261020_wallet_spend_and_topup.sql` (+ mirror in `supabase/migrations/`), **NOT applied to production**. Details and rollout: `docs/architecture/Wallet-Spend-and-Topup.md`.
 
+
+---
+
+# Payment Security Hardening track (H00-H07)
+
+Separate from Phases 00-16 above (which stay as written). Scope, order and rules were set by the owner on 2026-10-10: one phase at a time, stop after each report, nothing applied to production / deployed / sent as a real payment without explicit authorization, no weakened tests, no commercial-rate changes, **no paid KYC (Dojah or any other) as a payment or withdrawal prerequisite**.
+
+| Phase | Status |
+|---|---|
+| H00 Baseline audit | READY_FOR_REVIEW (read-only; this section) |
+| H01 Shared OTP security | READY_FOR_REVIEW (migration written, NOT applied; `OTP_HMAC_SECRET` must be set before deploy) |
+| H02 PIN and payout-account protection | READY_FOR_REVIEW (migration written, NOT applied; new caps apply to all users, see commercial effect) |
+| H03 Payment and settlement security | READY_FOR_REVIEW (migration written, NOT applied; apply before deploy; 10% top-up fee per owner) |
+| H04 Withdrawal state machine | READY_FOR_REVIEW (migration written, NOT applied; apply before deploy; legacy-row SQL for the owner) |
+| H05 Shared payment email system | READY_FOR_REVIEW (migration written, NOT applied; no payment e-mail has ever been sent in production: deploy + Vault secrets first) |
+| H06 KYC exclusion | READY_FOR_REVIEW (migration written, NOT applied; code is safe before and after it: a missing row means OFF) |
+| H07 Tests and release gate | READY_FOR_REVIEW (CI and gate written locally, NOT pushed; both apps' production-dependency audits FAIL, pre-existing, owner decision) |
+
+## H00 - Baseline audit (read-only)
+
+Method: read the OTP / PIN / payout-account / KYC / withdrawal code in `packages/shared-payments`, `shared-email`, `shared-notifications`, `shared-payout-ui` and both apps' handlers; the OTP, PIN, payout-account, limits and withdrawal-OTP migrations; CI workflows; read production's migration LIST (names and versions only, project `szdybxmgmhndoytqanfb`, via `list_migrations`). No SQL was run against production, so **live ACLs, RLS and config values (for example `payout_account_required`) are NOT verified here**. No file other than this section was changed.
+
+### Inventory (IMPL implemented / PART partial / MISSING / UNSAFE)
+
+| Feature | Status | Where / evidence |
+|---|---|---|
+| CSPRNG 6-digit code | IMPL | `shared-payments/src/otp.js` `crypto.randomInt` |
+| Keyed OTP hash, no plaintext stored | IMPL (key choice: H-02) | `otp.js` `hashOtp` HMAC-SHA256 of `userId:purpose:code`; `otp_challenges.code_hash` |
+| Purpose + user binding | IMPL | hash input and `(user_id, purpose)` lookup in `issue_otp` / `verify_otp` |
+| 5-min expiry, 5 attempts, single use, row-locked verify | IMPL | `supabase/migrations/carefind_20261024_otp_challenges.sql` |
+| Resend cooldown 60 s, 3 per hour per user+purpose, atomic | IMPL | same file, advisory lock |
+| IP / global OTP abuse controls | MISSING | none in `otp.js` or SQL (H-03) |
+| OTP never logged / returned | IMPL | `sendOtp` returns a masked address only; provider error logged without the code |
+| OTP delivery | IMPL | direct send, not via outbox, by design (`securityEmails.js` header) |
+| PIN hash (scrypt, per-user salt), 5 failures -> 15 min lock | IMPL | `shared-payments/src/pin.js`, `carefind_20260816_withdrawal_pin.sql` |
+| PIN set/replace needs emailed OTP (+ current PIN unless forgot) | IMPL | `setWithdrawalPin`; handlers in both apps |
+| PIN recovery ("forgot") | PART | same function with `forgot:true`; OTP only; no distinct recovery notification, no post-change cooling-off (H-09) |
+| Payout account add: bank-resolved name, name match, OTP, limit 5, duplicates | IMPL but KYC-gated | `payoutAccounts.js` `addPayoutAccount` (H-01) |
+| Payout account remove: PIN + alert | IMPL | `payoutHandlers.js` `remove` |
+| Payout account set-default | PART | `setDefaultPayoutAccount`: session only, no PIN/OTP, no alert (H-08) |
+| Payout account "replace" | n/a | modelled as add + remove |
+| Withdrawal: PIN, then OTP, then bank-name check, then atomic reserve | IMPL | `initiate-withdrawal.js`, `initiate-business-withdrawal.js` |
+| CareFind withdrawal uses the shared PIN gate | UNSAFE (drift) | inline copy of `checkWithdrawalPin` in `initiate-withdrawal.js` (H-05) |
+| Destination forced from DB for saved accounts | IMPL | `getPayoutAccountForWithdrawal` |
+| Typed-in destination | PART | allowed while `payout_account_required = 0`; unsupported-bank branch trusts the typed name (H-06) |
+| Withdrawal state machine, reservation, reference from request id | IMPL (Phase 08; re-audit in H04) | `create_withdrawal`, `settle_withdrawal`, `shared-payments/src/withdrawals.js` |
+| Paystack webhook: HMAC-SHA512, constant-time, stored events, replay | IMPL | `apps/carefind/api/_handlers/paystack-webhook.js` |
+| CareHub Paystack webhook | n/a | none; CareHub intents settle through CareFind's shared endpoint (confirm the Paystack dashboard config in H03) |
+| Settlement / refunds / reconciliation engines | IMPL (Phases 04-14; re-audit in H03/H04) | `settle_payment_intent`, `request_refund`, `run_db_reconciliation` |
+| Email outbox with retry, backoff, dead state, idempotency key | IMPL | `EmailService.js`, `20261002_email_outbox_*` |
+| Escaping of template variables | IMPL (re-verify in H05) | `shared-email/src/utils/escapeHtml.js`, `layout.js` `html` tag |
+| Security emails (OTP, PIN changed, PIN locked, payout added/removed) | PART | `securityEmails.js`; sent directly; alert failures swallowed (H-04) |
+| Payment receipt / failure | IMPL | templates `payment_success`, `payment_failed` |
+| Withdrawal requested / completed / failed | IMPL | templates present; **processing: MISSING** |
+| Refund completed | IMPL | `refund_completed`; **refund requested / failed: MISSING** |
+| Wallet top-up receipt | NOT FOUND | no dedicated template located by key search (confirm in H05) |
+| Alerts for other sensitive changes (default account) | MISSING | H-08 |
+| `shared-notifications` | IMPL, unrelated to payment security | adapters + types only |
+| Paid KYC (Dojah) | IMPL and COUPLED to payout accounts / limits | see KYC map |
+
+### Findings
+
+Severity is my assessment from reading code; none was reproduced in this phase.
+
+* **H-01 (High, conflicts with the brief): KYC gates payout accounts and can gate withdrawals.** `addPayoutAccount` refuses without `kyc_verifications.tier >= 1` (403 `kyc_required`); both withdrawal handlers refuse typed-in destinations when `financial_config.payout_account_required = 1`; per-person limits are lifted by KYC tier (`withdrawalLimits.js`). Live value of the flag not read.
+* **H-02 (Medium): the OTP HMAC key falls back to `SUPABASE_SERVICE_ROLE_KEY`**, and the KYC hash secret falls back to the OTP secret and then the service key. The most powerful secret doubles as a hashing key; rotating one rotates the other and invalidates stored identifiers.
+* **H-03 (Medium): no IP or global OTP controls**, only per-user-per-purpose (60 s / 3 per hour). The in-memory limiter (`rateLimit.js`) is per serverless instance and used only by `resolve-account`.
+* **H-04 (Medium): security alert delivery failures are silently swallowed** (`.catch(() => {})` on PIN-changed, payout-account added/removed and PIN-locked). No outbox, no retry, no log line. Conflicts with "do not silently swallow delivery errors".
+* **H-05 (Medium, duplication): CareFind `initiate-withdrawal.js` re-implements the PIN gate inline** while CareHub uses `checkWithdrawalPin`. The same file also contains a verbatim duplicated `untraceable_credits` block (the second copy is unreachable).
+* **H-06 (Medium, confirm in H02): the unsupported-bank branch accepts the typed account name** with no bank confirmation (CareFind handler). Only reachable with no saved account.
+* **H-07 (Low): OTP purposes live in three places** (SQL allowlist re-created by each migration, `OTP_PURPOSES`, the email `PURPOSES` map). Adding a purpose without all three fails at runtime.
+* **H-08 (Medium): set-default payout account needs only a session** (no PIN, no alert), and the default decides where a one-click withdrawal goes.
+* **H-09 (Medium): no cooling-off after a PIN change or PIN recovery.** Someone holding a session AND the inbox can reset the PIN and withdraw immediately (a fresh withdrawal OTP is still required; the cooling cap applies only to NEW payout accounts).
+* **H-10 (Low): the OTP is consumed before bank resolution and reservation**, so a validation failure afterwards (limit, insufficient funds) costs the user a code and counts toward 3 per hour.
+* **H-11 (Low, latent): outbox template `withdrawal_pin_otp` is registered** (`shared-email/src/templates/index.js`) from a superseded design. Nothing sends it; if something did, the live code would be persisted in the outbox payload.
+* **H-12 (Medium): CI does not run `shared-email`, `shared-notifications` or `shared-payout-ui` tests**; CareHub CI does not run `shared-payments`; the real-Postgres concurrency job exists only in the CareFind workflow; `npm audit` covers the apps, not the packages.
+* **H-13 (Low): housekeeping delete of `otp_challenges` is fire-and-forget from Node**; no scheduled purge.
+* **H-14 (Low): `setWithdrawalPin` reads `hasPin` then writes** without a lock; OTP consumption bounds it, but it is not atomic.
+
+### Contradictions between migrations, docs and production
+
+1. Master plan Phase 16 (line 245) and the migration header say `carefind_20261020_wallet_spend_and_topup` is **NOT applied**. Production's migration list shows its 7 parts applied (`20261010110402` to `20261010110547`), and commit `6e1b4d2` says so.
+2. `carefind_20261027_withdrawal_otp_purpose.sql` header: "NOT APPLIED". Production list: applied (`20261010115431`). Same for `carefind_20261026_notifications_insert_policy` (header NOT applied; applied `20261010105435`).
+3. Repo names and dates differ from what ran: `carefind_20261024_otp_challenges.sql` (header: applied 2026-10-09) is `otp_challenges_table` at `20261009212046`; `carefind_20261025_payout_accounts_and_kyc.sql` is `payout_accounts_1..4`; `carefind_20261026_withdrawal_limits.sql` is `withdrawal_limits_config`. A migration-list diff will not match by name.
+4. The OTP migration file ends with `drop function if exists reject_business_withdrawal(uuid)`, yet a migration named `reject_business_withdrawal` was applied (`20261009212302`). Whether the function still exists live is **unverified** (known trap: replaced or dropped RPCs leaving siblings; check `pg_proc`).
+5. Master plan says Phase 16's payout/PIN parts "were NOT taken, KYC-based versions replace them". `docs/superpowers/{specs,plans}/2026-10-08-*` still describe `withdrawal_email_otps` + outbox `withdrawal_pin_otp`; the shipped design is `otp_challenges` + direct send.
+6. Docs location: `docs/architecture/` (18 files) vs untracked `apps/docs/architecture/` (3 files); `CareFind-Payment-Flows.md` and `Financial-Architecture.md` show as deleted from `docs/` in the working tree. Still unresolved from Phase 05.
+7. `CLAUDE.md` requires `docs/PROJECT_OVERVIEW.md`, `planning/ROADMAP.md`, `planning/CODE_AUDIT.md`; none exist, and `README.md` links CODE_AUDIT.
+8. `shared-email/src/events.js` says it mirrors `docs/architecture/Email-System.md`, which does not exist. The README test table omits shared-email, shared-payments and shared-payout-ui.
+9. Each migration exists twice (`supabase/migrations/` and `apps/carefind/sql/`).
+
+### KYC dependency map (input for H06; nothing disabled in H00)
+
+* shared-payments: `kyc/{DojahProvider,identity,nameMatch}.js`; `payoutAccounts.js` (KYC gate + legal-name match); `payoutHandlers.js` `createKycHandler`; `withdrawalLimits.js` (`kycTier`, tier caps); exports in `index.js`; tests `dojah`, `kycAndPayoutAccounts`, `nameMatch`, `payoutHandlers`, `withdrawalLimits`.
+* Apps: `api/_handlers/kyc.js` + router entry (both); `initiate-withdrawal.js` imports `limitsForSavedAccount`; `PayoutAccountsPanel.jsx` (both); `shared-payout-ui` (`client.js`, `selfie.js`, `stores.js`).
+* Database: `kyc_verifications`, `kyc_begin_attempt`, `kyc_save_verified`, `kyc_save_selfie`; config `payout_account_required`, `kyc_tier1_daily_cap_kobo`, `kyc_tier2_daily_cap_kobo`.
+* Env: Dojah credentials, `KYC_HASH_SECRET`.
+* Effective gate today: saving a payout account requires KYC; a withdrawal requires KYC only when `payout_account_required = 1` (live value unread). **Open design question for H02/H06:** without KYC there is no verified legal name, so "account name must match" needs a replacement rule (for example match the holder name on the platform profile or business registration) or an explicit owner decision to rely on the bank-resolved name plus OTP, PIN and cooling-off.
+
+### Tests run (baseline, no code changed)
+
+| Suite | Result |
+|---|---|
+| `packages/shared-payments` `npm test` | 22 files, 474 passed |
+| `packages/shared-email` `vitest run` | first run 333 passed / 2 failed (failing names not captured); immediate re-run 335 / 335. Treated as a load-sensitive flake, cause not identified |
+| `packages/shared-notifications` `vitest run` | 1 file, 12 passed |
+| CareFind targeted (withdrawal-pin, initiate-withdrawal x3, withdrawalOtpPurpose.db, withdrawalPin) | 5 files, 54 passed |
+| CareHub targeted (withdrawalPin, initiateBusinessWithdrawal x2) | 3 files, 46 passed |
+
+Not run: full CareFind and CareHub suites, `shared-payout-ui`, real-Postgres concurrency suites (need `PG_CONCURRENCY_URL`), production builds, `npm audit`. H07 owns those.
+
+### Unresolved / needs owner
+
+* Live value of `payout_account_required` and live ACLs of `issue_otp`, `verify_otp`, `get_withdrawal_pin`, `payout_account_*`, `kyc_*` (one read-only catalog query; I did not run SQL on production).
+* Whether `reject_business_withdrawal` still exists live.
+* Canonical docs location.
+* The name-match replacement rule once KYC is out (above).
+* Whether Paystack sends CareHub events to the CareFind webhook (dashboard setting, not in the repo).
+
+Next phase: **H01 - Shared OTP security** (done below).
+
+### H00 addendum - live catalog read (2026-10-10, read-only SELECT on `szdybxmgmhndoytqanfb`, owner-authorized)
+
+* ACLs: `issue_otp`, `verify_otp`, `get_withdrawal_pin`, `set_withdrawal_pin`, `verify_withdrawal_pin`, `payout_account_add/disable/set_default`, `kyc_begin_attempt/save_verified/save_selfie`, `create_withdrawal`, `create_business_withdrawal`, `reject_business_withdrawal`: EXECUTE for `postgres` and `service_role` only; one function per name (no overload siblings among these).
+* `otp_challenges`, `withdrawal_pins`, `payout_accounts`, `kyc_verifications`: RLS on, zero policies, no anon/authenticated grants (`payout_accounts` and `kyc_verifications` are SELECT-only for service_role).
+* `issue_otp` allowlist live: `pin_set`, `payout_account`, `withdrawal`.
+* `financial_config.payout_account_required = 0`: typed-in bank details are still accepted, so KYC does **not** currently gate withdrawals. It gates only saving a payout account, and lifts the daily cap by tier (`kyc_tier1` N50,000, `kyc_tier2` N500,000; cooling-off N20,000 for 24 h).
+* **`reject_business_withdrawal(uuid)` exists live** (service_role only). The repo's OTP migration says it was dropped as superseded by `settle_business_withdrawal`; the drop was never applied. It is a second door for business-withdrawal refunds: to be reviewed in H04, not changed in H00/H01.
+* `otp_challenges` contains **zero rows**: no OTP has ever been issued in production, so the OTP, PIN-replace and payout-account flows have not been exercised live (consistent with the application code from Phases 04-16 not being deployed).
+
+## H01 - Shared OTP security
+
+Owner approval of the design: 2026-10-10 (chat). Scope was the OTP service only; PIN and payout-account rules are H02, the email delivery path is H05.
+
+Already correct and left alone (verified by reading and by tests): CSPRNG codes, keyed hash bound to user and purpose, 5-minute expiry, 5 attempts per challenge, atomic row-locked single use, 60 s gap and 3 an hour per user and purpose, no code in any response, authenticated issuance bound to the session user (no account-enumeration surface).
+
+Changes:
+* **Dedicated key (H-02):** `OTP_HMAC_SECRET` is required when `NODE_ENV=production`; the service-role-key fallback now exists only outside production. A misconfigured deploy answers 503 `otp_unavailable` with an `otp.misconfigured` log line, before any database call.
+* **IP and platform ceilings (H-03):** `issue_otp` takes `p_ip_hash` (keyed HMAC of the client address; the address is never stored). Per-IP (`otp_ip_hourly_cap`, default 10) and platform (`otp_global_hourly_cap`, default 500) hourly ceilings are read from `financial_config` and counted under advisory locks taken in a fixed order (user+purpose, ip, platform). Per-IP and per-user refusals share one response so a caller cannot tell which ceiling it hit; a platform refusal is 503. Client address comes from the edge-set headers first (`x-vercel-forwarded-for`, `x-real-ip`), never a browser-supplied first `X-Forwarded-For` entry.
+* **One purpose registry (H-07):** `OTP_PURPOSE_VALUES` / `isOtpPurpose` in shared-payments; unknown purposes are refused in JS before the database on issue and verify. The email wording map is exported as `OTP_EMAIL_PURPOSES`. `otpPurposeRegistry.test.js` fails the build when the SQL allowlist, the JS constant and the email map disagree.
+* **One `/otp` action (duplication):** `issueOtpFromRequest` in shared-payments replaces the copy-pasted purpose dispatch in both apps' `withdrawal-pin.js`; the payout-accounts route forwards the client IP too.
+* **Purge (H-13):** the fire-and-forget delete in `sendOtp` is gone; cron step `otp_purge` (hourly, behind `claim_job_slot`) deletes codes older than a day through `purgeOtpChallenges`, and a failure is a reported failed step.
+* **Logging:** structured JSON events `otp.issued`, `otp.rate_limited` (scope user / ip / global), `otp.verify_rejected`, `otp.delivery_failed`, `otp.misconfigured`, `otp.purged`. Fields: purpose, a keyed 12-character user reference, outcome. Never a code, address, IP, user id or key; provider error text is stripped of e-mail addresses.
+
+Files:
+* New: `supabase/migrations/carefind_20261028_otp_hardening.sql` (+ identical copy in `apps/carefind/sql/`); `packages/shared-payments/src/__tests__/otpHardening.test.js`; `apps/carefind/src/test/payments/{otpHardening.db,otpConcurrency.pg,otpPurposeRegistry}.test.js`.
+* Changed: `packages/shared-payments/src/{otp,index,payoutAccounts,payoutHandlers}.js`; `packages/shared-email/src/{securityEmails,index}.js`; `apps/carefind/api/_handlers/withdrawal-pin.js`; `apps/carehub/api/_handlers/withdrawal-pin.js`; `apps/carefind/api/_lib/financeJobs.js` (+ its test: the step list now includes `otp_purge`); `docs/architecture/Payout-Accounts-and-KYC.md`.
+
+Migration: `carefind_20261028_otp_hardening` - **NOT applied to production.** Adds `otp_challenges.ip_hash` (+2 indexes), two `financial_config` rows, drops the 4-argument `issue_otp` and creates the 5-argument one (service_role only). No DELETE statement in it. Old callers that pass four arguments keep working (the new parameter has a default), so it can be applied before the code deploy. After applying, re-read `pg_proc`: exactly one `issue_otp`, ACL `{postgres=X/postgres,service_role=X/postgres}`.
+
+Tests (all run 2026-10-10 on the final code):
+| Suite | Result |
+|---|---|
+| shared-payments (full) | 23 files, 494 passed (474 baseline + 20 new) |
+| shared-email (full) | 15 files, 335 passed |
+| shared-notifications | 12 passed |
+| CareFind api + payments, PGlite, `*.pg.test.js` excluded | 77 files, 1020 passed (includes 16 new migration tests, 1 registry test) |
+| CareFind real-Postgres suites (`pg.test`, `--no-file-parallelism`, PostgreSQL 17.5 via a throw-away embedded server, UTF8) | 9 files, 64 passed (includes the 6 new OTP concurrency tests: 30 racing verifies -> exactly 1 ok; 20 parallel wrong guesses -> 4 invalid + 1 locked; 40 accounts on one IP -> exactly 10 issued; 40 on 40 IPs with platform cap 15 -> exactly 15; mixed load -> no deadlock) |
+| CareHub api | 19 files, 217 passed |
+| Production builds | CareFind and CareHub build clean |
+| Lint (`npm run lint`) | 0 errors in both apps (353 / 394 pre-existing warnings; not compared file by file) |
+
+Mutation check: deleting the per-IP and platform advisory locks from the migration made both ceiling tests fail (40 issued instead of 10 / 15); file restored and re-verified.
+
+Test-environment notes: no PostgreSQL was installed, so the real-concurrency suites were run against a throw-away embedded PostgreSQL 17.5 (production is 17.6; the Phase 05-13 notes used 18.4). A first run of the older `reconciliationConcurrency` and `vendorPayoutsConcurrency` suites failed only because that scratch cluster had been created with WIN1252 encoding (migrations contain Unicode arrows); recreated as UTF8 they pass. Not run: `shared-payout-ui`, `npm audit`, the mutation harness (`test:mutation`).
+
+Unresolved / carried forward:
+* **Before deploying H01 code: set `OTP_HMAC_SECRET` (its own value, not the service-role key) on both Vercel projects. Owner action; not done.** Zero rows exist in `otp_challenges` in production, so no in-flight code is invalidated by the key choice.
+* Apply the migration (owner authorization needed).
+* Behind a trusted proxy chain other than Vercel the IP headers would need re-checking; `clientIp` is only as trustworthy as the edge.
+* H-10 (the withdrawal code is consumed before bank resolution, so a later validation failure costs the user a code) is deliberately unchanged: reordering would move a paid provider lookup ahead of the third factor. Revisit in H02.
+* `reject_business_withdrawal(uuid)` still exists live (known from `Payout-Accounts-and-KYC.md` section 5); H04.
+* KYC hash secret still falls back to `OTP_HMAC_SECRET`, then the service-role key (H06).
+
+Next phase: **H02 - PIN and payout-account protection** (done below).
+
+## H02 - PIN and payout-account protection
+
+Owner approval of the design and decisions: 2026-10-10 ("approve with D1a, D2 as proposed, D3 approved"). D1a: no name-match requirement, the bank's resolved name is stored. D2: reuse the existing cooling-off cap and hours, new `pin_change_cooloff_hours` default 24. D3: the new caps apply to all users, including typed-in destinations today.
+
+Corrections to H00 made while reading closer: **H-08 is Low** (the server takes the destination from each request's `payoutAccountId`, never from "default"; set-default only changes what the app preselects). **New High finding, fixed:** the new-account cooling-off cap applied only when the withdrawal named a saved account, so while `payout_account_required = 0` (live) typing the destination skipped it entirely.
+
+What changed:
+* **A. New-destination rule.** `limitsForDestination` (shared-payments `withdrawalLimits.js`) caps any destination the owner has not been paid at (new saved account inside its window, any typed-in destination, any destination the bank could not confirm) at the cooling-off amount until a withdrawal to it completes. History = a completed `withdrawal_requests` / `business_withdrawal_requests` row for the same bank code and account number. A failed history lookup counts as unknown (caps, never uncaps). Applies to both apps, saved or typed.
+* **B. PIN-change cooling.** `withdrawal_pins.pin_set_at` (written by `set_withdrawal_pin`); for `pin_change_cooloff_hours` after it, every withdrawal is capped. Existing PINs have `null` and are not capped by applying the migration.
+* **C. CareFind uses the shared PIN gate** (`checkWithdrawalPin`, same as CareHub) instead of its inline copy; the duplicated unreachable `untraceable_credits` block and the inline account check are gone (CareFind now uses the shared `verifyBankAccount`). `needsPin` / `code` are returned like CareHub.
+* **D. Alerts.** Set-default sends an owner alert (`renderPayoutAccountEmail` event `default`). All owner alerts go through `sendSecurityAlert`, which logs `alert.failed` (event and an address-free reason) instead of swallowing the failure. The retrying outbox remains H05.
+* **E. No KYC gate for saving an account (D1a).** `addPayoutAccount` no longer reads `kyc_verifications` and no longer matches names; `p_score` is null. Both apps' UI no longer disables "Add account" without verification and describes identity verification as optional.
+* **F. Unverifiable bank (H-06).** The typed name is still accepted, but the destination is always treated as new and `withdrawal.unverified_destination` is logged (bank code only).
+* **Fail closed.** If the limits cannot be decided CareFind answers 503 `limits_unavailable` and reserves nothing.
+* Responses carry `limitReason` = `new_account` | `new_destination` | `pin_changed`.
+
+Not changed: the KYC tier ceiling still lifts the trust ladder for a saved account of a person (H06 decides), the withdrawal-code ordering (H-10), the KYC endpoints, tables and UI form (optional now, removed in H06), the PIN/OTP rules from H01.
+
+Files:
+* New: `supabase/migrations/carefind_20261029_pin_and_payout_protection.sql` (+ identical copy in `apps/carefind/sql/`); `packages/shared-payments/src/alerts.js`, `src/__tests__/alerts.test.js`; `apps/carefind/src/test/payments/pinProtection.db.test.js`.
+* Changed: `packages/shared-payments/src/{withdrawalLimits,payoutAccounts,payoutHandlers,pin,index}.js`; `packages/shared-email/src/securityEmails.js`; `apps/carefind/api/_handlers/initiate-withdrawal.js`; `apps/carehub/api/_handlers/initiate-business-withdrawal.js`; both apps' `PayoutAccountsPanel.jsx` and `AddPayoutAccountModal.jsx`; `docs/architecture/Payout-Accounts-and-KYC.md` (banner + section 7).
+* Tests changed on purpose (behaviour changed by the approved decisions, none weakened): the KYC-required and name-mismatch cases in `kycAndPayoutAccounts.test.js` / `payoutHandlers.test.js` now assert the opposite (saves without identity, stores the bank's name, still gated by the code); `withdrawalLimits.test.js` (`readLimitConfig` shape, `limitsForSavedAccount` replaced by `limitsForDestination`); the three CareFind `initiate-withdrawal.*.test.js` files and `initiateWithdrawal.test.js` (real PIN hashes for the shared gate, `.in()` on the fake, `coin_value_kobo`); two panel tests (adding is no longer blocked); CareHub `initiateBusinessWithdrawal.payoutAccount/recovery` (typed destinations now carry the cap).
+
+Migration: `carefind_20261029_pin_and_payout_protection` - **NOT applied to production.** Adds `withdrawal_pins.pin_set_at`, one `financial_config` row, re-creates `set_withdrawal_pin` with the same signature, and two partial indexes (created only if the request tables exist). Safe to apply before the code deploys (nothing reads the column until the new code does). After applying, re-read `pg_proc`: one `set_withdrawal_pin`, ACL `{postgres=X/postgres,service_role=X/postgres}`.
+
+Tests (2026-10-10, final code):
+| Suite | Result |
+|---|---|
+| shared-payments | 24 files, 514 passed |
+| shared-email | 15 files, 336 passed |
+| shared-notifications / shared-payout-ui | 12 passed / 3 files, 34 passed |
+| CareFind api + payments + wallet-payments (PGlite, `*.pg.test.js` excluded) | 82 files, 1066 passed |
+| CareHub api + wallet | 24 files, 255 passed |
+| CareFind real-Postgres suites (embedded PostgreSQL 17.5, UTF8, `--no-file-parallelism`) | 9 files, 64 passed |
+| Builds / lint | both apps build clean; `npm run lint` 0 errors (353 / 394 pre-existing warnings) |
+
+New tests: 13 `limitsForDestination` cases, 4 `alerts`, net +2 in `kycAndPayoutAccounts`, net +1 in `payoutHandlers`, 1 shared-email (shared-payments 494 -> 514), 10 CareFind handler bypass cases, 6 CareHub handler cases, 7 migration cases (PGlite). The CareFind and CareHub totals above also include the wallet UI folders, which the H01 run did not cover. Mutation check: forcing the new-destination rule off failed 17 tests across shared-payments and the CareFind handler suite; file restored and re-verified.
+
+Not run / not proven: the withdrawal engine's per-call cap under concurrency was NOT re-tested for this exact path because the mechanism is unchanged and is already covered by `withdrawalConcurrency.pg.test.js` (cap 50, twenty 10-coin requests -> exactly 5) and the business default-cap case, both green in the run above. No end-to-end browser check of the add-account UI (unit-level panel tests only; the layout was not changed). `npm audit`, `test:mutation` harness not run.
+
+Unresolved / carried forward:
+* **Commercial effect to communicate:** the first withdrawal to any destination, and every withdrawal for 24 h after a PIN change, is capped at N20,000 per rolling 24 h for ALL users. Existing users with typed-in destinations hit it on their first withdrawal after the deploy (the typed destination counts as known once one withdrawal to it completes). Set `payout_account_cooloff_hours` and/or `pin_change_cooloff_hours` to 0 to disable.
+* A person who has never completed a withdrawal and wants to move more than N20,000 must do it in more than one day, or via a first N20,000 withdrawal then the rest.
+* Apply the migration and deploy (owner). `OTP_HMAC_SECRET` (H01) must be set first.
+* Set-default stays session-only by design; the alert is best effort until H05.
+* Dojah/KYC code, tier limits and the optional UI form remain until H06.
+* `reject_business_withdrawal(uuid)` still exists live (H04).
+
+Next phase: **H03 - Payment and settlement security** (done below).
+
+## H03 - Payment and settlement security
+
+Owner approval: 2026-10-10 ("approve scope"; D-A and D-B not answered, applied as (1) keep rounding unchanged and no extra callback origins). Added by the owner in the same message and confirmed by answer: **a 10% processing fee on every top-up, added on top, on both CareFind CareCoin top-ups and CareHub business wallet top-ups, future top-ups only.**
+
+Audit (read-only, plus SELECT queries on production): every initiator, redirect handler, the Paystack webhook, `settle_payment_intent` and its handlers. Verified sound: prices and fees decided on the server (the client names only what it buys); the intent recorded before Paystack with payer, purpose, expected integer kobo, currency and entity; settlement verified through Paystack's verify API, never from webhook metadata; provider, currency and exact-amount checks and transaction-id conflict refusal in the one SQL engine; redirect and webhook share one entry point; replays are no-ops; the webhook signature is HMAC-SHA512 compared in constant time and events are persisted before processing. Full per-flow table with the test that proves each claim: `docs/architecture/Payment-Security-Matrix.md`.
+
+Findings and what was done:
+* **G1 (Medium) `callback_url` was client-supplied** in five initiators (F-27). Fixed: `resolveCallbackUrl` (absolute, no credentials, https except localhost, origin must be the request's own or in `PAYMENT_CALLBACK_ORIGINS`), applied before any intent is created; 400 `invalid_callback_url`.
+* **G4 (latent)** a wallet-funded intent reaching the provider path would have been closed as `failed` after Paystack answered "not found". Fixed: `settleByReference` returns `not_provider_payment` for `*_wallet` purposes without touching the provider or the intent.
+* **Top-up processing fee (owner decision).** Server-side only, `financial_config.topup_processing_fee_rate` (0.10, read on every top-up, 0 disables, missing/invalid row falls back to 10% with a logged warning). Fee = `round(base x rate)` kobo. `expected_amount` is the total charged; `metadata` carries `base_amount_kobo`, `fee_kobo`, `fee_rate`. CareHub wallet credits the BASE (before this change it would have credited the total), CareFind credits whole coins; both handlers refuse an intent whose base + fee is not the charged total. `{ quote: true }` returns the rate so both wallet screens show "wallet receives / fee / you pay" before checkout. Receipts and the CareHub top-up email show the right figure.
+* **G2 (decision, applied (1) keep)** card-paid subscriptions and consultations still pay the creator `floor(price x 80%)` whole coins and the platform the remainder; the platform keeps up to one coin (N200) more than 20% per such payment. Not changed. Paying card-funded earnings in exact kobo needs a kobo ledger for creators: a separate phase if wanted.
+* **G3 (High, operational, no code) delayed and ambiguous outcomes are not being resolved in production.** Read on 2026-10-10: every pg_cron run in 24 h fails (`email-outbox-carefind` 1,440, `email-outbox-carehub` 1,440: `Vault secret ... is not set`); **7 payment intents are `pending` for more than an hour**, 11 reconciliation findings are open, and only 2 provider events exist. The sweeps that settle or close such payments are tested but cannot run until the code is deployed and the Vault secrets are set. Nothing was settled or changed by this audit.
+* **G5 (accepted)** an anonymous holder of a booking reference can trigger its settlement: by design for guest bookings, idempotent, credits only the intent's own entities.
+
+Files:
+* New: `packages/shared-payments/src/{topupFee,callbackUrl}.js`; tests `packages/shared-payments/src/__tests__/{topupFeeAndCallback,walletPurposeGuard}.test.js`, `apps/carefind/src/test/payments/topupProcessingFee.db.test.js`; `supabase/migrations/carefind_20261030_topup_processing_fee.sql` (+ identical copy in `apps/carefind/sql/`); `docs/architecture/Payment-Security-Matrix.md`.
+* Changed: `packages/shared-payments/src/{settlement,requestSettlement,effects,index}.js`; CareFind `api/_handlers/{initiate-payment,charge-subscription,charge-consultation}.js`; CareHub `api/_handlers/{initiate-wallet-topup,initiate-plan-payment}.js`, `src/modules/wallet/{Wallet.jsx,topupApi.js}`; CareFind `src/modules/wallet-payments/Wallet.jsx`; tests `topupFlow`, `subscriptionFlow`, `consultationFlow` (CareFind), `walletTopup`, `paymentFlows`, `Wallet.test.jsx` (CareHub). Existing tests were changed only where the new rules require it (callback origin must match the request; top-up totals include the fee); none was weakened.
+
+Migration: `carefind_20261030_topup_processing_fee` - **NOT applied to production.** One config row and two re-created handler functions with unchanged signatures (`_settle_wallet_topup`, `_settle_business_wallet_topup`; no sibling, no grants). **Apply it BEFORE deploying the fee code** (until then old intents carry no metadata and are credited as before; new intents carry the fee and the OLD business handler would credit the total). After applying, re-read `pg_proc` ACLs: nobody but the owner may execute either function.
+
+Tests (2026-10-10, final code):
+| Suite | Result |
+|---|---|
+| shared-payments | 26 files, 552 passed |
+| shared-email | 14 of 15 files passed in the full run; `deliveryContracts.test.js` failed 2 tests with 20-25 s runtimes while the machine was loaded (the same two failed once in the H00 baseline); re-run alone: 7/7 in 6.9 s. Treated as a load-sensitive flake (it scans the source tree); not fixed here |
+| shared-notifications / shared-payout-ui | 12 / 34 passed |
+| CareFind api + payments + wallet UI (PGlite, no `*.pg.test.js`) | 82 of 83 files passed (1,099 tests); `otpHardening.db.test.js` failed to start in the loaded run, re-run alone: 16/16. Same cause |
+| CareHub api + wallet | 24 files, 278 passed |
+| CareFind real-Postgres (embedded PostgreSQL 17.5, UTF8) | 9 files, 64 passed |
+| Builds / lint | both apps build; `npm run lint` 0 errors (353 / 394 pre-existing warnings) |
+
+New tests: 15 migration cases (base credited, replay, base-only payment refused, overpay refused, tampered metadata refused, legacy intent, zero fee, coins whole, ACL), 41 helper/guard cases, 14 CareFind and 14 CareHub handler cases (fee per package, client fee ignored, config rate, 0, unreadable rate, quote, callback bypass x7 per initiator), 3 wallet UI cases.
+
+Not done / not proven: no mutation run for the fee path; no browser walkthrough of either wallet screen (unit-level UI tests only; the CareFind wallet screen has no component test); no real Paystack call (nothing was paid or sent); the Paystack dashboard settings (webhook URL, `refund.*` events for the shared endpoint) are not visible from here.
+
+Unresolved / owner actions:
+1. **Apply `carefind_20261030` before deploying; deploy; then set the three Vault secrets** so the sweeps run and the 7 stale intents and 11 findings are resolved by the existing engine. Order: `OTP_HMAC_SECRET` (H01) -> apply H01/H02/H03 migrations -> deploy -> Vault secrets.
+2. Tell customers about the 10% fee before it goes live (it changes the price of every top-up; the CareFind packages page and the CareHub dialog now show it).
+3. D-A (rounding) stays at "keep"; say if you want the kobo-ledger phase.
+4. Revenue reporting: the fee is on the intent (`metadata.fee_kobo`); there is no separate revenue table for it yet, so finance reports must read it from there (or ask for a ledger row in H07).
+5. Carried: KYC (H06), `reject_business_withdrawal` (H04), email outbox for alerts (H05), `lookup-appointment` / `resolve-account` exposures noted in Phase 14.
+
+Next phase: **H04 - Withdrawal state machine** (done below).
+
+## H04 - Withdrawal state machine
+
+Owner approval: 2026-10-10 ("approve H04; D1 60 min; D2 give me the SQL").
+
+Audit (read-only plus SELECT queries on production): `create_withdrawal` / `create_business_withdrawal`, `attach_*`, `settle_*`, the state guard trigger, `reconcile_withdrawals`, the apps' initiators, the webhook transfer events, the sweep, the admin reject path, and the live data. Already satisfying the brief: atomic reservation (wallet lock, balance and 24 h cap, debit, request row in one transaction); the unique reference derived from the request id before any provider call; provider linkage by exact request id and immutable once set; no "latest pending row" selection anywhere; a trigger-enforced state machine with immutable owner/amount/bank details and no deletes; refund at most once (row lock, unique ledger reference, early return); real-Postgres concurrency tests for simultaneous withdrawals, cap races and duplicate events (Phase 08).
+
+Findings and what was done:
+* **W1 (Medium), fixed: "reserved" did not say whether a transfer call was made.** `processing` was set only when the provider's answer came back, so a timed-out call and a never-sent call looked alike and were both released on a 10-minute "not found". Now `mark_withdrawal_transfer_attempt` / `mark_business_withdrawal_transfer_attempt` move `reserved -> processing` immediately BEFORE the provider call, and the API makes no call unless the mark was recorded (otherwise it releases the reservation). `reserved` = no call ever made (releasable at once); `processing` = a call was made or is in flight, released only on provider-confirmed non-payment: Paystack `failed/reversed/abandoned/blocked/rejected`, or "not found" with no transfer code **60 minutes after the mark** (D1, `AMBIGUOUS_GRACE_MS`), or at once after a definite Paystack refusal. A timeout alone never releases funds, in the handler, the sweep or the admin screen. Rows with no status are treated as attempted.
+* **W2 (Medium), fixed: a payout reported after a refund left no durable trace** (a possible double payout, logged only). The settle functions now stamp `failure_reason` once with `conflict:paid_after_refund` / `conflict:failed_after_completed` / `conflict:amount_mismatch` and change nothing else; `reconcile_withdrawals` reports them as `provider_conflict` (critical by default, so the existing finance alert fires). `processing_without_transfer` is raised only when a marked transfer is overdue (stale window + 30 minutes).
+* **W3 (Low), fixed in the migration: the stray pre-engine `reject_business_withdrawal(uuid)` is dropped.** It was re-created in production by an earlier OTP-era migration after the engine retired it; inert (it needs a `pending` status that cannot exist) but it hand-edits a wallet balance.
+* **W4 (owner) three legacy withdrawals, 41 coins, still `reserved`** (ids and the Paystack checks to make are in `docs/architecture/Withdrawal-Engine.md`, "Runbook"). The SQL is written for the owner to run after checking the evidence; **not run by me**. The 26-coin request will refund itself through the sweep once the code is deployed and the sweep runs; the two with no reference need the SQL or the admin screen.
+* **W5 (note)** there is deliberately no persisted `requested` state: request, reference and reservation are one atomic step.
+* **W6 (known, out of scope)** business wallets have no balance ledger of their own beyond `business_wallet_transactions`.
+
+Files:
+* New: `supabase/migrations/carefind_20261031_withdrawal_attempt_and_conflicts.sql` (+ identical copy in `apps/carefind/sql/`); `apps/carefind/src/test/payments/{withdrawalAttempt.db,withdrawalAttemptConcurrency.pg}.test.js`.
+* Changed: `packages/shared-payments/src/{withdrawals,index}.js`; CareFind `api/_handlers/{initiate-withdrawal,admin-auth}.js`; CareHub `api/_handlers/initiate-business-withdrawal.js`; `docs/architecture/Withdrawal-Engine.md` (state diagram, meaning of each state, runbook).
+* Tests changed on purpose (the rule they encoded, "not found after 10 minutes", is now the two-state rule): `withdrawals.test.js`, CareFind `withdrawalRecovery.test.js` and `withdrawalAdmin.test.js`, and the four handler suites (default answer for the new RPC). Nothing was weakened; the old behaviour for a never-attempted request is still asserted.
+
+Migration: `carefind_20261031_withdrawal_attempt_and_conflicts` - **NOT applied to production.** Two new service_role-only functions; `settle_withdrawal`, `settle_business_withdrawal` and `reconcile_withdrawals` re-created with unchanged signatures (ACLs kept, no siblings); one `drop function`. **Apply it BEFORE deploying the code** (the new handlers refuse to start a transfer they could not mark, so without the functions every withdrawal would be released as `attempt_not_recorded`). If the SQL tool stalls on the `drop`, run that one statement in the SQL editor. After applying, re-read `pg_proc`: one row per name, ACL `{postgres=X/postgres,service_role=X/postgres}`, `reject_business_withdrawal` absent.
+
+Tests (2026-10-10, final code):
+| Suite | Result |
+|---|---|
+| shared-payments | 26 files, 572 passed (+20: decision rules for both states, the 60-minute window, every provider status) |
+| shared-email / shared-notifications / shared-payout-ui | 336 / 12 / 34 passed |
+| CareFind api + payments + wallet UI (PGlite, no `*.pg.test.js`) | 84 files, 1,145 passed (new: 21 migration cases in `withdrawalAttempt.db`, 8 handler cases) |
+| CareHub api + wallet | 24 files; 279 passed in the full run, 3 stale-rule failures in `withdrawalRecovery.test.js` updated to the two-state rule and re-run: 16/16 |
+| CareFind real-Postgres (embedded PostgreSQL 17.5, UTF8, `--no-file-parallelism`) | 10 files, 72 passed (new: 8 in `withdrawalAttemptConcurrency.pg`) |
+| Builds / lint | both apps build; `npm run lint` 0 errors (353 / 394 pre-existing warnings) |
+
+Concurrency proven on real Postgres: 40 duplicate provider success events complete once and refund nothing; 20 marks racing 20 failures end in one `refunded` state with the coins returned once (4 rounds); 25 success events after a refund are stamped once and move nothing (personal and business); 20 wrong-amount successes are refused and stamped once; an attach racing duplicate successes completes once with the linkage recorded; 40 simultaneous marked withdrawals from a 25-coin wallet leave exactly 5 in flight and a zero balance; 30 marks racing 30 business failures refund the wallet once.
+Mutation check: removing the conflict stamp and letting a retried mark move `updated_at` made 3 of the 21 migration tests fail; the file was restored and re-verified.
+Not run: a real Paystack transfer (nothing was sent), `npm audit`, the `test:mutation` harness.
+
+Unresolved / owner actions:
+1. Apply order: `OTP_HMAC_SECRET` -> migrations H01, H02, H03, H04 -> deploy -> Vault secrets (the sweep only exists once deployed and scheduled).
+2. Run the legacy-withdrawal runbook after checking Paystack.
+3. Business-wallet ledger remains a possible later phase.
+
+Next phase: **H05 - Shared payment email system** (done below).
+
+## H05 - Shared payment email system
+
+Owner approval: 2026-10-10 ("approve H05, D1-D4 as recommended"): D1 the "processing" notice is a one-time slow-transfer message; D2 enable the payment, withdrawal, refund and security events in the catalog; D3 include the delivery backfill; D4 `payment_failed` only for provider-declined payments.
+
+Audit (read-only plus SELECT queries on production): shared-email (templates, `EmailService`, `sendEmail`, provider, security mails), shared-payments effects, every payment/withdrawal/refund/wallet sender in both apps, the catalog and the live outbox. Already satisfying the brief: outbox lease claim, attempt counting at claim, max attempts, backoff (Retry-After honoured), `dead` state, unique idempotency key, provider idempotency key = row id, `email_logs`, dispatch pause; the `html` tagged template escapes every interpolation; provider secrets are read server-side only; one-time codes are sent directly and never stored (H01); admin-only send endpoints with an allowlist.
+
+Findings and what was done:
+* **E1 (High, operational) no payment, withdrawal, refund or top-up e-mail has ever been sent in production** (19 outbox rows, all registration / password-reset / order mail; the outbox cron fails every minute, "Vault secret ... is not set"; the new code is undeployed). No code change can fix this; it is on the owner list.
+* **E2 fixed: missing e-mails.** New templates for both brands: `withdrawal_processing` (once, only when Paystack still reports the transfer in flight after the grace period, via the sweep), `refund_requested`, `refund_failed`, and CareHub `payment_failed`; a distinct **PIN reset** security mail (`forgot PIN`), sent instead of the ordinary change notice. `payment_failed` is now actually sent, only for a provider-declined payment (verify status `failed`; not an abandoned checkout), by the redirect handlers and the sweep, once per reference.
+* **E3 fixed: poor payloads.** The customer's real name (never their address), the naira actually paid out, the coins, the bank and the last four digits, for withdrawal requested / completed / failed in both apps; refund e-mails say `N...` for card refunds and `N CareCoins` for CareCoin refunds; the CareHub top-up e-mail shows the amount credited (not the fee-inclusive charge).
+* **E4 fixed: a failed enqueue was lost for good.** New cron step `payment_notifications` (every 15 minutes, behind `claim_job_slot`): `list_unnotified_money_events` lists money events that settled in the last 48 hours and have no outbox row under their e-mail's key (withdrawals and business withdrawals completed / failed, refunds completed / failed, top-ups), and the same effects send them under the same keys. A lost enqueue becomes a late e-mail; a replay cannot duplicate it. Enqueue failures are also logged as structured `email.enqueue_failed` events (no address).
+* **E5 fixed:** `withdrawal_pin_otp` removed from both template registries and the shared exports.
+* **E6 fixed: account numbers.** `maskAccount` (last four digits, idempotent, total) is applied at the source (effects) and again inside every template; the business effect used to store the FULL account number in the outbox payload.
+* **E7 fixed (migration, not applied):** the payment, withdrawal, refund, wallet and review events are registered and enabled for the brand that sends them (new rows modelled on the app's `withdrawal_requested` row); no other event is touched.
+* **E8 fixed:** CareFind `api/email/send.js` has the credential-key guard CareHub's had.
+* **New central guard:** `EmailService.enqueue` refuses any payload with a credential-like key at any depth (`otp`, `code`, `pin`, `password`, `secret`, `api_key`, `token`, `session` ...) before a row is written, so no sender can put a secret in the stored outbox.
+
+Files:
+* New: `supabase/migrations/carefind_20261101_payment_email_events.sql` (+ identical copy in `apps/carefind/sql/`); `apps/carefind/api/_lib/moneyNotifications.js`; tests `packages/shared-email/src/__tests__/{paymentEmails,outboxCredentialGuard}.test.js`, `packages/shared-payments/src/__tests__/paymentNotifications.test.js`, `apps/carefind/api/_lib/__tests__/{moneyNotifications,withdrawalEffects}.test.js`, `apps/carefind/src/test/payments/paymentEmailEvents.db.test.js`.
+* Changed: shared-email `templates/{index.js,CareHub/index.js,Transactional/index.js,Transactional/CareFind/{index,CareFind}.js}`, `securityEmails.js`, `EmailService.js`, `events.js`, `index.js`, `utils/formatters.js`; shared-payments `withdrawals.js`, `refunds.js`, `refundEffects.js`, `businessWithdrawalEffects.js`, `effects.js`, `reconciliation.js`, `pin.js`, `index.js`; CareFind `api/_lib/{withdrawalEffects,withdrawalRecovery,intentSettlement,financeJobs}.js`, `api/_handlers/{initiate-withdrawal,cancel-appointment}.js`, `api/email/send.js`; CareHub `api/_lib/{withdrawalRecovery,intentSettlement}.js`, `api/_handlers/initiate-business-withdrawal.js`; `docs/architecture/Notifications-and-Purchase-Emails.md`.
+* Tests changed on purpose: the refund `onSettled` seam now also reports `failed` and `requested` (`refunds.test.js`, `refundEffects.test.js`); the business effect masks the account and names the business (`businessWithdrawalEffects.test.js`); the finance-jobs step list includes `payment_notifications`. Nothing was weakened.
+
+Migration: `carefind_20261101_payment_email_events` - **NOT applied to production.** Additive: catalog rows (insert-or-enable only) and one read-only `service_role` function. Safe to apply at any time and before or after the deploy; the cron step needs the function, and fails visibly (a failed step) if it is missing.
+
+Tests (2026-10-11, final code):
+| Suite | Result |
+|---|---|
+| shared-payments | 27 files, 595 passed |
+| shared-email | 17 files, 447 passed; `deliveryContracts.test.js` failed 2 tests with 23-29 s runtimes while the machine was loaded (the same two as in H00 and H03); re-run alone: 7/7 in 2.8 s. Load-sensitive flake (it scans the source tree), not fixed here |
+| shared-notifications / shared-payout-ui | 12 / 34 passed |
+| CareFind api + payments + wallet UI (PGlite, no `*.pg.test.js`) | 87 files, 1,179 tests; 3 tests that encoded "only a completed refund notifies" were updated to the new three-moment rule and re-run: 25/25 |
+| CareHub api + wallet | 24 files, 284 passed |
+| CareFind real-Postgres (embedded PostgreSQL 17.5, UTF8) | 10 files, 72 passed |
+| Builds / lint | both apps build; `npm run lint` 0 errors (354 / 394 warnings) |
+
+New tests: 70 template/contract cases (every payment template, both brands, hostile input, masking, no secret field), 20 outbox-guard cases, 16 notification-decision cases (slow notice, declined payment, PIN reset), 8 backfill cases, 8 withdrawal-effect cases, 13 migration cases (catalog and list function on PGlite), 3 finance-job cases, 2 sweep-hook cases.
+Mutation check: removing the template-level account masking and disabling the credential guard made 10 of 101 tests fail; both files restored and re-verified.
+Not run: any send to a real recipient (nothing was sent), `npm audit`, the `test:mutation` harness.
+
+Unresolved / owner actions:
+1. **Deploy, then set the three Vault secrets**: until then no e-mail of any kind is drained by the cron, and the payment e-mails depend on the immediate flush after each enqueue.
+2. Resend sender domains and `EMAIL_FROM` are configuration I cannot see; nothing was sent to a real recipient in this phase.
+3. Marketing, business-lifecycle and auth e-mails were not reviewed (out of scope).
+
+Next phase: **H06 - KYC exclusion** (done below).
+
+## H06 - KYC exclusion
+
+Owner approval: 2026-10-11 ("approve H06; D1 disable; D2 keep; D3 confirmed"): D1 identity verification is disabled by default, D2 the code, tables and stored rows are kept, D3 payments and withdrawals must never depend on it.
+
+Findings (re-checked against the code, not the H00 map):
+* **K1 (High, fixed): a hidden dependency.** The payout screen loaded `kyc/status` and `listPayoutAccounts` together and failed as a whole if either failed, so an unconfigured Dojah (or a KYC outage) could stop a person reaching their payout accounts. The account list is now loaded first and is the screen; `kyc/status` is asked only when the server says verification is on, and a failure there is tolerated.
+* **K2 (Medium, fixed): KYC still moved money limits.** `limitsForDestination` lifted the trust-ladder cap by KYC tier for a saved account. It now reads a KYC row only when the switch is on; otherwise tier is 0 and the cap is the trust cap. **Commercial effect:** a person who had completed verification (none in production: `kyc_verifications` has 2 tier-0 rows) would lose a tier-based lift; nobody currently has one.
+* **K3 (Medium, fixed): paid lookups reachable.** `/api/kyc/verify` and `/selfie` could reach Dojah from any signed-in account. They now answer 404 `kyc_disabled` before the provider is built.
+* **K4 (Low, fixed): the identity hash key.** In production `KYC_HASH_SECRET` is required (no fallback to the one-time-code key or the service-role key); outside production the old fallbacks remain.
+* Not an issue: no payment, withdrawal, refund, settlement, OTP, PIN or e-mail module referenced KYC (proved by the new isolation test, which now guards it).
+
+Switch: `financial_config.kyc_enabled` (0 default; only exactly 1 turns it on; missing row, junk or 2 all mean OFF). Re-enable runbook is in `docs/architecture/Payout-Accounts-and-KYC.md`.
+
+Files:
+* New: `supabase/migrations/carefind_20261102_kyc_switch.sql` (+ identical copy in `apps/carefind/sql/`; one `insert ... on conflict do nothing`); `packages/shared-payments/src/__tests__/kycIsolation.test.js`.
+* Changed: `shared-payments/src/{withdrawalLimits,payoutAccounts,payoutHandlers,index}.js`, `kyc/identity.js`; `shared-payout-ui/src/stores.js`; both apps' `PayoutAccountsPanel.jsx` (identity card hidden when off); `docs/architecture/Payout-Accounts-and-KYC.md`.
+* Tests changed on purpose: the CareFind "Phase 4" tier-lift cases now run with `kyc_enabled = 1` (they describe the optional mode), and the H02 saved-account case expects cap 1000 with no lift when OFF (was 2500). New OFF-mode cases in `initiate-withdrawal.payoutAccount`, `payoutHandlers`, `withdrawalLimits`, `stores` and both panel tests. Nothing was weakened; ON-mode behaviour is still covered.
+
+Migration: `carefind_20261102_kyc_switch` - **NOT applied to production.** Optional: the code treats a missing row as OFF, so deploy order does not matter. Apply it only so the switch is visible and editable in `financial_config`.
+
+Tests (2026-10-11, final code):
+| Suite | Result |
+|---|---|
+| shared-payments | 28 files, 616 passed |
+| shared-email / shared-notifications / shared-payout-ui | 447 / 12 / 39 passed |
+| CareFind api + payments + wallet UI (PGlite) | 87 files: 86 passed, 1178 tests passed, 7 skipped (the `*.pg.test.js` suites skip without `PG_CONCURRENCY_URL`, by design). `pinProtection.db.test.js` **failed to start in the full run** (file-level, machine under load); re-run alone: 7/7, 28 s. Load-sensitive, not caused by H06 (the file does not touch KYC); I did not capture the exact message, so this is an inference |
+| CareHub api + wallet | 24 files, 285 passed |
+| CareFind real-Postgres (embedded PostgreSQL 17.5, UTF8) | 10 files, 72 passed |
+| Builds / lint | both apps build; `npm run lint` 0 errors (354 / 394 warnings) |
+
+Not run: any call to Dojah (live or sandbox; nothing was sent), `npm audit`, the `test:mutation` harness. Mutation check: forcing `kycEnabled: true` in `readLimitConfig` failed 9 of 79 tests across `withdrawalLimits`, `payoutHandlers` and `kycAndPayoutAccounts`; the file was restored and re-verified.
+
+Unresolved / owner actions:
+1. Same order as before, plus: apply `carefind_20261102` (optional). Dojah variables are **not** needed for any payment flow.
+2. If identity verification is ever re-enabled: set `KYC_HASH_SECRET` first, run the Dojah sandbox (NIN and selfie field names were never verified against the live API), then set `kyc_enabled = 1`.
+3. CareHub Appointments' withdraw dialog still uses typed bank details (carried from Phase 14; matters only if `payout_account_required` is set to 1).
+4. Flaky under load, to harden in H07: shared-email `deliveryContracts`, CareFind `pinProtection.db` / `otpHardening.db` (PGlite startup).
+
+Next phase: **H07 - Tests and release gate** (done below).
+
+## H07 - Tests and release gate
+
+Owner approval: 2026-10-11 ("approve", defaults as recommended): D1 CI Postgres pinned to production's major (17), D2 mutation gate blocking on money-code changes, D3 production-dependency audit blocking for the packages, D4 local only (nothing pushed).
+
+Findings (from the CI and harness audit):
+* **R1 (High) three packages never ran in CI** (`shared-email`, `shared-notifications`, `shared-payout-ui`), and **R2** the CareHub workflow never ran `shared-payments`. Fixed: `.github/workflows/packages-ci.yml` runs all four on every change under `packages/`.
+* **R3 (High) no mutant covered H01-H06.** Fixed: 16 new mutants H01-H16 (one-time-code IP and platform caps and key binding; cooling-off for a first-time destination, a recent PIN change and a business; the 10% fee; the callback allowlist; the wallet-purpose guard; the "attempted" rule and the sixty-minute wait; the retry keeping the original mark time; account masking; the outbox credential guard; the KYC switch and endpoint gate).
+* **R4** the mutation gate was not in CI. Fixed: `finance-mutation.yml` (blocking; runs on changes to the money packages, `supabase/`, CareFind `api/` and the financial tests; about 15 minutes).
+* **R5 fixed (flakes):** `deliveryContracts` read the whole tree repeatedly per test (now once; explicit file-level timeout, assertions identical); CareFind `hookTimeout` 120 s so a loaded machine no longer fails a PGlite file at start-up (per-test timeout unchanged).
+* **R6 fixed:** the real-Postgres CI service was Postgres 16; production is 17.
+* **R7 fixed:** `scripts/release-gate.mjs`, one command and one table; exit 0 only when every step ran and passed, 2 when something was skipped, 1 when something failed. It also checks that every money migration from `carefind_20261028` on exists in both `supabase/migrations` and `apps/carefind/sql` with identical content, and that migration names are unique.
+* **Found while building the gate:** CareFind's plain `npm test` runs the `*.pg` suites in parallel when `PG_CONCURRENCY_URL` is set, and they collide on locks (55P03). The gate now hides the URL from every step except the sequential real-Postgres one. CI is not affected (its plain test step has no URL).
+* **Found, NOT fixed (needs a decision): both apps' existing "Security audit" CI steps fail today** on production dependencies, so CI for both apps is already red at that step on a fresh run: CareFind `brace-expansion` (high), `react-router` / `react-router-dom` and `dompurify`; CareHub the same plus `source-map-js`, `vite` (high), `vitest`/`tinypool` (critical). CareHub lists `vite` and `vitest` under `dependencies`, so the dev toolchain counts as production there. All four packages also have vitest-2 advisories in dev dependencies only (hence the packages' audit is `--omit=dev`). I did not upgrade dependencies or loosen the audit.
+* **Found, NOT fixed:** `shared-email` declares a `typecheck` script (`tsc --noEmit`) with no TypeScript dependency and no tsconfig, so it cannot run; I did not add it to CI.
+
+Files:
+* New: `.github/workflows/packages-ci.yml`, `.github/workflows/finance-mutation.yml`, `scripts/release-gate.mjs`, `packages/shared-email/package-lock.json`.
+* Changed: `.github/workflows/carefind-ci.yml` (Postgres 17), `apps/carefind/src/test/payments/mutation/mutants.mjs` (+16), `apps/carefind/vitest.config.js` (`hookTimeout`), `packages/shared-email/src/__tests__/deliveryContracts.test.js`, `docs/architecture/Financial-Test-Plan.md`.
+
+Migrations: none in H07.
+
+Results (2026-10-11; the gate was run in two passes because the first exposed the gate bug above and two packages with empty local `node_modules`):
+| Step | Result |
+|---|---|
+| migration copies identical, names unique | PASS |
+| shared-payments / shared-email / shared-notifications / shared-payout-ui (`npm test`, lockfile-pinned vitest 2) | PASS (all four) |
+| CareFind all tests (PGlite, `*.pg` hidden) | PASS (744 s) |
+| CareHub all tests | PASS |
+| CareFind real-Postgres concurrency suites (embedded PostgreSQL 17.5) | PASS (229 s) |
+| mutation gate | PASS: 46 of 46 killed (30 original + 16 new), 780 s; every mutated file verified restored |
+| lint (both apps) / builds (both apps) | PASS, 0 errors |
+| audit, production dependencies, high: the four packages | PASS |
+| audit, production dependencies, high: CareFind, CareHub | **FAIL** (pre-existing, see above) |
+
+Overall gate verdict: **NOT READY on dependency audits only.** Every functional step passes. The combined run was not a single uninterrupted invocation; a final one-command run once the audit decision is made would give the single table.
+
+Not run: Dojah or any provider call, `npm run bench:finance`, a push or PR (so none of the new workflows has run on GitHub yet; they are untested there).
+
+Unresolved / owner actions:
+1. Decide the dependency audit: upgrade (`react-router-dom` 7.18.4 is offered as a fix; CareHub's `vite`/`vitest` should move to `devDependencies`) or accept and scope the audit. Until then CI audit steps stay red.
+2. Review and push the workflows; the first GitHub run may need tweaks (cache paths, the `finance-suite` job on Postgres 17).
+3. Everything from H01-H06 still stands: set `OTP_HMAC_SECRET`, apply migrations H01-H06 in order, deploy, set the Vault secrets, run the legacy-withdrawal runbook, tell customers about the 10% fee.
+4. Outside this track, unfixed: CareHub `businesses` INSERT escalation (memory note).
+
+## Track summary (H00-H07)
+
+All eight phases are written, tested and READY_FOR_REVIEW locally. Nothing has been applied to production, deployed, pushed, or sent through a provider.

@@ -22,13 +22,15 @@ The properties found nothing in the engines as they stand. Their value is that t
 
 ## 3. Mutation testing
 
-`mutants.mjs` lists 25 deliberate defects (a check removed, a number changed, a guard disabled): the settlement amount check, the vendor credit amount, the replay guard on the booking credit, restoring a failed refund, marking a refunded order, the provider amount check on refunds, refunding on cancel, capping an approved return and a return request, the release sweep's live-refund guard, the withdrawal cap, the referral and shop commission rates, auto-resolving findings, the job gate, re-alerting an acknowledged finding, the vendor-credit reconciliation, tying a service-role return to its customer, and in Node: retrying business errors, the circuit breaker (never opening, opening on non-outages), the amount comparison with Paystack, releasing a failed alert, answering a settled intent from the database, treating a failed webhook event as handled. The runner applies each, runs the tests meant to catch it, requires a failure, and **always restores the file** (`finally`, SIGINT/SIGTERM, a backup directory that is restored first on the next start). A `find` that stops matching exactly once is reported INVALID, so a mutant cannot silently stop applying when the code moves.
+`mutants.mjs` lists 46 deliberate defects (the original 30, M01-M30 and N01-N07, plus H01-H16 from the H07 hardening track: the one-time-code caps and key binding, the cooling-off caps, the top-up fee, the callback allowlist, the wallet-purpose guard, the sixty-minute rule and attempt marker, account masking, the outbox credential guard, and the KYC switch). The original text below describes the first 25 (a check removed, a number changed, a guard disabled): the settlement amount check, the vendor credit amount, the replay guard on the booking credit, restoring a failed refund, marking a refunded order, the provider amount check on refunds, refunding on cancel, capping an approved return and a return request, the release sweep's live-refund guard, the withdrawal cap, the referral and shop commission rates, auto-resolving findings, the job gate, re-alerting an acknowledged finding, the vendor-credit reconciliation, tying a service-role return to its customer, and in Node: retrying business errors, the circuit breaker (never opening, opening on non-outages), the amount comparison with Paystack, releasing a failed alert, answering a settled intent from the database, treating a failed webhook event as handled. The runner applies each, runs the tests meant to catch it, requires a failure, and **always restores the file** (`finally`, SIGINT/SIGTERM, a backup directory that is restored first on the next start). A `find` that stops matching exactly once is reported INVALID, so a mutant cannot silently stop applying when the code moves.
 
 **First run: 21 of 24 killed; the 3 survivors were real holes, now closed:**
 * the shop-return amount cap: the mutant targeted a migration a later one had replaced (the test was right; the mutant was stale), now aimed at the live definition and killed;
 * the vendor-credit reconciliation `credit_amount_mismatch` branch had **no test** (added);
 * a webhook event that failed was not covered at the unit level (`events.js` had no tests of its own: added).
 **Final: 25 of 25 killed.**
+
+**H07 (2026-10-11): 30 of 30 original mutants killed on the current tree; the 16 new H-track mutants (H01-H16) were all killed on their first run.** The mutation gate is a blocking CI job (`.github/workflows/finance-mutation.yml`, about an hour) on any change to the money packages, migrations, CareFind API or the financial tests. Add the mutant that would have caught every future money bug.
 
 ## 4. What the review found (beyond the tests)
 
@@ -49,13 +51,17 @@ The properties found nothing in the engines as they stand. Their value is that t
 cd apps/carefind
 npm run test:finance        # handlers + PGlite migrations/engines + the invariant suite (about 15-20 minutes on a laptop)
 PG_CONCURRENCY_URL=postgres://postgres:pw@127.0.0.1:5432/postgres npm run test:finance:pg   # real concurrency, sequential
-npm run test:mutation       # all mutants (about 40 minutes); or: node src/test/payments/mutation/run.mjs M02 N05
+npm run test:mutation       # all 46 mutants (about 15 minutes); or: node src/test/payments/mutation/run.mjs M02 N05
 cd ../../packages/shared-payments && npm test
 ```
 
+**The whole release gate in one command (H07):** `node scripts/release-gate.mjs` from the repository root runs the migration-copy check, every package suite, both app suites, the real-Postgres suites (needs `PG_CONCURRENCY_URL`), the mutation gate, lint, both builds and the production-dependency audits, and prints one table. Exit code 0 only when every step ran and passed; a skipped step gives exit code 2 ("incomplete"), a failed one exit code 1. `--only=` and `--skip=` select groups (`migrations`, `packages`, `apps`, `realpg`, `mutation`, `lint`, `builds`, `audit`).
+
+**CI (H07):** `packages-ci.yml` runs all four shared packages on every change under `packages/`; `carefind-ci.yml` runs the real-Postgres suites on Postgres 17 (production's major version); `finance-mutation.yml` is the mutation gate.
+
 ## 7. Not done
 
-* The migrations are tested on PGlite and on a real Postgres 16-class server, never on Supabase's own stack (GoTrue roles, extensions): production catalog checks after every apply remain the last line.
+* The migrations are tested on PGlite and on a real Postgres 17 server (CI and the local embedded one), never on Supabase's own stack (GoTrue roles, extensions): production catalog checks after every apply remain the last line.
 * Mutants exist for the highest-value defects; the list should grow with every bug found (add the mutant that would have caught it).
 * No end-to-end browser test of a payment (Paystack sandbox); the provider contract is tested with recorded-shape fakes.
 * CareHub's API handlers were not re-audited in this phase (its suite is unchanged and passing).
