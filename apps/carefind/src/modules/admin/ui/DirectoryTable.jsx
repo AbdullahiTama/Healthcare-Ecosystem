@@ -13,7 +13,7 @@ const SEARCH_DELAY_MS = 300
 // Retry and never an empty message.
 export default function DirectoryTable({
   title, noun, query, columns, search, onSearch, searchPlaceholder, filters,
-  filtersActive, onClear, page, onPage, pageSize, renderDrawer, toolbar, rowLabel,
+  filtersActive, onClear, page, onPage, renderDrawer, toolbar, rowLabel,
 }) {
   const [openId, setOpenId] = useState(null)
   const [error, setError] = useState('')
@@ -21,6 +21,8 @@ export default function DirectoryTable({
 
   // Search box: local text, pushed up only after typing stops and only when it
   // changes the applied search. `search` going to '' from outside resets the box.
+  // Only `search` going to '' from outside is mirrored into the input; a new
+  // non-empty value from outside (e.g. a URL param) is not.
   const [text, setText] = useState(search)
   const debounced = useDebounced(text, SEARCH_DELAY_MS)
   const latest = useRef({ search, onSearch })
@@ -54,7 +56,9 @@ export default function DirectoryTable({
     : isPlaceholderData ? 'Updating…'
       : data?.total != null ? `${data.total} ${noun}${data.total === 1 ? '' : 's'}` : `${rows.length} shown`
 
-  const empty = page > 0
+  const empty = isPlaceholderData
+    ? <p className="adm-note">Updating…</p>
+    : page > 0
     ? (
       <div>
         <Empty message={`No ${noun}s on this page`} cause="none" />
@@ -107,8 +111,8 @@ export default function DirectoryTable({
 
       {ready && (
         <nav className="adm-dir-pager" aria-label={`${title} pages`}>
-          <Button size="sm" variant="ghost" disabled={page <= 0} onClick={() => onPage(page - 1)}>Previous</Button>
-          <Button size="sm" variant="ghost" disabled={!data?.hasNext} onClick={() => onPage(page + 1)}>Next</Button>
+          <Button size="sm" variant="ghost" disabled={page <= 0 || isPlaceholderData} onClick={() => onPage(page - 1)}>Previous</Button>
+          <Button size="sm" variant="ghost" disabled={!data?.hasNext || isPlaceholderData} onClick={() => onPage(page + 1)}>Next</Button>
         </nav>
       )}
 

@@ -170,4 +170,17 @@ describe('DirectoryTable', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Previous' }))
     expect(props.onPage).toHaveBeenLastCalledWith(1)
   })
+
+  it('disables Previous and Next while the next page is loading', () => {
+    setup({ page: 2, query: ok({ isPlaceholderData: true }) })
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
+  })
+
+  it('shows no empty message while empty placeholder rows wait for the real page', () => {
+    setup({ page: 0, filtersActive: true, query: ok({ isPlaceholderData: true, data: { rows: [], hasNext: false, total: 0 } }) })
+    expect(screen.queryByText(/No users/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
+    expect(screen.getByText('Updating…')).toBeInTheDocument()
+  })
 })
