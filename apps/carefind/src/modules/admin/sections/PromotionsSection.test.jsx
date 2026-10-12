@@ -229,4 +229,51 @@ describe('PromotionsSection', () => {
     expect(screen.getByText('<b>bold</b>')).toBeInTheDocument()
     expect(document.querySelector('li b')).toBeNull()
   })
+
+  // A create or delete can end after the admin has left this tab. The form
+  // and the rows are gone then, so a failure is toasted instead of dropped.
+  describe('a result that arrives after the screen unmounted', () => {
+    it('toasts a failed create', async () => {
+      let resolve
+      actions.createPromotion.mockImplementation(() => new Promise(r => { resolve = r }))
+      const view = render(<PromotionsSection />)
+      fireEvent.change(titleBox(), { target: { value: 'Sale' } })
+      act(() => { fireEvent.click(add()) })
+      const pending = actions.createPromotion.mock.results[0].value
+      view.unmount()
+      await act(async () => { resolve({ ok: false, error: 'Server down' }); await pending })
+      expect(admin.showToast).toHaveBeenCalledTimes(1)
+      expect(admin.showToast).toHaveBeenCalledWith("Couldn't create the promotion: Server down", { type: 'error' })
+    })
+
+    it('toasts a failed delete', async () => {
+      let resolve
+      actions.deletePromotion.mockImplementation(() => new Promise(r => { resolve = r }))
+      const view = render(<PromotionsSection />)
+      fireEvent.click(screen.getByRole('button', { name: 'Delete promotion 50% off Vitamin C' }))
+      let pending
+      act(() => { pending = admin.askConfirm.mock.calls[0][0].action() })
+      view.unmount()
+      await act(async () => { resolve({ ok: false, error: 'Forbidden' }); await pending })
+      expect(admin.showToast).toHaveBeenCalledTimes(1)
+      expect(admin.showToast).toHaveBeenCalledWith("Couldn't delete the promotion: Forbidden", { type: 'error' })
+    })
+
+    it('adds nothing to a late success (the hook has toasted it)', async () => {
+      let resolveCreate
+      let resolveDelete
+      actions.createPromotion.mockImplementation(() => new Promise(r => { resolveCreate = r }))
+      actions.deletePromotion.mockImplementation(() => new Promise(r => { resolveDelete = r }))
+      const view = render(<PromotionsSection />)
+      fireEvent.change(titleBox(), { target: { value: 'Sale' } })
+      act(() => { fireEvent.click(add()) })
+      const created = actions.createPromotion.mock.results[0].value
+      fireEvent.click(screen.getByRole('button', { name: 'Delete promotion 50% off Vitamin C' }))
+      let deleted
+      act(() => { deleted = admin.askConfirm.mock.calls[0][0].action() })
+      view.unmount()
+      await act(async () => { resolveCreate({ ok: true }); resolveDelete({ ok: true }); await created; await deleted })
+      expect(admin.showToast).not.toHaveBeenCalled()
+    })
+  })
 })

@@ -132,7 +132,27 @@ describe('useContentActions: promotions', () => {
     const { result } = renderHook(() => useContentActions())
     const out = await run(() => result.current.deleteStory('s1'))
     expect(out).toEqual({ ok: true })
+    // The toast runs after the refresh and is not lost when the refresh throws.
+    expect(admin.showToast).toHaveBeenCalledWith('Story deleted', { type: 'success' })
     spy.mockRestore()
+  })
+})
+
+// Legacy wrote no audit entry and no action-history entry for stories or
+// promotions; these pin that, so adding one is a deliberate change.
+describe('useContentActions: no audit or action history', () => {
+  it.each([
+    ['createStory', { title: 'T', body: 'B', bgColor: 'x', imageFile: file }, 'create_story'],
+    ['deleteStory', 's1', 'delete_story'],
+    ['createPromotion', { title: 'Sale', linkUrl: '', days: '7', imageFile: file }, 'create_promotion'],
+    ['deletePromotion', 'p1', 'delete_promotion'],
+  ])('%s calls only its own action: no log_audit_action and no recordAction', async (name, arg, action) => {
+    const { result } = renderHook(() => useContentActions())
+    const out = await run(() => result.current[name](arg))
+    expect(out).toEqual({ ok: true })
+    expect(calledActions()).toEqual([action])
+    expect(calledActions()).not.toContain('log_audit_action')
+    expect(admin.recordAction).not.toHaveBeenCalled()
   })
 })
 

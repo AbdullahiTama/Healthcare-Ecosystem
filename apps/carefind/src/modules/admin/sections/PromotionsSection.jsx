@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Trash2, Megaphone, X } from 'lucide-react'
 import { Button, Input, Select, Empty } from '@care-ecosystem/design-system/components/ui'
 import { timeAgo } from '../ui'
@@ -67,7 +67,20 @@ function PromotionRow({ promo, disabled, error, onDelete }) {
 export default function PromotionsSection() {
   const query = usePromotionsList()
   const { busy, createPromotion, deletePromotion } = useContentActions()
-  const { askConfirm } = useAdmin()
+  const { askConfirm, showToast } = useAdmin()
+  // Whether this screen is still shown. A create or delete can end after the
+  // admin has left the tab; its form and rows are gone then, so a failure is
+  // toasted rather than dropped (a success was already toasted by the hook).
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
+  const toastIfGone = (verb, res) => {
+    if (mounted.current) return false
+    if (!res.ok) showToast(`Couldn't ${verb} the promotion: ${res.error}`, { type: 'error' })
+    return true
+  }
 
   const [title, setTitle] = useState('')
   const [linkUrl, setLinkUrl] = useState('')
@@ -100,6 +113,7 @@ export default function PromotionsSection() {
     if (busy || !valid) return
     setError('')
     const res = await createPromotion({ title: title.trim(), linkUrl, days, imageFile: file })
+    if (toastIfGone('create', res)) return
     if (res.ok) {
       setTitle(''); setLinkUrl(''); setDays(DEFAULT_DAYS); removeFile()
     } else {
@@ -113,6 +127,7 @@ export default function PromotionsSection() {
     confirmLabel: 'Delete',
     action: async () => {
       const res = await deletePromotion(promo.id)
+      if (toastIfGone('delete', res)) return
       setDeleteErrors(prev => {
         const next = { ...prev }
         if (res.ok) delete next[promo.id]

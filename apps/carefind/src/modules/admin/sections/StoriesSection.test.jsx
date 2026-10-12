@@ -119,6 +119,8 @@ describe('StoriesSection', () => {
     expect(fileBox().files[0]).toBe(file)
     expect(screen.getByAltText('Selected image preview')).toBeInTheDocument()
     expect(screen.getByText('cover.png')).toBeInTheDocument()
+    // While the screen is shown the failure is inline only, never toasted.
+    expect(admin.showToast).not.toHaveBeenCalled()
     // the admin can retry with the same file
     actions.createStory.mockResolvedValue({ ok: true })
     await submit()
@@ -217,5 +219,52 @@ describe('StoriesSection', () => {
     expect(screen.getByText('<b>bold</b>')).toBeInTheDocument()
     expect(document.querySelector('li b')).toBeNull()
     expect(document.querySelector('li img')).toBeNull()
+  })
+
+  // A create or delete can end after the admin has left this tab. The form
+  // and the rows are gone then, so a failure is toasted instead of dropped.
+  describe('a result that arrives after the screen unmounted', () => {
+    it('toasts a failed create', async () => {
+      let resolve
+      actions.createStory.mockImplementation(() => new Promise(r => { resolve = r }))
+      const view = render(<StoriesSection />)
+      fireEvent.change(titleBox(), { target: { value: 'Big news' } })
+      act(() => { fireEvent.click(publish()) })
+      const pending = actions.createStory.mock.results[0].value
+      view.unmount()
+      await act(async () => { resolve({ ok: false, error: 'Server down' }); await pending })
+      expect(admin.showToast).toHaveBeenCalledTimes(1)
+      expect(admin.showToast).toHaveBeenCalledWith("Couldn't create the story: Server down", { type: 'error' })
+    })
+
+    it('toasts a failed delete', async () => {
+      let resolve
+      actions.deleteStory.mockImplementation(() => new Promise(r => { resolve = r }))
+      const view = render(<StoriesSection />)
+      fireEvent.click(screen.getByRole('button', { name: 'Delete story New feature' }))
+      let pending
+      act(() => { pending = admin.askConfirm.mock.calls[0][0].action() })
+      view.unmount()
+      await act(async () => { resolve({ ok: false, error: 'Forbidden' }); await pending })
+      expect(admin.showToast).toHaveBeenCalledTimes(1)
+      expect(admin.showToast).toHaveBeenCalledWith("Couldn't delete the story: Forbidden", { type: 'error' })
+    })
+
+    it('adds nothing to a late success (the hook has toasted it)', async () => {
+      let resolveCreate
+      let resolveDelete
+      actions.createStory.mockImplementation(() => new Promise(r => { resolveCreate = r }))
+      actions.deleteStory.mockImplementation(() => new Promise(r => { resolveDelete = r }))
+      const view = render(<StoriesSection />)
+      fireEvent.change(titleBox(), { target: { value: 'Big news' } })
+      act(() => { fireEvent.click(publish()) })
+      const created = actions.createStory.mock.results[0].value
+      fireEvent.click(screen.getByRole('button', { name: 'Delete story New feature' }))
+      let deleted
+      act(() => { deleted = admin.askConfirm.mock.calls[0][0].action() })
+      view.unmount()
+      await act(async () => { resolveCreate({ ok: true }); resolveDelete({ ok: true }); await created; await deleted })
+      expect(admin.showToast).not.toHaveBeenCalled()
+    })
   })
 })

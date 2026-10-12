@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Trash2, BookOpen, X } from 'lucide-react'
 import { Button, Input, Textarea, Empty } from '@care-ecosystem/design-system/components/ui'
 import { timeAgo } from '../ui'
@@ -59,7 +59,20 @@ function StoryRow({ story, disabled, error, onDelete }) {
 export default function StoriesSection() {
   const query = useStoriesList()
   const { busy, createStory, deleteStory } = useContentActions()
-  const { askConfirm } = useAdmin()
+  const { askConfirm, showToast } = useAdmin()
+  // Whether this screen is still shown. A create or delete can end after the
+  // admin has left the tab; its form and rows are gone then, so a failure is
+  // toasted rather than dropped (a success was already toasted by the hook).
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
+  const toastIfGone = (verb, res) => {
+    if (mounted.current) return false
+    if (!res.ok) showToast(`Couldn't ${verb} the story: ${res.error}`, { type: 'error' })
+    return true
+  }
 
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -92,6 +105,7 @@ export default function StoriesSection() {
     if (busy || !valid) return
     setError('')
     const res = await createStory({ title: title.trim(), body: body.trim(), bgColor, imageFile: file })
+    if (toastIfGone('create', res)) return
     if (res.ok) {
       setTitle(''); setBody(''); setBgColor(DEFAULT_COLOR); removeFile()
     } else {
@@ -105,6 +119,7 @@ export default function StoriesSection() {
     confirmLabel: 'Delete',
     action: async () => {
       const res = await deleteStory(story.id)
+      if (toastIfGone('delete', res)) return
       setDeleteErrors(prev => {
         const next = { ...prev }
         if (res.ok) delete next[story.id]
