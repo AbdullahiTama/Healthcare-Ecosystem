@@ -127,8 +127,10 @@ const selectStyle = {
 }
 
 // Verify, Suspend and Delete. Suspend and Delete are not offered on your own
-// account (that would lock you out). This only hides the buttons: the server
-// is what decides whether an action is allowed.
+// account, nor while the signed-in admin is not yet known. This is UI only:
+// suspend_user and delete_user (api/_handlers/admin-auth.js) do NOT prevent an
+// admin acting on their own account; hiding the buttons only prevents an
+// accidental lock-out or self-delete from this screen.
 function UserActions({ u, isSelf, actions, askConfirm, close, setError }) {
   const [verifying, setVerifying] = useState(false)
   const [specialty, setSpecialty] = useState('')
@@ -179,7 +181,7 @@ function UserActions({ u, isSelf, actions, askConfirm, close, setError }) {
               confirmLabel: 'Delete',
               action: async () => finish(await actions.deleteUser({ id: u.id, name })),
             })}>
-            Delete account
+            Delete user
           </Button>
         </>
       )}
@@ -221,7 +223,7 @@ export default function UsersSection() {
     status: u.is_verified ? 'confirmed' : undefined,
     body: <UserBody u={u} phone={phoneMap[u.id]} />,
     footer: (
-      <UserActions key={u.id} u={u} isSelf={!!adminUser?.id && u.id === adminUser.id}
+      <UserActions key={u.id} u={u} isSelf={!adminUser?.id || u.id === adminUser.id}
         actions={actions} askConfirm={askConfirm} close={close} setError={setError} />
     ),
   })

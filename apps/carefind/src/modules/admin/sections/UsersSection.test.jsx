@@ -7,7 +7,7 @@ import { renderWithQueryClient } from '../../../test/renderWithQueryClient.jsx'
 const dir = vi.hoisted(() => ({ calls: [], result: null }))
 const actions = vi.hoisted(() => ({ verifyUser: vi.fn(), suspendUser: vi.fn(), deleteUser: vi.fn(), busy: null }))
 const trust = vi.hoisted(() => ({ value: null }))
-const admin = vi.hoisted(() => ({ askConfirm: vi.fn() }))
+const admin = vi.hoisted(() => ({ askConfirm: vi.fn(), adminUser: { id: 'a1' } }))
 const api = vi.hoisted(() => ({ callAdminAuth: vi.fn() }))
 const csv = vi.hoisted(() => ({ exportCSV: vi.fn() }))
 
@@ -18,7 +18,7 @@ vi.mock('../hooks/useUsersDirectory', async (importActual) => {
 vi.mock('../hooks/useUserActions', () => ({ useUserActions: () => actions }))
 vi.mock('../hooks/useTrustQueues', () => ({ useTrustQueues: () => ({ data: trust.value }) }))
 vi.mock('../provider/AdminProvider.jsx', () => ({
-  useAdmin: () => ({ adminUser: { id: 'a1' }, askConfirm: admin.askConfirm, confirming: false }),
+  useAdmin: () => ({ adminUser: admin.adminUser, askConfirm: admin.askConfirm, confirming: false }),
 }))
 vi.mock('../adminApi', () => ({ callAdminAuth: api.callAdminAuth }))
 vi.mock('../ui', async (importActual) => ({ ...(await importActual()), exportCSV: csv.exportCSV }))
@@ -56,6 +56,7 @@ beforeEach(() => {
   actions.suspendUser.mockReset().mockResolvedValue({ ok: true })
   actions.deleteUser.mockReset().mockResolvedValue({ ok: true })
   admin.askConfirm.mockReset()
+  admin.adminUser = { id: 'a1' }
   api.callAdminAuth.mockReset().mockResolvedValue({ data: posts })
   csv.exportCSV.mockReset()
 })
@@ -264,7 +265,7 @@ describe('UsersSection', () => {
     actions.deleteUser.mockResolvedValue({ ok: false, error: 'Not allowed' })
     render()
     const dialog = openUser('Bayo Lawal')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete account' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete user' }))
     expect(admin.askConfirm).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Delete this user?',
       confirmLabel: 'Delete',
@@ -276,17 +277,33 @@ describe('UsersSection', () => {
     expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent('Not allowed')
   })
 
-  it('hides Delete account and Suspend for the signed-in admin, but keeps Verify', () => {
+  it('fails closed: with the signed-in admin not yet known, no Delete or Suspend; they appear once a different admin is known', () => {
+    admin.adminUser = undefined
+    const { rerender } = render()
+    let dialog = openUser('Bayo Lawal')
+    expect(within(dialog).queryByRole('button', { name: 'Delete user' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Suspend' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('combobox', { name: 'Suspend duration' })).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Verify' })).toBeInTheDocument()
+
+    admin.adminUser = { id: 'a1' }
+    rerender(<UsersSection />)
+    dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('button', { name: 'Delete user' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Suspend' })).toBeInTheDocument()
+  })
+
+  it('hides Delete user and Suspend for the signed-in admin, but keeps Verify', () => {
     render()
     const self = openUser('Admin Self')
-    expect(within(self).queryByRole('button', { name: 'Delete account' })).not.toBeInTheDocument()
+    expect(within(self).queryByRole('button', { name: 'Delete user' })).not.toBeInTheDocument()
     expect(within(self).queryByRole('button', { name: 'Suspend' })).not.toBeInTheDocument()
     expect(within(self).queryByRole('combobox', { name: 'Suspend duration' })).not.toBeInTheDocument()
     expect(within(self).getByRole('button', { name: 'Verify' })).toBeInTheDocument()
 
     fireEvent.click(within(self).getByRole('button', { name: 'Close' }))
     const other = openUser('Bayo Lawal')
-    expect(within(other).getByRole('button', { name: 'Delete account' })).toBeInTheDocument()
+    expect(within(other).getByRole('button', { name: 'Delete user' })).toBeInTheDocument()
     expect(within(other).getByRole('button', { name: 'Suspend' })).toBeInTheDocument()
   })
 })
