@@ -47,7 +47,8 @@ const columns = [
   { key: 'verification_label', label: 'Title', render: u => u.verification_label || '—' },
   { key: 'location', label: 'Location', render: u => u.location || '—' },
   { key: 'is_verified', label: 'Verified', render: u => (u.is_verified ? <StatusBadge status="confirmed" /> : '—') },
-  { key: 'created_at', label: 'Joined', sortable: true, sortValue: u => new Date(u.created_at).getTime(), render: u => timeAgo(u.created_at) },
+  // Not sortable: DataTable sorts only the 25 rows on screen (finding 44).
+  { key: 'created_at', label: 'Joined', render: u => timeAgo(u.created_at) },
 ]
 
 const shortId = (id) => (id && id.length > 16 ? `${id.slice(0, 16)}…` : id || '—')
@@ -58,7 +59,10 @@ const joinedDate = (d) => {
 const websiteHref = (w) => (w.startsWith('http') ? w : `https://${w}`)
 
 // The 3 most recent posts, loaded while the drawer is open. A failed or
-// malformed response is shown as failed, never as "no posts".
+// malformed response is shown as failed, never as "no posts". This calls
+// callAdminAuth directly because usersRepository turns failures into
+// `data || []`. isPending (not isLoading) also covers a disabled query, which
+// has no data.
 function RecentPosts({ userId }) {
   const posts = useQuery({
     queryKey: ['admin', 'user-posts', userId],
@@ -73,7 +77,7 @@ function RecentPosts({ userId }) {
   return (
     <section aria-label="Recent posts" style={{ marginTop: 16 }}>
       <h3 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600 }}>Recent posts</h3>
-      {posts.isLoading ? <p className="adm-note">Loading posts…</p>
+      {posts.isPending ? <p className="adm-note">Loading posts…</p>
         : posts.isError ? <p className="adm-note">Couldn't load posts</p>
           : posts.data.length === 0 ? <p className="adm-note">No posts yet</p>
             : (

@@ -22,7 +22,7 @@ function setup(over = {}) {
   const props = {
     title: 'Users', noun: 'user', query: ok(), columns, search: '', onSearch: vi.fn(),
     searchPlaceholder: 'Search users', filters: <span>filter row</span>, filtersActive: false,
-    onClear: vi.fn(), page: 1, onPage: vi.fn(), pageSize: 25,
+    onClear: vi.fn(), page: 1, onPage: vi.fn(),
     renderDrawer: (r) => ({ body: <p>Details for {r.name}</p>, footer: <button>Do thing</button> }),
     rowLabel: r => r.name,
     ...over,
@@ -147,6 +147,15 @@ describe('DirectoryTable', () => {
     expect(props.onPage).toHaveBeenLastCalledWith(1)
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     expect(props.onPage).toHaveBeenLastCalledWith(3)
+  })
+
+  it('says which page is shown, in a polite live region, so page changes are announced', () => {
+    const { props, rerender } = setup({ page: 0 })
+    const label = screen.getByText('Page 1')
+    expect(label).toHaveAttribute('aria-live', 'polite')
+    expect(within(screen.getByRole('navigation', { name: 'Users pages' })).getByText('Page 1')).toBe(label)
+    rerender(<DirectoryTable {...props} page={2} />)
+    expect(screen.getByText('Page 3')).toBeInTheDocument()
   })
 
   it('opens the drawer from the Review button with the renderDrawer content, and Close closes it', () => {

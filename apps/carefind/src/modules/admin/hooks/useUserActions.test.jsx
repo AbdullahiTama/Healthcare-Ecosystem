@@ -22,6 +22,9 @@ describe('useUserActions', () => {
     expect(callAdminAuth).toHaveBeenCalledWith('manual_verify', { userId: 'u1', specialty: 'Pharmacist' })
     expect(admin.invalidateAdmin).toHaveBeenCalled()
     expect(admin.showToast).toHaveBeenCalledWith('User verified', { type: 'success' })
+    // Manual verification writes no audit entry: exactly one server call.
+    expect(callAdminAuth).toHaveBeenCalledTimes(1)
+    expect(admin.recordAction).not.toHaveBeenCalled()
   })
 
   it('refuses a blank specialty without calling the server', async () => {
@@ -31,12 +34,13 @@ describe('useUserActions', () => {
     expect(callAdminAuth).not.toHaveBeenCalled()
   })
 
-  it('suspends with the legacy payload, audits it and toasts the days', async () => {
+  it('suspends with the legacy payload, audits it and toasts that the user is marked as suspended', async () => {
     const { result } = renderHook(() => useUserActions())
     await run(() => result.current.suspendUser({ id: 'u1', days: '7' }))
     expect(callAdminAuth).toHaveBeenCalledWith('suspend_user', { userId: 'u1', days: '7' })
     expect(callAdminAuth).toHaveBeenCalledWith('log_audit_action', expect.objectContaining({ auditAction: 'suspend', targetType: 'user', targetId: 'u1', metadata: { days: '7' } }))
-    expect(admin.showToast).toHaveBeenCalledWith('User suspended for 7 days', { type: 'success' })
+    expect(admin.showToast).toHaveBeenCalledWith('User marked as suspended for 7 days', { type: 'success' })
+    expect(admin.recordAction).not.toHaveBeenCalled()
   })
 
   it('deletes with the legacy payload and audits the name', async () => {
@@ -45,6 +49,7 @@ describe('useUserActions', () => {
     expect(callAdminAuth).toHaveBeenCalledWith('delete_user', { userId: 'u1' })
     expect(callAdminAuth).toHaveBeenCalledWith('log_audit_action', expect.objectContaining({ auditAction: 'delete', targetType: 'user', targetId: 'u1', metadata: { name: 'Ada Obi' } }))
     expect(admin.showToast).toHaveBeenCalledWith('User deleted', { type: 'success' })
+    expect(admin.recordAction).not.toHaveBeenCalled()
   })
 
   it('returns the error and neither toasts nor refreshes on failure', async () => {

@@ -40,7 +40,9 @@ export function useUserActions() {
   }
   const suspendUser = ({ id, days }) => run({
     id, action: 'suspend_user', payload: { userId: id, days },
-    auditAs: ['suspend', 'user'], metadata: { days }, success: `User suspended for ${days} days`,
+    auditAs: ['suspend', 'user'], metadata: { days }, // suspend_user only sets suspended_until; nothing in this repo enforces it,
+    // so the toast says what was recorded, as the confirmation does.
+    success: `User marked as suspended for ${days} days`,
   })
   const deleteUser = ({ id, name }) => run({
     id, action: 'delete_user', payload: { userId: id },

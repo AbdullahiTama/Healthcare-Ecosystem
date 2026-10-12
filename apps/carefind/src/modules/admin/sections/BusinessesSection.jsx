@@ -32,16 +32,21 @@ const columns = [
   { key: 'business_type', label: 'Type', render: b => capitalised(b.business_type) },
   { key: 'location', label: 'Location', render: locationOf },
   { key: 'visible_on_carefind', label: 'Status', render: statusOf },
-  { key: 'created_at', label: 'Added', sortable: true, sortValue: b => new Date(b.created_at).getTime(), render: b => timeAgo(b.created_at) },
+  // Not sortable: DataTable sorts only the 25 rows on screen (finding 44).
+  { key: 'created_at', label: 'Added', render: b => timeAgo(b.created_at) },
 ]
 
 const statGridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, margin: '16px 0' }
 
 // A stat is "…" while loading and "Couldn't load" on failure, never 0.
 const statValue = (q, render) => (q.isPending ? '…' : q.isError ? "Couldn't load" : render(q.data))
-const averageOf = (reviews) => (reviews.length
-  ? (reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / reviews.length).toFixed(1)
-  : 'N/A')
+// Only finite numeric ratings count; a review with no rating is not a 0.
+const averageOf = (reviews) => {
+  const ratings = reviews
+    .map(r => (r.rating == null || r.rating === '' ? NaN : Number(r.rating)))
+    .filter(Number.isFinite)
+  return ratings.length ? (ratings.reduce((sum, n) => sum + n, 0) / ratings.length).toFixed(1) : 'N/A'
+}
 
 function Stars({ rating }) {
   const n = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)))

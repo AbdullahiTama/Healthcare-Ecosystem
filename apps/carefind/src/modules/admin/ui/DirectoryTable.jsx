@@ -124,6 +124,7 @@ export default function DirectoryTable({
       {ready && (
         <nav className="adm-dir-pager" aria-label={`${title} pages`}>
           <Button size="sm" variant="ghost" disabled={page <= 0 || isPlaceholderData} onClick={() => onPage(page - 1)}>Previous</Button>
+          <span className="adm-note" aria-live="polite">Page {page + 1}</span>
           <Button size="sm" variant="ghost" disabled={!data?.hasNext || isPlaceholderData} onClick={() => onPage(page + 1)}>Next</Button>
         </nav>
       )}

@@ -328,4 +328,23 @@ describe('UsersSection', () => {
     expect(within(dialog).queryByRole('button', { name: 'Delete user' })).not.toBeInTheDocument()
     expect(within(dialog).queryByRole('button', { name: 'Suspend' })).not.toBeInTheDocument()
   })
+
+  it('the Joined column is not sortable, because only the 25 rows on screen would sort', () => {
+    render()
+    const before = screen.getAllByRole('row').map(r => r.textContent)
+    const joined = screen.getByRole('columnheader', { name: 'Joined' })
+    expect(joined).toHaveAttribute('aria-sort', 'none')
+    fireEvent.click(joined)
+    fireEvent.click(joined)
+    expect(joined).toHaveAttribute('aria-sort', 'none')
+    expect(screen.getAllByRole('row').map(r => r.textContent)).toEqual(before)
+  })
+
+  it('a drawer whose posts query is disabled (no user id) shows loading, never throws', () => {
+    dir.result = ok({ data: { rows: [{ ...users[1], id: '' }], hasNext: false, total: 1 } })
+    render()
+    const dialog = openUser('Bayo Lawal')
+    expect(within(dialog).getByText('Loading posts…')).toBeInTheDocument()
+    expect(api.callAdminAuth).not.toHaveBeenCalled()
+  })
 })

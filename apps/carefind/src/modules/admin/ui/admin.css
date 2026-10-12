@@ -111,4 +111,4 @@ button.adm-item:hover { background: var(--adm-line-soft); }
 .adm-dir-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
 .adm-dir-search { box-sizing: border-box; min-height: 44px; width: 100%; max-width: 420px; padding: 0 12px; font: inherit; color: var(--adm-ink); background: var(--adm-panel); border: 1px solid var(--adm-line); border-radius: 8px; }
 .adm-dir-search:focus-visible { outline: 2px solid var(--teal-deep, #0e6f5a); outline-offset: 2px; }
-.adm-dir-pager { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.adm-dir-pager { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 12px; }

@@ -322,4 +322,31 @@ describe('BusinessesSection', () => {
     expect(stat(dialog, 'Products')).toHaveTextContent('1')
     expect(stat(dialog, 'Avg rating')).toHaveTextContent('2.0')
   })
+
+  it('the average ignores reviews with no numeric rating, and is N/A when none has one', async () => {
+    repo.reviews.mockImplementation(byBusiness({
+      b1: [{ id: 'r1', rating: 5, comment: 'Rated' }, { id: 'r2', rating: null, comment: 'Unrated' }, { id: 'r3', rating: 'x', comment: null }],
+      b2: [{ id: 'r9', rating: null, comment: 'Only unrated' }],
+    }))
+    render()
+    let dialog = openBusiness('Alpha Pharmacy')
+    expect(await within(dialog).findByText('Unrated')).toBeInTheDocument()
+    expect(stat(dialog, 'Avg rating')).toHaveTextContent('5.0')
+    expect(stat(dialog, 'Reviews')).toHaveTextContent('3')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+
+    dialog = openBusiness('Beta Clinic')
+    expect(await within(dialog).findByText('Only unrated')).toBeInTheDocument()
+    expect(stat(dialog, 'Avg rating')).toHaveTextContent('N/A')
+  })
+
+  it('the Added column is not sortable, because only the 25 rows on screen would sort', () => {
+    render()
+    const before = screen.getAllByRole('row').map(r => r.textContent)
+    const added = screen.getByRole('columnheader', { name: 'Added' })
+    fireEvent.click(added)
+    fireEvent.click(added)
+    expect(added).toHaveAttribute('aria-sort', 'none')
+    expect(screen.getAllByRole('row').map(r => r.textContent)).toEqual(before)
+  })
 })
