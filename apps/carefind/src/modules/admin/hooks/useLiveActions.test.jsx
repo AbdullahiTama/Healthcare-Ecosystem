@@ -244,3 +244,61 @@ describe('busy', () => {
     expect(result.current.busy).toBeNull()
   })
 })
+
+describe('in-flight guard', () => {
+  const deferred = () => { let resolve, reject; const p = new Promise((res, rej) => { resolve = res; reject = rej }); return { p, resolve, reject } }
+
+  it('a second endShow on the same show is refused without a server call', async () => {
+    const d = deferred()
+    callAdminAuth.mockImplementation(() => d.p)
+    const { result } = setup()
+    let first, second
+    act(() => { first = result.current.endShow('a') })
+    await act(async () => { second = await result.current.endShow('a') })
+    expect(second).toEqual({ ok: false, error: 'Already running' })
+    await act(async () => { d.resolve({}); await first })
+    expect(callAdminAuth.mock.calls).toEqual([['end_live_show', { showId: 'a' }]])
+  })
+  it('endShow on different shows both run', async () => {
+    const d = deferred()
+    callAdminAuth.mockImplementation(() => d.p)
+    const { result } = setup()
+    let a, b
+    act(() => { a = result.current.endShow('a'); b = result.current.endShow('b') })
+    await act(async () => { d.resolve({}); await Promise.all([a, b]) })
+    expect(callAdminAuth).toHaveBeenCalledTimes(2)
+  })
+  it('hideComment runs while a postItem is still in flight', async () => {
+    let release
+    uploadToBucket.mockImplementation(() => new Promise(r => { release = r }))
+    const { result } = setup()
+    let post, hide
+    act(() => { post = result.current.postItem({ showId: 's', text: '', imageFile: image }) })
+    await act(async () => { hide = await result.current.hideComment('c1') })
+    expect(hide).toEqual({ ok: true })
+    expect(callAdminAuth.mock.calls).toEqual([['hide_live_comment', { id: 'c1' }]])
+    await act(async () => { release({ ok: true, url: 'u' }); await post })
+  })
+  it('isBusy is true while running and false after, including after a failure', async () => {
+    let release
+    callAdminAuth.mockImplementation(() => new Promise(r => { release = r }))
+    const { result } = setup()
+    let p
+    act(() => { p = result.current.endShow('a') })
+    expect(result.current.isBusy('endShow', 'a')).toBe(true)
+    expect(result.current.isBusy('endShow', 'b')).toBe(false)
+    expect(result.current.busyKeys).toEqual(['endShow:a'])
+    await act(async () => { release({}); await p })
+    expect(result.current.isBusy('endShow', 'a')).toBe(false)
+    callAdminAuth.mockReset().mockRejectedValueOnce(new Error('x'))
+    await run(() => result.current.endShow('a'))
+    expect(result.current.isBusy('endShow', 'a')).toBe(false)
+    expect(result.current.busyKeys).toEqual([])
+  })
+  it('the key is released after a failure so the action can run again', async () => {
+    callAdminAuth.mockRejectedValueOnce(new Error('x'))
+    const { result } = setup()
+    await run(() => result.current.endShow('a'))
+    expect(await run(() => result.current.endShow('a'))).toEqual({ ok: true })
+  })
+})

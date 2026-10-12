@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { callAdminAuth } from '../adminApi'
 import { useAdmin } from '../provider/AdminProvider.jsx'
 import { bestEffort } from '../lib/bestEffort'
@@ -15,30 +15,40 @@ import { uploadToBucket } from '../lib/uploadMedia'
 // admin_token or sends a token. If the image posts but the text then fails the
 // result carries partial: true, so the caller keeps only the text draft.
 //
-// `busy` is the name of the running action ('startShow', 'scheduleShow',
-// 'startScheduled', 'cancelScheduled', 'endShow', 'postItem', 'postMedia',
-// 'hideComment') or null. It covers uploads too. The cards disable their
-// controls while it is non-null, so only one action runs at a time.
+// In-flight guard: each run has a key `${action}:${targetId ?? ''}` (e.g.
+// 'endShow:<showId>', 'hideComment:<commentId>', 'startShow:'). A run whose key
+// is already running resolves { ok: false, error: 'Already running' } with no
+// server call, so a double click cannot post or end twice. Different keys may
+// overlap (hide a comment while a slide uploads). The key covers uploads too and
+// is always released in `finally`. `busyKeys` and `isBusy(action, targetId)`
+// drive the UI; `busy` is the action name of the oldest running key, or null.
 
 export const slideContent = (url, num, total) => `${url}|||${num}|||${total}`
 
 export function useLiveActions() {
   const { showToast, invalidateAdmin } = useAdmin()
-  const [busy, setBusy] = useState(null)
+  const running = useRef(new Set())
+  const [busyKeys, setBusyKeys] = useState([])
+  const isBusy = useCallback((action, targetId) => busyKeys.includes(`${action}:${targetId ?? ''}`), [busyKeys])
+  const busy = busyKeys.length ? busyKeys[0].split(':')[0] : null
 
   // `work` does the uploads and server calls and returns the result plus
   // whether the control room changed. The refresh and toast run after it and
   // cannot throw out of here: once the server has committed, the admin must
   // never be told the action failed.
-  const perform = useCallback(async (name, work, success) => {
-    setBusy(name)
+  const perform = useCallback(async (name, targetId, work, success) => {
+    const key = `${name}:${targetId ?? ''}`
+    if (running.current.has(key)) return { ok: false, error: 'Already running' }
+    running.current.add(key)
+    setBusyKeys([...running.current])
     let outcome
     try {
       outcome = await work()
     } catch (err) {
       outcome = { result: { ok: false, error: err.message }, changed: false }
     } finally {
-      setBusy(null)
+      running.current.delete(key)
+      setBusyKeys([...running.current])
     }
     if (outcome.changed) bestEffort(`refreshing after ${name}`, invalidateAdmin)
     if (outcome.result.ok && success) bestEffort(`toasting ${name}`, () => showToast(success, { type: 'success' }))
@@ -46,21 +56,21 @@ export function useLiveActions() {
   }, [showToast, invalidateAdmin])
 
   // A single server call.
-  const simple = useCallback((name, action, payload, success) => perform(name, async () => {
+  const simple = useCallback((name, targetId, action, payload, success) => perform(name, targetId, async () => {
     await callAdminAuth(action, payload)
     return { result: { ok: true }, changed: true }
   }, success), [perform])
 
   const startShow = useCallback(({ title, guestIds }) => {
     if (!(title || '').trim()) return Promise.resolve({ ok: false, error: 'Add a show title' })
-    return simple('startShow', 'start_live_show', { title: title.trim(), guestIds },
+    return simple('startShow', null, 'start_live_show', { title: title.trim(), guestIds },
       'Live show started! Open the Control Room to begin posting.')
   }, [simple])
 
   const scheduleShow = useCallback(({ title, scheduledAt, trailerFile, guestIds }) => {
     if (!(title || '').trim()) return Promise.resolve({ ok: false, error: 'Add a show title' })
     if (!scheduledAt) return Promise.resolve({ ok: false, error: 'Pick a date & time for the show' })
-    return perform('scheduleShow', async () => {
+    return perform('scheduleShow', null, async () => {
       let trailerUrl = null
       if (trailerFile) {
         const upload = await uploadToBucket('live-media', trailerFile, 'trailer', { contentType: trailerFile.type || 'video/mp4' })
@@ -72,15 +82,15 @@ export function useLiveActions() {
     }, 'Show scheduled! It will show a countdown to your audience. Tap "Start Now" when you\'re ready to go live.')
   }, [perform])
 
-  const startScheduled = useCallback((id) => simple('startScheduled', 'start_scheduled_show', { showId: id }, 'You are now LIVE!'), [simple])
-  const cancelScheduled = useCallback((id) => simple('cancelScheduled', 'cancel_scheduled_show', { showId: id }, 'Scheduled show cancelled'), [simple])
-  const endShow = useCallback((id) => simple('endShow', 'end_live_show', { showId: id }, 'Live show ended'), [simple])
+  const startScheduled = useCallback((id) => simple('startScheduled', id, 'start_scheduled_show', { showId: id }, 'You are now LIVE!'), [simple])
+  const cancelScheduled = useCallback((id) => simple('cancelScheduled', id, 'cancel_scheduled_show', { showId: id }, 'Scheduled show cancelled'), [simple])
+  const endShow = useCallback((id) => simple('endShow', id, 'end_live_show', { showId: id }, 'Live show ended'), [simple])
 
   // Image first, then text, as the legacy handler did.
   const postItem = useCallback(({ showId, text, imageFile }) => {
     const cleanText = (text || '').trim()
     if (!cleanText && !imageFile) return Promise.resolve({ ok: false, error: 'Write something or add an image' })
-    return perform('postItem', async () => {
+    return perform('postItem', showId, async () => {
       let imagePosted = false
       try {
         if (imageFile) {
@@ -101,8 +111,8 @@ export function useLiveActions() {
     })
   }, [perform])
 
-  const postMedia = useCallback(({ showId, kind, content }) => simple('postMedia', 'post_live_item', { showId, kind, content }), [simple])
-  const hideComment = useCallback((id) => simple('hideComment', 'hide_live_comment', { id }), [simple])
+  const postMedia = useCallback(({ showId, kind, content }) => simple('postMedia', showId, 'post_live_item', { showId, kind, content }), [simple])
+  const hideComment = useCallback((id) => simple('hideComment', id, 'hide_live_comment', { id }), [simple])
 
-  return { busy, startShow, scheduleShow, startScheduled, cancelScheduled, endShow, postItem, postMedia, hideComment }
+  return { busy, busyKeys, isBusy, startShow, scheduleShow, startScheduled, cancelScheduled, endShow, postItem, postMedia, hideComment }
 }
