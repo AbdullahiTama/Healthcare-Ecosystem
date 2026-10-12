@@ -325,11 +325,27 @@ describe('ModerationSection', () => {
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
   })
 
-  it('shows loading rather than an empty queue while the lists load', () => {
-    queues.value = undefined
-    renderSection()
+  // The loading state: the page is marked busy and the table shows its
+  // skeleton rows (the shared skeleton's pulse), with no count and no rows.
+  const expectLoading = (container) => {
+    expect(container.querySelector('.adm-page')).toHaveAttribute('aria-busy', 'true')
+    expect(container.querySelectorAll('[style*="ds-pulse"]').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/waiting$/)).not.toBeInTheDocument()
     expect(screen.queryByText('Nothing waiting')).not.toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: /^Select / })).not.toBeInTheDocument()
+  }
+
+  it('shows loading rather than an empty queue while the lists load', () => {
+    queues.value = undefined
+    const { container } = renderSection()
+    expectLoading(container)
+  })
+
+  it('shows loading, not Nothing waiting, while the flagged posts are still loading', () => {
+    queues.value = { ...queues.value, verifications: { status: 'ok', data: [] }, reports: { status: 'ok', data: [] } }
+    adminData.value = undefined
+    const { container } = renderSection()
+    expectLoading(container)
   })
 
   it('Escape closes an item drawer, but not while a confirmation is open on top of it', () => {

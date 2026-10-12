@@ -75,7 +75,10 @@ export default function ModerationSection() {
   const [openKey, setOpenKey] = useState(null)
   const [error, setError] = useState('')
 
-  const loading = !data
+  // Loading until every source has answered: the trust queues and the flagged
+  // posts arrive separately, and showing "Nothing waiting" before the posts
+  // land would claim a clear queue that is about to fill.
+  const loading = !data || !adminData
   const reportsFailed = data?.reports?.status === 'error'
   const verificationsFailed = data?.verifications?.status === 'error'
   const anyFailed = reportsFailed || verificationsFailed
@@ -273,7 +276,7 @@ export default function ModerationSection() {
   )
 
   return (
-    <div className="adm-page" aria-busy={bulkActionLoading || undefined}>
+    <div className="adm-page" aria-busy={loading || bulkActionLoading || undefined}>
       <div className="adm-head">
         <h1>Moderation</h1>
         {!loading && <span className="adm-meta adm-num">{items.length}{reportsCapped ? '+' : ''} waiting</span>}
