@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
-import { FilterPills } from './FilterPills.jsx'
+import { FilterPills, DateRange } from './FilterPills.jsx'
 
 const options = [{ value: 'all', label: 'All' }, { value: 'verified', label: 'Verified' }]
 
@@ -23,5 +23,29 @@ describe('FilterPills', () => {
     render(<FilterPills options={['all', 'post']} value="all" onChange={() => {}} />)
     expect(screen.queryByRole('group')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'post' })).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
+describe('DateRange', () => {
+  it('names each date input by its label and reports changes', () => {
+    const onFrom = vi.fn()
+    const onTo = vi.fn()
+    render(<DateRange from="2026-09-01" to="" onFrom={onFrom} onTo={onTo} />)
+    const from = screen.getByLabelText('From')
+    const to = screen.getByLabelText('To')
+    expect(from).toHaveAttribute('type', 'date')
+    expect(from).toHaveValue('2026-09-01')
+    expect(to).toHaveValue('')
+    fireEvent.change(from, { target: { value: '2026-09-02' } })
+    fireEvent.change(to, { target: { value: '2026-09-30' } })
+    expect(onFrom).toHaveBeenCalledWith('2026-09-02')
+    expect(onTo).toHaveBeenCalledWith('2026-09-30')
+  })
+
+  it('two ranges on one screen keep their labels apart', () => {
+    render(<><DateRange onFrom={() => {}} onTo={() => {}} /><DateRange onFrom={() => {}} onTo={() => {}} /></>)
+    const froms = screen.getAllByLabelText('From')
+    expect(froms).toHaveLength(2)
+    expect(froms[0]).not.toBe(froms[1])
   })
 })

@@ -10,7 +10,8 @@ import { useAdmin } from '../provider/AdminProvider.jsx'
 import { callAdminAuth } from '../adminApi'
 
 const NO_FILTERS = { search: '', type: 'all', dateFrom: '', dateTo: '', page: 0 }
-const capitalised = (s) => (s ? s[0].toUpperCase() + s.slice(1) : '')
+// '' for anything that is not a non-empty string (a malformed row never crashes).
+const capitalised = (s) => (typeof s === 'string' && s ? s[0].toUpperCase() + s.slice(1) : '')
 const TYPE_OPTIONS = ['all', 'text', 'question', 'review', 'article', 'visual', 'premium']
   .map(value => ({ value, label: capitalised(value) }))
 const DELETE_CONSEQUENCE = 'This permanently deletes the post along with its likes and comments. This cannot be undone.'
@@ -24,10 +25,6 @@ const excerptOf = (p) => {
 }
 const rowLabel = (p) => excerptOf(p) || 'Post'
 const typeLabel = (p) => capitalised(p.post_type) || 'Post'
-const postedAt = (p) => {
-  const t = p.created_at ? Date.parse(p.created_at) : NaN
-  return Number.isFinite(t) ? t : 0
-}
 
 const columns = [
   { key: 'content', label: 'Post', render: p => excerptOf(p) || '—' },
@@ -35,12 +32,13 @@ const columns = [
   { key: 'user_id', label: 'Author', render: p => (p.user_id ? String(p.user_id).slice(0, 8) : '—') },
   // A missing view count is unknown, never 0.
   { key: 'view_count', label: 'Views', render: p => (p.view_count == null ? '—' : String(p.view_count)) },
-  // Sorting reorders only the rows on this page; a post without a date sorts as 0.
-  { key: 'created_at', label: 'Posted', sortable: true, sortValue: postedAt, render: p => (p.created_at ? timeAgo(p.created_at) : '—') },
+  // Not sortable: DataTable would reorder only the 25 rows on this page.
+  { key: 'created_at', label: 'Posted', render: p => (p.created_at ? timeAgo(p.created_at) : '—') },
 ]
 
-// Only an http(s) URL from the database is ever made a link.
-const isHttpUrl = (url) => /^https?:\/\//i.test(url)
+// Only an http(s) URL from the database is ever made a link or a media source.
+const isHttpUrl = (url) => typeof url === 'string' && /^https?:\/\//i.test(url)
+const UNSUPPORTED_MEDIA = <p className="adm-note">Unsupported media address</p>
 const imagesOf = (p) => {
   const list = Array.isArray(p.image_urls) ? p.image_urls.filter(u => typeof u === 'string' && u) : []
   if (list.length) return list
@@ -136,15 +134,14 @@ function PostBody({ p, shownId }) {
         <section aria-label="Images" style={sectionStyle}>
           <h3 style={headingStyle}>Images ({images.length})</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
-            {images.map((url, i) => {
-              const img = (
-                <img src={url} alt={`Post image ${i + 1} of ${images.length}`} loading="lazy"
-                  style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block', borderRadius: 8, border: '1px solid var(--adm-line)' }} />
+            {images.map((url, i) => (isHttpUrl(url)
+              ? (
+                <a key={i} href={url} target="_blank" rel="noreferrer" style={{ display: 'block' }}>
+                  <img src={url} alt={`Post image ${i + 1} of ${images.length}`} loading="lazy"
+                    style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block', borderRadius: 8, border: '1px solid var(--adm-line)' }} />
+                </a>
               )
-              return isHttpUrl(url)
-                ? <a key={i} href={url} target="_blank" rel="noreferrer" style={{ display: 'block' }}>{img}</a>
-                : <span key={i} style={{ display: 'block' }}>{img}</span>
-            })}
+              : <span key={i} style={{ display: 'block' }}>{UNSUPPORTED_MEDIA}</span>))}
           </div>
         </section>
       )}
@@ -152,14 +149,18 @@ function PostBody({ p, shownId }) {
       {p.video_url && (
         <section aria-label="Video" style={sectionStyle}>
           <h3 style={headingStyle}>Video</h3>
-          <video src={p.video_url} controls preload="metadata" aria-label="Post video" style={{ width: '100%', maxHeight: 400, borderRadius: 8, background: 'var(--color-gray-900, #111)' }} />
+          {isHttpUrl(p.video_url)
+            ? <video src={p.video_url} controls preload="metadata" aria-label="Post video" style={{ width: '100%', maxHeight: 400, borderRadius: 8, background: 'var(--color-gray-900, #111)' }} />
+            : UNSUPPORTED_MEDIA}
         </section>
       )}
 
       {p.audio_url && (
         <section aria-label="Audio" style={sectionStyle}>
           <h3 style={headingStyle}>Audio</h3>
-          <audio src={p.audio_url} controls preload="metadata" aria-label="Post audio" style={{ width: '100%' }} />
+          {isHttpUrl(p.audio_url)
+            ? <audio src={p.audio_url} controls preload="metadata" aria-label="Post audio" style={{ width: '100%' }} />
+            : UNSUPPORTED_MEDIA}
         </section>
       )}
     </>
@@ -200,7 +201,9 @@ export default function PostsSection() {
       title: typeLabel(p),
       body: <PostBody key={p.id} p={p} shownId={shownId} />,
       footer: (
-        <Button variant="danger" fullWidth loading={busyId === p.id} loadingText="Deleting…" leftIcon={<Trash2 size={14} aria-hidden="true" />}
+        // One delete at a time: disabled while any post is being deleted; the
+        // one running reads "Deleting…".
+        <Button variant="danger" fullWidth disabled={busyId != null} loading={busyId === p.id} loadingText="Deleting…" leftIcon={<Trash2 size={14} aria-hidden="true" />}
           onClick={() => askConfirm({
             title: 'Delete this post?',
             consequence: DELETE_CONSEQUENCE,

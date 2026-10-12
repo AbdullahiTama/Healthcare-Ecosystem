@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { theme } from '../../../styles/theme'
 
 // Each pill reports whether it is the active one (aria-pressed). With `label`
@@ -37,7 +38,12 @@ export function FilterPills({ options, value, onChange, label: groupLabel }) {
   )
 }
 
+// Each label is linked to its input (useId keeps two ranges on one screen apart),
+// so the date inputs have accessible names.
 export function DateRange({ from, to, onFrom, onTo }) {
+  const id = useId()
+  const fromId = `${id}-from`
+  const toId = `${id}-to`
   const inputStyle = {
     flex: 1,
     minHeight: 40,
@@ -53,12 +59,12 @@ export function DateRange({ from, to, onFrom, onTo }) {
   return (
     <div style={{ display: 'flex', gap: 8 }}>
       <div style={{ flex: 1 }}>
-        <label style={{ fontSize: 11, fontWeight: 700, color: theme.gray600, display: 'block', marginBottom: 4 }}>From</label>
-        <input type="date" value={from || ''} onChange={(e) => onFrom(e.target.value)} style={inputStyle} />
+        <label style={{ fontSize: 11, fontWeight: 700, color: theme.gray600, display: 'block', marginBottom: 4 }} htmlFor={fromId}>From</label>
+        <input id={fromId} type="date" value={from || ''} onChange={(e) => onFrom(e.target.value)} style={inputStyle} />
       </div>
       <div style={{ flex: 1 }}>
-        <label style={{ fontSize: 11, fontWeight: 700, color: theme.gray600, display: 'block', marginBottom: 4 }}>To</label>
-        <input type="date" value={to || ''} onChange={(e) => onTo(e.target.value)} style={inputStyle} />
+        <label style={{ fontSize: 11, fontWeight: 700, color: theme.gray600, display: 'block', marginBottom: 4 }} htmlFor={toId}>To</label>
+        <input id={toId} type="date" value={to || ''} onChange={(e) => onTo(e.target.value)} style={inputStyle} />
       </div>
     </div>
   )

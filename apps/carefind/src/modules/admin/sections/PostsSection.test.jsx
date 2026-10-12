@@ -59,7 +59,11 @@ function makeWrapper() {
 let wrapper
 const renderSection = () => render(<PostsSection />, { wrapper })
 const searchBox = () => screen.getByRole('textbox', { name: 'Search post text…' })
-const dateInputs = () => screen.getByRole('group', { name: 'Posted between' }).querySelectorAll('input[type="date"]')
+// The From and To inputs are reached by their labels, inside the named group.
+const dateInputs = () => {
+  const group = within(screen.getByRole('group', { name: 'Posted between' }))
+  return [group.getByLabelText('From'), group.getByLabelText('To')]
+}
 const openPost = (label) => {
   fireEvent.click(screen.getByRole('button', { name: `Review ${label}` }))
   return screen.getByRole('dialog')
@@ -222,15 +226,15 @@ describe('PostsSection', () => {
     expect(screen.getByRole('button', { name: 'Export this page (CSV)' })).toBeDisabled()
   })
 
-  it('the Posted column sorts, and a post without a date sorts deterministically', () => {
+  it('the Posted column is not sortable, because only the 25 rows on screen would sort', () => {
     renderSection()
+    const before = screen.getAllByRole('row').map(r => r.textContent)
     const posted = screen.getByRole('columnheader', { name: 'Posted' })
+    expect(posted).toHaveAttribute('aria-sort', 'none')
     fireEvent.click(posted)
-    const order = () => screen.getAllByRole('row').slice(1).map(r => within(r).getByRole('button', { name: /^Review / }).getAttribute('aria-label'))
-    const first = order()
-    expect(posted).not.toHaveAttribute('aria-sort', 'none')
     fireEvent.click(posted)
-    expect(order()).toEqual([...first].reverse())
+    expect(posted).toHaveAttribute('aria-sort', 'none')
+    expect(screen.getAllByRole('row').map(r => r.textContent)).toEqual(before)
   })
 
   it('the drawer shows the type, author, full content, images, video, audio and badges; the author loads only once opened', async () => {
@@ -261,7 +265,7 @@ describe('PostsSection', () => {
     expect(within(dialog).getByText('Subscribers only')).toBeInTheDocument()
   })
 
-  it('a post without user_id says "No author recorded", asks nothing, and never links a javascript: image', () => {
+  it('a post without user_id says "No author recorded", asks nothing, and never renders a javascript: image', () => {
     renderSection()
     const dialog = openPost(`${'a'.repeat(100)}…`)
     expect(within(dialog).getByText('No author recorded')).toBeInTheDocument()
@@ -271,10 +275,45 @@ describe('PostsSection', () => {
     expect(dialog.querySelector('video')).toBeNull()
     expect(dialog.querySelector('audio')).toBeNull()
     // The legacy image_url is used when image_urls is empty, but only an
-    // http(s) URL is ever a link.
-    expect(within(dialog).getByRole('img', { name: /^Post image/ })).toBeInTheDocument()
+    // http(s) URL is ever an image source or a link.
+    expect(within(dialog).queryByRole('img', { name: /^Post image/ })).not.toBeInTheDocument()
+    expect(dialog.querySelector('img')).toBeNull()
     expect(dialog.querySelector('a[href^="javascript"]')).toBeNull()
-    expect(within(dialog).getByRole('img', { name: /^Post image/ }).closest('a')).toBeNull()
+    expect(within(dialog).getByText('Unsupported media address')).toBeInTheDocument()
+  })
+
+  it('a non-http(s) video or audio address shows a note, never a media element', () => {
+    dir.result = ok({ data: { rows: [{ ...posts[0], image_urls: ['data:image/png;base64,AAAA'], image_url: null, video_url: 'javascript:alert(1)', audio_url: 'blob:abc' }], hasNext: false, total: 1 } })
+    renderSection()
+    const dialog = openFirst()
+    expect(dialog.querySelector('img')).toBeNull()
+    expect(dialog.querySelector('video')).toBeNull()
+    expect(dialog.querySelector('audio')).toBeNull()
+    expect(within(within(dialog).getByRole('region', { name: 'Images' })).getByText('Unsupported media address')).toBeInTheDocument()
+    expect(within(within(dialog).getByRole('region', { name: 'Video' })).getByText('Unsupported media address')).toBeInTheDocument()
+    expect(within(within(dialog).getByRole('region', { name: 'Audio' })).getByText('Unsupported media address')).toBeInTheDocument()
+  })
+
+  it('a non-string post_type renders without crashing and falls back to "Post"', () => {
+    dir.result = ok({ data: { rows: [{ ...posts[2], id: 'p9', post_type: 7 }], hasNext: false, total: 1 } })
+    renderSection()
+    // The Type cell is '—' and the drawer title falls back to 'Post'.
+    expect(within(screen.getAllByRole('row')[1]).getAllByText('—').length).toBeGreaterThan(0)
+    const dialog = openPost('Post')
+    expect(dialog.querySelector('.adm-drawer-title')).toHaveTextContent(/^Post$/)
+  })
+
+  it('Delete post is disabled while any delete is running, and names the running one "Deleting…"', () => {
+    actions.busyId = 'p2'
+    const { unmount } = renderSection()
+    let dialog = openFirst()
+    expect(within(dialog).getByRole('button', { name: 'Delete post' })).toBeDisabled()
+    unmount()
+
+    actions.busyId = 'p1'
+    renderSection()
+    dialog = openFirst()
+    expect(within(dialog).getByRole('button', { name: 'Deleting…' })).toBeDisabled()
   })
 
   it('a failed author request says "Couldn\'t load the author" and never "Unknown user"', async () => {
@@ -336,6 +375,7 @@ describe('PostsSection', () => {
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
     const other = openPost('Post')
     await act(async () => { resolve({ ok: false, error: 'Not allowed' }); await pending })
+    expect(actions.deletePost).toHaveBeenCalledWith('p1')
     expect(admin.showToast).toHaveBeenCalledWith("Couldn't delete the post: Not allowed", { type: 'error' })
     expect(screen.getByRole('dialog')).toBe(other)
     expect(within(other).queryByRole('alert')).not.toBeInTheDocument()
@@ -352,6 +392,7 @@ describe('PostsSection', () => {
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }))
     openPost('Post')
     await act(async () => { resolve({ ok: true }); await pending })
+    expect(actions.deletePost).toHaveBeenCalledWith('p1')
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(admin.showToast).not.toHaveBeenCalled()
   })
