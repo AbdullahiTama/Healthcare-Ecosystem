@@ -14,6 +14,10 @@ import RevenueSection from './sections/RevenueSection.jsx'
 import OrdersSection from './sections/OrdersSection.jsx'
 import WithdrawalsSection from './sections/WithdrawalsSection.jsx'
 import MoneyChecksSection from './sections/MoneyChecksSection.jsx'
+import PostsSection from './sections/PostsSection.jsx'
+import StoriesSection from './sections/StoriesSection.jsx'
+import NewsSection from './sections/NewsSection.jsx'
+import PromotionsSection from './sections/PromotionsSection.jsx'
 import { ModerationProvider } from './stores/moderationStore'
 import LegacyTabHost from './legacy/LegacyTabHost.jsx'
 import { isAllowed } from './navigation'
@@ -41,6 +45,10 @@ function ActiveSection({ tab, setTab }) {
   if (tab === 'orders') return <OrdersSection />
   if (tab === 'withdrawals') return <WithdrawalsSection />
   if (tab === 'reconciliation') return <MoneyChecksSection />
+  if (tab === 'posts') return <PostsSection />
+  if (tab === 'stories') return <StoriesSection />
+  if (tab === 'news') return <NewsSection />
+  if (tab === 'promotions') return <PromotionsSection />
   return <LegacyTabHost tab={tab} setTab={setTab} />
 }
 
