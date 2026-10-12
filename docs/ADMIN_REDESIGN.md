@@ -313,7 +313,8 @@ Backend, SQL and financial calculations are out of scope for this work.
 63. `exportCSV` (`ui/adminHelpers.js`) writes cell values as given (JSON-quoted) without
     neutralising spreadsheet formulas, so a user-supplied value beginning with `=`, `+`, `-` or
     `@` (a post's text, a name) can run as a formula when the file is opened in Excel or Sheets
-    (CSV injection). It applies to every "Export this page (CSV)" in the console. Documented, not
+    (CSV injection). It applies to every CSV export (6 callers: Users, Businesses list and
+    per-business data, Posts, Revenue, Drugs). Documented, not
     changed; the fix is to prefix such cells with `'` in the one shared helper.
 64. Each retry of a failed story or promotion create uploads a NEW file to `story-images` /
     `promo-images` under a new timestamped name, and a successful upload followed by a failed
@@ -336,9 +337,11 @@ Phase 4a follow-ups and final-review corrections (fix commits 22e511b, 8359054, 
   pending, Delete always (8359054). The Reject confirmation says so.
 - News: the approve audit entry records the item's ORIGINAL headline, as legacy did, even when
   the admin edited it (`approveNews({ originalHeadline })`, 8359054).
-- News contact links are built safely: `mailto:` keeps `@` literal and encodes only `?`, `&`, `#`,
-  `%` and whitespace (so an address cannot add cc/subject/body headers); `tel:` is the value
-  stripped to `+` and digits, and no link is shown when nothing remains (8359054).
+- News contact links are built safely: the email is a `mailto:` link only for a single plain
+  address (no whitespace, exactly one `@`, no `,` or `;`), so `,`/`;` cannot add recipients;
+  anything else is shown as text. The link keeps `@` literal and encodes `?`, `&`, `#`, `%`, `,`,
+  `;` and whitespace, so an address cannot add cc/subject/body headers (8359054, 05159d4).
+  `tel:` is the value stripped to `+` and digits, and no link is shown when nothing remains.
 - Stories and Promotions toast a create or delete failure that arrives after the admin left the
   tab, instead of dropping it (77967e6).
 - `useAdminStories` and `useAdminPromotions` in `src/hooks/queries.js` now have no consumers (the
