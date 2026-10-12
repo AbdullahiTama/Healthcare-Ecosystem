@@ -229,29 +229,48 @@ Backend, SQL and financial calculations are out of scope for this work.
     (1b5759e, c94f7af).
 46. Revenue divides `naira_amount` by 100; Orders shows the same field undivided. One of them is
     wrong by 100x. Left as is on both and labelled ("Amount as stored"); needs the backend and
-    finance owner (c94f7af, d59cf35).
+    finance owner (c94f7af, d59cf35). Display only: Revenue's ₦ column shows "—" when
+    `naira_amount` is 0 or missing; the legacy tab rendered a stray "0" for 0.
 47. "Orders" lists wallet transactions (the same 50 rows), not shop orders, and sits under
-    Marketplace in navigation. Documented. Related: Orders' status badge uses `StatusBadge`, which
-    has no `success` entry, so such a row shows as a gray pill where legacy coloured it green.
-    Also, the shared `ReviewQueue` labels its tabs Pending and All, so for withdrawals "Pending"
-    means in progress (`reserved` or `processing`).
+    Marketplace in navigation. Documented.
 48. Withdrawals converts coins to naira with a fixed 200 per coin in the UI (`nairaFromCoins`).
     Now labelled "about ₦X at 200 per coin" (ddc5f42).
 49. `list_transactions` and `list_withdrawal_requests` are readable by any valid admin token
     (finding 1 applies to money data); hiding the tabs is cosmetic. Money data is read through the
-    same endpoints as before. Documented.
+    same endpoints as before. `reject_withdrawal` itself also only checks `verifyToken`
+    (`admin-auth.js` ~345-347), so per finding 1 roles are not enforced on the money action
+    either: any admin role can reject a withdrawal. Documented.
 50. The legacy withdrawal reject toasted any server error and did not refresh, although a 409
     "confirmed paid" had already settled the request. **Fixed**: the new action refreshes the list
     on every outcome (010eb04; a late result can no longer land on a different open drawer, 1a70b26).
-    Neither version writes an audit row or action history for the reject (documented, unchanged).
+    A refusal that arrives after its drawer was closed or replaced is toasted ("Couldn't reject the
+    withdrawal: …") instead of being dropped, and a refresh or toast that throws after the server
+    committed no longer reports the reject as failed (this wave's fix commits; see finding 55 on
+    audit).
 51. Account numbers were shown in full in the list. **Fixed**: the Withdrawals table shows the last
-    four digits and the drawer the full number (ddc5f42).
+    four digits and the drawer the full number (ddc5f42). The drawer shows only the fields the
+    legacy screen showed (person, amount, bank, account number and name, status, requested); the
+    Paystack reference is not shown.
 52. `reject_withdrawal` can record a request as PAID (Paystack says the transfer succeeded) while
-    returning HTTP 409, refund it, or block it (`decideAdminReject`; `admin-auth.js` ~344-376). The
+    returning HTTP 409, refund it, or block it (`decideAdminReject`; `admin-auth.js` ~344-383). The
     legacy "Reject and refund" label promised a refund that happens in only one of the three
     outcomes. **Fixed**: the button is now "Reject withdrawal" and the confirmation states the
     outcomes (5439a32). Follow-up: the server should return a distinguishable code for the
     settled-as-paid case so the drawer can show it as information, not an error.
+53. Orders' status badge uses `StatusBadge`, which has no `success` entry, so a `success` row shows
+    as a gray pill where legacy coloured it green. Display only; the fix belongs in the design
+    system. Documented.
+54. The shared `ReviewQueue` labels its tabs Pending and All, so for withdrawals "Pending" means in
+    progress (`reserved` or `processing`). The empty message says "Nothing in progress". Documented.
+55. No audit row or action history is written for the withdrawal reject, the most consequential
+    admin money action, before or after this phase (`useWithdrawalActions` matches the legacy
+    handler). Owner follow-up recommended: the server should write the audit row in
+    `reject_withdrawal`, so it cannot be skipped by a client. Also recorded:
+    - A failed list refresh after a reject hides the drawer (and the message in it) until the list
+      recovers. This is shared `ReviewQueue` behaviour (the selection is kept and the drawer comes
+      back with the row). A refusal whose drawer is already hidden this way is toasted.
+    - The Money checks Retry button gives no feedback while retrying: react-query keeps `isError`
+      true during the refetch, so the error and Retry stay on screen until it settles.
 
 ## Verification state
 
