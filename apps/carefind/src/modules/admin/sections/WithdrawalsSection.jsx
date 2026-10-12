@@ -28,13 +28,13 @@ const amountText = (w) => `${w.amount} coins · about ₦${nairaFromCoins(w.amou
 
 const requestedDate = (w) => (w.created_at ? new Date(w.created_at).toLocaleString() : '—')
 
-const columns = [
+export const columns = [
   { key: 'person', label: 'Person', render: person },
   { key: 'amount', label: 'Amount', render: amountText },
   // Masked here: the full number is only in the drawer.
   { key: 'bank', label: 'Bank', render: w => `${w.bank_name || '—'} · ${maskAccount(w.account_number)}` },
   { key: 'status', label: 'Status', render: w => <StatusBadge status={w.status} /> },
-  { key: 'created_at', label: 'Requested', sortable: true, sortValue: w => new Date(w.created_at).getTime(), render: w => timeAgo(w.created_at) },
+  { key: 'created_at', label: 'Requested', sortable: true, sortValue: w => (w.created_at ? new Date(w.created_at).getTime() : 0), render: w => timeAgo(w.created_at) },
 ]
 
 function WithdrawalBody({ w }) {
@@ -72,10 +72,10 @@ export default function WithdrawalsSection() {
           onClick={() => askConfirm({
             title: 'Reject this withdrawal?',
             consequence: REJECT_CONSEQUENCE,
-            confirmLabel: 'Reject and refund',
+            confirmLabel: 'Reject withdrawal',
             action: async () => finish(await rejectWithdrawal(w.id)),
           })}>
-          Reject and refund
+          Reject withdrawal
         </Button>
       ) : null,
     }

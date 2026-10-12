@@ -10,7 +10,7 @@ vi.mock('../hooks/useFinanceData', () => ({
 vi.mock('../hooks/useWithdrawalActions', () => ({ useWithdrawalActions: () => actions }))
 vi.mock('../provider/AdminProvider.jsx', () => ({ useAdmin: () => admin }))
 
-import WithdrawalsSection, { REJECT_CONSEQUENCE } from './WithdrawalsSection.jsx'
+import WithdrawalsSection, { REJECT_CONSEQUENCE, columns } from './WithdrawalsSection.jsx'
 
 const EXPECTED_CONSEQUENCE =
   'Paystack is checked first. If the transfer failed or was never sent, the coins are refunded to the user. ' +
@@ -82,30 +82,30 @@ describe('WithdrawalsSection', () => {
     expect(dialog().queryByText('Paystack reference')).not.toBeInTheDocument()
   })
 
-  it('offers Reject and refund only for reserved or processing withdrawals', () => {
+  it('offers Reject withdrawal only for reserved or processing withdrawals', () => {
     render(<WithdrawalsSection />)
     openReview('Ada Obi')
-    expect(dialog().getByRole('button', { name: 'Reject and refund' })).toBeInTheDocument()
+    expect(dialog().getByRole('button', { name: 'Reject withdrawal' })).toBeInTheDocument()
     fireEvent.click(dialog().getByRole('button', { name: 'Close' }))
     openReview('Bayo')
-    expect(dialog().getByRole('button', { name: 'Reject and refund' })).toBeInTheDocument()
+    expect(dialog().getByRole('button', { name: 'Reject withdrawal' })).toBeInTheDocument()
     fireEvent.click(dialog().getByRole('button', { name: 'Close' }))
     fireEvent.click(screen.getByRole('tab', { name: /All/ }))
     openReview('Chika Eze')
-    expect(dialog().queryByRole('button', { name: 'Reject and refund' })).not.toBeInTheDocument()
+    expect(dialog().queryByRole('button', { name: 'Reject withdrawal' })).not.toBeInTheDocument()
   })
 
   it('asks for confirmation with the true consequence and rejects only when it is confirmed', async () => {
     render(<WithdrawalsSection />)
     openReview('Ada Obi')
-    fireEvent.click(dialog().getByRole('button', { name: 'Reject and refund' }))
+    fireEvent.click(dialog().getByRole('button', { name: 'Reject withdrawal' }))
     expect(REJECT_CONSEQUENCE).toBe(EXPECTED_CONSEQUENCE)
     expect(admin.askConfirm).toHaveBeenCalledTimes(1)
     const call = admin.askConfirm.mock.calls[0][0]
     expect(call).toEqual(expect.objectContaining({
       title: 'Reject this withdrawal?',
       consequence: EXPECTED_CONSEQUENCE,
-      confirmLabel: 'Reject and refund',
+      confirmLabel: 'Reject withdrawal',
     }))
     expect(actions.rejectWithdrawal).not.toHaveBeenCalled()
     await act(async () => { await call.action() })
@@ -117,7 +117,7 @@ describe('WithdrawalsSection', () => {
     actions.rejectWithdrawal.mockResolvedValue({ ok: false, error: 'Paystack says the transfer is still in progress' })
     render(<WithdrawalsSection />)
     openReview('Ada Obi')
-    fireEvent.click(dialog().getByRole('button', { name: 'Reject and refund' }))
+    fireEvent.click(dialog().getByRole('button', { name: 'Reject withdrawal' }))
     await act(async () => { await admin.askConfirm.mock.calls[0][0].action() })
     expect(screen.getByRole('alert')).toHaveTextContent('Paystack says the transfer is still in progress')
     expect(screen.getByRole('dialog')).toBeInTheDocument()
@@ -127,7 +127,7 @@ describe('WithdrawalsSection', () => {
     actions.rejectWithdrawal.mockResolvedValue({ ok: false, error: 'The transfer already succeeded at Paystack, so it was marked completed instead of refunded.' })
     const { rerender } = render(<WithdrawalsSection />)
     openReview('Ada Obi')
-    fireEvent.click(dialog().getByRole('button', { name: 'Reject and refund' }))
+    fireEvent.click(dialog().getByRole('button', { name: 'Reject withdrawal' }))
     await act(async () => { await admin.askConfirm.mock.calls[0][0].action() })
 
     const refreshed = rows().map(r => (r.id === 'w1' ? { ...r, status: 'completed' } : r))
@@ -135,14 +135,14 @@ describe('WithdrawalsSection', () => {
     rerender(<WithdrawalsSection />)
 
     expect(screen.getByRole('dialog')).toBeInTheDocument()
-    expect(dialog().queryByRole('button', { name: 'Reject and refund' })).not.toBeInTheDocument()
+    expect(dialog().queryByRole('button', { name: 'Reject withdrawal' })).not.toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('marked completed instead of refunded')
   })
 
   it('closes the drawer when the reject succeeds', async () => {
     render(<WithdrawalsSection />)
     openReview('Ada Obi')
-    fireEvent.click(dialog().getByRole('button', { name: 'Reject and refund' }))
+    fireEvent.click(dialog().getByRole('button', { name: 'Reject withdrawal' }))
     await act(async () => { await admin.askConfirm.mock.calls[0][0].action() })
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
@@ -161,6 +161,13 @@ describe('WithdrawalsSection', () => {
     render(<WithdrawalsSection />)
     expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument()
     expect(screen.queryByText('Nothing in progress')).not.toBeInTheDocument()
+  })
+
+  it('sorts a request with no created_at deterministically, as time 0', () => {
+    const requested = columns.find(c => c.key === 'created_at')
+    expect(requested.sortValue(wd({ created_at: null }))).toBe(0)
+    expect(requested.sortValue(wd({ created_at: undefined }))).toBe(0)
+    expect(requested.sortValue(wd({ created_at: '2026-10-01T00:00:00Z' }))).toBe(Date.parse('2026-10-01T00:00:00Z'))
   })
 
   it('says nothing is in progress, and the All tab says there are no requests yet, when the list is empty', () => {
