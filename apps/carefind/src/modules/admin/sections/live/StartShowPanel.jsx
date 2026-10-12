@@ -36,7 +36,10 @@ export default function StartShowPanel({ liveCount = 0 }) {
   const [scheduledAt, setScheduledAt] = useState('')
   const [trailerFile, setTrailerFile] = useState(null)
   const [fileKey, setFileKey] = useState(0) // remounts the file input to clear it
-  const [error, setError] = useState('')
+  // One error per action, each shown beside its own button; a new attempt of
+  // either clears both.
+  const [goLiveError, setGoLiveError] = useState('')
+  const [scheduleError, setScheduleError] = useState('')
 
   const results = useGuestSearch(search)
   const { data, isLoading, isError, isFetching, refetch } = results || {}
@@ -55,12 +58,12 @@ export default function StartShowPanel({ liveCount = 0 }) {
 
   const clearFile = () => { setTrailerFile(null); setFileKey(k => k + 1) }
   const clearForm = () => {
-    setTitle(''); setSearch(''); setGuests([]); setScheduledAt(''); clearFile(); setError('')
+    setTitle(''); setSearch(''); setGuests([]); setScheduledAt(''); clearFile(); setGoLiveError(''); setScheduleError('')
   }
 
   // Runs one action. Success clears the form; failure keeps it all. A result
   // that arrives after the panel has gone is toasted, not dropped.
-  const finish = (message, res) => {
+  const finish = (message, res, setError) => {
     if (!mounted.current) {
       if (!res.ok) showToast(`${message}: ${res.error}`, { type: 'error' })
       return
@@ -76,8 +79,8 @@ export default function StartShowPanel({ liveCount = 0 }) {
       consequence: `This starts a live show that every CareFind user will see. It stays live until you end it.${liveCount > 0 ? ` ${liveCount} other show${liveCount === 1 ? ' is' : 's are'} already live.` : ''}`,
       confirmLabel: 'Go live',
       action: async () => {
-        if (mounted.current) setError('')
-        finish("Couldn't start the show", await startShow({ title, guestIds: selectedIds }))
+        if (mounted.current) { setGoLiveError(''); setScheduleError('') }
+        finish("Couldn't start the show", await startShow({ title, guestIds: selectedIds }), setGoLiveError)
       },
     })
   }
@@ -85,8 +88,8 @@ export default function StartShowPanel({ liveCount = 0 }) {
   const submitSchedule = async (e) => {
     e.preventDefault()
     if (!hasTitle || !scheduledAt || busy) return
-    setError('')
-    finish("Couldn't schedule the show", await scheduleShow({ title, scheduledAt, trailerFile, guestIds: selectedIds }))
+    setGoLiveError(''); setScheduleError('')
+    finish("Couldn't schedule the show", await scheduleShow({ title, scheduledAt, trailerFile, guestIds: selectedIds }), setScheduleError)
   }
 
   const retry = () => refetch?.()
@@ -120,7 +123,7 @@ export default function StartShowPanel({ liveCount = 0 }) {
               <li key={u.id} className="adm-live-guest">
                 <span className="adm-live-avatar" aria-hidden="true">{initial(u)}</span>
                 <label htmlFor={boxId} className="adm-live-guest-name">{name}</label>
-                <input id={boxId} type="checkbox" className="adm-live-guest-check" checked={selectedIds.includes(u.id)}
+                <input id={boxId} type="checkbox" className="adm-live-guest-check" checked={selectedIds.includes(u.id)} disabled={busy}
                   onChange={() => toggleGuest(u)} aria-label={name} />
               </li>
             )
@@ -144,7 +147,7 @@ export default function StartShowPanel({ liveCount = 0 }) {
       <div className="adm-live-guests">
         <h4 className="adm-live-subhead">Invite guests to co-host</h4>
         <Input id={`${ids}-search`} aria-label="Search users by name…" value={search} onChange={setSearch}
-          placeholder="Search users by name…" />
+          placeholder="Search users by name…" disabled={busy} />
         {resultsArea}
         <div>
           <h4 className="adm-live-subhead">Selected guests ({guests.length})</h4>
@@ -164,14 +167,15 @@ export default function StartShowPanel({ liveCount = 0 }) {
         </div>
       </div>
 
-      {error && <p role="alert" className="adm-live-alert">{error}</p>}
+      <div role="group" aria-label="Go live now" className="adm-live-composer">
+        {goLiveError && <p role="alert" className="adm-live-alert">{goLiveError}</p>}
+        <Button variant="primary" fullWidth disabled={busy || !hasTitle} loading={starting} loadingText="Starting…"
+          leftIcon={<Radio size={16} aria-hidden="true" />} onClick={confirmGoLive}>
+          Go live now
+        </Button>
+      </div>
 
-      <Button variant="primary" fullWidth disabled={busy || !hasTitle} loading={starting} loadingText="Starting…"
-        leftIcon={<Radio size={16} aria-hidden="true" />} onClick={confirmGoLive}>
-        Go live now
-      </Button>
-
-      <form onSubmit={submitSchedule} className="adm-live-composer adm-live-schedule">
+      <form onSubmit={submitSchedule} aria-label="Schedule a show" className="adm-live-composer adm-live-schedule">
         <h4 className="adm-live-subhead">Or schedule for later</h4>
         <p className="adm-note">Set a time and an optional trailer. A countdown shows in the stories row.</p>
         <Input id={`${ids}-when`} type="datetime-local" label="Date and time" value={scheduledAt} onChange={setScheduledAt} disabled={busy} />
@@ -188,6 +192,7 @@ export default function StartShowPanel({ liveCount = 0 }) {
             </div>
           )}
         </div>
+        {scheduleError && <p role="alert" className="adm-live-alert">{scheduleError}</p>}
         <Button type="submit" variant="secondary" fullWidth disabled={busy || !hasTitle || !scheduledAt}
           loading={scheduling} loadingText="Scheduling…" leftIcon={<Calendar size={14} aria-hidden="true" />}>
           Schedule show

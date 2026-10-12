@@ -102,7 +102,7 @@ describe('StartShowPanel go live', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Ada Obi' }))
     await click(goLive())
     await act(async () => { await lastAsk().action() })
-    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't start the show: server down")
+    expect(within(screen.getByRole('group', { name: 'Go live now' })).getByRole('alert')).toHaveTextContent("Couldn't start the show: server down")
     expect(titleBox()).toHaveValue('Malaria Live')
     expect(dateBox()).toHaveValue('2026-11-03T18:30')
     expect(screen.getByText('Selected guests (1)')).toBeInTheDocument()
@@ -145,7 +145,7 @@ describe('StartShowPanel schedule', () => {
     fireEvent.change(trailerBox(), { target: { files: [video()] } })
     fireEvent.click(screen.getByRole('checkbox', { name: 'Ada Obi' }))
     await click(schedule())
-    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't schedule the show: Couldn't upload the trailer: too big")
+    expect(within(screen.getByRole('form', { name: 'Schedule a show' })).getByRole('alert')).toHaveTextContent("Couldn't schedule the show: Couldn't upload the trailer: too big")
     expect(titleBox()).toHaveValue('Heart Night')
     expect(dateBox()).toHaveValue('2026-11-03T18:30')
     expect(screen.getByText('trailer.mp4')).toBeInTheDocument()
@@ -211,5 +211,56 @@ describe('StartShowPanel guests', () => {
     search.result = { data: undefined, isLoading: true, isError: false, isFetching: true, refetch: vi.fn() }
     render(<StartShowPanel liveCount={0} />)
     expect(screen.getByRole('status')).toHaveTextContent('Searching users…')
+  })
+})
+
+describe('StartShowPanel polish', () => {
+  it('disables the guest search, checkboxes and remove buttons while busy', () => {
+    const { rerender } = render(<StartShowPanel liveCount={0} />)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ada Obi' }))
+    actions.busyKeys = ['scheduleShow:']
+    rerender(<StartShowPanel liveCount={0} />)
+    expect(screen.getByLabelText('Search users by name…')).toBeDisabled()
+    screen.getAllByRole('checkbox').forEach(c => expect(c).toBeDisabled())
+    expect(screen.getByRole('button', { name: 'Remove Ada Obi' })).toBeDisabled()
+  })
+
+  it('shows each failure in its own region and clears both on a new attempt', async () => {
+    actions.startShow.mockResolvedValueOnce({ ok: false, error: 'live down' })
+    actions.scheduleShow.mockResolvedValueOnce({ ok: false, error: 'sched down' })
+    render(<StartShowPanel liveCount={0} />)
+    type(titleBox(), 'Show')
+    type(dateBox(), '2026-11-03T18:30')
+    const liveRegion = screen.getByRole('group', { name: 'Go live now' })
+    const formRegion = screen.getByRole('form', { name: 'Schedule a show' })
+    await click(goLive())
+    await act(async () => { await lastAsk().action() })
+    expect(within(liveRegion).getByRole('alert')).toHaveTextContent('live down')
+    expect(within(formRegion).queryByRole('alert')).toBeNull()
+    await click(schedule())
+    expect(within(formRegion).getByRole('alert')).toHaveTextContent('sched down')
+    expect(within(liveRegion).queryByRole('alert')).toBeNull()
+  })
+
+  it('toasts a failure that resolves after unmount', async () => {
+    let finishStart
+    actions.startShow.mockReturnValue(new Promise(r => { finishStart = r }))
+    const { unmount } = render(<StartShowPanel liveCount={0} />)
+    type(titleBox(), 'Show')
+    await click(goLive())
+    const pending = lastAsk().action()
+    unmount()
+    await act(async () => { finishStart({ ok: false, error: 'late' }); await pending })
+    expect(admin.showToast).toHaveBeenCalledWith("Couldn't start the show: late", { type: 'error' })
+  })
+
+  it('keeps earlier results and offers Retry when a refresh fails', () => {
+    const refetch = vi.fn()
+    search.result = { data: [ada], isLoading: false, isError: true, isFetching: false, refetch }
+    render(<StartShowPanel liveCount={0} />)
+    expect(screen.getByRole('checkbox', { name: 'Ada Obi' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't refresh the search")
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(refetch).toHaveBeenCalled()
   })
 })

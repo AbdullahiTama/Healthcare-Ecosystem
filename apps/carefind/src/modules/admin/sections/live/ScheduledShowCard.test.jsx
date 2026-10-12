@@ -101,4 +101,15 @@ describe('ScheduledShowCard', () => {
     render(<ScheduledShowCard show={show} />)
     expect(startBtn()).toBeEnabled()
   })
+
+  it('toasts a failure that resolves after unmount', async () => {
+    let finish
+    actions.startScheduled.mockReturnValue(new Promise(r => { finish = r }))
+    const { unmount } = render(<ScheduledShowCard show={show} />)
+    await click(startBtn())
+    const pending = lastAsk().action()
+    unmount()
+    await act(async () => { finish({ ok: false, error: 'late' }); await pending })
+    expect(admin.showToast).toHaveBeenCalledWith("Couldn't start the show: late", { type: 'error' })
+  })
 })
