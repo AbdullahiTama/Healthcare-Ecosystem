@@ -147,6 +147,36 @@ describe('WithdrawalsSection', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
+  // A reject can take seconds (Paystack is asked). If the admin moves to another
+  // withdrawal meanwhile, w1's late result must not land on w2's drawer.
+  const startRejectThenOpenOther = async () => {
+    let resolve
+    actions.rejectWithdrawal.mockImplementation(() => new Promise(r => { resolve = r }))
+    render(<WithdrawalsSection />)
+    openReview('Ada Obi')
+    fireEvent.click(dialog().getByRole('button', { name: 'Reject withdrawal' }))
+    let pending
+    act(() => { pending = admin.askConfirm.mock.calls[0][0].action() })
+    expect(actions.rejectWithdrawal).toHaveBeenCalledWith('w1')
+    fireEvent.click(dialog().getByRole('button', { name: 'Close' }))
+    openReview('Bayo')
+    expect(screen.getByRole('dialog')).toHaveTextContent('Bayo')
+    return async (result) => { await act(async () => { resolve(result); await pending }) }
+  }
+
+  it('does not show a late refusal for w1 in the drawer of another withdrawal', async () => {
+    const finishW1 = await startRejectThenOpenOther()
+    await finishW1({ ok: false, error: 'still in progress' })
+    expect(screen.getByRole('dialog')).toHaveTextContent('Bayo')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('does not close the drawer of another withdrawal when w1 succeeds late', async () => {
+    const finishW1 = await startRejectThenOpenOther()
+    await finishW1({ ok: true })
+    expect(screen.getByRole('dialog')).toHaveTextContent('Bayo')
+  })
+
   it('shows Retry, not an empty queue, when the list failed', () => {
     setList({ status: 'error' })
     render(<WithdrawalsSection />)

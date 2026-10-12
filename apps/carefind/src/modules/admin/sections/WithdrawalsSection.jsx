@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { XCircle } from 'lucide-react'
 import { Button, StatusBadge } from '@care-ecosystem/design-system/components/ui'
 import ReviewQueue from '../ui/ReviewQueue.jsx'
@@ -59,12 +60,22 @@ export default function WithdrawalsSection() {
   const { data, isLoading, refetch } = useFinanceData()
   const { busy, rejectWithdrawal } = useWithdrawalActions()
   const { askConfirm } = useAdmin()
+  // The id of the row the drawer is rendering, so a late result can tell
+  // whether its drawer is still the one on screen.
+  const shownId = useRef(null)
 
   // A settled query with no data is a failure, never an endless skeleton.
   const source = isLoading ? undefined : (data?.withdrawals ?? { status: 'error' })
 
   const renderDrawer = (w, { close, setError }) => {
-    const finish = (res) => { if (res.ok) close(); else setError(res.error) }
+    shownId.current = w.id
+    // close and setError act on whichever drawer is open now. A reject can take
+    // seconds, so a result for a row that is no longer shown is dropped here;
+    // the hook has already refreshed the list, so the outcome is not lost.
+    const finish = (res) => {
+      if (shownId.current !== w.id) return
+      if (res.ok) close(); else setError(res.error)
+    }
     return {
       body: <WithdrawalBody w={w} />,
       footer: isInFlight(w) ? (
