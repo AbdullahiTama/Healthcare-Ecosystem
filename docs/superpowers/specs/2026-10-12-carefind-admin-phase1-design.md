@@ -212,3 +212,20 @@ Nothing is pushed to `main`.
 
 Backend, SQL, financial calculations, routing changes, historical analytics,
 Phases 2 to 5, resolving the PR #3 overlap.
+
+## 10. Implementation notes (built 2026-10-12)
+
+Where the build differs from the text above:
+
+- Breakpoints follow the shared design system: off-canvas navigation under 768px, an
+  icon rail from 768 to 1023px, the full rail from 1024px (not "under 900px").
+  The rail width is the design system's 72px.
+- Needs attention rows open their section on click. No drawer is used in Phase 1, so
+  `DataTable` and the drawer variant of `Modal` are first used in Phase 2.
+- The navigation shows no numeric alerts badge; the topbar bell carries the count.
+- The queue builder takes an optional `capped` list and marks rows `atLeast`, because the
+  server caps several lists (finding 14 in `docs/ADMIN_REDESIGN.md`).
+- The queue shows no currency amounts. Withdrawal rows show the member's name only.
+- `AdminProvider` fails closed: with no server-verified admin it renders nothing.
+- The "Session expired" toast moved into `AdminShell` so it appears on any screen.
+- Findings 1 to 15 are listed in `docs/ADMIN_REDESIGN.md`, the living copy.
