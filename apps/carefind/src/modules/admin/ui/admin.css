@@ -98,3 +98,11 @@ button.adm-item:hover { background: var(--adm-line-soft); }
   .adm-cell dd { font-size: 22px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* Review drawer */
+.adm-drawer-title { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.adm-drawer-error { padding: 10px 12px; margin-bottom: 14px; border-radius: 8px; background: var(--adm-urgent-wash); color: var(--adm-urgent); font-size: 13px; }
+.adm-drawer-grid { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0 0 16px; font-size: 13px; }
+.adm-drawer-grid dt { color: var(--adm-ink-soft); font-weight: 600; }
+.adm-drawer-grid dd { margin: 0; overflow-wrap: anywhere; }
+.adm-drawer-text { padding: 12px; border-radius: 8px; background: var(--adm-line-soft); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
