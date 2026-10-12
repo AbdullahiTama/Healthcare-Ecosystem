@@ -1,28 +1,21 @@
 import { useEffect, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../../config/supabaseClient'
-import { usersRepository } from '../repositories/usersRepository'
 import { commerceRepository } from '../repositories/commerceRepository'
 import { liveRepository } from '../repositories/liveRepository'
 import { callAdminAuth } from '../adminApi'
 import { useAdmin } from '../provider/AdminProvider.jsx'
 import { ALL_TABS } from '../navigation'
-import { useAdminData, useAdminStories, useAdminNews, useAdminPromotions, useAdminSearchLogs, useAdminLiveShows, useAdminShopData, useAdminRoles } from '../../../hooks/queries'
+import { useAdminData, useAdminSearchLogs, useAdminLiveShows, useAdminShopData, useAdminRoles } from '../../../hooks/queries'
 import ShopTab from '../tabs/ShopTab.jsx'
-import PostsTab from '../tabs/PostsTab.jsx'
 import DrugsTab from '../tabs/DrugsTab.jsx'
 import TasksTab from '../tabs/TasksTab.jsx'
 import TeamsTab from '../tabs/TeamsTab.jsx'
-import StoriesTab from '../tabs/StoriesTab.jsx'
-import NewsTab from '../tabs/NewsTab.jsx'
-import PromotionsTab from '../tabs/PromotionsTab.jsx'
 import SearchesTab from '../tabs/SearchesTab.jsx'
 import GoLiveTab from '../tabs/GoLiveTab.jsx'
 import NotificationsTab from '../tabs/NotificationsTab.jsx'
 import EmailTemplatesTab from '../tabs/EmailTemplatesTab.jsx'
 import AuditLog from '../components/AuditLog.jsx'
 import ErrorsTab from '../tabs/ErrorsTab.jsx'
-import { ModerationProvider } from '../stores/moderationStore'
 
 // The screens that have not been redesigned yet. They still receive the state
 // and handlers they were written against; each redesign phase moves a tab's
@@ -30,19 +23,14 @@ import { ModerationProvider } from '../stores/moderationStore'
 // Session, toasts, confirm and sign-out come from AdminProvider.
 
 export default function LegacyTabHost({ tab, setTab }) {
-  const qc = useQueryClient()
-  const { adminUser, permissions: adminPermissions, showToast, askConfirm, invalidateAdmin, recordAction } = useAdmin()
+  const { adminUser, permissions: adminPermissions, showToast, askConfirm, invalidateAdmin } = useAdmin()
 
-  const [postSearch, setPostSearch] = useState('')
   const [drugSearch, setDrugSearch] = useState('')
   const [drugReviews, setDrugReviews] = useState([])
   const [drugName, setDrugName] = useState('')
   const [drugRatingFilter, setDrugRatingFilter] = useState('all')
   const [drugDateFrom, setDrugDateFrom] = useState('')
   const [drugDateTo, setDrugDateTo] = useState('')
-  const [postTypeFilter, setPostTypeFilter] = useState('all')
-  const [postDateFrom, setPostDateFrom] = useState('')
-  const [postDateTo, setPostDateTo] = useState('')
   const [taskTitle, setTaskTitle] = useState('')
   const [taskDesc, setTaskDesc] = useState('')
   const [taskComp, setTaskComp] = useState('')
@@ -58,18 +46,6 @@ export default function LegacyTabHost({ tab, setTab }) {
   const [staffMsg, setStaffMsg] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [storyTitle, setStoryTitle] = useState('')
-  const [storyBody, setStoryBody] = useState('')
-  const [storyBg, setStoryBg] = useState('var(--color-primary)')
-  const [storyImageFile, setStoryImageFile] = useState(null)
-  const [savingStory, setSavingStory] = useState(false)
-  const [editingNews, setEditingNews] = useState(null)
-  const [savingNews, setSavingNews] = useState(false)
-  const [promoTitle, setPromoTitle] = useState('')
-  const [promoLink, setPromoLink] = useState('')
-  const [promoDays, setPromoDays] = useState('7')
-  const [promoImage, setPromoImage] = useState(null)
-  const [savingPromo, setSavingPromo] = useState(false)
   const [liveTitle, setLiveTitle] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
   const [trailerFile, setTrailerFile] = useState(null)
@@ -82,8 +58,6 @@ export default function LegacyTabHost({ tab, setTab }) {
   const [liveDraft, setLiveDraft] = useState('')
   const [liveImage, setLiveImage] = useState(null)
   const [postingLive, setPostingLive] = useState(false)
-  const [selectedPost, setSelectedPost] = useState(null)
-  const [postAuthor, setPostAuthor] = useState(null)
   const [newRoleName, setNewRoleName] = useState('')
   const [newRoleDesc, setNewRoleDesc] = useState('')
   const [newRoleTabs, setNewRoleTabs] = useState({})
@@ -92,33 +66,17 @@ export default function LegacyTabHost({ tab, setTab }) {
   const [savingRole, setSavingRole] = useState(false)
 
   const { data: adminData } = useAdminData(!!adminUser)
-  const { data: stories = [] } = useAdminStories(!!adminUser)
-  const { data: newsData } = useAdminNews(!!adminUser)
-  const { data: promotions = [] } = useAdminPromotions(!!adminUser)
   const { data: searchLogs = [] } = useAdminSearchLogs(!!adminUser)
   const { data: liveShowsData } = useAdminLiveShows(!!adminUser)
   const { data: shopData } = useAdminShopData(!!adminUser)
   const { data: adminRoles = [] } = useAdminRoles(!!adminUser)
 
-  const { posts = [], users = [], tasks = [], teams = [], staff = [], notifications = [], notifCount = 0, roleNotifCount = 0, stats = {} } = adminData || {}
-  const newsItems = newsData?.items || []
-  const newsPhones = newsData?.phones || {}
+  const { users = [], tasks = [], teams = [], staff = [], notifications = [], notifCount = 0, roleNotifCount = 0, stats = {} } = adminData || {}
   const activeShows = liveShowsData?.active || []
   const scheduledShows = liveShowsData?.scheduled || []
   const ecomApps = shopData?.apps || []
   const ecomProductsAdmin = shopData?.products || []
   const shopOrdersAdmin = shopData?.orders || []
-
-  async function logAuditAction(auditAction, targetType, targetId, metadata = {}) {
-    try {
-      await callAdminAuth('log_audit_action', {
-        auditAction,
-        targetType,
-        targetId,
-        metadata,
-      })
-    } catch { /* non-blocking — audit failure must not block moderation */ }
-  }
 
   async function updateEcomApp(id, status) {
     try {
@@ -288,186 +246,6 @@ export default function LegacyTabHost({ tab, setTab }) {
     loadLiveControl(showId)
   }
 
-  async function createPromotion() {
-    if (!promoTitle.trim()) { showToast('Add a title', { type: 'warning' }); return }
-    setSavingPromo(true)
-    let imageUrl = null
-    if (promoImage) {
-      const ext = promoImage.name.split('.').pop()
-      const path = `promo-${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('promo-images').upload(path, promoImage)
-      if (!upErr) {
-        const { data: urlData } = supabase.storage.from('promo-images').getPublicUrl(path)
-        imageUrl = urlData.publicUrl
-      }
-    }
-    try {
-      await callAdminAuth('create_promotion', {
-         title: promoTitle.trim(),
-        linkUrl: promoLink.trim() || null,
-        imageUrl,
-        days: promoDays,
-      })
-      setPromoTitle(''); setPromoLink(''); setPromoDays('7'); setPromoImage(null)
-      invalidateAdmin()
-      showToast('Promotion created', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't create the promotion: ${err.message}`, { type: 'error' })
-    }
-    setSavingPromo(false)
-  }
-
-  function deletePromotion(id) {
-    askConfirm({
-      title: 'Delete this promotion?',
-      consequence: 'This permanently removes the promotion from the app. This cannot be undone.',
-      confirmLabel: 'Delete',
-      action: () => reallyDeletePromotion(id),
-    })
-  }
-  async function reallyDeletePromotion(id) {
-    try {
-      await callAdminAuth('delete_promotion', {  id })
-      invalidateAdmin()
-      showToast('Promotion deleted', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't delete the promotion: ${err.message}`, { type: 'error' })
-    }
-  }
-
-  async function approveNews(item) {
-    setSavingNews(true)
-    const edits = editingNews && editingNews.id === item.id
-      ? { headline: editingNews.headline, subtitle: editingNews.subtitle, body: editingNews.body }
-      : {}
-    try {
-      await callAdminAuth('approve_news', {  id: item.id, edits })
-      logAuditAction('approve', 'news', item.id, { headline: item.headline })
-      recordAction({ action: 'approve', target: 'news', id: item.id, timestamp: new Date().toISOString() })
-      showToast('News item approved', { type: 'success' })
-      // Optimistic update so UI reflects immediately even before reload
-      qc.setQueryData(['admin', 'news'], prev => ({ ...prev, items: (prev?.items || []).map(n => n.id === item.id ? { ...n, ...edits, status: 'approved', published_at: new Date().toISOString() } : n) }))
-    } catch (err) {
-      showToast(`Couldn't approve the news item: ${err.message}`, { type: 'error' })
-    }
-    setEditingNews(null)
-    setSavingNews(false)
-    invalidateAdmin()
-    invalidateAdmin()
-  }
-
-  async function rejectNews(id) {
-    try {
-      await callAdminAuth('reject_news', {  id })
-      logAuditAction('reject', 'news', id, {})
-      recordAction({ action: 'reject', target: 'news', id, timestamp: new Date().toISOString() })
-      showToast('News item rejected', { type: 'success' })
-      qc.setQueryData(['admin', 'news'], prev => ({ ...prev, items: (prev?.items || []).map(n => n.id === id ? { ...n, status: 'rejected' } : n) }))
-    } catch (err) {
-      showToast(`Couldn't reject the news item: ${err.message}`, { type: 'error' })
-    }
-    setEditingNews(null)
-    invalidateAdmin()
-    invalidateAdmin()
-  }
-
-  function deleteNews(id) {
-    askConfirm({
-      title: 'Permanently delete this news item?',
-      consequence: 'This permanently removes the news item from the app. This cannot be undone.',
-      confirmLabel: 'Delete',
-      action: () => reallyDeleteNews(id),
-    })
-  }
-  async function reallyDeleteNews(id) {
-    try {
-      await callAdminAuth('delete_news', {  id })
-      logAuditAction('delete', 'news', id, {})
-      qc.setQueryData(['admin', 'news'], prev => ({ ...prev, items: (prev?.items || []).filter(n => n.id !== id) }))
-      showToast('News item deleted', { type: 'success' })
-      invalidateAdmin()
-      invalidateAdmin()
-    } catch (err) {
-      showToast(`Couldn't delete the news item: ${err.message}`, { type: 'error' })
-    }
-  }
-
-  async function createStory() {
-    if (!storyTitle.trim() && !storyBody.trim() && !storyImageFile) return
-    setSavingStory(true)
-    let imageUrl = null
-    if (storyImageFile) {
-      const ext = storyImageFile.name.split('.').pop()
-      const path = `story-${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('story-images').upload(path, storyImageFile)
-      if (!upErr) {
-        const { data: urlData } = supabase.storage.from('story-images').getPublicUrl(path)
-        imageUrl = urlData.publicUrl
-      }
-    }
-    try {
-      await callAdminAuth('create_story', {
-         title: storyTitle.trim() || null,
-        body: storyBody.trim() || null,
-        imageUrl,
-        bgColor: storyBg,
-      })
-      setStoryTitle(''); setStoryBody(''); setStoryBg('var(--color-primary)'); setStoryImageFile(null)
-      invalidateAdmin()
-      showToast('Story published', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't create the story: ${err.message}`, { type: 'error' })
-    }
-    setSavingStory(false)
-  }
-
-  function deleteStory(id) {
-    askConfirm({
-      title: 'Delete this story?',
-      consequence: 'This permanently removes the story from the feed. This cannot be undone.',
-      confirmLabel: 'Delete',
-      action: () => reallyDeleteStory(id),
-    })
-  }
-  async function reallyDeleteStory(id) {
-    try {
-      await callAdminAuth('delete_story', {  id })
-      invalidateAdmin()
-      showToast('Story deleted', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't delete the story: ${err.message}`, { type: 'error' })
-    }
-  }
-
-  async function viewPostDetails(p) {
-    setSelectedPost(p)
-    setPostAuthor(null)
-    if (p.user_id) {
-      const profile = await usersRepository.getUserProfile(p.user_id)
-      setPostAuthor(profile || null)
-    }
-  }
-
-  function deletePost(id) {
-    askConfirm({
-      title: 'Delete this post?',
-      consequence: 'This permanently deletes the post along with its likes and comments. This cannot be undone.',
-      confirmLabel: 'Delete',
-      action: () => reallyDeletePost(id),
-    })
-  }
-  async function reallyDeletePost(id) {
-    try {
-      await callAdminAuth('delete_post', {  id })
-      logAuditAction('delete', 'post', id, {})
-      recordAction({ action: 'reject', target: 'post', id, timestamp: new Date().toISOString() })
-      invalidateAdmin()
-      showToast('Post deleted', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't delete the post: ${err.message}`, { type: 'error' })
-    }
-  }
-
   async function searchDrugs() {
     if (!drugSearch.trim()) return
     const products = await commerceRepository.searchProducts(drugSearch)
@@ -517,23 +295,17 @@ export default function LegacyTabHost({ tab, setTab }) {
   }
 
   return (
-    <ModerationProvider>
-      <div>
-        {tab === 'audit_log' && <AuditLog />}
-        {tab === 'errors' && <ErrorsTab showToast={showToast} />}
-        {tab === 'posts' && <PostsTab posts={posts} selectedPost={selectedPost} setSelectedPost={setSelectedPost} postAuthor={postAuthor} setPostAuthor={setPostAuthor} postSearch={postSearch} setPostSearch={setPostSearch} postTypeFilter={postTypeFilter} setPostTypeFilter={setPostTypeFilter} postDateFrom={postDateFrom} setPostDateFrom={setPostDateFrom} postDateTo={postDateTo} setPostDateTo={setPostDateTo} viewPostDetails={viewPostDetails} deletePost={deletePost} />}
-        {tab === 'drugs' && <DrugsTab drugSearch={drugSearch} setDrugSearch={setDrugSearch} drugReviews={drugReviews} drugName={drugName} setDrugName={setDrugName} drugRatingFilter={drugRatingFilter} setDrugRatingFilter={setDrugRatingFilter} drugDateFrom={drugDateFrom} setDrugDateFrom={setDrugDateFrom} drugDateTo={drugDateTo} setDrugDateTo={setDrugDateTo} searchDrugs={searchDrugs} />}
-        {tab === 'tasks' && <TasksTab tasks={tasks} taskTitle={taskTitle} setTaskTitle={setTaskTitle} taskDesc={taskDesc} setTaskDesc={setTaskDesc} taskComp={taskComp} setTaskComp={setTaskComp} taskSpec={taskSpec} setTaskSpec={setTaskSpec} savingTask={savingTask} createTask={createTask} />}
-        {tab === 'teams' && <TeamsTab teams={teams} staff={staff} teamName={teamName} setTeamName={setTeamName} createTeam={createTeam} staffName={staffName} setStaffName={setStaffName} staffEmail={staffEmail} setStaffEmail={setStaffEmail} staffPass={staffPass} setStaffPass={setStaffPass} staffRole={staffRole} setStaffRole={setStaffRole} staffTeam={staffTeam} setStaffTeam={setStaffTeam} savingStaff={savingStaff} staffMsg={staffMsg} setStaffMsg={setStaffMsg} createStaff={createStaff} adminUser={adminUser} adminRoles={adminRoles} newRoleName={newRoleName} setNewRoleName={setNewRoleName} newRoleDesc={newRoleDesc} setNewRoleDesc={setNewRoleDesc} newRoleTabs={newRoleTabs} setNewRoleTabs={setNewRoleTabs} editingRoleId={editingRoleId} setEditingRoleId={setEditingRoleId} editingRoleTabs={editingRoleTabs} setEditingRoleTabs={setEditingRoleTabs} savingRole={savingRole} loadAdminRoles={invalidateAdmin} showToast={showToast} ALL_TABS={ALL_TABS} />}
-        {tab === 'stories' && <StoriesTab stories={stories} storyTitle={storyTitle} setStoryTitle={setStoryTitle} storyBody={storyBody} setStoryBody={setStoryBody} storyBg={storyBg} setStoryBg={setStoryBg} storyImageFile={storyImageFile} setStoryImageFile={setStoryImageFile} savingStory={savingStory} createStory={createStory} deleteStory={deleteStory} />}
-        {tab === 'news' && <NewsTab newsItems={newsItems} editingNews={editingNews} setEditingNews={setEditingNews} newsPhones={newsPhones} savingNews={savingNews} approveNews={approveNews} rejectNews={rejectNews} deleteNews={deleteNews} />}
-        {tab === 'promotions' && <PromotionsTab promotions={promotions} promoTitle={promoTitle} setPromoTitle={setPromoTitle} promoLink={promoLink} setPromoLink={setPromoLink} promoDays={promoDays} setPromoDays={setPromoDays} promoImage={promoImage} setPromoImage={setPromoImage} savingPromo={savingPromo} createPromotion={createPromotion} deletePromotion={deletePromotion} />}
-        {tab === 'searches' && <SearchesTab searchLogs={searchLogs} />}
-        {tab === 'golive' && <GoLiveTab activeShows={activeShows} scheduledShows={scheduledShows} liveTitle={liveTitle} setLiveTitle={setLiveTitle} scheduledAt={scheduledAt} setScheduledAt={setScheduledAt} trailerFile={trailerFile} setTrailerFile={setTrailerFile} creatingShow={creatingShow} liveGuests={liveGuests} setLiveGuests={setLiveGuests} guestSearch={guestSearch} setGuestSearch={setGuestSearch} users={users} startLiveShow={startLiveShow} scheduleShow={scheduleShow} endLiveShow={endLiveShow} startScheduledShow={startScheduledShow} cancelScheduledShow={cancelScheduledShow} liveDraft={liveDraft} setLiveDraft={setLiveDraft} liveImage={liveImage} setLiveImage={setLiveImage} postingLive={postingLive} postLiveItem={postLiveItem} liveItems={liveItems} liveStats={liveStats} liveComments={liveComments} hideLiveComment={hideLiveComment} loadLiveControl={loadLiveControl} toggleGuest={toggleGuest} showToast={showToast} postLiveVoice={postLiveVoice} postLiveSlide={postLiveSlide} postLiveVideo={postLiveVideo} />}
-        {tab === 'shop' && <ShopTab showToast={showToast} />}
-        {tab === 'notifications' && <NotificationsTab notifications={notifications} setTab={setTab} />}
-        {tab === 'email_templates' && <EmailTemplatesTab showToast={showToast} />}
-      </div>
-    </ModerationProvider>
+    <div>
+      {tab === 'audit_log' && <AuditLog />}
+      {tab === 'errors' && <ErrorsTab showToast={showToast} />}
+      {tab === 'drugs' && <DrugsTab drugSearch={drugSearch} setDrugSearch={setDrugSearch} drugReviews={drugReviews} drugName={drugName} setDrugName={setDrugName} drugRatingFilter={drugRatingFilter} setDrugRatingFilter={setDrugRatingFilter} drugDateFrom={drugDateFrom} setDrugDateFrom={setDrugDateFrom} drugDateTo={drugDateTo} setDrugDateTo={setDrugDateTo} searchDrugs={searchDrugs} />}
+      {tab === 'tasks' && <TasksTab tasks={tasks} taskTitle={taskTitle} setTaskTitle={setTaskTitle} taskDesc={taskDesc} setTaskDesc={setTaskDesc} taskComp={taskComp} setTaskComp={setTaskComp} taskSpec={taskSpec} setTaskSpec={setTaskSpec} savingTask={savingTask} createTask={createTask} />}
+      {tab === 'teams' && <TeamsTab teams={teams} staff={staff} teamName={teamName} setTeamName={setTeamName} createTeam={createTeam} staffName={staffName} setStaffName={setStaffName} staffEmail={staffEmail} setStaffEmail={setStaffEmail} staffPass={staffPass} setStaffPass={setStaffPass} staffRole={staffRole} setStaffRole={setStaffRole} staffTeam={staffTeam} setStaffTeam={setStaffTeam} savingStaff={savingStaff} staffMsg={staffMsg} setStaffMsg={setStaffMsg} createStaff={createStaff} adminUser={adminUser} adminRoles={adminRoles} newRoleName={newRoleName} setNewRoleName={setNewRoleName} newRoleDesc={newRoleDesc} setNewRoleDesc={setNewRoleDesc} newRoleTabs={newRoleTabs} setNewRoleTabs={setNewRoleTabs} editingRoleId={editingRoleId} setEditingRoleId={setEditingRoleId} editingRoleTabs={editingRoleTabs} setEditingRoleTabs={setEditingRoleTabs} savingRole={savingRole} loadAdminRoles={invalidateAdmin} showToast={showToast} ALL_TABS={ALL_TABS} />}
+      {tab === 'searches' && <SearchesTab searchLogs={searchLogs} />}
+      {tab === 'golive' && <GoLiveTab activeShows={activeShows} scheduledShows={scheduledShows} liveTitle={liveTitle} setLiveTitle={setLiveTitle} scheduledAt={scheduledAt} setScheduledAt={setScheduledAt} trailerFile={trailerFile} setTrailerFile={setTrailerFile} creatingShow={creatingShow} liveGuests={liveGuests} setLiveGuests={setLiveGuests} guestSearch={guestSearch} setGuestSearch={setGuestSearch} users={users} startLiveShow={startLiveShow} scheduleShow={scheduleShow} endLiveShow={endLiveShow} startScheduledShow={startScheduledShow} cancelScheduledShow={cancelScheduledShow} liveDraft={liveDraft} setLiveDraft={setLiveDraft} liveImage={liveImage} setLiveImage={setLiveImage} postingLive={postingLive} postLiveItem={postLiveItem} liveItems={liveItems} liveStats={liveStats} liveComments={liveComments} hideLiveComment={hideLiveComment} loadLiveControl={loadLiveControl} toggleGuest={toggleGuest} showToast={showToast} postLiveVoice={postLiveVoice} postLiveSlide={postLiveSlide} postLiveVideo={postLiveVideo} />}
+      {tab === 'shop' && <ShopTab showToast={showToast} />}
+      {tab === 'notifications' && <NotificationsTab notifications={notifications} setTab={setTab} />}
+      {tab === 'email_templates' && <EmailTemplatesTab showToast={showToast} />}
+    </div>
   )
 }
