@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 
-// AdminPanel's routing of the four Phase 2a tabs. The sections, the shell and
+// AdminPanel's routing of the Phase 2a and 2b tabs. The sections, the shell and
 // the provider are stubbed so the test exercises only AdminPanel's own choice
 // of section and its permission gate (`isAllowed` from the real navigation).
 // The stub shell lists only what `visibleGroups` lets the role see, as the real
@@ -37,6 +37,8 @@ vi.mock('./sections/VerificationsSection.jsx', () => ({ default: () => <h1>Verif
 vi.mock('./sections/ClaimsSection.jsx', () => ({ default: () => <h1>Claims</h1> }))
 vi.mock('./sections/ReportsSection.jsx', () => ({ default: () => <h1>Reports</h1> }))
 vi.mock('./sections/ModerationSection.jsx', () => ({ default: () => <h1>Moderation</h1> }))
+vi.mock('./sections/UsersSection.jsx', () => ({ default: () => <h1>Users</h1> }))
+vi.mock('./sections/BusinessesSection.jsx', () => ({ default: () => <h1>Businesses</h1> }))
 vi.mock('./legacy/LegacyTabHost.jsx', () => ({ default: ({ tab }) => <h1>Legacy {tab}</h1> }))
 
 import AdminPanel from './AdminPanel.jsx'
@@ -47,6 +49,8 @@ const TABS = [
   { nav: 'Claims', key: 'claims', heading: 'Claims' },
   { nav: 'Reports', key: 'reports', heading: 'Reports' },
   { nav: 'Moderation queue', key: 'moderation', heading: 'Moderation' },
+  { nav: 'Users', key: 'users', heading: 'Users' },
+  { nav: 'Businesses', key: 'businesses', heading: 'Businesses' },
 ]
 
 const nav = () => within(screen.getByRole('navigation', { name: 'Admin sections' }))
@@ -54,7 +58,7 @@ const heading = () => screen.getByRole('heading', { level: 1 })
 
 beforeEach(() => { admin.permissions = {} })
 
-describe('AdminPanel: the Phase 2a tabs', () => {
+describe('AdminPanel: the Phase 2a and 2b tabs', () => {
   it('starts on the Overview', () => {
     render(<AdminPanel />)
     expect(heading()).toHaveTextContent('Overview')
