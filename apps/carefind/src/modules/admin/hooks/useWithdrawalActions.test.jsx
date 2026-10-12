@@ -40,6 +40,41 @@ describe('useWithdrawalActions', () => {
     expect(admin.showToast).not.toHaveBeenCalled()
   })
 
+  // The server committed (a refund, or recorded as paid): a refresh or toast that
+  // throws afterwards must not turn that into a reported failure.
+  it('still resolves { ok: true } when the refresh throws after the server succeeded', async () => {
+    admin.invalidateAdmin.mockImplementation(() => { throw new Error('refresh broke') })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result } = renderHook(() => useWithdrawalActions())
+    const out = await run(() => result.current.rejectWithdrawal('w1'))
+    expect(out).toEqual({ ok: true })
+    expect(callAdminAuth).toHaveBeenCalledTimes(1)
+    expect(result.current.busy).toBeNull()
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('failed after the server call'), expect.stringMatching(/broke/))
+    logged.mockRestore()
+  })
+
+  it('still resolves { ok: true } when the toast throws after the server succeeded', async () => {
+    admin.showToast.mockImplementation(() => { throw new Error('toast broke') })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result } = renderHook(() => useWithdrawalActions())
+    const out = await run(() => result.current.rejectWithdrawal('w1'))
+    expect(out).toEqual({ ok: true })
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('failed after the server call'), expect.stringMatching(/broke/))
+    logged.mockRestore()
+  })
+
+  it('on a server error still returns that error when the refresh throws', async () => {
+    callAdminAuth.mockRejectedValueOnce(new Error('Already confirmed paid'))
+    admin.invalidateAdmin.mockImplementation(() => { throw new Error('refresh broke') })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result } = renderHook(() => useWithdrawalActions())
+    const out = await run(() => result.current.rejectWithdrawal('w1'))
+    expect(out).toEqual({ ok: false, error: 'Already confirmed paid' })
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('failed after the server call'), expect.stringMatching(/broke/))
+    logged.mockRestore()
+  })
+
   it('busy is the id being rejected and clears afterwards', async () => {
     let release
     callAdminAuth.mockImplementation(() => new Promise(r => { release = r }))

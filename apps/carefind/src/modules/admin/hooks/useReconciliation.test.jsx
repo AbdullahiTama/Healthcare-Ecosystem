@@ -90,6 +90,29 @@ describe('useReconciliationActions.updateFinding', () => {
     expect(admin.invalidateAdmin).not.toHaveBeenCalled()
   })
 
+  // The decision is recorded on the server: a refresh or toast that throws
+  // afterwards must not turn it into a reported failure.
+  it('still resolves { ok: true } for a dismiss when the refresh throws after the server succeeded', async () => {
+    admin.invalidateAdmin.mockImplementation(() => { throw new Error('refresh broke') })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result } = renderHook(() => useReconciliationActions())
+    const out = await run(() => result.current.updateFinding({ id: 'f1', op: 'dismiss', note: 'Explained by refund' }))
+    expect(out).toEqual({ ok: true })
+    expect(result.current.busyId).toBeNull()
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('failed after the server call'), expect.stringMatching(/broke/))
+    logged.mockRestore()
+  })
+
+  it('still resolves { ok: true } when the toast throws after the server succeeded', async () => {
+    admin.showToast.mockImplementation(() => { throw new Error('toast broke') })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result } = renderHook(() => useReconciliationActions())
+    const out = await run(() => result.current.updateFinding({ id: 'f1', op: 'acknowledge' }))
+    expect(out).toEqual({ ok: true })
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('failed after the server call'), expect.stringMatching(/broke/))
+    logged.mockRestore()
+  })
+
   it('busyId is the finding id while pending and null after', async () => {
     let release
     respond(() => new Promise(r => { release = r }))
@@ -114,6 +137,16 @@ describe('useReconciliationActions.runNow', () => {
     expect(out).toEqual({ ok: true, summary: 'Checked. 2 critical, 3 warning, 4 info open.' })
     expect(callAdminAuth).toHaveBeenCalledWith('admin_run_reconciliation')
     expect(admin.invalidateAdmin).toHaveBeenCalled()
+  })
+
+  it('still returns the summary when the refresh throws after the run succeeded, and does not toast a failure', async () => {
+    admin.invalidateAdmin.mockImplementation(() => { throw new Error('refresh broke') })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const out = await runWith({ report: { db: { totals: { open_critical: 1, open_warning: 0, open_info: 0 } } } })
+    expect(out).toEqual({ ok: true, summary: 'Checked. 1 critical, 0 warning, 0 info open.' })
+    expect(admin.showToast).not.toHaveBeenCalled()
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('failed after the server call'), expect.stringMatching(/broke/))
+    logged.mockRestore()
   })
 
   it('says the run finished when there are no totals', async () => {
