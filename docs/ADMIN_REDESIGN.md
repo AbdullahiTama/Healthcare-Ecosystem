@@ -117,6 +117,21 @@ Backend, SQL and financial calculations are out of scope for this work.
     notification, no profile or business change); approve_claim sets the claim approved
     and `businesses.visible_on_carefind = true`. The drawer confirmation text states only
     this. Informational.
+26. Moderation lists every source as legacy did but now shows an item's actions only when
+    its tab is permitted (`verifications`, `reports`, `posts`), in the drawer and the bulk
+    bar. Legacy's Moderation had no reachable actions (finding 22). UI courtesy only; the
+    server decides.
+27. `list_reports` and `list_business_claims` in `api/_handlers/admin-auth.js` (~lines 661
+    and 693) ignore the query error and return `[]`, so a failed query reaches Reports,
+    Claims and Moderation as "Nothing waiting" despite the client settling each source;
+    `list_reports` also caps at 30 rows across ALL statuses, so resolved rows use up the
+    pending window. Documented (backend out of scope).
+28. The shared `Modal` registers an Escape listener per open modal, so stacked modals all
+    close; the drawer works around it with `preventClose` while a confirmation is open
+    (`AdminProvider` exposes `confirming`). A "topmost modal only" rule belongs in the
+    shared package (next to finding 21), as does a fix for rows rendering as nested
+    interactive controls on phones (DataTable `onRowClick` makes each mobile card
+    `role="button"` with the Review button inside). Documented.
 
 ## Verification state
 
@@ -125,7 +140,11 @@ the metric strip, `OverviewSection` and `AdminProvider`. The pre-existing panel 
 passes against the new shell.
 
 Phase 2a: unit and component tests cover `useTrustQueues`, `useReviewActions`,
-`ReviewDrawer`, `ReviewQueue`, the four sections, `bulkModeration` and `BulkActionBar`.
+`ReviewDrawer`, `ReviewQueue`, the four sections, `bulkModeration` and `BulkActionBar`,
+and the panel's routing and permission fallback for the four tabs.
 Responsive behaviour at 375, 390, 768, 1024, 1440 and 1920 has NOT been measured in a
 browser, and no admin session was available, so none of this has been exercised against
-the live backend.
+the live backend. Bulk approval of verifications has no confirmation step (this matches
+the spec; consider adding one). Responsive widths, the credential popup across browsers,
+and where focus lands after an action removes a row all remain unverified without a
+browser and an admin session.
