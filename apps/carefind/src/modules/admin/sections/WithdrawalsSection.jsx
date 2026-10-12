@@ -38,6 +38,8 @@ export const columns = [
   { key: 'created_at', label: 'Requested', sortable: true, sortValue: w => (w.created_at ? new Date(w.created_at).getTime() : 0), render: w => timeAgo(w.created_at) },
 ]
 
+// Only the fields the legacy screen showed (the spec forbids exposing more of
+// the select('*') row): no Paystack reference or transfer code.
 function WithdrawalBody({ w }) {
   return (
     <dl className="adm-drawer-grid">
@@ -48,7 +50,6 @@ function WithdrawalBody({ w }) {
       <dt>Account name</dt><dd>{w.account_name || '—'}</dd>
       <dt>Status</dt><dd><StatusBadge status={w.status} /></dd>
       <dt>Requested</dt><dd>{requestedDate(w)}</dd>
-      {w.paystack_reference ? <><dt>Paystack reference</dt><dd>{w.paystack_reference}</dd></> : null}
     </dl>
   )
 }

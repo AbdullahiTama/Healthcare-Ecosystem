@@ -73,13 +73,21 @@ describe('WithdrawalsSection', () => {
     expect(dialog().getByText('Ada Obi Savings')).toBeInTheDocument()
   })
 
-  it('shows the Paystack reference only when the row has one', () => {
+  // The spec: no more financial information than the legacy screen showed, and
+  // the legacy WithdrawalsTab never showed the Paystack reference.
+  it('shows only the fields the legacy screen showed, never the Paystack reference', () => {
     render(<WithdrawalsSection />)
     openReview('Ada Obi')
-    expect(dialog().getByText('cf_wd_ref_1')).toBeInTheDocument()
-    fireEvent.click(dialog().getByRole('button', { name: 'Close' }))
-    openReview('Bayo')
+    const terms = dialog().getAllByRole('term').map(t => t.textContent)
+    expect(terms).toEqual(['Person', 'Amount', 'Bank', 'Account number', 'Account name', 'Status', 'Requested'])
+    expect(dialog().queryByText('cf_wd_ref_1')).not.toBeInTheDocument()
     expect(dialog().queryByText('Paystack reference')).not.toBeInTheDocument()
+  })
+
+  it('names the person by display name when there is no full name', () => {
+    render(<WithdrawalsSection />)
+    openReview('Bayo')
+    expect(dialog().getAllByText('Bayo').length).toBeGreaterThan(0)
   })
 
   it('offers Reject withdrawal only for reserved or processing withdrawals', () => {
