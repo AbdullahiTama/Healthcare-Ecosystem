@@ -18,6 +18,11 @@ describe('BulkActionBar', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
 
+  it('lets the button row wrap so four labelled actions fit a phone', () => {
+    render(<BulkActionBar selectedCount={2} onApprove={() => {}} onReject={() => {}} onDismiss={() => {}} onDelete={() => {}} onClear={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Clear' }).parentElement).toHaveStyle({ flexWrap: 'wrap' })
+  })
+
   it('keeps the old labels by default', () => {
     render(<BulkActionBar selectedCount={1} onApprove={() => {}} />)
     expect(screen.getByRole('button', { name: 'Approve selected' })).toBeInTheDocument()

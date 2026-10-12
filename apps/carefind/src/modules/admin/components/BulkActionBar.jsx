@@ -17,7 +17,7 @@ export function BulkActionBar({ selectedCount, onApprove, onReject, onDismiss, o
       flexWrap: 'wrap',
     }}>
       <span style={{ fontWeight: 700, fontSize: 13 }}>{selectedCount} selected</span>
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {onApprove && (
           <button onClick={onApprove} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--green)', color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
             {approveLabel}
