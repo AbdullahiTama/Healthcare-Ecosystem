@@ -88,6 +88,18 @@ export function buildAttentionQueue(sources = {}, { capped = [] } = {}) {
   return { rows, unavailable }
 }
 
+// The records of one kind that are waiting on an admin. The metric cells on the
+// Overview use this too, so "waiting" has one definition.
+export function openItems(type, list) {
+  const kind = KINDS.find(k => k.type === type)
+  return Array.isArray(list) && kind ? list.filter(kind.isOpen) : []
+}
+
+export function oldestTime(items) {
+  const times = items.map(i => timeOf(i.created_at)).filter(Boolean)
+  return times.length ? new Date(Math.min(...times)).toISOString() : null
+}
+
 export function filterBySeverity(rows, severity) {
   return severity === 'all' ? rows : rows.filter(r => r.severity === severity)
 }

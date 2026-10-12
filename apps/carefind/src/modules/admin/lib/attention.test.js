@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildAttentionQueue, filterBySeverity, countBySeverity } from './attention'
+import { buildAttentionQueue, filterBySeverity, countBySeverity, openItems, oldestTime } from './attention'
 
 const t = (h) => new Date(Date.UTC(2026, 9, 12, h)).toISOString()
 
@@ -108,5 +108,21 @@ describe('severity helpers', () => {
     const { rows } = buildAttentionQueue(sources)
     expect(filterBySeverity(rows, 'all')).toHaveLength(rows.length)
     expect(filterBySeverity(rows, 'info').map(r => r.type).sort()).toEqual(['consultation', 'task'])
+  })
+})
+
+describe('openItems and oldestTime', () => {
+  it('uses the same definition of waiting as the queue', () => {
+    expect(openItems('withdrawal', sources.withdrawals).map(w => w.id)).toEqual(['w1', 'w2'])
+    expect(openItems('verification', sources.verifications)).toHaveLength(2)
+  })
+  it('returns nothing for a missing list or unknown type', () => {
+    expect(openItems('report', null)).toEqual([])
+    expect(openItems('nope', [])).toEqual([])
+  })
+  it('finds the oldest time, or null when there is none', () => {
+    expect(oldestTime(openItems('verification', sources.verifications))).toBe(t(1))
+    expect(oldestTime([])).toBeNull()
+    expect(oldestTime([{ id: 'x' }])).toBeNull()
   })
 })
