@@ -150,8 +150,8 @@ export default function BusinessesSection() {
       searchPlaceholder="Search company name…"
       filters={(
         <>
-          <FilterPills options={TYPE_OPTIONS} value={type} onChange={(v) => update({ type: v })} />
-          <FilterPills options={STATUS_OPTIONS} value={status} onChange={(v) => update({ status: v })} />
+          <FilterPills label="Business type" options={TYPE_OPTIONS} value={type} onChange={(v) => update({ type: v })} />
+          <FilterPills label="Claim status" options={STATUS_OPTIONS} value={status} onChange={(v) => update({ status: v })} />
           <Input id="businesses-location-filter" label="State or city" value={locationText} onChange={setLocationText} placeholder="e.g. Lagos" style={{ minWidth: 180 }} />
         </>
       )}

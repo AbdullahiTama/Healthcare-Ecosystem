@@ -113,13 +113,22 @@ describe('BusinessesSection', () => {
     expect(last()).toEqual({ search: 'alpha', type: 'clinic', status: 'unclaimed', location: 'Lagos', page: 0 })
   })
 
-  it('offers all eight types and the three statuses as pills, and the Claimed pill filters', () => {
+  it('offers all eight types and the three statuses as labelled pill groups, and the Claimed pill filters', () => {
     render()
+    const types = screen.getByRole('group', { name: 'Business type' })
+    const statuses = screen.getByRole('group', { name: 'Claim status' })
     for (const label of ['All', 'Pharmacy', 'Hospital', 'Clinic', 'Dental', 'Optical', 'Wellness', 'Skincare']) {
-      expect(screen.getAllByRole('button', { name: label }).length).toBeGreaterThan(0)
+      expect(within(types).getByRole('button', { name: label })).toBeInTheDocument()
     }
-    fireEvent.click(screen.getByRole('button', { name: 'Claimed' }))
+    for (const label of ['All', 'Claimed', 'Unclaimed']) {
+      expect(within(statuses).getByRole('button', { name: label })).toBeInTheDocument()
+    }
+    expect(within(statuses).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(statuses).getByRole('button', { name: 'Claimed' }))
     expect(last()).toEqual({ ...NONE, status: 'claimed' })
+    expect(within(statuses).getByRole('button', { name: 'Claimed' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(statuses).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false')
+    expect(within(types).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('a whitespace-only location sends no location', () => {

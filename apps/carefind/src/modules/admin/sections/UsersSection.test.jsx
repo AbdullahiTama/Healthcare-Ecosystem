@@ -103,8 +103,12 @@ describe('UsersSection', () => {
   it('the Verified pill filters on verified, and the Specialty input filters (debounced, trimmed) from page 0', () => {
     vi.useFakeTimers()
     render()
-    fireEvent.click(screen.getByRole('button', { name: 'Verified' }))
+    const pills = screen.getByRole('group', { name: 'Verification' })
+    expect(within(pills).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(pills).getByRole('button', { name: 'Verified' }))
     expect(last()).toEqual({ search: '', verified: 'verified', specialty: '', page: 0 })
+    expect(within(pills).getByRole('button', { name: 'Verified' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(pills).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false')
 
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     expect(last().page).toBe(1)

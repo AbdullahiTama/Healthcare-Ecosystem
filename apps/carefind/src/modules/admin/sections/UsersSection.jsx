@@ -244,7 +244,7 @@ export default function UsersSection() {
       searchPlaceholder="Search by name or username"
       filters={(
         <>
-          <FilterPills options={VERIFIED_OPTIONS} value={verified} onChange={(v) => update({ verified: v })} />
+          <FilterPills label="Verification" options={VERIFIED_OPTIONS} value={verified} onChange={(v) => update({ verified: v })} />
           <Input id="users-specialty-filter" label="Specialty" value={specialtyText} onChange={setSpecialtyText} placeholder="e.g. Pharmacist" style={{ minWidth: 180 }} />
         </>
       )}
