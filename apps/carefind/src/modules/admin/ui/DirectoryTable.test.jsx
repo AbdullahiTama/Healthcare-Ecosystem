@@ -84,6 +84,19 @@ describe('DirectoryTable', () => {
     expect(props.onSearch).not.toHaveBeenCalled()
   })
 
+  it('retyping the cleared search within 300 ms of a reset still applies it', () => {
+    vi.useFakeTimers()
+    const { props, rerender } = setup({ search: 'ada' })
+    const box = screen.getByRole('textbox', { name: 'Search users' })
+    rerender(<DirectoryTable {...props} search="" />)
+    expect(box).toHaveValue('')
+    act(() => { vi.advanceTimersByTime(100) })
+    fireEvent.change(box, { target: { value: 'ada' } })
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(props.onSearch).toHaveBeenCalledTimes(1)
+    expect(props.onSearch).toHaveBeenCalledWith('ada')
+  })
+
   it('shows a Retry, never an empty message, when the list failed', () => {
     const query = ok({ isError: true, data: undefined })
     setup({ query })

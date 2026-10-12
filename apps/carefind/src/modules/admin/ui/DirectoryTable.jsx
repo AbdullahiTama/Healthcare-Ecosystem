@@ -23,18 +23,26 @@ export default function DirectoryTable({
   const { confirming } = useAdmin()
 
   // Search box: local text, pushed up only after typing stops and only when it
-  // changes the applied search. `search` going to '' from outside resets the box.
-  // Only `search` going to '' from outside is mirrored into the input; a new
-  // non-empty value from outside (e.g. a URL param) is not.
+  // changes the applied search. Only `search` going to '' from outside (Clear
+  // filters) is mirrored into the box; a new non-empty value from outside (e.g.
+  // a URL param) is not. The box is reset during render, so the apply effect
+  // never sees the stale text. A value is applied only once the debounced value
+  // has caught up with the box: a stale debounced value is never re-applied
+  // after a reset, and retyping the term that was cleared still applies it.
   const [text, setText] = useState(search)
+  const [prevSearch, setPrevSearch] = useState(search)
+  if (search !== prevSearch) {
+    setPrevSearch(search)
+    if (search === '') setText('')
+  }
   const debounced = useDebounced(text, SEARCH_DELAY_MS)
   const latest = useRef({ search, onSearch })
   useEffect(() => { latest.current = { search, onSearch } })
   useEffect(() => {
+    if (debounced !== text) return
     const next = debounced.trim()
     if (next !== latest.current.search) latest.current.onSearch(next)
-  }, [debounced])
-  useEffect(() => { if (search === '') setText('') }, [search])
+  }, [debounced, text])
 
   const { isLoading, isError, isPlaceholderData, refetch } = query
   const data = query.data
