@@ -85,4 +85,46 @@ describe('useUsersDirectory', () => {
     await waitFor(() => expect(c.result.current.isSuccess).toBe(true))
     expect(c.result.current.data.total).toBe(4218)
   })
+
+  it('replaces characters that break the server filter with spaces before sending', async () => {
+    const { result } = renderHook(() => useUsersDirectory(params({ search: 'Obi, Ada', specialty: 'Pharm (retail)' })), { wrapper: createWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(callAdminAuth).toHaveBeenCalledWith('list_user_profiles', expect.objectContaining({ search: 'Obi Ada', specialty: 'Pharm retail' }))
+  })
+
+  it('never lets a filter clause through to the server', async () => {
+    const { result } = renderHook(() => useUsersDirectory(params({ search: 'a),id.eq.1', specialty: 'x"\\y' })), { wrapper: createWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const sent = callAdminAuth.mock.calls[0][1]
+    expect(sent.search).toBe('a id.eq.1')
+    expect(sent.specialty).toBe('x y')
+    expect(sent.search).not.toMatch(/[,()"\\]/)
+    expect(sent.specialty).not.toMatch(/[,()"\\]/)
+  })
+
+  it('a term of only such characters is no filter, and the grand total is loaded', async () => {
+    const { result } = renderHook(() => useUsersDirectory(params({ search: ' (,) ', specialty: '""' })), { wrapper: createWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(callAdminAuth).toHaveBeenCalledWith('list_user_profiles', expect.objectContaining({ search: '', specialty: '' }))
+    expect(result.current.data.total).toBe(4218)
+  })
+
+  it('requests the grand total in parallel with the list, not after it', async () => {
+    let resolveList
+    callAdminAuth.mockReturnValue(new Promise((res) => { resolveList = res }))
+    const { result } = renderHook(() => useUsersDirectory(params()), { wrapper: createWrapper() })
+    await waitFor(() => expect(query).toHaveBeenCalledWith('profiles', { select: 'id', count: 'head' }))
+    expect(result.current.isSuccess).toBe(false)
+    resolveList({ data: rowsOf(3) })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data.total).toBe(4218)
+  })
+
+  it('a failed list is still the error when the count fails too', async () => {
+    callAdminAuth.mockRejectedValue(new Error('boom'))
+    query.mockRejectedValue(new Error('count down'))
+    const { result } = renderHook(() => useUsersDirectory(params()), { wrapper: createWrapper() })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.error.message).toBe('boom')
+  })
 })
