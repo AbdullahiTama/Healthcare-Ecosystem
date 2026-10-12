@@ -91,6 +91,14 @@ describe('buildAttentionQueue', () => {
   })
 })
 
+describe('capped sources', () => {
+  it('marks rows from a capped list as a lower bound', () => {
+    const { rows } = buildAttentionQueue(sources, { capped: ['reports'] })
+    expect(rows.find(r => r.type === 'report').atLeast).toBe(true)
+    expect(rows.find(r => r.type === 'claim').atLeast).toBe(false)
+  })
+})
+
 describe('severity helpers', () => {
   it('counts items, not rows, per severity', () => {
     const { rows } = buildAttentionQueue(sources)

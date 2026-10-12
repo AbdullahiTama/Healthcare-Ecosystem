@@ -56,7 +56,9 @@ const KINDS = [
   },
 ]
 
-export function buildAttentionQueue(sources = {}) {
+// `capped`: names of sources whose server list hit its row cap, so the true
+// total may be higher. Their rows carry `atLeast: true` and show "N+".
+export function buildAttentionQueue(sources = {}, { capped = [] } = {}) {
   const rows = []
   const unavailable = []
 
@@ -76,6 +78,7 @@ export function buildAttentionQueue(sources = {}) {
       title: kind.label,
       subtitle: kind.context(newest),
       count: open.length,
+      atLeast: capped.includes(kind.source),
       time: newest.created_at ?? null,
       oldest: oldest.created_at ?? null,
     })
