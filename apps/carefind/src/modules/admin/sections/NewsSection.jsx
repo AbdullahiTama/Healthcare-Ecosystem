@@ -12,17 +12,31 @@ import { useAdmin } from '../provider/AdminProvider.jsx'
 //   approve_news -> applies `edits`, sets status 'approved' and published_at (publishes it)
 //   reject_news  -> sets status 'rejected' only (not published, not deleted)
 //   delete_news  -> deletes the row
-const REJECT_CONSEQUENCE = 'The item is marked as rejected and is not published. It stays in the list under All.'
+const REJECT_CONSEQUENCE = 'The item is marked as rejected and is not published. It stays in the list under All, where it can still be approved.'
 const DELETE_CONSEQUENCE = 'This permanently removes the news item from the app. This cannot be undone.'
 
 const FIELDS = ['headline', 'subtitle', 'body']
+const BODY_NOTE = 'Note: Body is stored as rich blocks; heavy formatting is best done in-app. Light text edits here are fine.'
+// The queue's Pending tab holds only pending items.
 const isOpen = (n) => n.status === 'pending'
+// Which actions an item offers, as the legacy News tab had them: Edit and
+// Reject only while pending; Approve for anything not yet approved, so a
+// rejected item can still be published; Delete always.
+const canEdit = (n) => n.status === 'pending'
+const canReject = (n) => n.status === 'pending'
+const canApprove = (n) => n.status !== 'approved'
 const person = (n) => n.profiles?.full_name || n.profiles?.display_name || 'User'
 const headlineOf = (n) => n.headline || 'News item'
 const submitted = (n) => (n.created_at ? timeAgo(n.created_at) : '—')
 // Only an http(s) URL from the database is ever loaded as an image.
 const isHttpUrl = (url) => typeof url === 'string' && /^https?:\/\//i.test(url)
 const text = (v) => (v == null ? '' : String(v))
+// A tel: target of digits and + only ('' when nothing remains: no link).
+const telTarget = (phone) => text(phone).replace(/[^+\d]/g, '')
+// A mailto: address keeps '@' (and everything else) literal; only the
+// characters that would start a query or fragment, or break the URL, are
+// encoded, so a crafted address cannot add cc/subject/body headers.
+const mailtoTarget = (email) => text(email).replace(/[?&#%\s]/g, c => encodeURIComponent(c))
 
 // Submitted is not sortable: the server returns the newest 60 only, so sorting
 // would reorder a partial list and mislead (Phase 2b finding 44).
@@ -45,6 +59,8 @@ function approvalOf(n, draft) {
     subtitle: value('subtitle'),
     body: value('body'),
     edited: FIELDS.some(changed),
+    // The audit records the item's own headline, as legacy did.
+    originalHeadline: n.headline,
   }
 }
 
@@ -83,8 +99,12 @@ function NewsBody({ n, phone, shownId, draft, setDraft, busy }) {
         <section aria-label="Contact the submitter" style={sectionStyle}>
           <h3 style={headingStyle}>Contact the submitter</h3>
           <dl className="adm-drawer-grid">
-            {phone && (<><dt>Phone</dt><dd><a href={`tel:${encodeURIComponent(phone)}`} aria-label={`Call ${phone}`}>{phone}</a></dd></>)}
-            {email && (<><dt>Email</dt><dd><a href={`mailto:${encodeURIComponent(email)}`} aria-label={`Email ${email}`}>{email}</a></dd></>)}
+            {phone && (
+              <><dt>Phone</dt><dd>{telTarget(phone)
+                ? <a href={`tel:${telTarget(phone)}`} aria-label={`Call ${phone}`}>{phone}</a>
+                : text(phone)}</dd></>
+            )}
+            {email && (<><dt>Email</dt><dd><a href={`mailto:${mailtoTarget(email)}`} aria-label={`Email ${email}`}>{email}</a></dd></>)}
           </dl>
         </section>
       )}
@@ -99,7 +119,7 @@ function NewsBody({ n, phone, shownId, draft, setDraft, busy }) {
       <section aria-label="Article" style={sectionStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
           <h3 style={{ ...headingStyle, margin: 0 }}>{editing ? 'Edit before publishing' : 'Article'}</h3>
-          {isOpen(n) && (editing ? (
+          {canEdit(n) && (editing ? (
             <Button size="sm" variant="ghost" disabled={busy} leftIcon={<X size={14} aria-hidden="true" />} onClick={() => setDraft(null)}>
               Cancel edit
             </Button>
@@ -115,7 +135,7 @@ function NewsBody({ n, phone, shownId, draft, setDraft, busy }) {
             <Input id="news-edit-headline" label="Headline" required value={draft.headline} onChange={set('headline')} disabled={busy}
               error={text(draft.headline).trim() ? undefined : 'A headline is required to publish.'} />
             <Input id="news-edit-subtitle" label="Subtitle" value={draft.subtitle} onChange={set('subtitle')} disabled={busy} />
-            <Textarea id="news-edit-body" label="Body" value={draft.body} onChange={set('body')} rows={8} disabled={busy} />
+            <Textarea id="news-edit-body" label="Body" value={draft.body} onChange={set('body')} rows={8} disabled={busy} helperText={BODY_NOTE} />
           </div>
         ) : (
           <>
@@ -156,10 +176,19 @@ export default function NewsSection() {
     // closed this drawer or opened another by the time a result arrives: then a
     // failure is toasted, never dropped, and a success needs nothing more (the
     // hook has toasted and refreshed).
+    // A throw, or a result without ok, is a failure like any other, so
+    // nothing escapes the onClick or the confirm action.
     const run = async (kind, call) => {
       setActing({ id: n.id, kind })
       let res
-      try { res = await call() } finally { setActing(null) }
+      try {
+        const out = await call()
+        res = out?.ok === true ? out : { ok: false, error: out?.error || 'The server gave no result' }
+      } catch (err) {
+        res = { ok: false, error: err?.message || String(err) }
+      } finally {
+        setActing(null)
+      }
       const message = res.ok ? null : `Couldn't ${kind} the news item: ${res.error}`
       if (shownId.current !== n.id) {
         if (message) showToast(message, { type: 'error' })
@@ -168,8 +197,10 @@ export default function NewsSection() {
       if (res.ok) close(); else setError(message)
     }
     const working = (kind) => acting?.id === n.id && acting.kind === kind
-    const approval = approvalOf(n, draft?.id === n.id ? draft : null)
-    const headlineBlank = !text(approval.headline).trim()
+    const editing = draft?.id === n.id
+    const approval = approvalOf(n, editing ? draft : null)
+    // Only an edited headline can block Approve; the item's own is never checked.
+    const headlineBlank = editing && !text(draft.headline).trim()
     const phone = n.contact_phone || phones[n.author_id]
 
     const deleteButton = (
@@ -189,24 +220,24 @@ export default function NewsSection() {
       body: <NewsBody key={n.id} n={n} phone={phone} shownId={shownId} draft={draft} setDraft={setDraft} busy={busy} />,
       footer: (
         <div style={footerRowStyle}>
-          {isOpen(n) && (
-            <>
-              <Button variant="primary" style={footerButtonStyle} disabled={busy || headlineBlank} loading={working('approve')} loadingText="Publishing…"
-                leftIcon={<Check size={14} aria-hidden="true" />}
-                onClick={() => run('approve', () => approveNews(approval))}>
-                Approve and publish
-              </Button>
-              <Button variant="secondary" style={footerButtonStyle} disabled={busy} loading={working('reject')} loadingText="Rejecting…"
-                leftIcon={<X size={14} aria-hidden="true" />}
-                onClick={() => askConfirm({
-                  title: 'Reject this news item?',
-                  consequence: REJECT_CONSEQUENCE,
-                  confirmLabel: 'Reject',
-                  action: () => run('reject', () => rejectNews(n.id)),
-                })}>
-                Reject
-              </Button>
-            </>
+          {canApprove(n) && (
+            <Button variant="primary" style={footerButtonStyle} disabled={busy || headlineBlank} loading={working('approve')} loadingText="Publishing…"
+              leftIcon={<Check size={14} aria-hidden="true" />}
+              onClick={() => run('approve', () => approveNews(approval))}>
+              Approve and publish
+            </Button>
+          )}
+          {canReject(n) && (
+            <Button variant="secondary" style={footerButtonStyle} disabled={busy} loading={working('reject')} loadingText="Rejecting…"
+              leftIcon={<X size={14} aria-hidden="true" />}
+              onClick={() => askConfirm({
+                title: 'Reject this news item?',
+                consequence: REJECT_CONSEQUENCE,
+                confirmLabel: 'Reject',
+                action: () => run('reject', () => rejectNews(n.id)),
+              })}>
+              Reject
+            </Button>
           )}
           {deleteButton}
         </div>

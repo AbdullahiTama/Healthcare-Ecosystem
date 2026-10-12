@@ -14,7 +14,7 @@ vi.mock('../provider/AdminProvider.jsx', () => ({ useAdmin: () => admin }))
 import NewsSection, { columns } from './NewsSection.jsx'
 
 const REJECT_TITLE = 'Reject this news item?'
-const REJECT_CONSEQUENCE = 'The item is marked as rejected and is not published. It stays in the list under All.'
+const REJECT_CONSEQUENCE = 'The item is marked as rejected and is not published. It stays in the list under All, where it can still be approved.'
 const DELETE_TITLE = 'Permanently delete this news item?'
 const DELETE_CONSEQUENCE = 'This permanently removes the news item from the app. This cannot be undone.'
 
@@ -117,14 +117,32 @@ describe('NewsSection', () => {
     expect(document.querySelector('img[src="x"]')).toBeNull()
   })
 
-  it('shows the contact block with tel: and mailto: links built from encoded values', () => {
+  it('shows the contact block with a tel: link of digits and + only, and a mailto: link that keeps @', () => {
     render(<NewsSection />)
     openReview('Clinic opens in Ikeja')
     const contact = within(dialog().getByRole('region', { name: 'Contact the submitter' }))
     const call = contact.getByRole('link', { name: 'Call +234 801 234 5678' })
-    expect(call).toHaveAttribute('href', `tel:${encodeURIComponent('+234 801 234 5678')}`)
+    expect(call).toHaveAttribute('href', 'tel:+2348012345678')
     const mail = contact.getByRole('link', { name: 'Email ada@example.com' })
-    expect(mail).toHaveAttribute('href', `mailto:${encodeURIComponent('ada@example.com')}`)
+    expect(mail).toHaveAttribute('href', 'mailto:ada@example.com')
+  })
+
+  it('encodes only ?, &, #, % and whitespace in a mailto: address, so it cannot add headers', () => {
+    lists.result = loaded({ data: { items: [item({ contact_email: 'a?cc=x@y.com&b#c%d e@ex.com' })], phones: {} } })
+    render(<NewsSection />)
+    openReview('Clinic opens in Ikeja')
+    const mail = dialog().getByRole('link', { name: 'Email a?cc=x@y.com&b#c%d e@ex.com' })
+    expect(mail).toHaveAttribute('href', 'mailto:a%3Fcc=x@y.com%26b%23c%25d%20e@ex.com')
+  })
+
+  it('shows a phone with no digits as text, never as a tel: link', () => {
+    lists.result = loaded({ data: { items: [item({ contact_phone: 'call me', contact_email: null })], phones: {} } })
+    render(<NewsSection />)
+    openReview('Clinic opens in Ikeja')
+    const contact = within(dialog().getByRole('region', { name: 'Contact the submitter' }))
+    expect(contact.getByText('call me')).toBeInTheDocument()
+    expect(contact.queryByRole('link')).not.toBeInTheDocument()
+    expect(document.querySelector('a[href^="tel:"]')).toBeNull()
   })
 
   it('falls back to the phone from the submitter verification when the item has no contact phone', () => {
@@ -150,7 +168,7 @@ describe('NewsSection', () => {
     expect(actions.approveNews).toHaveBeenCalledTimes(1)
     expect(actions.approveNews).toHaveBeenCalledWith({
       id: 'n1', headline: 'Clinic opens in Ikeja', subtitle: 'A new 24-hour clinic',
-      body: 'Line one\nLine two {with} [brackets] "quoted"', edited: false,
+      body: 'Line one\nLine two {with} [brackets] "quoted"', edited: false, originalHeadline: 'Clinic opens in Ikeja',
     })
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
@@ -164,6 +182,20 @@ describe('NewsSection', () => {
     expect(dialog().getByLabelText(/Headline/)).toBeRequired()
     expect(dialog().getByLabelText('Subtitle')).toHaveValue('A new 24-hour clinic')
     expect(dialog().getByLabelText('Body')).toHaveValue('Line one\nLine two {with} [brackets] "quoted"')
+    // Legacy's note: the body is stored as rich blocks.
+    expect(dialog().getByLabelText('Body')).toHaveAccessibleDescription('Note: Body is stored as rich blocks; heavy formatting is best done in-app. Light text edits here are fine.')
+  })
+
+  it('opening the drawer and entering or leaving Edit never approves', () => {
+    render(<NewsSection />)
+    openReview('Clinic opens in Ikeja')
+    fireEvent.click(dialog().getByRole('button', { name: 'Edit' }))
+    type(/Headline/, 'Changed')
+    fireEvent.click(dialog().getByRole('button', { name: 'Cancel edit' }))
+    fireEvent.click(dialog().getByRole('button', { name: 'Edit' }))
+    fireEvent.click(dialog().getByRole('button', { name: 'Close' }))
+    expect(actions.approveNews).not.toHaveBeenCalled()
+    expect(admin.askConfirm).not.toHaveBeenCalled()
   })
 
   it('sends the edited values with edited: true after editing', async () => {
@@ -175,7 +207,7 @@ describe('NewsSection', () => {
     await act(async () => { fireEvent.click(approveButton()) })
     expect(actions.approveNews).toHaveBeenCalledWith({
       id: 'n1', headline: 'Clinic opens in Ikeja on Monday', subtitle: 'A new 24-hour clinic',
-      body: 'Rewritten body', edited: true,
+      body: 'Rewritten body', edited: true, originalHeadline: 'Clinic opens in Ikeja',
     })
   })
 
@@ -187,6 +219,7 @@ describe('NewsSection', () => {
     await act(async () => { fireEvent.click(approveButton()) })
     expect(actions.approveNews).toHaveBeenCalledWith({
       id: 'n2', headline: 'Pharmacy hours change from today', subtitle: null, body: 'Short body', edited: true,
+      originalHeadline: 'Pharmacy hours change',
     })
   })
 
@@ -199,7 +232,7 @@ describe('NewsSection', () => {
     await act(async () => { fireEvent.click(approveButton()) })
     expect(actions.approveNews).toHaveBeenCalledWith({
       id: 'n1', headline: 'Clinic opens in Ikeja', subtitle: 'A new 24-hour clinic',
-      body: 'Line one\nLine two {with} [brackets] "quoted"', edited: false,
+      body: 'Line one\nLine two {with} [brackets] "quoted"', edited: false, originalHeadline: 'Clinic opens in Ikeja',
     })
   })
 
@@ -237,6 +270,15 @@ describe('NewsSection', () => {
     expect(actions.approveNews).not.toHaveBeenCalled()
     type(/Headline/, 'Back')
     expect(approveButton()).toBeEnabled()
+  })
+
+  it("never blocks Approve on the item's own blank headline when Edit was not opened", async () => {
+    lists.result = loaded({ data: { items: [item({ headline: '' })], phones: {} } })
+    render(<NewsSection />)
+    openReview('News item')
+    expect(approveButton()).toBeEnabled()
+    await act(async () => { fireEvent.click(approveButton()) })
+    expect(actions.approveNews).toHaveBeenCalledWith(expect.objectContaining({ id: 'n1', headline: '', edited: false, originalHeadline: '' }))
   })
 
   it('asks for confirmation before rejecting and rejects only when it is confirmed', async () => {
@@ -298,6 +340,38 @@ describe('NewsSection', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
+  it('a thrown action error is shown inline like any failure, never escaping the click', async () => {
+    actions.approveNews.mockRejectedValue(new Error('boom'))
+    render(<NewsSection />)
+    openReview('Clinic opens in Ikeja')
+    await act(async () => { fireEvent.click(approveButton()) })
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't approve the news item: boom")
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('a result without ok is a failure shown inline', async () => {
+    actions.approveNews.mockResolvedValue(undefined)
+    render(<NewsSection />)
+    openReview('Clinic opens in Ikeja')
+    await act(async () => { fireEvent.click(approveButton()) })
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't approve the news item: The server gave no result")
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(admin.showToast).not.toHaveBeenCalled()
+  })
+
+  it('a thrown error that arrives after the drawer closed is toasted', async () => {
+    let reject
+    actions.deleteNews.mockImplementation(() => new Promise((_, r) => { reject = r }))
+    render(<NewsSection />)
+    openReview('Clinic opens in Ikeja')
+    fireEvent.click(dialog().getByRole('button', { name: 'Delete' }))
+    let pending
+    act(() => { pending = admin.askConfirm.mock.calls[0][0].action() })
+    fireEvent.click(dialog().getByRole('button', { name: 'Close' }))
+    await act(async () => { reject(new Error('Gone')); await pending })
+    expect(admin.showToast).toHaveBeenCalledWith("Couldn't delete the news item: Gone", { type: 'error' })
+  })
+
   it('disables every footer button, Edit and the edit inputs while an action is running', () => {
     const { rerender } = render(<NewsSection />)
     openReview('Clinic opens in Ikeja')
@@ -323,17 +397,35 @@ describe('NewsSection', () => {
     expect(dialog().getByRole('button', { name: 'Edit' })).toBeDisabled()
   })
 
-  it('offers no Edit, Approve or Reject for decided items, but keeps Delete', () => {
+  // As legacy: Edit and Reject only for a pending item, Approve for anything
+  // not yet approved, Delete always.
+  const footerButtons = () => ['Edit', 'Approve and publish', 'Reject', 'Delete']
+    .filter(name => dialog().queryByRole('button', { name }))
+
+  it('a pending item offers Edit, Approve, Reject and Delete', () => {
+    render(<NewsSection />)
+    openReview('Clinic opens in Ikeja')
+    expect(footerButtons()).toEqual(['Edit', 'Approve and publish', 'Reject', 'Delete'])
+  })
+
+  it('a rejected item can still be approved and deleted, but not edited or rejected again', async () => {
     render(<NewsSection />)
     showAll()
-    for (const headline of ['Free screening day', 'Spam submission']) {
-      openReview(headline)
-      expect(dialog().queryByRole('button', { name: 'Approve and publish' })).not.toBeInTheDocument()
-      expect(dialog().queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
-      expect(dialog().queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
-      expect(dialog().getByRole('button', { name: 'Delete' })).toBeInTheDocument()
-      fireEvent.click(dialog().getByRole('button', { name: 'Close' }))
-    }
+    openReview('Spam submission')
+    expect(footerButtons()).toEqual(['Approve and publish', 'Delete'])
+    await act(async () => { fireEvent.click(approveButton()) })
+    expect(actions.approveNews).toHaveBeenCalledWith({
+      id: 'n4', headline: 'Spam submission', subtitle: 'A new 24-hour clinic',
+      body: 'Line one\nLine two {with} [brackets] "quoted"', edited: false, originalHeadline: 'Spam submission',
+    })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('an approved item offers only Delete', () => {
+    render(<NewsSection />)
+    showAll()
+    openReview('Free screening day')
+    expect(footerButtons()).toEqual(['Delete'])
   })
 
   // The confirm closes before the action runs, so the admin can move on while

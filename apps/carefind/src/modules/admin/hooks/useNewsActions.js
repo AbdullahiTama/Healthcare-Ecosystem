@@ -45,10 +45,12 @@ export function useNewsActions() {
     return result
   }, [showToast, invalidateAdmin, recordAction])
 
-  const approveNews = ({ id, headline, subtitle, body, edited }) => run({
+  // The audit records the item's original headline, as legacy did; it falls
+  // back to the headline sent when the caller does not pass one.
+  const approveNews = ({ id, headline, subtitle, body, edited, originalHeadline }) => run({
     id, action: 'approve_news',
     payload: { id, edits: edited ? { headline, subtitle, body } : {} },
-    auditMetadata: { headline }, record: 'approve', success: 'News item approved',
+    auditMetadata: { headline: originalHeadline ?? headline }, record: 'approve', success: 'News item approved',
   })
   const rejectNews = (id) => run({
     id, action: 'reject_news', payload: { id },

@@ -17,10 +17,11 @@ beforeEach(() => {
 describe('useNewsActions', () => {
   it('approves with the edited fields when edited', async () => {
     const { result } = renderHook(() => useNewsActions())
-    const out = await run(() => result.current.approveNews({ id: 'n1', headline: 'H', subtitle: 'S', body: 'B', edited: true }))
+    const out = await run(() => result.current.approveNews({ id: 'n1', headline: 'H', subtitle: 'S', body: 'B', edited: true, originalHeadline: 'Original' }))
     expect(out).toEqual({ ok: true })
     expect(callAdminAuth).toHaveBeenCalledWith('approve_news', { id: 'n1', edits: { headline: 'H', subtitle: 'S', body: 'B' } })
-    expect(callAdminAuth).toHaveBeenCalledWith('log_audit_action', { auditAction: 'approve', targetType: 'news', targetId: 'n1', metadata: { headline: 'H' } })
+    // As legacy, the audit records the item's original headline, not the edit.
+    expect(callAdminAuth).toHaveBeenCalledWith('log_audit_action', { auditAction: 'approve', targetType: 'news', targetId: 'n1', metadata: { headline: 'Original' } })
     expect(admin.recordAction).toHaveBeenCalledWith({ action: 'approve', target: 'news', id: 'n1', timestamp: expect.any(String) })
     expect(admin.invalidateAdmin).toHaveBeenCalledTimes(1)
     expect(admin.showToast).toHaveBeenCalledWith('News item approved', { type: 'success' })
@@ -30,6 +31,8 @@ describe('useNewsActions', () => {
     const { result } = renderHook(() => useNewsActions())
     await run(() => result.current.approveNews({ id: 'n1', headline: 'H', subtitle: 'S', body: 'B', edited: false }))
     expect(callAdminAuth).toHaveBeenCalledWith('approve_news', { id: 'n1', edits: {} })
+    // Without originalHeadline the audit falls back to the headline sent.
+    expect(callAdminAuth).toHaveBeenCalledWith('log_audit_action', { auditAction: 'approve', targetType: 'news', targetId: 'n1', metadata: { headline: 'H' } })
   })
 
   it('rejects, audits and records the action', async () => {
