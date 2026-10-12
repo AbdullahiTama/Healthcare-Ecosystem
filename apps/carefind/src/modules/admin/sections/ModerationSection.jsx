@@ -37,6 +37,16 @@ const PRIORITY_OPTIONS = [
 ]
 const NO_ROWS = []
 
+// The visible name of an item, never blank.
+const titleOf = (item) => item.title || 'Untitled'
+// The accessible name of an item's checkbox and Review button. Titles repeat
+// (two posts reported as "spam", or a report with no reason), so the source
+// and the start of the summary are added to keep each name unique in practice.
+function itemLabel(item) {
+  const summary = item.description && item.description !== item.title ? `: ${item.description.slice(0, 40)}` : ''
+  return `${titleOf(item)} (${SOURCE_LABEL[item.source] || item.source}${summary})`
+}
+
 const fieldStyle = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--adm-ink-soft)' }
 const selectStyle = { height: 34, padding: '0 10px', border: '1px solid var(--adm-line)', borderRadius: 8, font: 'inherit', fontSize: 13, color: 'var(--adm-ink)', background: 'var(--adm-panel)' }
 const checkStyle = { width: 16, height: 16, margin: 0, cursor: 'pointer', accentColor: 'var(--teal-deep, #0e6f5a)' }
@@ -153,7 +163,7 @@ export default function ModerationSection() {
     {
       key: 'select', label: 'Select',
       render: item => (
-        <input type="checkbox" style={checkStyle} aria-label={`Select ${item.title}`}
+        <input type="checkbox" style={checkStyle} aria-label={`Select ${itemLabel(item)}`}
           checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)} />
       ),
     },
@@ -163,7 +173,7 @@ export default function ModerationSection() {
       key: 'summary', label: 'Summary',
       render: i => (
         <span>
-          <span className="adm-item-title">{i.title}</span>
+          <span className="adm-item-title">{titleOf(i)}</span>
           {i.description && i.description !== i.title ? <span className="adm-item-sub">{i.description}</span> : null}
         </span>
       ),
@@ -302,7 +312,7 @@ export default function ModerationSection() {
         loading={loading}
         empty={empty}
         actions={(item) => (
-          <Button size="sm" variant="ghost" onClick={() => open(item)} aria-label={`Review ${item.title}`}>
+          <Button size="sm" variant="ghost" onClick={() => open(item)} aria-label={`Review ${itemLabel(item)}`}>
             Review
           </Button>
         )}
@@ -321,7 +331,7 @@ export default function ModerationSection() {
         deleteLabel="Delete posts"
       />
 
-      <ReviewDrawer show={!!current} title={current ? current.title : ''} status={current ? current.status : undefined} onClose={close} error={error} footer={drawer?.footer}>
+      <ReviewDrawer show={!!current} title={current ? titleOf(current) : ''} status={current ? current.status : undefined} onClose={close} error={error} footer={drawer?.footer}>
         {drawer?.body}
       </ReviewDrawer>
     </div>

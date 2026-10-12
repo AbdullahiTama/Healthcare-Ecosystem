@@ -100,6 +100,10 @@ describe('summarizeBulk', () => {
     expect(out.type).toBe('error')
     expect(out.message).toBe('Approved 1. Skipped: A (not a verification). Failed: B (Not allowed)')
   })
+  it('names an item with no title as Untitled', () => {
+    expect(summarizeBulk({ done: 0, skipped: [{ id: 'r1', title: null, why: 'not a verification' }], failed: [] }, 'Approved').message)
+      .toBe('Approved 0. Skipped: Untitled (not a verification)')
+  })
   it('is a warning when only skips happened', () => {
     expect(summarizeBulk({ done: 0, skipped: [{ id: 'a', title: 'A', why: 'x' }], failed: [] }, 'Dismissed').type).toBe('warning')
   })

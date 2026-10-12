@@ -28,9 +28,18 @@ const flagged = { id: 'p9', status: 'flagged', content: 'Miracle cure inside', r
 const REPORT = 'spam'
 const VERIFICATION = 'Verification: Amina Yusuf'
 const POST = 'Miracle cure inside'
+// Checkboxes and Review buttons are named by title plus source and summary, so
+// two items with the same title still get distinct names.
+const LABELS = {
+  [REPORT]: 'spam (Report: Buy cheap pills now)',
+  [VERIFICATION]: 'Verification: Amina Yusuf (Verification: Pharmacist — Garki Pharmacy)',
+  [POST]: 'Miracle cure inside (Flagged post)',
+  abuse: 'abuse (Report)',
+}
+const label = (title) => LABELS[title]
 
 const renderSection = () => render(<ModerationProvider><ModerationSection /></ModerationProvider>)
-const select = (title) => fireEvent.click(screen.getByRole('checkbox', { name: `Select ${title}` }))
+const select = (title) => fireEvent.click(screen.getByRole('checkbox', { name: `Select ${label(title)}` }))
 const calls = (name) => api.callAdminAuth.mock.calls.filter(([action]) => action === name)
 const runConfirmed = async () => { await act(async () => { await admin.askConfirm.mock.calls[0][0].action() }) }
 
@@ -57,32 +66,32 @@ describe('ModerationSection', () => {
     renderSection()
     expect(screen.getByRole('heading', { level: 1, name: 'Moderation' })).toBeInTheDocument()
     for (const title of [REPORT, POST, VERIFICATION]) {
-      const row = screen.getByRole('checkbox', { name: `Select ${title}` }).closest('tr')
+      const row = screen.getByRole('checkbox', { name: `Select ${label(title)}` }).closest('tr')
       expect(within(row).getByText(title)).toBeInTheDocument()
       expect(within(row).getByText(/^(Urgent|High|Medium|Low)$/)).toBeInTheDocument()
     }
     // Two pending reports on one post collapse into one item and raise its priority.
-    expect(within(screen.getByRole('checkbox', { name: `Select ${REPORT}` }).closest('tr')).getByText('High')).toBeInTheDocument()
+    expect(within(screen.getByRole('checkbox', { name: `Select ${label(REPORT)}` }).closest('tr')).getByText('High')).toBeInTheDocument()
   })
 
   it('lists only what is waiting: no resolved report, no decided verification', () => {
     renderSection()
-    expect(screen.queryByRole('checkbox', { name: 'Select abuse' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('checkbox', { name: 'Select Verification: Bola' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /^Select abuse/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /^Select Verification: Bola/ })).not.toBeInTheDocument()
   })
 
   it('narrows the list by source and by priority', () => {
     renderSection()
     fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'verification' } })
-    expect(screen.getByRole('checkbox', { name: `Select ${VERIFICATION}` })).toBeInTheDocument()
-    expect(screen.queryByRole('checkbox', { name: `Select ${REPORT}` })).not.toBeInTheDocument()
-    expect(screen.queryByRole('checkbox', { name: `Select ${POST}` })).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: `Select ${label(VERIFICATION)}` })).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: `Select ${label(REPORT)}` })).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: `Select ${label(POST)}` })).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'all' } })
     fireEvent.change(screen.getByLabelText('Priority'), { target: { value: 'high' } })
-    expect(screen.getByRole('checkbox', { name: `Select ${REPORT}` })).toBeInTheDocument()
-    expect(screen.queryByRole('checkbox', { name: `Select ${VERIFICATION}` })).not.toBeInTheDocument()
-    expect(screen.queryByRole('checkbox', { name: `Select ${POST}` })).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: `Select ${label(REPORT)}` })).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: `Select ${label(VERIFICATION)}` })).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: `Select ${label(POST)}` })).not.toBeInTheDocument()
   })
 
   it('says there is nothing to match when a filter empties the list, not that nothing is waiting', () => {
@@ -109,7 +118,7 @@ describe('ModerationSection', () => {
     expect(calls('resolve_report')).toEqual([])
     expect(admin.showToast).toHaveBeenCalledWith('Approved 1. Skipped: spam (not a verification)', { type: 'warning' })
     expect(admin.invalidateAdmin).toHaveBeenCalled()
-    expect(screen.getByRole('checkbox', { name: `Select ${VERIFICATION}` })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: `Select ${label(VERIFICATION)}` })).not.toBeChecked()
     // Auth travels in the header; no payload ever carries a token.
     for (const [, payload] of api.callAdminAuth.mock.calls) expect(payload).not.toHaveProperty('token')
   })
@@ -178,6 +187,23 @@ describe('ModerationSection', () => {
     await waitFor(() => expect(admin.showToast).toHaveBeenCalledWith('Approved 0. Failed: Verification: Amina Yusuf (Not allowed)', { type: 'error' }))
   })
 
+  it('two items with the same title get distinct checkbox and Review names', () => {
+    queues.value = { ...queues.value, reports: { status: 'ok', data: [report(), report({ id: 'r5', post_id: 'p5', posts: { content: 'Free money here' } })] } }
+    renderSection()
+    const boxes = screen.getAllByRole('checkbox', { name: /^Select spam/ })
+    expect(boxes).toHaveLength(2)
+    expect(new Set(boxes.map(b => b.getAttribute('aria-label'))).size).toBe(2)
+    const reviews = screen.getAllByRole('button', { name: /^Review spam/ })
+    expect(new Set(reviews.map(b => b.getAttribute('aria-label'))).size).toBe(2)
+  })
+
+  it('an item with no title is named Untitled, never left unnamed', () => {
+    queues.value = { ...queues.value, reports: { status: 'ok', data: [report({ reason: null })] } }
+    adminData.value = { posts: [] }
+    renderSection()
+    expect(screen.getByRole('checkbox', { name: 'Select Untitled (Report: Buy cheap pills now)' })).toBeInTheDocument()
+  })
+
   it('row checkboxes are labelled inputs, and Select all selects only the filtered rows', () => {
     renderSection()
     const boxes = screen.getAllByRole('checkbox', { name: /^Select .+/ })
@@ -187,16 +213,16 @@ describe('ModerationSection', () => {
     }
     fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'report' } })
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select all' }))
-    expect(screen.getByRole('checkbox', { name: `Select ${REPORT}` })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: `Select ${label(REPORT)}` })).toBeChecked()
     expect(screen.getByText('1 selected')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'all' } })
-    expect(screen.getByRole('checkbox', { name: `Select ${VERIFICATION}` })).not.toBeChecked()
-    expect(screen.getByRole('checkbox', { name: `Select ${POST}` })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: `Select ${label(VERIFICATION)}` })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: `Select ${label(POST)}` })).not.toBeChecked()
   })
 
   it('Review on a report shows the Reports drawer body, and Dismiss resolves every pending report by id', async () => {
     renderSection()
-    fireEvent.click(screen.getByRole('button', { name: `Review ${REPORT}` }))
+    fireEvent.click(screen.getByRole('button', { name: `Review ${label(REPORT)}` }))
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByText('Reason')).toBeInTheDocument()
     expect(within(dialog).getByText('Buy cheap pills now', { selector: '.adm-drawer-text' })).toBeInTheDocument()
@@ -207,7 +233,7 @@ describe('ModerationSection', () => {
 
   it('a report drawer deletes the post only after confirmation, by post id', async () => {
     renderSection()
-    fireEvent.click(screen.getByRole('button', { name: `Review ${REPORT}` }))
+    fireEvent.click(screen.getByRole('button', { name: `Review ${label(REPORT)}` }))
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete post' }))
     expect(actions.deletePost).not.toHaveBeenCalled()
     await runConfirmed()
@@ -217,7 +243,7 @@ describe('ModerationSection', () => {
   it('a failed dismiss keeps the drawer open with the error', async () => {
     actions.resolveReport.mockResolvedValueOnce({ ok: false, error: 'Not allowed' })
     renderSection()
-    fireEvent.click(screen.getByRole('button', { name: `Review ${REPORT}` }))
+    fireEvent.click(screen.getByRole('button', { name: `Review ${label(REPORT)}` }))
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Dismiss' }))
     expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent('Not allowed')
     expect(actions.resolveReport).toHaveBeenCalledTimes(1)
@@ -225,7 +251,7 @@ describe('ModerationSection', () => {
 
   it('Review on a verification shows the applicant details and approves with the same payload', async () => {
     renderSection()
-    fireEvent.click(screen.getByRole('button', { name: `Review ${VERIFICATION}` }))
+    fireEvent.click(screen.getByRole('button', { name: `Review ${label(VERIFICATION)}` }))
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByText('Applicant')).toBeInTheDocument()
     expect(within(dialog).getByText('Garki Pharmacy')).toBeInTheDocument()
@@ -236,7 +262,7 @@ describe('ModerationSection', () => {
 
   it('a verification drawer rejects only after confirmation', async () => {
     renderSection()
-    fireEvent.click(screen.getByRole('button', { name: `Review ${VERIFICATION}` }))
+    fireEvent.click(screen.getByRole('button', { name: `Review ${label(VERIFICATION)}` }))
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reject' }))
     expect(actions.rejectVerification).not.toHaveBeenCalled()
     await runConfirmed()
@@ -245,7 +271,7 @@ describe('ModerationSection', () => {
 
   it('Review on a flagged post shows its text and deletes it after confirmation', async () => {
     renderSection()
-    fireEvent.click(screen.getByRole('button', { name: `Review ${POST}` }))
+    fireEvent.click(screen.getByRole('button', { name: `Review ${label(POST)}` }))
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByText(POST, { selector: '.adm-drawer-text' })).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete post' }))
@@ -259,7 +285,7 @@ describe('ModerationSection', () => {
     adminData.value = { posts: [] }
     renderSection()
     expect(screen.getByText("Couldn't load reports")).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: `Select ${VERIFICATION}` })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: `Select ${label(VERIFICATION)}` })).toBeInTheDocument()
     expect(screen.queryByText('Nothing waiting')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /retry/i }))
     expect(queues.refetch).toHaveBeenCalled()

@@ -56,7 +56,7 @@ export async function runBulk(action, items, { reports = [], call, audit }) {
 // The result toast: how many were done, then every skipped and failed item by
 // name with its reason. A failure makes it an error, a skip a warning.
 export function summarizeBulk(result, verb) {
-  const name = (x) => `${x.title || x.id} (${x.why})`
+  const name = (x) => `${x.title || 'Untitled'} (${x.why})`
   let message = `${verb} ${result.done}`
   if (result.skipped.length) message += `. Skipped: ${result.skipped.map(name).join(', ')}`
   if (result.failed.length) message += `. Failed: ${result.failed.map(name).join(', ')}`
