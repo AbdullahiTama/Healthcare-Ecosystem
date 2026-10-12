@@ -5,7 +5,7 @@ import {
   Pill, ClipboardList, Target, Search, LogOut, RotateCcw, Clock,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { NAV_GROUPS } from './AdminSidebar'
+import { NAV_GROUPS } from './navigation'
 
 const ALL_TABS = NAV_GROUPS.flatMap(g =>
   g.items.map(item => ({ ...item, group: g.label, type: 'tab' }))
@@ -58,7 +58,7 @@ export default function CommandPalette({ open, onClose, onNavigate, onSignOut, o
   }, [open])
 
   const filtered = useMemo(() => {
-    const tabs = ALL_TABS.filter(t => permissions?.[t.key] !== false)
+    const tabs = ALL_TABS.filter(t => permissions?.[t.permissionKey || t.key] !== false)
     const all = [...tabs, ...QUICK_ACTIONS]
 
     if (!query.trim()) return all
