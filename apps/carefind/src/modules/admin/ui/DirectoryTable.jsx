@@ -17,7 +17,8 @@ export default function DirectoryTable({
 }) {
   // `plural` is only needed when `${noun}s` is not the plural (business, businesses).
   const nouns = plural || `${noun}s`
-  const [openId, setOpenId] = useState(null)
+  // The open row is kept as a snapshot, so the drawer is independent of the page.
+  const [opened, setOpened] = useState(null)
   const [error, setError] = useState('')
   const { confirming } = useAdmin()
 
@@ -39,17 +40,18 @@ export default function DirectoryTable({
   const data = query.data
   const rows = useMemo(() => data?.rows || [], [data])
   const ready = !isLoading && !isError
-  // Only a real (not placeholder) list lacking the row clears the selection; a
-  // failed refresh keeps it, and the drawer returns if the list recovers with it.
-  const loaded = !!data && !isPlaceholderData && !isError
 
-  const current = openId == null ? null : rows.find(r => r.id === openId) || null
-  useEffect(() => {
-    if (openId != null && loaded && !current) { setOpenId(null); setError('') }
-  }, [openId, loaded, current])
+  // A directory row leaving the current page means nothing: the lists are
+  // newest-first with offset paging and refresh on every insert and a 30 s poll,
+  // so one signup moves a row to the next page. The drawer therefore shows the
+  // row's fresh data while it is on the page and the latest snapshot otherwise,
+  // and closes only when the admin closes it or an action calls `close`.
+  const fresh = opened == null ? null : rows.find(r => r.id === opened.id) || null
+  useEffect(() => { if (fresh && fresh !== opened) setOpened(fresh) }, [fresh, opened])
+  const current = fresh || opened
 
-  const open = (row) => { setError(''); setOpenId(row.id) }
-  const close = () => { setOpenId(null); setError('') }
+  const open = (row) => { setError(''); setOpened(row) }
+  const close = () => { setOpened(null); setError('') }
   const drawer = current ? renderDrawer(current, { close, setError }) : null
 
   // While a new query loads over the previous page, that page's grand total is

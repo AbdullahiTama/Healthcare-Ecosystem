@@ -146,11 +146,37 @@ describe('DirectoryTable', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('closes the drawer when its row leaves the page', () => {
+  it('keeps the drawer open on the opened row when a refresh moves that row off the page', () => {
     const { props, rerender } = setup()
     fireEvent.click(screen.getByRole('button', { name: 'Review Ada' }))
-    rerender(<DirectoryTable {...props} query={ok({ data: { rows: people.slice(1), hasNext: true, total: 4217 } })} />)
+    rerender(<DirectoryTable {...props} query={ok({ data: { rows: people.slice(1), hasNext: true, total: 4219 } })} />)
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Details for Ada')).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('shows fresh data for the open row while it is still on the page', () => {
+    const { props, rerender } = setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Review Ada' }))
+    const renamed = [{ ...people[0], name: 'Ada Renamed' }, ...people.slice(1)]
+    rerender(<DirectoryTable {...props} query={ok({ data: { rows: renamed, hasNext: true, total: 4218 } })} />)
+    expect(within(screen.getByRole('dialog')).getByText('Details for Ada Renamed')).toBeInTheDocument()
+    // Once it leaves the page, the latest data seen for it stays on screen.
+    rerender(<DirectoryTable {...props} query={ok({ data: { rows: people.slice(1), hasNext: true, total: 4219 } })} />)
+    expect(within(screen.getByRole('dialog')).getByText('Details for Ada Renamed')).toBeInTheDocument()
+  })
+
+  it('an action that fails after a refresh moved its row off the page still shows its error inline', () => {
+    let fail
+    const { props, rerender } = setup({
+      renderDrawer: (r, { setError }) => { fail = setError; return { body: <p>Details for {r.name}</p> } },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Review Ada' }))
+    const failFromFirstRender = fail
+    rerender(<DirectoryTable {...props} query={ok({ data: { rows: people.slice(1), hasNext: true, total: 4219 } })} />)
+    act(() => { failFromFirstRender('Not allowed') })
+    expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent('Not allowed')
   })
 
   it('Escape closes the drawer, but not while a confirmation is open on top', () => {
