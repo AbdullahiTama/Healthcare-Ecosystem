@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 const queues = vi.hoisted(() => ({ value: null, refetch: vi.fn() }))
 const actions = vi.hoisted(() => ({
-  approveVerification: vi.fn(), rejectVerification: vi.fn(), openCredential: vi.fn(), busyId: null,
+  approveVerification: vi.fn(), rejectVerification: vi.fn(), openCredential: vi.fn(), busyId: null, credentialBusyId: null,
 }))
 const admin = vi.hoisted(() => ({ askConfirm: vi.fn() }))
 vi.mock('../hooks/useTrustQueues', () => ({ useTrustQueues: () => ({ data: queues.value, refetch: queues.refetch }) }))
@@ -20,6 +20,8 @@ beforeEach(() => {
   actions.rejectVerification.mockReset().mockResolvedValue({ ok: true })
   actions.openCredential.mockReset().mockResolvedValue({ ok: true })
   admin.askConfirm.mockReset()
+  actions.busyId = null
+  actions.credentialBusyId = null
 })
 
 describe('VerificationsSection', () => {
@@ -82,5 +84,21 @@ describe('VerificationsSection', () => {
   it('offers a Review button named after the applicant on pending rows', () => {
     render(<VerificationsSection />)
     expect(screen.getByRole('button', { name: 'Review Amina Yusuf' })).toBeInTheDocument()
+  })
+
+  it('opening the credential shows its own spinner and leaves Approve usable', () => {
+    actions.credentialBusyId = 'v1'
+    render(<VerificationsSection />)
+    fireEvent.click(screen.getByRole('button', { name: 'Review Amina Yusuf' }))
+    expect(screen.getByRole('button', { name: 'Opening…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled()
+  })
+
+  it('an approval in flight leaves View credential usable', () => {
+    actions.busyId = 'v1'
+    render(<VerificationsSection />)
+    fireEvent.click(screen.getByRole('button', { name: 'Review Amina Yusuf' }))
+    expect(screen.getByRole('button', { name: 'View credential' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
   })
 })

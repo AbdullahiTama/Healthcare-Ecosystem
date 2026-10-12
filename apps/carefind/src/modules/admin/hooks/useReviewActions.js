@@ -15,6 +15,9 @@ async function audit(auditAction, targetType, targetId, metadata = {}) {
 export function useReviewActions() {
   const { showToast, invalidateAdmin, recordAction } = useAdmin()
   const [busyId, setBusyId] = useState(null)
+  // Opening a credential is not a review action, so it has its own busy state:
+  // a shared one made Approve spin while the document opened, and vice versa.
+  const [credentialBusyId, setCredentialBusyId] = useState(null)
 
   const run = useCallback(async ({ id, action, payload, auditAs, record, success, metadata }) => {
     setBusyId(id)
@@ -65,7 +68,7 @@ export function useReviewActions() {
   // the tab could never be pointed at the URL. Instead the opener is severed by
   // hand before navigating, so the signed-URL page cannot reach back to us.
   const openCredential = useCallback(async (requestId) => {
-    setBusyId(requestId)
+    setCredentialBusyId(requestId)
     const tab = window.open('', '_blank')
     if (tab) { try { tab.opener = null } catch { /* best effort */ } }
     try {
@@ -77,9 +80,9 @@ export function useReviewActions() {
       if (tab) tab.close()
       return { ok: false, error: `Could not open the document: ${err.message}` }
     } finally {
-      setBusyId(null)
+      setCredentialBusyId(null)
     }
   }, [])
 
-  return { busyId, approveVerification, rejectVerification, approveClaim, rejectClaim, resolveReport, deletePost, openCredential }
+  return { busyId, credentialBusyId, approveVerification, rejectVerification, approveClaim, rejectClaim, resolveReport, deletePost, openCredential }
 }

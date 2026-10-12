@@ -28,7 +28,7 @@ export function VerificationBody({ v, actions, setError }) {
         <dt>Submitted</dt><dd>{timeAgo(v.created_at)}</dd>
       </dl>
       {v.credential_url && (
-        <Button variant="ghost" size="sm" loading={actions.busyId === v.id} loadingText="Opening…"
+        <Button variant="ghost" size="sm" loading={actions.credentialBusyId === v.id} loadingText="Opening…"
           onClick={async () => { const res = await actions.openCredential(v.id); setError(res.ok ? '' : res.error) }}>
           View credential
         </Button>

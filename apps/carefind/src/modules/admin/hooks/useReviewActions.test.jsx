@@ -100,4 +100,31 @@ describe('useReviewActions', () => {
     expect(out).toEqual({ ok: false, error: 'Could not open the document: no file' })
     open.mockRestore()
   })
+
+  it('opening a credential has its own busy state, apart from the review actions', async () => {
+    const tab = { location: '', opener: {}, close: vi.fn() }
+    const open = vi.spyOn(window, 'open').mockReturnValue(tab)
+    let resolve
+    callAdminAuth.mockImplementationOnce(() => new Promise(r => { resolve = r }))
+    const { result } = renderHook(() => useReviewActions())
+    let pending
+    act(() => { pending = result.current.openCredential('v1') })
+    expect(result.current.credentialBusyId).toBe('v1')
+    expect(result.current.busyId).toBeNull()
+    await act(async () => { resolve({ url: 'https://signed.example/doc' }); await pending })
+    expect(result.current.credentialBusyId).toBeNull()
+    open.mockRestore()
+  })
+
+  it('a review action in flight does not mark the credential busy', async () => {
+    let resolve
+    callAdminAuth.mockImplementationOnce(() => new Promise(r => { resolve = r }))
+    const { result } = renderHook(() => useReviewActions())
+    let pending
+    act(() => { pending = result.current.approveVerification({ id: 'v1', userId: 'u1', profession: 'Pharmacist' }) })
+    expect(result.current.busyId).toBe('v1')
+    expect(result.current.credentialBusyId).toBeNull()
+    await act(async () => { resolve({}); await pending })
+    expect(result.current.busyId).toBeNull()
+  })
 })

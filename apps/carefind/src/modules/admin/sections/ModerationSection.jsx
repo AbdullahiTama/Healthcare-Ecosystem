@@ -120,8 +120,10 @@ export default function ModerationSection() {
   const openSourceLoaded = openSource === 'report' ? data?.reports?.status === 'ok'
     : openSource === 'verification' ? data?.verifications?.status === 'ok'
       : !!adminData
-  // The item was handled elsewhere (or the list refreshed without it). A failed
-  // refresh keeps the drawer: only a loaded list that lacks the item closes it.
+  // The item was handled elsewhere (or the list refreshed without it): only a
+  // loaded source that lacks the item clears the selection. While its source
+  // has failed there is no item to show, so the drawer hides but the selection
+  // is kept, and the drawer reappears if the source recovers with the item.
   const drawerGone = openKey != null && !current && openSourceLoaded
   useEffect(() => {
     if (drawerGone) { setOpenKey(null); setError('') }

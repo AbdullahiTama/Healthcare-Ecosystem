@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, within, act } from '@testing-librar
 
 const queues = vi.hoisted(() => ({ value: null, refetch: vi.fn() }))
 const actions = vi.hoisted(() => ({
-  approveVerification: vi.fn(), rejectVerification: vi.fn(), resolveReport: vi.fn(), deletePost: vi.fn(), openCredential: vi.fn(), busyId: null,
+  approveVerification: vi.fn(), rejectVerification: vi.fn(), resolveReport: vi.fn(), deletePost: vi.fn(), openCredential: vi.fn(), busyId: null, credentialBusyId: null,
 }))
 const admin = vi.hoisted(() => ({ askConfirm: vi.fn(), showToast: vi.fn(), invalidateAdmin: vi.fn(), permissions: {} }))
 const adminData = vi.hoisted(() => ({ value: { posts: [] } }))

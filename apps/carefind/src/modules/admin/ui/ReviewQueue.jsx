@@ -25,8 +25,10 @@ export default function ReviewQueue({
   const atCap = cap != null && all.length >= cap
 
   const current = openId == null ? null : all.find(r => rowId(r) === openId) || null
-  // The row was resolved elsewhere (or the list refreshed without it). A failed
-  // refresh keeps the drawer: only a loaded list that lacks the row closes it.
+  // The row was resolved elsewhere (or the list refreshed without it): only a
+  // loaded list that lacks the row clears the selection. While a refresh has
+  // failed there is no row to show, so the drawer hides but the selection is
+  // kept, and the drawer reappears if the list recovers with the row in it.
   useEffect(() => {
     if (openId != null && data && !current) { setOpenId(null); setError('') }
   }, [openId, data, current])
