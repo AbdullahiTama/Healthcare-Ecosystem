@@ -33,10 +33,15 @@ const isHttpUrl = (url) => typeof url === 'string' && /^https?:\/\//i.test(url)
 const text = (v) => (v == null ? '' : String(v))
 // A tel: target of digits and + only ('' when nothing remains: no link).
 const telTarget = (phone) => text(phone).replace(/[^+\d]/g, '')
-// A mailto: address keeps '@' (and everything else) literal; only the
-// characters that would start a query or fragment, or break the URL, are
-// encoded, so a crafted address cannot add cc/subject/body headers.
-const mailtoTarget = (email) => text(email).replace(/[?&#%\s]/g, c => encodeURIComponent(c))
+// An email is a link only when it is ONE plain address: no whitespace, exactly
+// one '@', and no ',' or ';' (which would add recipients). Anything else is
+// shown as text.
+const SINGLE_ADDRESS = /^[^\s@,;]+@[^\s@,;]+$/
+const isSingleAddress = (email) => SINGLE_ADDRESS.test(text(email))
+// The mailto: target keeps '@' literal; the characters that would start a
+// query or fragment, add a recipient, or break the URL are encoded, so a
+// crafted address cannot add cc/subject/body headers.
+const mailtoTarget = (email) => text(email).replace(/[?&#%,;\s]/g, c => encodeURIComponent(c))
 
 // Submitted is not sortable: the server returns the newest 60 only, so sorting
 // would reorder a partial list and mislead (Phase 2b finding 44).
@@ -104,7 +109,11 @@ function NewsBody({ n, phone, shownId, draft, setDraft, busy }) {
                 ? <a href={`tel:${telTarget(phone)}`} aria-label={`Call ${phone}`}>{phone}</a>
                 : text(phone)}</dd></>
             )}
-            {email && (<><dt>Email</dt><dd><a href={`mailto:${mailtoTarget(email)}`} aria-label={`Email ${email}`}>{email}</a></dd></>)}
+            {email && (
+              <><dt>Email</dt><dd>{isSingleAddress(email)
+                ? <a href={`mailto:${mailtoTarget(email)}`} aria-label={`Email ${email}`}>{email}</a>
+                : text(email)}</dd></>
+            )}
           </dl>
         </section>
       )}

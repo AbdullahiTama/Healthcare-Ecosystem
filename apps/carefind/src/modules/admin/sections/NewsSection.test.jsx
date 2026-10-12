@@ -127,12 +127,29 @@ describe('NewsSection', () => {
     expect(mail).toHaveAttribute('href', 'mailto:ada@example.com')
   })
 
-  it('encodes only ?, &, #, % and whitespace in a mailto: address, so it cannot add headers', () => {
-    lists.result = loaded({ data: { items: [item({ contact_email: 'a?cc=x@y.com&b#c%d e@ex.com' })], phones: {} } })
+  it('encodes ?, &, #, %, comma and semicolon in a single address, keeping @, so it cannot add headers', () => {
+    lists.result = loaded({ data: { items: [item({ contact_email: 'a?cc=x&body=y#z%q@ex.com' })], phones: {} } })
     render(<NewsSection />)
     openReview('Clinic opens in Ikeja')
-    const mail = dialog().getByRole('link', { name: 'Email a?cc=x@y.com&b#c%d e@ex.com' })
-    expect(mail).toHaveAttribute('href', 'mailto:a%3Fcc=x@y.com%26b%23c%25d%20e@ex.com')
+    const mail = dialog().getByRole('link', { name: 'Email a?cc=x&body=y#z%q@ex.com' })
+    expect(mail).toHaveAttribute('href', 'mailto:a%3Fcc=x%26body=y%23z%25q@ex.com')
+  })
+
+  // A mailto: target with ',' or ';' (or a second '@', or whitespace) opens a
+  // draft to more than one recipient: such a value is shown as text only.
+  it.each([
+    'ada@x.com,attacker@evil.com',
+    'a@x.com;b@y.com',
+    'a?cc=x@y.com&b#c%d e@ex.com',
+    'not an address',
+  ])('shows %s as text, never as a mailto: link', (email) => {
+    lists.result = loaded({ data: { items: [item({ contact_phone: null, contact_email: email })], phones: {} } })
+    render(<NewsSection />)
+    openReview('Clinic opens in Ikeja')
+    const contact = within(dialog().getByRole('region', { name: 'Contact the submitter' }))
+    expect(contact.getByText(email)).toBeInTheDocument()
+    expect(contact.queryByRole('link')).not.toBeInTheDocument()
+    expect(document.querySelector('a[href^="mailto:"]')).toBeNull()
   })
 
   it('shows a phone with no digits as text, never as a tel: link', () => {
