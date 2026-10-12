@@ -97,7 +97,12 @@ export default function LiveShowCard({ show }) {
   const [file, setFile] = useState(null)
   const [fileKey, setFileKey] = useState(0) // remounts the file input to clear it
   const [composerError, setComposerError] = useState('')
-  const [mediaError, setMediaError] = useState('')
+  // Media posts that failed, oldest first: { id, label, error }. The shared
+  // components mark an item as posted whatever the result, so each failure
+  // stays here, naming its item, until that item posts or it is dismissed;
+  // a new media post never clears it.
+  const [mediaFailures, setMediaFailures] = useState([])
+  const failureSeq = useRef(0)
   const [hideError, setHideError] = useState('')
   const [endError, setEndError] = useState('')
 
@@ -132,14 +137,19 @@ export default function LiveShowCard({ show }) {
 
   // Returned to the shared component, which awaits it (SlideUploader posts one
   // slide after another).
-  const sendMedia = async (kind, content) => {
-    setMediaError('')
+  const sendMedia = async (kind, content, label) => {
     const res = await postMedia({ showId: show.id, kind, content })
-    if (!goneAfter("Couldn't post to the live show", res) && !res.ok) {
-      setMediaError(`Couldn't post to the live show: ${res.error}`)
+    if (goneAfter(`Couldn't post ${label}`, res)) return res
+    if (res.ok) {
+      setMediaFailures(list => list.filter(f => f.label !== label))
+    } else {
+      failureSeq.current += 1
+      const id = failureSeq.current
+      setMediaFailures(list => [...list, { id, label, error: res.error }])
     }
     return res
   }
+  const dismissFailure = (id) => setMediaFailures(list => list.filter(f => f.id !== id))
 
   const hide = async (comment) => {
     setHideError('')
@@ -257,11 +267,25 @@ export default function LiveShowCard({ show }) {
       </form>
 
       <div className="adm-live-tools">
-        <VoiceRecorder showId={show.id} onRecorded={(url) => sendMedia('voice', url)} />
-        <SlideUploader showId={show.id} onPostSlide={(url, num, total) => sendMedia('slide', slideContent(url, num, total))} />
-        <VideoRecorder showId={show.id} onRecorded={(url) => sendMedia('video', url)} />
-        <VideoUploader showId={show.id} onUploaded={(url) => sendMedia('video', url)} />
-        {mediaError && <Alert>{mediaError}</Alert>}
+        <VoiceRecorder showId={show.id} onRecorded={(url) => sendMedia('voice', url, 'Voice note')} />
+        <SlideUploader showId={show.id}
+          onPostSlide={(url, num, total) => sendMedia('slide', slideContent(url, num, total), `Slide ${num} of ${total}`)} />
+        <VideoRecorder showId={show.id} onRecorded={(url) => sendMedia('video', url, 'Video')} />
+        <VideoUploader showId={show.id} onUploaded={(url) => sendMedia('video', url, 'Video')} />
+        {mediaFailures.length > 0 && (
+          <div role="alert" aria-label="Media that did not post" className="adm-live-alert">
+            <ul className="adm-live-failures">
+              {mediaFailures.map(f => (
+                <li key={f.id}>
+                  <span>Couldn't post {f.label}: {f.error}</span>
+                  <Button variant="ghost" size="sm" aria-label={`Dismiss: ${f.label}`} onClick={() => dismissFailure(f.id)}>
+                    Dismiss
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {data && (

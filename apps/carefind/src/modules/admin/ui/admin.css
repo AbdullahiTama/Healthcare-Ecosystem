@@ -146,3 +146,5 @@ button.adm-item:hover { background: var(--adm-line-soft); }
 .adm-live-comment { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .adm-live-comment-text { flex: 1; min-width: 0; font-size: 13px; color: var(--adm-ink-mid); overflow-wrap: anywhere; }
 .adm-live-comment-text strong { color: var(--adm-ink); }
+.adm-live-failures { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.adm-live-failures li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }

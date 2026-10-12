@@ -10,7 +10,7 @@ const actions = vi.hoisted(() => ({
   postItem: vi.fn(), postMedia: vi.fn(), hideComment: vi.fn(), endShow: vi.fn(),
 }))
 const admin = vi.hoisted(() => ({ askConfirm: vi.fn(), showToast: vi.fn() }))
-const stubs = vi.hoisted(() => ({ slideReturned: null }))
+const stubs = vi.hoisted(() => ({ slideReturned: null, slide: null }))
 
 vi.mock('../../hooks/useLiveControl', () => ({
   useLiveControl: (showId) => { control.calls.push(showId); return control.byShow[showId] },
@@ -37,7 +37,7 @@ vi.mock('../../../../components/VoiceRecorder.jsx', () => ({
 }))
 vi.mock('../../../../components/SlideUploader.jsx', () => ({
   // SlideUploader awaits onPostSlide, so the stub keeps what it returned.
-  default: ({ showId, onPostSlide }) => <button type="button" onClick={() => { stubs.slideReturned = onPostSlide('https://cdn/s.jpg', 2, 5) }}>stub slide {showId}</button>,
+  default: ({ showId, onPostSlide }) => <button type="button" onClick={() => { const { url, num, total } = stubs.slide; stubs.slideReturned = onPostSlide(url, num, total) }}>stub slide {showId}</button>,
 }))
 vi.mock('../../../../components/VideoRecorder.jsx', () => ({
   default: ({ showId, onRecorded }) => <button type="button" onClick={() => onRecorded('https://cdn/cam.webm')}>stub camera {showId}</button>,
@@ -91,6 +91,7 @@ beforeEach(() => {
   control.byShow = { [show.id]: loaded() }
   control.calls = []
   stubs.slideReturned = null
+  stubs.slide = { url: 'https://cdn/s.jpg', num: 2, total: 5 }
   actions.busyKeys = []
   for (const fn of [actions.postItem, actions.postMedia, actions.hideComment, actions.endShow]) {
     fn.mockReset()
@@ -373,13 +374,79 @@ describe('LiveShowCard shared media components', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('late')
   })
 
-  it('shows a media failure inline, separate from the composer', async () => {
+  it('shows a media failure inline, naming the item, separate from the composer', async () => {
     actions.postMedia.mockResolvedValue({ ok: false, error: 'Not allowed' })
     render(<LiveShowCard show={show} />)
     await click(screen.getByRole('button', { name: 'stub voice show-1' }))
     const alert = screen.getByRole('alert')
-    expect(alert).toHaveTextContent("Couldn't post to the live show: Not allowed")
+    expect(alert).toHaveTextContent("Couldn't post Voice note: Not allowed")
     expect(draftBox()).toHaveValue('')
+  })
+})
+
+describe('LiveShowCard media failures', () => {
+  const pressSlide = (num, total = 8) => { stubs.slide = { url: `https://cdn/s${num}.jpg`, num, total }; return click(screen.getByRole('button', { name: 'stub slide show-1' })) }
+  const failures = () => screen.getByRole('alert', { name: 'Media that did not post' })
+  const lines = () => within(failures()).getAllByRole('listitem')
+
+  it('keeps a failed slide visible when the next slide is posted, naming it', async () => {
+    let resolveNext
+    actions.postMedia
+      .mockResolvedValueOnce({ ok: false, error: 'Network down' })
+      .mockReturnValueOnce(new Promise(r => { resolveNext = r }))
+    render(<LiveShowCard show={show} />)
+    await pressSlide(3)
+    expect(failures()).toHaveTextContent("Couldn't post Slide 3 of 8: Network down")
+    await pressSlide(4)
+    // Slide 4 is still running: slide 3's failure has not been cleared.
+    expect(failures()).toHaveTextContent("Couldn't post Slide 3 of 8: Network down")
+    await act(async () => { resolveNext({ ok: true }) })
+    expect(lines()).toHaveLength(1)
+    expect(failures()).toHaveTextContent('Slide 3 of 8')
+    expect(actions.postMedia).toHaveBeenNthCalledWith(1, { showId: 'show-1', kind: 'slide', content: 'https://cdn/s3.jpg|||3|||8' })
+    expect(actions.postMedia).toHaveBeenNthCalledWith(2, { showId: 'show-1', kind: 'slide', content: 'https://cdn/s4.jpg|||4|||8' })
+  })
+
+  it('removes a failure when the same item later posts', async () => {
+    actions.postMedia.mockResolvedValueOnce({ ok: false, error: 'Network down' })
+    render(<LiveShowCard show={show} />)
+    await pressSlide(3)
+    expect(failures()).toHaveTextContent('Slide 3 of 8')
+    await pressSlide(3)
+    expect(screen.queryByRole('alert', { name: 'Media that did not post' })).not.toBeInTheDocument()
+  })
+
+  it('shows two different failures as two lines, and Dismiss removes only its own', async () => {
+    actions.postMedia
+      .mockResolvedValueOnce({ ok: false, error: 'Network down' })
+      .mockResolvedValueOnce({ ok: false, error: 'Too large' })
+    render(<LiveShowCard show={show} />)
+    await pressSlide(3)
+    await click(screen.getByRole('button', { name: 'stub camera show-1' }))
+    expect(lines()).toHaveLength(2)
+    expect(lines()[0]).toHaveTextContent("Couldn't post Slide 3 of 8: Network down")
+    expect(lines()[1]).toHaveTextContent("Couldn't post Video: Too large")
+    await click(screen.getByRole('button', { name: 'Dismiss: Slide 3 of 8' }))
+    expect(lines()).toHaveLength(1)
+    expect(lines()[0]).toHaveTextContent("Couldn't post Video: Too large")
+    await click(screen.getByRole('button', { name: 'Dismiss: Video' }))
+    expect(screen.queryByRole('alert', { name: 'Media that did not post' })).not.toBeInTheDocument()
+  })
+
+  it('names the item when the post was refused as already running', async () => {
+    actions.postMedia.mockResolvedValue({ ok: false, error: 'Already running' })
+    render(<LiveShowCard show={show} />)
+    await click(screen.getByRole('button', { name: 'stub voice show-1' }))
+    expect(failures()).toHaveTextContent("Couldn't post Voice note: Already running")
+  })
+
+  it("keeps each card's failures to its own show", async () => {
+    control.byShow[otherShow.id] = loaded()
+    actions.postMedia.mockResolvedValue({ ok: false, error: 'Network down' })
+    render(<><LiveShowCard show={show} /><LiveShowCard show={otherShow} /></>)
+    await click(screen.getByRole('button', { name: 'stub voice show-1' }))
+    expect(within(card(show.title)).getByRole('alert', { name: 'Media that did not post' })).toHaveTextContent('Voice note')
+    expect(within(card(otherShow.title)).queryByRole('alert', { name: 'Media that did not post' })).not.toBeInTheDocument()
   })
 })
 
