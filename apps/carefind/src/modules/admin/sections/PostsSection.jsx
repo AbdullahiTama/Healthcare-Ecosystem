@@ -141,7 +141,7 @@ function PostBody({ p, shownId }) {
                     style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block', borderRadius: 8, border: '1px solid var(--adm-line)' }} />
                 </a>
               )
-              : <span key={i} style={{ display: 'block' }}>{UNSUPPORTED_MEDIA}</span>))}
+              : <div key={i}>{UNSUPPORTED_MEDIA}</div>))}
           </div>
         </section>
       )}
