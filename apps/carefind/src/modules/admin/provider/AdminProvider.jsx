@@ -143,9 +143,14 @@ export function AdminProvider({ children }) {
     pollFn: invalidateAdmin,
   })
 
+  // True while the confirmation dialog is open. Every open shared Modal listens
+  // for Escape on `document`, so a drawer under the confirmation reads this to
+  // stop the same Escape closing it too.
+  const confirming = !!confirmState
+
   const value = useMemo(() => ({
-    adminUser, permissions, showToast, askConfirm, invalidateAdmin, signOut, recordAction, actionHistory,
-  }), [adminUser, permissions, showToast, askConfirm, invalidateAdmin, signOut, recordAction, actionHistory])
+    adminUser, permissions, showToast, askConfirm, confirming, invalidateAdmin, signOut, recordAction, actionHistory,
+  }), [adminUser, permissions, showToast, askConfirm, confirming, invalidateAdmin, signOut, recordAction, actionHistory])
 
   // Fail closed: nothing of the admin renders without a server-verified admin,
   // including the instant before a failed verification redirects to /login.

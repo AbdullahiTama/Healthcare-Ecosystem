@@ -1,4 +1,4 @@
-export function BulkActionBar({ selectedCount, onApprove, onReject, onDelete, onClear }) {
+export function BulkActionBar({ selectedCount, onApprove, onReject, onDismiss, onDelete, onClear, approveLabel = 'Approve selected', rejectLabel = 'Reject selected', dismissLabel = 'Dismiss selected', deleteLabel = 'Delete selected' }) {
   if (!selectedCount) return null
   return (
     <div style={{
@@ -17,20 +17,25 @@ export function BulkActionBar({ selectedCount, onApprove, onReject, onDelete, on
       flexWrap: 'wrap',
     }}>
       <span style={{ fontWeight: 700, fontSize: 13 }}>{selectedCount} selected</span>
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {onApprove && (
           <button onClick={onApprove} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--green)', color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-            Approve selected
+            {approveLabel}
           </button>
         )}
         {onReject && (
           <button onClick={onReject} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--amber)', color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-            Reject selected
+            {rejectLabel}
+          </button>
+        )}
+        {onDismiss && (
+          <button onClick={onDismiss} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--amber)', color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+            {dismissLabel}
           </button>
         )}
         {onDelete && (
           <button onClick={onDelete} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--red)', color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-            Delete selected
+            {deleteLabel}
           </button>
         )}
         {onClear && (

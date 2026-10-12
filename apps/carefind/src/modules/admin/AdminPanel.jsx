@@ -4,6 +4,11 @@ import { AdminProvider, useAdmin } from './provider/AdminProvider.jsx'
 import AdminShell from './shell/AdminShell.jsx'
 import OverviewSection from './sections/OverviewSection.jsx'
 import FeedRankingSection from './sections/FeedRankingSection.jsx'
+import VerificationsSection from './sections/VerificationsSection.jsx'
+import ClaimsSection from './sections/ClaimsSection.jsx'
+import ReportsSection from './sections/ReportsSection.jsx'
+import ModerationSection from './sections/ModerationSection.jsx'
+import { ModerationProvider } from './stores/moderationStore'
 import LegacyTabHost from './legacy/LegacyTabHost.jsx'
 import { isAllowed } from './navigation'
 
@@ -20,6 +25,10 @@ function ActiveSection({ tab, setTab }) {
 
   if (tab === 'overview') return <OverviewSection permissions={permissions} onOpenTab={setTab} />
   if (tab === 'feed_ranking') return <FeedRankingSection />
+  if (tab === 'verifications') return <VerificationsSection />
+  if (tab === 'claims') return <ClaimsSection />
+  if (tab === 'reports') return <ReportsSection />
+  if (tab === 'moderation') return <ModerationProvider><ModerationSection /></ModerationProvider>
   return <LegacyTabHost tab={tab} setTab={setTab} />
 }
 

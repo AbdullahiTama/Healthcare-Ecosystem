@@ -9,9 +9,6 @@ import { useAdmin } from '../provider/AdminProvider.jsx'
 import { ALL_TABS } from '../navigation'
 import { useAdminData, useAdminStories, useAdminNews, useAdminPromotions, useAdminSearchLogs, useAdminLiveShows, useAdminShopData, useAdminRoles } from '../../../hooks/queries'
 import ShopTab from '../tabs/ShopTab.jsx'
-import VerificationsTab from '../tabs/VerificationsTab.jsx'
-import ClaimsTab from '../tabs/ClaimsTab.jsx'
-import ReportsTab from '../tabs/ReportsTab.jsx'
 import UsersTab from '../tabs/UsersTab.jsx'
 import PostsTab from '../tabs/PostsTab.jsx'
 import RevenueTab from '../tabs/RevenueTab.jsx'
@@ -28,7 +25,6 @@ import SearchesTab from '../tabs/SearchesTab.jsx'
 import GoLiveTab from '../tabs/GoLiveTab.jsx'
 import NotificationsTab from '../tabs/NotificationsTab.jsx'
 import EmailTemplatesTab from '../tabs/EmailTemplatesTab.jsx'
-import ModerationQueue from '../tabs/ModerationQueue.jsx'
 import AuditLog from '../components/AuditLog.jsx'
 import OrdersTab from '../tabs/OrdersTab.jsx'
 import ErrorsTab from '../tabs/ErrorsTab.jsx'
@@ -43,10 +39,6 @@ export default function LegacyTabHost({ tab, setTab }) {
   const qc = useQueryClient()
   const { adminUser, permissions: adminPermissions, showToast, askConfirm, invalidateAdmin, recordAction } = useAdmin()
 
-  // Credential review: which document is being signed, and any failure to
-  // report inline against that row.
-  const [credentialLoadingId, setCredentialLoadingId] = useState(null)
-  const [credentialError, setCredentialError] = useState({ id: null, message: '' })
   const [userSearch, setUserSearch] = useState('')
   const [postSearch, setPostSearch] = useState('')
   const [drugSearch, setDrugSearch] = useState('')
@@ -60,7 +52,6 @@ export default function LegacyTabHost({ tab, setTab }) {
   const [postDateTo, setPostDateTo] = useState('')
   const [userVerifiedFilter, setUserVerifiedFilter] = useState('all')
   const [userSpecialtyFilter, setUserSpecialtyFilter] = useState('')
-  const [reportStatusFilter, setReportStatusFilter] = useState('pending')
   const [selectedUser, setSelectedUser] = useState(null)
   const [suspendDays, setSuspendDays] = useState('7')
   const [userPosts, setUserPosts] = useState([])
@@ -131,7 +122,7 @@ export default function LegacyTabHost({ tab, setTab }) {
   const { data: shopData } = useAdminShopData(!!adminUser)
   const { data: adminRoles = [] } = useAdminRoles(!!adminUser)
 
-  const { posts = [], users = [], verifications = [], claims = [], reports = [], transactions = [], tasks = [], teams = [], staff = [], businesses = [], withdrawals = [], notifications = [], phoneMap = {}, notifCount = 0, roleNotifCount = 0, stats = {} } = adminData || {}
+  const { posts = [], users = [], transactions = [], tasks = [], teams = [], staff = [], businesses = [], withdrawals = [], notifications = [], phoneMap = {}, notifCount = 0, roleNotifCount = 0, stats = {} } = adminData || {}
   const newsItems = newsData?.items || []
   const newsPhones = newsData?.phones || {}
   const activeShows = liveShowsData?.active || []
@@ -521,82 +512,6 @@ export default function LegacyTabHost({ tab, setTab }) {
     invalidateAdmin()
   }
 
-  // Resolve a private credential document to a short-lived signed URL and
-  // open it. The admin API holds the service-role key; the browser never does.
-  async function openCredential(requestId) {
-    setCredentialLoadingId(requestId)
-    setCredentialError({ id: null, message: '' })
-
-    // The tab is opened SYNCHRONOUSLY, inside the click's user-activation
-    // window, and pointed at the signed URL once it arrives. Calling
-    // window.open() after the await is blocked by Chrome and Safari, which
-    // would look like the button doing nothing at all.
-    const tab = window.open('', '_blank', 'noopener,noreferrer')
-    try {
-      const { url } = await callAdminAuth('credential_url', {  requestId })
-      if (tab) {
-        tab.location = url
-      } else {
-        // Popups blocked entirely — hand the reviewer a link rather than
-        // failing silently.
-        setCredentialError({ id: requestId, message: 'Your browser blocked the document window. Allow popups for this site and try again.' })
-      }
-    } catch (err) {
-      if (tab) tab.close()
-      setCredentialError({ id: requestId, message: `Could not open the document: ${err.message}` })
-    } finally {
-      setCredentialLoadingId(null)
-    }
-  }
-
-  async function approveVerif(id, userId, profession) {
-    try {
-      await callAdminAuth('approve_verification', {  id, userId, profession })
-      logAuditAction('approve', 'verification', id, { userId, profession })
-      recordAction({ action: 'approve', target: 'verification', id, timestamp: new Date().toISOString() })
-      invalidateAdmin()
-      showToast('Verification approved', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't approve the verification: ${err.message}`, { type: 'error' })
-    }
-  }
-
-  async function rejectVerif(id) {
-    try {
-      await callAdminAuth('reject_verification', {  id })
-      logAuditAction('reject', 'verification', id, {})
-      recordAction({ action: 'reject', target: 'verification', id, timestamp: new Date().toISOString() })
-      invalidateAdmin()
-      showToast('Verification rejected', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't reject the verification: ${err.message}`, { type: 'error' })
-    }
-  }
-
-  async function approveClaim(id, businessId) {
-    try {
-      await callAdminAuth('approve_claim', {  claimId: id, businessId })
-      logAuditAction('approve', 'claim', id, { businessId })
-      recordAction({ action: 'approve', target: 'claim', id, timestamp: new Date().toISOString() })
-      invalidateAdmin()
-      showToast('Claim approved', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't approve the claim: ${err.message}`, { type: 'error' })
-    }
-  }
-
-  async function rejectClaim(id) {
-    try {
-      await callAdminAuth('reject_claim', {  claimId: id })
-      logAuditAction('reject', 'claim', id, {})
-      recordAction({ action: 'reject', target: 'claim', id, timestamp: new Date().toISOString() })
-      invalidateAdmin()
-      showToast('Claim rejected', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't reject the claim: ${err.message}`, { type: 'error' })
-    }
-  }
-
   function deletePost(id) {
     askConfirm({
       title: 'Delete this post?',
@@ -614,18 +529,6 @@ export default function LegacyTabHost({ tab, setTab }) {
       showToast('Post deleted', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't delete the post: ${err.message}`, { type: 'error' })
-    }
-  }
-
-  async function resolveReport(id) {
-    try {
-      await callAdminAuth('resolve_report', {  id })
-      logAuditAction('resolve', 'report', id, {})
-      recordAction({ action: 'approve', target: 'report', id, timestamp: new Date().toISOString() })
-      invalidateAdmin()
-      showToast('Report resolved', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't resolve the report: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -693,13 +596,9 @@ export default function LegacyTabHost({ tab, setTab }) {
   return (
     <ModerationProvider>
       <div>
-        {tab === 'moderation' && <ModerationQueue reports={reports} posts={posts} verifications={verifications} showToast={showToast} loadAll={loadAll} />}
         {tab === 'audit_log' && <AuditLog />}
         {tab === 'errors' && <ErrorsTab showToast={showToast} />}
         {tab === 'reconciliation' && <ReconciliationTab showToast={showToast} />}
-        {tab === 'verifications' && <VerificationsTab verifications={verifications} openCredential={openCredential} credentialLoadingId={credentialLoadingId} credentialError={credentialError} approveVerif={approveVerif} rejectVerif={rejectVerif} />}
-        {tab === 'claims' && <ClaimsTab claims={claims} approveClaim={approveClaim} rejectClaim={rejectClaim} />}
-        {tab === 'reports' && <ReportsTab reports={reports} deletePost={deletePost} resolveReport={resolveReport} />}
         {tab === 'users' && <UsersTab users={users} selectedUser={selectedUser} setSelectedUser={setSelectedUser} userSearch={userSearch} setUserSearch={setUserSearch} userVerifiedFilter={userVerifiedFilter} setUserVerifiedFilter={setUserVerifiedFilter} userSpecialtyFilter={userSpecialtyFilter} setUserSpecialtyFilter={setUserSpecialtyFilter} phoneMap={phoneMap} viewUserDetails={viewUserDetails} suspendDays={suspendDays} setSuspendDays={setSuspendDays} suspendUser={suspendUser} deleteUser={deleteUser} deletingUser={deletingUser} userPosts={userPosts} verifyingUser={verifyingUser} setVerifyingUser={setVerifyingUser} verifySpecialty={verifySpecialty} setVerifySpecialty={setVerifySpecialty} manualVerify={manualVerify} adminUser={adminUser} />}
         {tab === 'posts' && <PostsTab posts={posts} selectedPost={selectedPost} setSelectedPost={setSelectedPost} postAuthor={postAuthor} setPostAuthor={setPostAuthor} postSearch={postSearch} setPostSearch={setPostSearch} postTypeFilter={postTypeFilter} setPostTypeFilter={setPostTypeFilter} postDateFrom={postDateFrom} setPostDateFrom={setPostDateFrom} postDateTo={postDateTo} setPostDateTo={setPostDateTo} viewPostDetails={viewPostDetails} deletePost={deletePost} />}
         {tab === 'revenue' && <RevenueTab transactions={transactions} />}

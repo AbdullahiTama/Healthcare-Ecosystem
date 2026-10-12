@@ -16,9 +16,10 @@ vi.mock('../hooks/useRealtimeChannel', () => ({ useRealtimeChannel: vi.fn() }))
 import { AdminProvider, useAdmin } from './AdminProvider.jsx'
 
 function Probe() {
-  const { adminUser, permissions, signOut, askConfirm, recordAction, actionHistory } = useAdmin()
+  const { adminUser, permissions, signOut, askConfirm, recordAction, actionHistory, confirming } = useAdmin()
   return (
     <div>
+      <span>confirming:{String(confirming)}</span>
       <span>user:{adminUser.full_name}</span>
       <span>perm:{JSON.stringify(permissions)}</span>
       <span>history:{actionHistory.length}</span>
@@ -106,5 +107,19 @@ describe('AdminProvider', () => {
     expect(screen.getByText('history:0')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(screen.getByText('history:1')).toBeInTheDocument())
+  })
+
+  it('reports `confirming` while a confirmation is open, and clears it on confirm and on cancel', async () => {
+    mount()
+    expect(await screen.findByText('confirming:false')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'ask' }))
+    expect(await screen.findByText('confirming:true')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(await screen.findByText('confirming:false')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'ask' }))
+    expect(await screen.findByText('confirming:true')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(await screen.findByText('confirming:false')).toBeInTheDocument()
   })
 })
