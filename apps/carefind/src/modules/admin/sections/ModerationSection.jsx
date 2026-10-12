@@ -8,6 +8,7 @@ import { useReviewActions } from '../hooks/useReviewActions'
 import { useAdmin } from '../provider/AdminProvider.jsx'
 import { useAdminData } from '../../../hooks/queries'
 import { callAdminAuth } from '../adminApi'
+import { isAllowed } from '../navigation'
 import { getModerationItems } from '../lib/priorityScoring'
 import { runBulk, summarizeBulk, reportsToResolve } from '../lib/bulkModeration'
 import { useModerationStore } from '../stores/moderationStore'
@@ -65,7 +66,16 @@ export default function ModerationSection() {
   // "no flagged posts". Reports and verifications do report failure.
   const { data: adminData } = useAdminData(true)
   const actions = useReviewActions()
-  const { askConfirm, confirming, showToast, invalidateAdmin } = useAdmin()
+  const { askConfirm, confirming, showToast, invalidateAdmin, permissions } = useAdmin()
+  // Every source is listed, as before, but an item's actions are offered only
+  // when the role is allowed that item's own tab. This tidies the UI only: the
+  // server decides what any request may do.
+  const canAct = {
+    verification: isAllowed(permissions, 'verifications'),
+    report: isAllowed(permissions, 'reports'),
+    post: isAllowed(permissions, 'posts'),
+  }
+  const anyBulk = canAct.verification || canAct.report || canAct.post
   const {
     selectedIds, toggleSelect, selectAll, clearSelection,
     bulkActionLoading, setBulkActionLoading,
@@ -196,8 +206,13 @@ export default function ModerationSection() {
     </Button>
   )
 
-  // The drawer shows the same body as the item's own screen.
+  // The drawer shows the same body as the item's own screen, and its actions
+  // only when the role is allowed that screen.
   const renderDrawer = (item) => {
+    const view = renderItem(item)
+    return canAct[item.source] ? view : { body: view.body, footer: null }
+  }
+  const renderItem = (item) => {
     if (item.source === 'verification') {
       const v = item.raw
       return {
@@ -322,11 +337,11 @@ export default function ModerationSection() {
       />
 
       <BulkActionBar
-        selectedCount={selected.length}
-        onApprove={() => runAction('approve_verifications', 'Approved')}
-        onReject={onBulkReject}
-        onDismiss={() => runAction('dismiss_reports', 'Dismissed')}
-        onDelete={onBulkDelete}
+        selectedCount={anyBulk ? selected.length : 0}
+        onApprove={canAct.verification ? () => runAction('approve_verifications', 'Approved') : undefined}
+        onReject={canAct.verification ? onBulkReject : undefined}
+        onDismiss={canAct.report ? () => runAction('dismiss_reports', 'Dismissed') : undefined}
+        onDelete={canAct.post ? onBulkDelete : undefined}
         onClear={clearSelection}
         approveLabel="Approve verifications"
         rejectLabel="Reject verifications"

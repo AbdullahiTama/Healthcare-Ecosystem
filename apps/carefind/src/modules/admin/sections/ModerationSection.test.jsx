@@ -5,7 +5,7 @@ const queues = vi.hoisted(() => ({ value: null, refetch: vi.fn() }))
 const actions = vi.hoisted(() => ({
   approveVerification: vi.fn(), rejectVerification: vi.fn(), resolveReport: vi.fn(), deletePost: vi.fn(), openCredential: vi.fn(), busyId: null,
 }))
-const admin = vi.hoisted(() => ({ askConfirm: vi.fn(), showToast: vi.fn(), invalidateAdmin: vi.fn() }))
+const admin = vi.hoisted(() => ({ askConfirm: vi.fn(), showToast: vi.fn(), invalidateAdmin: vi.fn(), permissions: {} }))
 const adminData = vi.hoisted(() => ({ value: { posts: [] } }))
 const api = vi.hoisted(() => ({ callAdminAuth: vi.fn() }))
 vi.mock('../hooks/useTrustQueues', async () => {
@@ -58,6 +58,7 @@ beforeEach(() => {
   actions.deletePost.mockReset().mockResolvedValue({ ok: true })
   admin.askConfirm.mockReset()
   admin.confirming = false
+  admin.permissions = {}
   admin.showToast.mockReset()
   admin.invalidateAdmin.mockReset()
 })
@@ -359,5 +360,54 @@ describe('ModerationSection', () => {
     rerender(<ModerationProvider><ModerationSection /></ModerationProvider>)
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('a role without Verifications sees the verification and its details, but no way to approve or reject it', () => {
+    admin.permissions = { verifications: false }
+    renderSection()
+    expect(screen.getByRole('checkbox', { name: `Select ${label(VERIFICATION)}` })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: `Review ${label(VERIFICATION)}` }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Garki Pharmacy')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+
+    select(VERIFICATION)
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve verifications' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reject verifications' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Dismiss reports' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete posts' })).toBeInTheDocument()
+  })
+
+  it('a role without Reports or Posts gets no Dismiss or Delete, in the drawers or the bulk bar', () => {
+    admin.permissions = { reports: false, posts: false }
+    renderSection()
+    fireEvent.click(screen.getByRole('button', { name: `Review ${label(REPORT)}` }))
+    let dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Reason')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Delete post' })).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+
+    fireEvent.click(screen.getByRole('button', { name: `Review ${label(POST)}` }))
+    dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText(POST, { selector: '.adm-drawer-text' })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Delete post' })).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+
+    select(REPORT)
+    expect(screen.queryByRole('button', { name: 'Dismiss reports' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete posts' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Approve verifications' })).toBeInTheDocument()
+  })
+
+  it('a role allowed none of the three tabs gets no bulk bar at all', () => {
+    admin.permissions = { verifications: false, reports: false, posts: false }
+    renderSection()
+    select(REPORT)
+    expect(screen.queryByText('1 selected')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
   })
 })
