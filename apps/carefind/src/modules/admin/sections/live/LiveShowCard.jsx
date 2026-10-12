@@ -102,10 +102,14 @@ export default function LiveShowCard({ show }) {
   const [composerError, setComposerError] = useState('')
   // Media posts that failed, oldest first: { id, label, error }. The shared
   // components mark an item as posted whatever the result, so each failure
-  // stays here, naming its item, until that item posts or it is dismissed;
-  // a new media post never clears it.
+  // stays here, naming its item, until it is dismissed; a new media post
+  // never clears it. A slide's label ("Slide 3 of 8") names that slide, so its
+  // own later success also removes it. Every recording is a new item (the
+  // shared components cannot resend one), so each voice/video attempt is
+  // numbered ("Voice note 2") and its failure only goes on Dismiss.
   const [mediaFailures, setMediaFailures] = useState([])
   const failureSeq = useRef(0)
+  const attempts = useRef({ voice: 0, video: 0 })
   const [hideError, setHideError] = useState('')
   const [endError, setEndError] = useState('')
 
@@ -145,13 +149,18 @@ export default function LiveShowCard({ show }) {
     const res = await postMedia({ showId: show.id, kind, content })
     if (goneAfter(`Couldn't post ${label}`, res)) return res
     if (res.ok) {
-      setMediaFailures(list => list.filter(f => f.label !== label))
+      if (kind === 'slide') setMediaFailures(list => list.filter(f => f.label !== label))
     } else {
       failureSeq.current += 1
       const id = failureSeq.current
       setMediaFailures(list => [...list, { id, label, error: res.error }])
     }
     return res
+  }
+  // Numbered per card, counting every attempt, successful or not.
+  const sendRecording = (kind, name, url) => {
+    attempts.current[kind] += 1
+    return sendMedia(kind, url, `${name} ${attempts.current[kind]}`)
   }
   const dismissFailure = (id) => setMediaFailures(list => list.filter(f => f.id !== id))
 
@@ -271,11 +280,11 @@ export default function LiveShowCard({ show }) {
       </form>
 
       <div className="adm-live-tools">
-        <VoiceRecorder showId={show.id} onRecorded={(url) => sendMedia('voice', url, 'Voice note')} />
+        <VoiceRecorder showId={show.id} onRecorded={(url) => sendRecording('voice', 'Voice note', url)} />
         <SlideUploader showId={show.id}
           onPostSlide={(url, num, total) => sendMedia('slide', slideContent(url, num, total), `Slide ${num} of ${total}`)} />
-        <VideoRecorder showId={show.id} onRecorded={(url) => sendMedia('video', url, 'Video')} />
-        <VideoUploader showId={show.id} onUploaded={(url) => sendMedia('video', url, 'Video')} />
+        <VideoRecorder showId={show.id} onRecorded={(url) => sendRecording('video', 'Video', url)} />
+        <VideoUploader showId={show.id} onUploaded={(url) => sendRecording('video', 'Video', url)} />
         {mediaFailures.length > 0 && (
           <div role="alert" aria-label="Media that did not post" className="adm-live-alert">
             <ul className="adm-live-failures">
