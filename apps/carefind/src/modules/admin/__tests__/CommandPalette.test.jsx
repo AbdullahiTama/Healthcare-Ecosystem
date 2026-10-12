@@ -24,7 +24,7 @@ vi.mock('../../../styles/theme', () => ({
   },
 }))
 
-vi.mock('../AdminSidebar', () => ({
+vi.mock('../navigation', () => ({
   NAV_GROUPS: [
     {
       id: 'overview',
