@@ -1,8 +1,11 @@
 import { theme } from '../../../styles/theme'
 
-export function FilterPills({ options, value, onChange }) {
+// Each pill reports whether it is the active one (aria-pressed). With `label`
+// the pills are a named group, so a screen reader hears which filter they set.
+export function FilterPills({ options, value, onChange, label: groupLabel }) {
+  const group = groupLabel ? { role: 'group', 'aria-label': groupLabel } : {}
   return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    <div {...group} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
       {options.map(opt => {
         const key = typeof opt === 'string' ? opt : opt.value
         const label = typeof opt === 'string' ? opt : opt.label
@@ -10,6 +13,7 @@ export function FilterPills({ options, value, onChange }) {
         return (
           <button
             key={key}
+            aria-pressed={active}
             onClick={() => onChange(key)}
             style={{
               padding: '6px 14px',

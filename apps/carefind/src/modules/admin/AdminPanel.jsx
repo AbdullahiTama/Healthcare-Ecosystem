@@ -8,6 +8,8 @@ import VerificationsSection from './sections/VerificationsSection.jsx'
 import ClaimsSection from './sections/ClaimsSection.jsx'
 import ReportsSection from './sections/ReportsSection.jsx'
 import ModerationSection from './sections/ModerationSection.jsx'
+import UsersSection from './sections/UsersSection.jsx'
+import BusinessesSection from './sections/BusinessesSection.jsx'
 import { ModerationProvider } from './stores/moderationStore'
 import LegacyTabHost from './legacy/LegacyTabHost.jsx'
 import { isAllowed } from './navigation'
@@ -29,6 +31,8 @@ function ActiveSection({ tab, setTab }) {
   if (tab === 'claims') return <ClaimsSection />
   if (tab === 'reports') return <ReportsSection />
   if (tab === 'moderation') return <ModerationProvider><ModerationSection /></ModerationProvider>
+  if (tab === 'users') return <UsersSection />
+  if (tab === 'businesses') return <BusinessesSection />
   return <LegacyTabHost tab={tab} setTab={setTab} />
 }
 

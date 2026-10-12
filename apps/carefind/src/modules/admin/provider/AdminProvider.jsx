@@ -31,6 +31,9 @@ export function AdminProvider({ children }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [adminUser, setAdminUser] = useState(null)
+  // The sign-in (auth.users) id. Not adminUser.id: that is the admin_users row
+  // id, linked to the sign-in identity by admin_users.auth_user_id.
+  const [authUserId, setAuthUserId] = useState(null)
   const [permissions, setPermissions] = useState({})
   const [loading, setLoading] = useState(true)
   const [confirmState, setConfirmState] = useState(null)
@@ -83,6 +86,7 @@ export function AdminProvider({ children }) {
         localStorage.setItem('admin_permissions', JSON.stringify(verified.permissions || {}))
 
         setAdminUser(parsedAdmin)
+        setAuthUserId(session.user?.id || null)
         setPermissions(verified.permissions || {})
         setLoading(false)
       } catch {
@@ -93,6 +97,7 @@ export function AdminProvider({ children }) {
         }
         clearAdminCache()
         setAdminUser(null)
+        setAuthUserId(null)
         setPermissions({})
         setLoading(false)
         navigate('/login')
@@ -149,8 +154,8 @@ export function AdminProvider({ children }) {
   const confirming = !!confirmState
 
   const value = useMemo(() => ({
-    adminUser, permissions, showToast, askConfirm, confirming, invalidateAdmin, signOut, recordAction, actionHistory,
-  }), [adminUser, permissions, showToast, askConfirm, confirming, invalidateAdmin, signOut, recordAction, actionHistory])
+    adminUser, authUserId, permissions, showToast, askConfirm, confirming, invalidateAdmin, signOut, recordAction, actionHistory,
+  }), [adminUser, authUserId, permissions, showToast, askConfirm, confirming, invalidateAdmin, signOut, recordAction, actionHistory])
 
   // Fail closed: nothing of the admin renders without a server-verified admin,
   // including the instant before a failed verification redirects to /login.

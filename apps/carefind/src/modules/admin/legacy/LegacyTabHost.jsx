@@ -9,7 +9,6 @@ import { useAdmin } from '../provider/AdminProvider.jsx'
 import { ALL_TABS } from '../navigation'
 import { useAdminData, useAdminStories, useAdminNews, useAdminPromotions, useAdminSearchLogs, useAdminLiveShows, useAdminShopData, useAdminRoles } from '../../../hooks/queries'
 import ShopTab from '../tabs/ShopTab.jsx'
-import UsersTab from '../tabs/UsersTab.jsx'
 import PostsTab from '../tabs/PostsTab.jsx'
 import RevenueTab from '../tabs/RevenueTab.jsx'
 import DrugsTab from '../tabs/DrugsTab.jsx'
@@ -17,7 +16,6 @@ import TasksTab from '../tabs/TasksTab.jsx'
 import TeamsTab from '../tabs/TeamsTab.jsx'
 import WithdrawalsTab from '../tabs/WithdrawalsTab.jsx'
 import ReconciliationTab from '../tabs/ReconciliationTab.jsx'
-import BusinessesTab from '../tabs/BusinessesTab.jsx'
 import StoriesTab from '../tabs/StoriesTab.jsx'
 import NewsTab from '../tabs/NewsTab.jsx'
 import PromotionsTab from '../tabs/PromotionsTab.jsx'
@@ -39,7 +37,6 @@ export default function LegacyTabHost({ tab, setTab }) {
   const qc = useQueryClient()
   const { adminUser, permissions: adminPermissions, showToast, askConfirm, invalidateAdmin, recordAction } = useAdmin()
 
-  const [userSearch, setUserSearch] = useState('')
   const [postSearch, setPostSearch] = useState('')
   const [drugSearch, setDrugSearch] = useState('')
   const [drugReviews, setDrugReviews] = useState([])
@@ -50,19 +47,6 @@ export default function LegacyTabHost({ tab, setTab }) {
   const [postTypeFilter, setPostTypeFilter] = useState('all')
   const [postDateFrom, setPostDateFrom] = useState('')
   const [postDateTo, setPostDateTo] = useState('')
-  const [userVerifiedFilter, setUserVerifiedFilter] = useState('all')
-  const [userSpecialtyFilter, setUserSpecialtyFilter] = useState('')
-  const [selectedUser, setSelectedUser] = useState(null)
-  const [suspendDays, setSuspendDays] = useState('7')
-  const [userPosts, setUserPosts] = useState([])
-  const [deletingUser, setDeletingUser] = useState(false)
-  const [bizSearch, setBizSearch] = useState('')
-  const [bizTypeFilter, setBizTypeFilter] = useState('all')
-  const [bizStateFilter, setBizStateFilter] = useState('')
-  const [bizStatusFilter, setBizStatusFilter] = useState('all')
-  const [selectedBiz, setSelectedBiz] = useState(null)
-  const [bizReviews, setBizReviews] = useState([])
-  const [bizProducts, setBizProducts] = useState([])
   const [taskTitle, setTaskTitle] = useState('')
   const [taskDesc, setTaskDesc] = useState('')
   const [taskComp, setTaskComp] = useState('')
@@ -76,8 +60,6 @@ export default function LegacyTabHost({ tab, setTab }) {
   const [staffTeam, setStaffTeam] = useState('')
   const [savingStaff, setSavingStaff] = useState(false)
   const [staffMsg, setStaffMsg] = useState('')
-  const [verifyingUser, setVerifyingUser] = useState(null)
-  const [verifySpecialty, setVerifySpecialty] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [storyTitle, setStoryTitle] = useState('')
@@ -122,7 +104,7 @@ export default function LegacyTabHost({ tab, setTab }) {
   const { data: shopData } = useAdminShopData(!!adminUser)
   const { data: adminRoles = [] } = useAdminRoles(!!adminUser)
 
-  const { posts = [], users = [], transactions = [], tasks = [], teams = [], staff = [], businesses = [], withdrawals = [], notifications = [], phoneMap = {}, notifCount = 0, roleNotifCount = 0, stats = {} } = adminData || {}
+  const { posts = [], users = [], transactions = [], tasks = [], teams = [], staff = [], withdrawals = [], notifications = [], notifCount = 0, roleNotifCount = 0, stats = {} } = adminData || {}
   const newsItems = newsData?.items || []
   const newsPhones = newsData?.phones || {}
   const activeShows = liveShowsData?.active || []
@@ -358,12 +340,6 @@ export default function LegacyTabHost({ tab, setTab }) {
     }
   }
 
-  async function viewUserDetails(u) {
-    setSelectedUser(u)
-    const data = await usersRepository.getUserPosts(u.id)
-    setUserPosts(data || [])
-  }
-
   async function approveNews(item) {
     setSavingNews(true)
     const edits = editingNews && editingNews.id === item.id
@@ -477,41 +453,6 @@ export default function LegacyTabHost({ tab, setTab }) {
     }
   }
 
-  async function suspendUser(userId, days) {
-    try {
-      await callAdminAuth('suspend_user', {  userId, days })
-      logAuditAction('suspend', 'user', userId, { days })
-      setSelectedUser(null)
-      invalidateAdmin()
-      showToast(`User suspended for ${days} days`, { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't suspend the user: ${err.message}`, { type: 'error' })
-    }
-  }
-
-  function deleteUser(userId) {
-    const name = selectedUser?.full_name || selectedUser?.display_name || 'this user'
-    askConfirm({
-      title: 'Delete this user?',
-      consequence: `This permanently deletes ${name}'s account and all their posts, comments, and content. This cannot be undone.`,
-      confirmLabel: 'Delete',
-      action: () => reallyDeleteUser(userId),
-    })
-  }
-  async function reallyDeleteUser(userId) {
-    setDeletingUser(true)
-    try {
-      await callAdminAuth('delete_user', {  userId })
-      logAuditAction('delete', 'user', userId, { name: selectedUser?.full_name || selectedUser?.display_name })
-      showToast('User deleted', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't delete the user: ${err.message}`, { type: 'error' })
-    }
-    setSelectedUser(null)
-    setDeletingUser(false)
-    invalidateAdmin()
-  }
-
   function deletePost(id) {
     askConfirm({
       title: 'Delete this post?',
@@ -529,19 +470,6 @@ export default function LegacyTabHost({ tab, setTab }) {
       showToast('Post deleted', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't delete the post: ${err.message}`, { type: 'error' })
-    }
-  }
-
-  async function manualVerify(userId, specialty) {
-    if (!specialty) return
-    try {
-      await callAdminAuth('manual_verify', {  userId, specialty })
-      setVerifyingUser(null)
-      setVerifySpecialty('')
-      invalidateAdmin()
-      showToast('User verified', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't verify the user: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -599,7 +527,6 @@ export default function LegacyTabHost({ tab, setTab }) {
         {tab === 'audit_log' && <AuditLog />}
         {tab === 'errors' && <ErrorsTab showToast={showToast} />}
         {tab === 'reconciliation' && <ReconciliationTab showToast={showToast} />}
-        {tab === 'users' && <UsersTab users={users} selectedUser={selectedUser} setSelectedUser={setSelectedUser} userSearch={userSearch} setUserSearch={setUserSearch} userVerifiedFilter={userVerifiedFilter} setUserVerifiedFilter={setUserVerifiedFilter} userSpecialtyFilter={userSpecialtyFilter} setUserSpecialtyFilter={setUserSpecialtyFilter} phoneMap={phoneMap} viewUserDetails={viewUserDetails} suspendDays={suspendDays} setSuspendDays={setSuspendDays} suspendUser={suspendUser} deleteUser={deleteUser} deletingUser={deletingUser} userPosts={userPosts} verifyingUser={verifyingUser} setVerifyingUser={setVerifyingUser} verifySpecialty={verifySpecialty} setVerifySpecialty={setVerifySpecialty} manualVerify={manualVerify} adminUser={adminUser} />}
         {tab === 'posts' && <PostsTab posts={posts} selectedPost={selectedPost} setSelectedPost={setSelectedPost} postAuthor={postAuthor} setPostAuthor={setPostAuthor} postSearch={postSearch} setPostSearch={setPostSearch} postTypeFilter={postTypeFilter} setPostTypeFilter={setPostTypeFilter} postDateFrom={postDateFrom} setPostDateFrom={setPostDateFrom} postDateTo={postDateTo} setPostDateTo={setPostDateTo} viewPostDetails={viewPostDetails} deletePost={deletePost} />}
         {tab === 'revenue' && <RevenueTab transactions={transactions} />}
         {tab === 'orders' && <OrdersTab transactions={transactions} showToast={showToast} loadAll={loadAll} />}
@@ -607,7 +534,6 @@ export default function LegacyTabHost({ tab, setTab }) {
         {tab === 'tasks' && <TasksTab tasks={tasks} taskTitle={taskTitle} setTaskTitle={setTaskTitle} taskDesc={taskDesc} setTaskDesc={setTaskDesc} taskComp={taskComp} setTaskComp={setTaskComp} taskSpec={taskSpec} setTaskSpec={setTaskSpec} savingTask={savingTask} createTask={createTask} />}
         {tab === 'teams' && <TeamsTab teams={teams} staff={staff} teamName={teamName} setTeamName={setTeamName} createTeam={createTeam} staffName={staffName} setStaffName={setStaffName} staffEmail={staffEmail} setStaffEmail={setStaffEmail} staffPass={staffPass} setStaffPass={setStaffPass} staffRole={staffRole} setStaffRole={setStaffRole} staffTeam={staffTeam} setStaffTeam={setStaffTeam} savingStaff={savingStaff} staffMsg={staffMsg} setStaffMsg={setStaffMsg} createStaff={createStaff} adminUser={adminUser} adminRoles={adminRoles} newRoleName={newRoleName} setNewRoleName={setNewRoleName} newRoleDesc={newRoleDesc} setNewRoleDesc={setNewRoleDesc} newRoleTabs={newRoleTabs} setNewRoleTabs={setNewRoleTabs} editingRoleId={editingRoleId} setEditingRoleId={setEditingRoleId} editingRoleTabs={editingRoleTabs} setEditingRoleTabs={setEditingRoleTabs} savingRole={savingRole} loadAdminRoles={invalidateAdmin} showToast={showToast} ALL_TABS={ALL_TABS} />}
         {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} onReject={async (id) => { try { await callAdminAuth('reject_withdrawal', {  id }); invalidateAdmin(); showToast('Withdrawal rejected', { type: 'success' }) } catch (err) { showToast(`Couldn't reject the withdrawal: ${err.message}`, { type: 'error' }) } }} />}
-        {tab === 'businesses' && <BusinessesTab businesses={businesses} bizSearch={bizSearch} setBizSearch={setBizSearch} bizTypeFilter={bizTypeFilter} setBizTypeFilter={setBizTypeFilter} bizStateFilter={bizStateFilter} setBizStateFilter={setBizStateFilter} bizStatusFilter={bizStatusFilter} setBizStatusFilter={setBizStatusFilter} selectedBiz={selectedBiz} setSelectedBiz={setSelectedBiz} bizReviews={bizReviews} setBizReviews={setBizReviews} bizProducts={bizProducts} setBizProducts={setBizProducts} supabase={supabase} />}
         {tab === 'stories' && <StoriesTab stories={stories} storyTitle={storyTitle} setStoryTitle={setStoryTitle} storyBody={storyBody} setStoryBody={setStoryBody} storyBg={storyBg} setStoryBg={setStoryBg} storyImageFile={storyImageFile} setStoryImageFile={setStoryImageFile} savingStory={savingStory} createStory={createStory} deleteStory={deleteStory} />}
         {tab === 'news' && <NewsTab newsItems={newsItems} editingNews={editingNews} setEditingNews={setEditingNews} newsPhones={newsPhones} savingNews={savingNews} approveNews={approveNews} rejectNews={rejectNews} deleteNews={deleteNews} />}
         {tab === 'promotions' && <PromotionsTab promotions={promotions} promoTitle={promoTitle} setPromoTitle={setPromoTitle} promoLink={promoLink} setPromoLink={setPromoLink} promoDays={promoDays} setPromoDays={setPromoDays} promoImage={promoImage} setPromoImage={setPromoImage} savingPromo={savingPromo} createPromotion={createPromotion} deletePromotion={deletePromotion} />}
