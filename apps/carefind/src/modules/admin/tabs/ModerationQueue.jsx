@@ -90,14 +90,6 @@ export default function ModerationQueue({ reports, posts, verifications, showToa
             await callAdminAuth('approve_verification', { token, id: item.id, userId: item.target_id, profession: item.raw.profession })
             await logAudit('approve', 'verification', item.id, { userId: item.target_id })
             approved++
-          } else if (item.source === 'report') {
-            const toResolve = reportsToResolve(item, reports)
-            if (toResolve.length === 0) { skipped++; continue }
-            for (const rep of toResolve) {
-              await callAdminAuth('resolve_report', { token, id: rep.id })
-              await logAudit('resolve', 'report', rep.id, {})
-            }
-            approved++
           } else {
             skipped++
           }
@@ -105,7 +97,7 @@ export default function ModerationQueue({ reports, posts, verifications, showToa
       }
       clearSelection()
       loadAll()
-      const msg = skipped > 0 ? `Approved ${approved}, skipped ${skipped} (posts cannot be approved)` : `Approved ${approved} items`
+      const msg = skipped > 0 ? `Approved ${approved}, skipped ${skipped} (only verifications can be approved)` : `Approved ${approved} items`
       showToast(msg, { type: skipped > 0 ? 'warning' : 'success' })
     } catch (err) {
       showToast(`Bulk approve failed: ${err.message}`, { type: 'error' })
@@ -127,14 +119,6 @@ export default function ModerationQueue({ reports, posts, verifications, showToa
             await callAdminAuth('reject_verification', { token, id: item.id })
             await logAudit('reject', 'verification', item.id, {})
             rejected++
-          } else if (item.source === 'report') {
-            const toResolve = reportsToResolve(item, reports)
-            if (toResolve.length === 0) { skipped++; continue }
-            for (const rep of toResolve) {
-              await callAdminAuth('resolve_report', { token, id: rep.id })
-              await logAudit('resolve', 'report', rep.id, {})
-            }
-            rejected++
           } else {
             skipped++
           }
@@ -142,10 +126,43 @@ export default function ModerationQueue({ reports, posts, verifications, showToa
       }
       clearSelection()
       loadAll()
-      const msg = skipped > 0 ? `Rejected ${rejected}, skipped ${skipped} (posts cannot be rejected)` : `Rejected ${rejected} items`
+      const msg = skipped > 0 ? `Rejected ${rejected}, skipped ${skipped} (only verifications can be rejected)` : `Rejected ${rejected} items`
       showToast(msg, { type: skipped > 0 ? 'warning' : 'success' })
     } catch (err) {
       showToast(`Bulk reject failed: ${err.message}`, { type: 'error' })
+    }
+    setBulkActionLoading(false)
+  }
+
+  async function handleBulkDismiss() {
+    if (selectedIds.size === 0) return
+    setBulkActionLoading(true)
+    let dismissed = 0
+    let skipped = 0
+    try {
+      const token = localStorage.getItem('admin_token')
+      const itemsToDismiss = items.filter((i) => selectedIds.has(i.id))
+      for (const item of itemsToDismiss) {
+        try {
+          if (item.source === 'report') {
+            const toResolve = reportsToResolve(item, reports)
+            if (toResolve.length === 0) { skipped++; continue }
+            for (const rep of toResolve) {
+              await callAdminAuth('resolve_report', { token, id: rep.id })
+              await logAudit('resolve', 'report', rep.id, {})
+            }
+            dismissed++
+          } else {
+            skipped++
+          }
+        } catch { skipped++ }
+      }
+      clearSelection()
+      loadAll()
+      const msg = skipped > 0 ? `Dismissed ${dismissed}, skipped ${skipped} (only reports can be dismissed)` : `Dismissed ${dismissed} items`
+      showToast(msg, { type: skipped > 0 ? 'warning' : 'success' })
+    } catch (err) {
+      showToast(`Bulk dismiss failed: ${err.message}`, { type: 'error' })
     }
     setBulkActionLoading(false)
   }
@@ -356,7 +373,12 @@ export default function ModerationQueue({ reports, posts, verifications, showToa
       <BulkActionBar
         onApprove={handleBulkApprove}
         onReject={handleBulkReject}
+        onDismiss={handleBulkDismiss}
         onDelete={handleBulkDelete}
+        approveLabel="Approve verifications"
+        rejectLabel="Reject verifications"
+        dismissLabel="Dismiss reports"
+        deleteLabel="Delete posts"
       />
     </div>
   );
