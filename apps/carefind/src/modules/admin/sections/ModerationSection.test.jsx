@@ -57,6 +57,7 @@ beforeEach(() => {
   actions.resolveReport.mockReset().mockResolvedValue({ ok: true })
   actions.deletePost.mockReset().mockResolvedValue({ ok: true })
   admin.askConfirm.mockReset()
+  admin.confirming = false
   admin.showToast.mockReset()
   admin.invalidateAdmin.mockReset()
 })
@@ -329,5 +330,18 @@ describe('ModerationSection', () => {
     renderSection()
     expect(screen.queryByText('Nothing waiting')).not.toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: /^Select / })).not.toBeInTheDocument()
+  })
+
+  it('Escape closes an item drawer, but not while a confirmation is open on top of it', () => {
+    const { rerender } = renderSection()
+    fireEvent.click(screen.getByRole('button', { name: `Review ${label(POST)}` }))
+    admin.confirming = true
+    rerender(<ModerationProvider><ModerationSection /></ModerationProvider>)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    admin.confirming = false
+    rerender(<ModerationProvider><ModerationSection /></ModerationProvider>)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

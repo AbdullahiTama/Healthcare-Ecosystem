@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, DataTable, Empty } from '@care-ecosystem/design-system/components/ui'
 import ReviewDrawer from './ReviewDrawer.jsx'
+import { useAdmin } from '../provider/AdminProvider.jsx'
 import './admin.css'
 
 // One review queue for Verification, Claims and Reports: status tabs, the
@@ -13,6 +14,7 @@ export default function ReviewQueue({
   const [view, setView] = useState('pending')
   const [openId, setOpenId] = useState(null)
   const [error, setError] = useState('')
+  const { confirming } = useAdmin()
 
   const loading = !source
   const failed = source?.status === 'error'
@@ -69,7 +71,7 @@ export default function ReviewQueue({
         )}
       />
 
-      <ReviewDrawer show={!!current} title={current ? drawerTitle(current) : ''} status={current ? drawerStatus(current) : undefined} onClose={close} error={error} footer={drawer?.footer}>
+      <ReviewDrawer show={!!current} title={current ? drawerTitle(current) : ''} status={current ? drawerStatus(current) : undefined} onClose={close} error={error} footer={drawer?.footer} preventClose={confirming}>
         {drawer?.body}
       </ReviewDrawer>
     </div>

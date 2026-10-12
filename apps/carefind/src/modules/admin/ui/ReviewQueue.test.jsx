@@ -1,5 +1,10 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+
+// `confirming` is true while the admin's confirmation dialog is open on top.
+const admin = vi.hoisted(() => ({ confirming: false }))
+vi.mock('../provider/AdminProvider.jsx', () => ({ useAdmin: () => admin }))
+
 import ReviewQueue from './ReviewQueue.jsx'
 
 const rows = [
@@ -18,6 +23,8 @@ function setup(over = {}) {
   }
   return { props, ...render(<ReviewQueue {...props} />) }
 }
+
+beforeEach(() => { admin.confirming = false })
 
 describe('ReviewQueue', () => {
   it('has one h1 and defaults to the pending rows', () => {
@@ -71,5 +78,22 @@ describe('ReviewQueue', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Review Amina' }))
     rerender(<ReviewQueue {...props} source={{ status: 'ok', data: [rows[1]] }} />)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('Escape closes the drawer when no confirmation is open', () => {
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Review Amina' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('Escape inside a confirmation leaves the drawer behind it open', () => {
+    const { props, rerender } = setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Review Amina' }))
+    admin.confirming = true
+    rerender(<ReviewQueue {...props} />)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('Details for Amina')).toBeInTheDocument()
   })
 })

@@ -65,7 +65,7 @@ export default function ModerationSection() {
   // "no flagged posts". Reports and verifications do report failure.
   const { data: adminData } = useAdminData(true)
   const actions = useReviewActions()
-  const { askConfirm, showToast, invalidateAdmin } = useAdmin()
+  const { askConfirm, confirming, showToast, invalidateAdmin } = useAdmin()
   const {
     selectedIds, toggleSelect, selectAll, clearSelection,
     bulkActionLoading, setBulkActionLoading,
@@ -331,7 +331,7 @@ export default function ModerationSection() {
         deleteLabel="Delete posts"
       />
 
-      <ReviewDrawer show={!!current} title={current ? titleOf(current) : ''} status={current ? current.status : undefined} onClose={close} error={error} footer={drawer?.footer}>
+      <ReviewDrawer show={!!current} title={current ? titleOf(current) : ''} status={current ? current.status : undefined} onClose={close} error={error} footer={drawer?.footer} preventClose={confirming}>
         {drawer?.body}
       </ReviewDrawer>
     </div>
