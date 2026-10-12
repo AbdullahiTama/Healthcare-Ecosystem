@@ -140,14 +140,20 @@ describe('postItem', () => {
   it('image only posts just the image', async () => {
     const { result } = setup()
     await run(() => result.current.postItem({ showId: 's', text: '', imageFile: image }))
-    expect(callAdminAuth).toHaveBeenCalledTimes(1)
+    expect(callAdminAuth.mock.calls).toEqual([['post_live_item', { showId: 's', kind: 'image', content: 'https://cdn/x' }]])
   })
   it('a failed image upload posts nothing, not even the text', async () => {
     uploadToBucket.mockResolvedValue({ ok: false, error: 'bad' })
     const { result } = setup()
     expect(await run(() => result.current.postItem({ showId: 's', text: 'cap', imageFile: image }))).toEqual({ ok: false, error: "Couldn't upload the image: bad" })
     expect(callAdminAuth.mock.calls).toEqual([])
+    expect(admin.showToast).not.toHaveBeenCalled()
     expect(admin.invalidateAdmin).not.toHaveBeenCalled()
+  })
+  it('a non-Error rejection still yields an error string', async () => {
+    callAdminAuth.mockRejectedValueOnce('plain string')
+    const { result } = setup()
+    expect(await run(() => result.current.endShow('a'))).toEqual({ ok: false, error: 'plain string' })
   })
   it('a failed image post stops before the text and is not partial', async () => {
     callAdminAuth.mockRejectedValueOnce(new Error('img fail'))

@@ -45,7 +45,7 @@ export function useLiveActions() {
     try {
       outcome = await work()
     } catch (err) {
-      outcome = { result: { ok: false, error: err.message }, changed: false }
+      outcome = { result: { ok: false, error: err?.message || String(err) }, changed: false }
     } finally {
       running.current.delete(key)
       setBusyKeys([...running.current])
@@ -104,8 +104,8 @@ export function useLiveActions() {
         // The image is already live when only the text failed: refresh, and
         // tell the caller to keep just the text draft.
         return imagePosted
-          ? { result: { ok: false, error: err.message, partial: true }, changed: true }
-          : { result: { ok: false, error: err.message }, changed: false }
+          ? { result: { ok: false, error: err?.message || String(err), partial: true }, changed: true }
+          : { result: { ok: false, error: err?.message || String(err) }, changed: false }
       }
       return { result: { ok: true }, changed: true }
     })
