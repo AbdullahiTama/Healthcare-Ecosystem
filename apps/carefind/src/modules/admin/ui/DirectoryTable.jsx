@@ -12,9 +12,11 @@ const SEARCH_DELAY_MS = 300
 // is only ever shown as loading, failed, empty or loaded; a failed list shows
 // Retry and never an empty message.
 export default function DirectoryTable({
-  title, noun, query, columns, search, onSearch, searchPlaceholder, filters,
+  title, noun, plural, query, columns, search, onSearch, searchPlaceholder, filters,
   filtersActive, onClear, page, onPage, renderDrawer, toolbar, rowLabel,
 }) {
+  // `plural` is only needed when `${noun}s` is not the plural (business, businesses).
+  const nouns = plural || `${noun}s`
   const [openId, setOpenId] = useState(null)
   const [error, setError] = useState('')
   const { confirming } = useAdmin()
@@ -54,25 +56,25 @@ export default function DirectoryTable({
   // stale, so the count is withheld until the real result arrives.
   const countText = !ready ? undefined
     : isPlaceholderData ? 'Updating…'
-      : data?.total != null ? `${data.total} ${noun}${data.total === 1 ? '' : 's'}` : `${rows.length} shown`
+      : data?.total != null ? `${data.total} ${data.total === 1 ? noun : nouns}` : `${rows.length} shown`
 
   const empty = isPlaceholderData
     ? <p className="adm-note">Updating…</p>
     : page > 0
     ? (
       <div>
-        <Empty message={`No ${noun}s on this page`} cause="none" />
+        <Empty message={`No ${nouns} on this page`} cause="none" />
         <Button size="sm" variant="ghost" onClick={() => onPage(0)}>Back to first page</Button>
       </div>
     )
     : filtersActive
     ? (
       <div>
-        <Empty message={`No ${noun}s match these filters`} cause="none" />
+        <Empty message={`No ${nouns} match these filters`} cause="none" />
         <Button size="sm" variant="ghost" onClick={onClear}>Clear filters</Button>
       </div>
     )
-    : <Empty message={`No ${noun}s yet`} cause="none" />
+    : <Empty message={`No ${nouns} yet`} cause="none" />
 
   return (
     <div className="adm-page">

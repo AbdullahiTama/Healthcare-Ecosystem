@@ -104,6 +104,20 @@ describe('DirectoryTable', () => {
     expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
   })
 
+  it('uses an explicit plural for the count and the empty messages when given', () => {
+    const empty = ok({ data: { rows: [], hasNext: false, total: 0 } })
+    const { props, rerender } = setup({ noun: 'business', plural: 'businesses', page: 0, query: ok() })
+    expect(screen.getByText('4218 businesses')).toBeInTheDocument()
+    rerender(<DirectoryTable {...props} query={ok({ data: { rows: people, hasNext: false, total: 1 } })} />)
+    expect(screen.getByText('1 business')).toBeInTheDocument()
+    rerender(<DirectoryTable {...props} query={empty} filtersActive />)
+    expect(screen.getByText('No businesses match these filters')).toBeInTheDocument()
+    rerender(<DirectoryTable {...props} query={empty} filtersActive={false} />)
+    expect(screen.getByText('No businesses yet')).toBeInTheDocument()
+    rerender(<DirectoryTable {...props} query={empty} page={2} />)
+    expect(screen.getByText('No businesses on this page')).toBeInTheDocument()
+  })
+
   it('shows no count and no empty text while loading', () => {
     setup({ query: ok({ isLoading: true, data: undefined }) })
     expect(screen.queryByText(/users$/)).not.toBeInTheDocument()
