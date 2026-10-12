@@ -95,7 +95,7 @@ describe('DirectoryTable', () => {
 
   it('says no users match, with Clear filters, when filtered and empty; "No users yet" otherwise', () => {
     const empty = ok({ data: { rows: [], hasNext: false, total: 0 } })
-    const { props, rerender } = setup({ query: empty, filtersActive: true })
+    const { props, rerender } = setup({ page: 0, query: empty, filtersActive: true })
     expect(screen.getByText('No users match these filters')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
     expect(props.onClear).toHaveBeenCalled()
@@ -158,5 +158,16 @@ describe('DirectoryTable', () => {
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByText('Account of Ada')).toBeInTheDocument()
     expect(within(dialog).getByText(/approved/i)).toBeInTheDocument()
+  })
+
+  it('says an empty page beyond the first is empty, with a way back, and keeps the pager', () => {
+    const { props } = setup({ page: 2, filtersActive: true, query: ok({ data: { rows: [], hasNext: false, total: 40 } }) })
+    expect(screen.getByText('No users on this page')).toBeInTheDocument()
+    expect(screen.queryByText('No users yet')).not.toBeInTheDocument()
+    expect(screen.queryByText(/No users match/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to first page' }))
+    expect(props.onPage).toHaveBeenCalledWith(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Previous' }))
+    expect(props.onPage).toHaveBeenLastCalledWith(1)
   })
 })

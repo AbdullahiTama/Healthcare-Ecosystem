@@ -54,7 +54,14 @@ export default function DirectoryTable({
     : isPlaceholderData ? 'Updating…'
       : data?.total != null ? `${data.total} ${noun}${data.total === 1 ? '' : 's'}` : `${rows.length} shown`
 
-  const empty = filtersActive
+  const empty = page > 0
+    ? (
+      <div>
+        <Empty message={`No ${noun}s on this page`} cause="none" />
+        <Button size="sm" variant="ghost" onClick={() => onPage(0)}>Back to first page</Button>
+      </div>
+    )
+    : filtersActive
     ? (
       <div>
         <Empty message={`No ${noun}s match these filters`} cause="none" />
