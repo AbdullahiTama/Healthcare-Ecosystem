@@ -310,13 +310,47 @@ Backend, SQL and financial calculations are out of scope for this work.
     `subtitle` and `body`. Backend; documented, not changed. Approving PUBLISHES the item
     (status approved and `published_at`), so the button is now labelled "Approve and publish".
 
-Phase 4a follow-ups, documented:
+63. `exportCSV` (`ui/adminHelpers.js`) writes cell values as given (JSON-quoted) without
+    neutralising spreadsheet formulas, so a user-supplied value beginning with `=`, `+`, `-` or
+    `@` (a post's text, a name) can run as a formula when the file is opened in Excel or Sheets
+    (CSV injection). It applies to every "Export this page (CSV)" in the console. Documented, not
+    changed; the fix is to prefix such cells with `'` in the one shared helper.
+64. Each retry of a failed story or promotion create uploads a NEW file to `story-images` /
+    `promo-images` under a new timestamped name, and a successful upload followed by a failed
+    create leaves that file orphaned in the bucket. Nothing cleans these up. Documented, not
+    changed (a cleanup needs a server-side delete or a lifecycle rule on the buckets).
 
-- The News "Submitted" column is not sortable (the server returns the newest 60 only). The Posts
-  "Posted" column sorts only the 25 rows on the page, which can read as a global sort (finding 44);
-  a real sort needs an `order` parameter on `list_posts`.
-- The shared `DateRange` labels (From, To) in `ui/FilterPills.jsx` are not linked to their inputs
-  (no `htmlFor`/`id`), an accessibility defect shared with `DrugsTab`.
+Phase 4a follow-ups and final-review corrections (fix commits 22e511b, 8359054, 77967e6):
+
+- Neither the News "Submitted" column (the server returns the newest 60 only) nor the Posts
+  "Posted" column is sortable: a sort would reorder only the rows on screen (finding 44). **Fixed**
+  for Posts (22e511b), which sorted its 25 rows before. A real sort needs an `order` parameter on
+  `list_posts`.
+- The shared `DateRange` labels (From, To) in `ui/FilterPills.jsx` were not linked to their
+  inputs. **Fixed** (22e511b): each label is linked by a `useId` id, which also gives `DrugsTab`'s
+  date inputs accessible names.
+- Posts media: `<img>`, `<video>` and `<audio>` get a `src` only for an http(s) URL; any other
+  address shows "Unsupported media address" (22e511b).
+- News: as in the legacy tab, an item that was rejected (anything not yet approved) can still be
+  approved and published from its drawer under All; Edit and Reject are offered only while
+  pending, Delete always (8359054). The Reject confirmation says so.
+- News: the approve audit entry records the item's ORIGINAL headline, as legacy did, even when
+  the admin edited it (`approveNews({ originalHeadline })`, 8359054).
+- News contact links are built safely: `mailto:` keeps `@` literal and encodes only `?`, `&`, `#`,
+  `%` and whitespace (so an address cannot add cc/subject/body headers); `tel:` is the value
+  stripped to `+` and digits, and no link is shown when nothing remains (8359054).
+- Stories and Promotions toast a create or delete failure that arrives after the admin left the
+  tab, instead of dropping it (77967e6).
+- `useAdminStories` and `useAdminPromotions` in `src/hooks/queries.js` now have no consumers (the
+  new `useContentLists` replaced them). Dead code until Phase 5 removes it.
+- `usePostsDirectory` and the post-author query in `PostsSection` call `callAdminAuth` directly
+  rather than through a repository, because the repositories turn failures into `|| []` /
+  `|| null`, which would show a failed load as an empty list or an unknown user. Phase 5 should fix
+  the repositories (reject on failure) rather than copy this bypass.
+- Live story rows no longer show legacy's "Expires in X"; they show Live or Expired plus the age.
+  The remaining time is derivable from `expires_at` if wanted back.
+- The Stories and Promotions sections do not validate the chosen file's type or size (the input
+  only hints `accept="image/*"`); the bucket policy is the boundary (finding 60).
 
 ## Verification state
 
