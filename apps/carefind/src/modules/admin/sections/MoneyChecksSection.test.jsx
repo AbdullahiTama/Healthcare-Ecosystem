@@ -286,6 +286,7 @@ describe('MoneyChecksSection', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(showToast).not.toHaveBeenCalledWith('Finding acknowledged', { type: 'success' })
     expect(dialog().getByRole('button', { name: 'Acknowledge' })).toBeEnabled()
+    expect(showToast).not.toHaveBeenCalled()
     fireEvent.click(dialog().getByRole('button', { name: 'Close' }))
     expect(screen.getByText('unmatched charge')).toBeInTheDocument()
   })
@@ -340,6 +341,32 @@ describe('MoneyChecksSection', () => {
     await act(async () => { release(Promise.reject(new Error('Finding not found'))) })
     expect(screen.getByRole('dialog')).toHaveTextContent('stuck')
     expect(dialog().queryByRole('alert')).not.toBeInTheDocument()
+    expect(showToast).toHaveBeenCalledWith("Couldn't update the finding: Finding not found", { type: 'error' })
+  })
+
+  it('toasts a failed decision that arrives after the drawer was closed', async () => {
+    let release
+    respond({ data: [finding()] }, () => new Promise(r => { release = r }))
+    setup()
+    await review()
+    fireEvent.click(dialog().getByRole('button', { name: 'Acknowledge' }))
+    fireEvent.click(dialog().getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await act(async () => { release(Promise.reject(new Error('Finding not found'))) })
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith("Couldn't update the finding: Finding not found", { type: 'error' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('does not toast again for a late successful decision (the hook already did)', async () => {
+    let release
+    respond({ data: [finding()] }, () => new Promise(r => { release = r }))
+    setup()
+    await review()
+    fireEvent.click(dialog().getByRole('button', { name: 'Acknowledge' }))
+    fireEvent.click(dialog().getByRole('button', { name: 'Close' }))
+    await act(async () => { release({ success: true }) })
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Finding acknowledged', { type: 'success' }))
+    expect(showToast).toHaveBeenCalledTimes(1)
   })
 
   // legacy: runs the checks on demand and reports the totals and any failed step

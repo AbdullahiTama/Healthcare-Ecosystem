@@ -126,7 +126,7 @@ export default function MoneyChecksSection() {
   const rows = useMemo(() => data || [], [data])
   const ready = !isLoading && !isError
   const { busyId, running, updateFinding, runNow } = useReconciliationActions()
-  const { confirming } = useAdmin()
+  const { confirming, showToast } = useAdmin()
   const [summary, setSummary] = useState('')
 
   // The opened finding is kept as a snapshot, so the drawer survives a refresh
@@ -138,17 +138,22 @@ export default function MoneyChecksSection() {
   useEffect(() => { if (fresh && fresh !== opened) setOpened(fresh) }, [fresh, opened])
   const current = fresh || opened
   // The id of the finding on screen, so a late decision result for a finding
-  // whose drawer was closed (or replaced) is not shown on another one; the hook
-  // has already refreshed the lists and toasted a success, so nothing is lost.
+  // whose drawer was closed (or replaced) is not shown on another one. A late
+  // success needs nothing (the hook has refreshed and toasted); a late failure
+  // is toasted, so it is never lost.
   const shownId = useRef(null)
   const open = (f) => { shownId.current = f.id; setError(''); setOpened(f) }
   const close = () => { shownId.current = null; setOpened(null); setError('') }
 
   const decide = async (f, op, note) => {
     const res = await updateFinding({ id: f.id, op, note })
-    if (shownId.current !== f.id) return
+    const message = res.ok ? null : `Couldn't update the finding: ${res.error}`
+    if (shownId.current !== f.id) {
+      if (message) showToast(message, { type: 'error' })
+      return
+    }
     if (res.ok) close()
-    else setError(`Couldn't update the finding: ${res.error}`)
+    else setError(message)
   }
 
   const run = async () => {

@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, within, act } from '@testing-librar
 
 const finance = vi.hoisted(() => ({ value: null, isLoading: false, refetch: vi.fn() }))
 const actions = vi.hoisted(() => ({ busy: null, rejectWithdrawal: vi.fn() }))
-const admin = vi.hoisted(() => ({ askConfirm: vi.fn(), confirming: false }))
+const admin = vi.hoisted(() => ({ askConfirm: vi.fn(), showToast: vi.fn(), confirming: false }))
 vi.mock('../hooks/useFinanceData', () => ({
   useFinanceData: () => ({ data: finance.value, isLoading: finance.isLoading, refetch: finance.refetch }),
 }))
@@ -45,12 +45,14 @@ beforeEach(() => {
   actions.rejectWithdrawal.mockReset()
   actions.rejectWithdrawal.mockResolvedValue({ ok: true })
   admin.askConfirm.mockReset()
+  admin.showToast.mockReset()
 })
 
 describe('WithdrawalsSection', () => {
   it('lists in-progress withdrawals by default, and All shows completed ones', () => {
     render(<WithdrawalsSection />)
     expect(screen.getByRole('heading', { level: 1, name: 'Withdrawals' })).toBeInTheDocument()
+    expect(screen.getByText('Withdrawals are paid out automatically. Reject only one that is stuck.')).toBeInTheDocument()
     expect(screen.getByText('Ada Obi')).toBeInTheDocument()
     expect(screen.getByText('Bayo')).toBeInTheDocument()
     expect(screen.queryByText('Chika Eze')).not.toBeInTheDocument()
@@ -127,8 +129,18 @@ describe('WithdrawalsSection', () => {
     openReview('Ada Obi')
     fireEvent.click(dialog().getByRole('button', { name: 'Reject withdrawal' }))
     await act(async () => { await admin.askConfirm.mock.calls[0][0].action() })
-    expect(screen.getByRole('alert')).toHaveTextContent('Paystack says the transfer is still in progress')
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't reject the withdrawal: Paystack says the transfer is still in progress")
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(admin.showToast).not.toHaveBeenCalled()
+  })
+
+  it('names the Reject button "Rejecting…" and disables it while that withdrawal is being rejected', () => {
+    actions.busy = 'w1'
+    render(<WithdrawalsSection />)
+    openReview('Ada Obi')
+    const button = dialog().getByRole('button', { name: 'Rejecting…' })
+    expect(button).toBeDisabled()
+    expect(dialog().queryByRole('button', { name: 'Reject withdrawal' })).not.toBeInTheDocument()
   })
 
   it('renders the latest row after a refused reject: a now-completed request loses the button, the error stays', async () => {
@@ -144,7 +156,7 @@ describe('WithdrawalsSection', () => {
 
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(dialog().queryByRole('button', { name: 'Reject withdrawal' })).not.toBeInTheDocument()
-    expect(screen.getByRole('alert')).toHaveTextContent('marked completed instead of refunded')
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't reject the withdrawal: The transfer already succeeded")
   })
 
   it('closes the drawer when the reject succeeds', async () => {
@@ -172,17 +184,52 @@ describe('WithdrawalsSection', () => {
     return async (result) => { await act(async () => { resolve(result); await pending }) }
   }
 
-  it('does not show a late refusal for w1 in the drawer of another withdrawal', async () => {
+  it('toasts a late refusal for w1 instead of showing it in the drawer of another withdrawal', async () => {
     const finishW1 = await startRejectThenOpenOther()
     await finishW1({ ok: false, error: 'still in progress' })
     expect(screen.getByRole('dialog')).toHaveTextContent('Bayo')
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(admin.showToast).toHaveBeenCalledTimes(1)
+    expect(admin.showToast).toHaveBeenCalledWith("Couldn't reject the withdrawal: still in progress", { type: 'error' })
   })
 
-  it('does not close the drawer of another withdrawal when w1 succeeds late', async () => {
+  it('does not close the drawer of another withdrawal, or toast, when w1 succeeds late', async () => {
     const finishW1 = await startRejectThenOpenOther()
     await finishW1({ ok: true })
     expect(screen.getByRole('dialog')).toHaveTextContent('Bayo')
+    expect(admin.showToast).not.toHaveBeenCalled()
+  })
+
+  // The confirm closes before the reject runs, so the drawer can be closed while
+  // Paystack is asked. A refusal then has no drawer to land in: it must be toasted.
+  const startRejectThenClose = () => {
+    let resolve
+    actions.rejectWithdrawal.mockImplementation(() => new Promise(r => { resolve = r }))
+    render(<WithdrawalsSection />)
+    openReview('Ada Obi')
+    fireEvent.click(dialog().getByRole('button', { name: 'Reject withdrawal' }))
+    let pending
+    act(() => { pending = admin.askConfirm.mock.calls[0][0].action() })
+    fireEvent.click(dialog().getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    return async (result) => { await act(async () => { resolve(result); await pending }) }
+  }
+
+  it('toasts a refusal that arrives after the drawer was closed, and shows no inline alert', async () => {
+    const finishW1 = startRejectThenClose()
+    await finishW1({ ok: false, error: 'Paystack says the transfer is still in progress' })
+    expect(admin.showToast).toHaveBeenCalledWith("Couldn't reject the withdrawal: Paystack says the transfer is still in progress", { type: 'error' })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // Reopening the same withdrawal does not resurrect a stale error either.
+    openReview('Ada Obi')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('does not toast a success that arrives after the drawer was closed (the hook already did)', async () => {
+    const finishW1 = startRejectThenClose()
+    await finishW1({ ok: true })
+    expect(admin.showToast).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('shows Retry, not an empty queue, when the list failed', () => {

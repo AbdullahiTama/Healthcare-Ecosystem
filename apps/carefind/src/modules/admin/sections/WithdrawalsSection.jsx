@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { XCircle } from 'lucide-react'
 import { Button, StatusBadge } from '@care-ecosystem/design-system/components/ui'
 import ReviewQueue from '../ui/ReviewQueue.jsx'
@@ -40,7 +40,15 @@ export const columns = [
 
 // Only the fields the legacy screen showed (the spec forbids exposing more of
 // the select('*') row): no Paystack reference or transfer code.
-function WithdrawalBody({ w }) {
+// While mounted it marks its withdrawal as the one on screen. ReviewQueue's
+// close does not tell this section the drawer went away, so the body's unmount
+// is what clears the mark; a late result then knows its drawer is gone.
+function WithdrawalBody({ w, shownId }) {
+  const { id } = w
+  useEffect(() => {
+    shownId.current = id
+    return () => { if (shownId.current === id) shownId.current = null }
+  }, [id, shownId])
   return (
     <dl className="adm-drawer-grid">
       <dt>Person</dt><dd>{person(w)}</dd>
@@ -60,9 +68,9 @@ function WithdrawalBody({ w }) {
 export default function WithdrawalsSection() {
   const { data, isLoading, refetch } = useFinanceData()
   const { busy, rejectWithdrawal } = useWithdrawalActions()
-  const { askConfirm } = useAdmin()
-  // The id of the row the drawer is rendering, so a late result can tell
-  // whether its drawer is still the one on screen.
+  const { askConfirm, showToast } = useAdmin()
+  // The id of the row the drawer is rendering (null once no drawer is shown),
+  // so a late result can tell whether its drawer is still the one on screen.
   const shownId = useRef(null)
 
   // A settled query with no data is a failure, never an endless skeleton.
@@ -71,16 +79,22 @@ export default function WithdrawalsSection() {
   const renderDrawer = (w, { close, setError }) => {
     shownId.current = w.id
     // close and setError act on whichever drawer is open now. A reject can take
-    // seconds, so a result for a row that is no longer shown is dropped here;
-    // the hook has already refreshed the list, so the outcome is not lost.
+    // seconds (Paystack is asked), and the confirm has already closed, so the
+    // drawer may be closed or showing another withdrawal by the time it ends.
+    // Then a failure is toasted, never dropped (the legacy screen toasted every
+    // error); a success needs nothing more, the hook has toasted and refreshed.
     const finish = (res) => {
-      if (shownId.current !== w.id) return
-      if (res.ok) close(); else setError(res.error)
+      const message = res.ok ? null : `Couldn't reject the withdrawal: ${res.error}`
+      if (shownId.current !== w.id) {
+        if (message) showToast(message, { type: 'error' })
+        return
+      }
+      if (res.ok) close(); else setError(message)
     }
     return {
-      body: <WithdrawalBody w={w} />,
+      body: <WithdrawalBody w={w} shownId={shownId} />,
       footer: isInFlight(w) ? (
-        <Button variant="danger" fullWidth loading={busy === w.id} leftIcon={<XCircle size={14} aria-hidden="true" />}
+        <Button variant="danger" fullWidth loading={busy === w.id} loadingText="Rejecting…" leftIcon={<XCircle size={14} aria-hidden="true" />}
           onClick={() => askConfirm({
             title: 'Reject this withdrawal?',
             consequence: REJECT_CONSEQUENCE,
@@ -104,6 +118,7 @@ export default function WithdrawalsSection() {
       noneYet="No withdrawal requests yet"
       drawerTitle={person}
       renderDrawer={renderDrawer}
+      toolbar={<p className="adm-note">Withdrawals are paid out automatically. Reject only one that is stuck.</p>}
     />
   )
 }
