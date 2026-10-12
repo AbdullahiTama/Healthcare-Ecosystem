@@ -105,7 +105,7 @@ export default function DirectoryTable({
         </nav>
       )}
 
-      <ReviewDrawer show={!!current} title={current ? rowLabel(current) : ''} status={drawer?.status} onClose={close} error={error} footer={drawer?.footer} preventClose={confirming}>
+      <ReviewDrawer show={!!current} title={current ? (drawer?.title ?? rowLabel(current)) : ''} status={drawer?.status} onClose={close} error={error} footer={drawer?.footer} preventClose={confirming}>
         {drawer?.body}
       </ReviewDrawer>
     </div>

@@ -151,4 +151,12 @@ describe('DirectoryTable', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
+
+  it('uses the title and status renderDrawer returns', () => {
+    setup({ renderDrawer: (r) => ({ title: `Account of ${r.name}`, status: 'approved', body: <p>x</p> }) })
+    fireEvent.click(screen.getByRole('button', { name: 'Review Ada' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Account of Ada')).toBeInTheDocument()
+    expect(within(dialog).getByText(/approved/i)).toBeInTheDocument()
+  })
 })
