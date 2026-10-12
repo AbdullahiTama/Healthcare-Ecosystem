@@ -16,11 +16,12 @@ vi.mock('../hooks/useRealtimeChannel', () => ({ useRealtimeChannel: vi.fn() }))
 import { AdminProvider, useAdmin } from './AdminProvider.jsx'
 
 function Probe() {
-  const { adminUser, permissions, signOut, askConfirm, recordAction, actionHistory, confirming } = useAdmin()
+  const { adminUser, authUserId, permissions, signOut, askConfirm, recordAction, actionHistory, confirming } = useAdmin()
   return (
     <div>
       <span>confirming:{String(confirming)}</span>
       <span>user:{adminUser.full_name}</span>
+      <span>auth:{String(authUserId)}</span>
       <span>perm:{JSON.stringify(permissions)}</span>
       <span>history:{actionHistory.length}</span>
       <button onClick={signOut}>sign out</button>
@@ -34,7 +35,7 @@ const mount = () => render(<AdminProvider><Probe /></AdminProvider>)
 beforeEach(() => {
   localStorage.clear()
   navigate.mockReset()
-  supa.auth.getSession.mockReset().mockResolvedValue({ data: { session: { access_token: 't' } }, error: null })
+  supa.auth.getSession.mockReset().mockResolvedValue({ data: { session: { access_token: 't', user: { id: 'auth-u1' } } }, error: null })
   supa.auth.signOut.mockReset().mockResolvedValue({})
   api.callAdminAuth.mockReset().mockImplementation(async (action) => {
     if (action === 'verify') return { admin: { id: 'a1', full_name: 'Ada Admin', role: 'moderator' }, permissions: { finance: false } }
@@ -49,6 +50,12 @@ describe('AdminProvider', () => {
     expect(screen.getByText('perm:{"finance":false}')).toBeInTheDocument()
     expect(api.callAdminAuth).toHaveBeenCalledWith('verify')
     expect(JSON.parse(localStorage.getItem('admin_user')).id).toBe('a1')
+  })
+
+  it('exposes the sign-in user id from the session as authUserId, separate from the admin_users id', async () => {
+    mount()
+    expect(await screen.findByText('auth:auth-u1')).toBeInTheDocument()
+    expect(screen.getByText('user:Ada Admin')).toBeInTheDocument()
   })
 
   it('renders nothing of the admin and goes to login when there is no session', async () => {

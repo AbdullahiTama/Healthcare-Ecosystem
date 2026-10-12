@@ -7,7 +7,9 @@ import { renderWithQueryClient } from '../../../test/renderWithQueryClient.jsx'
 const dir = vi.hoisted(() => ({ calls: [], result: null }))
 const actions = vi.hoisted(() => ({ verifyUser: vi.fn(), suspendUser: vi.fn(), deleteUser: vi.fn(), busy: null }))
 const trust = vi.hoisted(() => ({ value: null }))
-const admin = vi.hoisted(() => ({ askConfirm: vi.fn(), adminUser: { id: 'a1' } }))
+// adminUser.id is the admin_users row id; authUserId is the sign-in (auth.users)
+// id, which is what profiles.id holds. For real staff the two differ.
+const admin = vi.hoisted(() => ({ askConfirm: vi.fn(), adminUser: { id: 'admin-row-1' }, authUserId: 'u-self' }))
 const api = vi.hoisted(() => ({ callAdminAuth: vi.fn() }))
 const csv = vi.hoisted(() => ({ exportCSV: vi.fn() }))
 
@@ -18,7 +20,7 @@ vi.mock('../hooks/useUsersDirectory', async (importActual) => {
 vi.mock('../hooks/useUserActions', () => ({ useUserActions: () => actions }))
 vi.mock('../hooks/useTrustQueues', () => ({ useTrustQueues: () => ({ data: trust.value }) }))
 vi.mock('../provider/AdminProvider.jsx', () => ({
-  useAdmin: () => ({ adminUser: admin.adminUser, askConfirm: admin.askConfirm, confirming: false }),
+  useAdmin: () => ({ adminUser: admin.adminUser, authUserId: admin.authUserId, askConfirm: admin.askConfirm, confirming: false }),
 }))
 vi.mock('../adminApi', () => ({ callAdminAuth: api.callAdminAuth }))
 vi.mock('../ui', async (importActual) => ({ ...(await importActual()), exportCSV: csv.exportCSV }))
@@ -29,7 +31,7 @@ const day = 86400000
 const users = [
   { id: 'u1-0123456789abcdef', full_name: 'Ada Obi', display_name: 'ada', is_verified: true, verification_label: 'Pharmacist', specialty: 'Pharmacy', location: 'Abuja', website: 'ada.example', created_at: new Date(Date.now() - 3 * day).toISOString() },
   { id: 'u2', full_name: 'Bayo Lawal', display_name: null, is_verified: false, verification_label: null, specialty: null, location: 'Lagos', website: null, created_at: new Date(Date.now() - 5 * day).toISOString() },
-  { id: 'a1', full_name: 'Admin Self', display_name: null, is_verified: false, verification_label: null, specialty: null, location: null, website: null, created_at: new Date(Date.now() - 9 * day).toISOString() },
+  { id: 'u-self', full_name: 'Admin Self', display_name: null, is_verified: false, verification_label: null, specialty: null, location: null, website: null, created_at: new Date(Date.now() - 9 * day).toISOString() },
 ]
 const posts = [
   { id: 'p1', content: 'First post', post_type: 'update', created_at: new Date().toISOString() },
@@ -56,7 +58,8 @@ beforeEach(() => {
   actions.suspendUser.mockReset().mockResolvedValue({ ok: true })
   actions.deleteUser.mockReset().mockResolvedValue({ ok: true })
   admin.askConfirm.mockReset()
-  admin.adminUser = { id: 'a1' }
+  admin.adminUser = { id: 'admin-row-1' }
+  admin.authUserId = 'u-self'
   api.callAdminAuth.mockReset().mockResolvedValue({ data: posts })
   csv.exportCSV.mockReset()
 })
@@ -277,8 +280,9 @@ describe('UsersSection', () => {
     expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent('Not allowed')
   })
 
-  it('fails closed: with the signed-in admin not yet known, no Delete or Suspend; they appear once a different admin is known', () => {
+  it('fails closed: with the sign-in user id not yet known, no Delete or Suspend; they appear once it is known', () => {
     admin.adminUser = undefined
+    admin.authUserId = undefined
     const { rerender } = render()
     let dialog = openUser('Bayo Lawal')
     expect(within(dialog).queryByRole('button', { name: 'Delete user' })).not.toBeInTheDocument()
@@ -286,14 +290,20 @@ describe('UsersSection', () => {
     expect(within(dialog).queryByRole('combobox', { name: 'Suspend duration' })).not.toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: 'Verify' })).toBeInTheDocument()
 
-    admin.adminUser = { id: 'a1' }
+    // The admin_users id alone is not the sign-in id, so it is not enough.
+    admin.adminUser = { id: 'admin-row-1' }
+    rerender(<UsersSection />)
+    dialog = screen.getByRole('dialog')
+    expect(within(dialog).queryByRole('button', { name: 'Delete user' })).not.toBeInTheDocument()
+
+    admin.authUserId = 'u-self'
     rerender(<UsersSection />)
     dialog = screen.getByRole('dialog')
     expect(within(dialog).getByRole('button', { name: 'Delete user' })).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: 'Suspend' })).toBeInTheDocument()
   })
 
-  it('hides Delete user and Suspend for the signed-in admin, but keeps Verify', () => {
+  it('hides Delete user and Suspend on the profile of the sign-in user (whose admin_users id differs), but keeps Verify', () => {
     render()
     const self = openUser('Admin Self')
     expect(within(self).queryByRole('button', { name: 'Delete user' })).not.toBeInTheDocument()
@@ -305,5 +315,13 @@ describe('UsersSection', () => {
     const other = openUser('Bayo Lawal')
     expect(within(other).getByRole('button', { name: 'Delete user' })).toBeInTheDocument()
     expect(within(other).getByRole('button', { name: 'Suspend' })).toBeInTheDocument()
+  })
+
+  it('also hides them on a profile whose id equals the admin_users id (where the two ids coincide, as in the QA seed)', () => {
+    admin.adminUser = { id: 'u2' }
+    render()
+    const dialog = openUser('Bayo Lawal')
+    expect(within(dialog).queryByRole('button', { name: 'Delete user' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Suspend' })).not.toBeInTheDocument()
   })
 })

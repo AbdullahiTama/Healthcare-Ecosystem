@@ -127,10 +127,14 @@ const selectStyle = {
 }
 
 // Verify, Suspend and Delete. Suspend and Delete are not offered on your own
-// account, nor while the signed-in admin is not yet known. This is UI only:
-// suspend_user and delete_user (api/_handlers/admin-auth.js) do NOT prevent an
-// admin acting on their own account; hiding the buttons only prevents an
-// accidental lock-out or self-delete from this screen.
+// account. `isSelf` compares the profile id (profiles.id is the sign-in user's
+// id) with the session's sign-in user id, and also with adminUser.id, which is
+// the admin_users row id and only equals the sign-in id where they coincide
+// (the QA seed). It fails closed: while the sign-in id is unknown, Suspend and
+// Delete are hidden. This is UI only: suspend_user and delete_user
+// (api/_handlers/admin-auth.js) do NOT prevent an admin acting on their own
+// account; hiding the buttons only prevents an accidental lock-out or
+// self-delete from this screen.
 function UserActions({ u, isSelf, actions, askConfirm, close, setError }) {
   const [verifying, setVerifying] = useState(false)
   const [specialty, setSpecialty] = useState('')
@@ -214,7 +218,8 @@ export default function UsersSection() {
   const query = useUsersDirectory({ search, verified, specialty, page })
   const rows = query.data?.rows || []
   const actions = useUserActions()
-  const { adminUser, askConfirm } = useAdmin()
+  const { adminUser, authUserId, askConfirm } = useAdmin()
+  const isSelf = (u) => !authUserId || u.id === authUserId || u.id === adminUser?.id
   const { data: trust } = useTrustQueues(true)
   const phoneMap = Object.fromEntries((trust?.verifications?.data || []).filter(v => v.phone).map(v => [v.user_id, v.phone]))
 
@@ -223,7 +228,7 @@ export default function UsersSection() {
     status: u.is_verified ? 'confirmed' : undefined,
     body: <UserBody u={u} phone={phoneMap[u.id]} />,
     footer: (
-      <UserActions key={u.id} u={u} isSelf={!adminUser?.id || u.id === adminUser.id}
+      <UserActions key={u.id} u={u} isSelf={isSelf(u)}
         actions={actions} askConfirm={askConfirm} close={close} setError={setError} />
     ),
   })
