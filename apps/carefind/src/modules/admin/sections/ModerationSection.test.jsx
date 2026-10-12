@@ -179,6 +179,30 @@ describe('ModerationSection', () => {
     expect(admin.showToast).toHaveBeenCalledWith('Deleted 0. Skipped: abuse (no post to delete)', { type: 'warning' })
   })
 
+  it('never acts on a selected row that the source filter hides, and the count excludes it', async () => {
+    renderSection()
+    select(VERIFICATION)
+    select(REPORT)
+    expect(screen.getByText('2 selected')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'report' } })
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Approve verifications' }))
+    await waitFor(() => expect(admin.showToast).toHaveBeenCalled())
+    expect(calls('approve_verification')).toEqual([])
+    expect(admin.showToast).toHaveBeenCalledWith('Approved 0. Skipped: spam (not a verification)', { type: 'warning' })
+  })
+
+  it('a selection the priority filter hides entirely leaves no bulk bar to act on it', () => {
+    renderSection()
+    select(VERIFICATION)
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Priority'), { target: { value: 'high' } })
+    expect(screen.queryByText(/selected$/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reject verifications' })).not.toBeInTheDocument()
+    expect(admin.askConfirm).not.toHaveBeenCalled()
+    expect(calls('reject_verification')).toEqual([])
+  })
+
   it('names a failed item in an error toast', async () => {
     api.callAdminAuth.mockImplementation(async (action) => { if (action === 'approve_verification') throw new Error('Not allowed'); return {} })
     renderSection()
