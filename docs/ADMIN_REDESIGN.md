@@ -9,8 +9,8 @@ Code: `apps/carefind/src/modules/admin/`.
 |---|---|---|
 | 1 | Foundation: `AdminProvider`, shell and topbar, Overview with Needs attention | built (PR #22) |
 | 2a | Trust queues: Verification, Claims, Reports, Moderation | built (PR #23) (Verification, Claims, Reports, Moderation) |
-| 2b | People: Users, Businesses | built on `feat/carefind-admin-phase2b` (Users, Businesses) |
-| 3 | Finance: Revenue, Withdrawals, Orders, Money checks | not started |
+| 2b | People: Users, Businesses | built (PR #24) (Users, Businesses) |
+| 3 | Finance: Revenue, Withdrawals, Orders, Money checks | built on `feat/carefind-admin-phase3` (Revenue, Orders, Withdrawals, Money checks) |
 | 4 | Content and Live: Posts, Stories, News, Promotions, Go live | not started |
 | 5 | System: Teams, Audit, Errors, Searches, Drug intel, Email templates, Shop; delete `legacy/` | not started |
 
@@ -23,7 +23,8 @@ shell/                     AdminNav, Topbar, AdminShell (uses the design-system 
 navigation.js              the nine groups; every tab key lives here once
 sections/                  redesigned screens (OverviewSection, FeedRankingSection,
                            VerificationsSection, ClaimsSection, ReportsSection, ModerationSection,
-                           UsersSection, BusinessesSection)
+                           UsersSection, BusinessesSection, RevenueSection, OrdersSection,
+                           WithdrawalsSection, MoneyChecksSection)
 legacy/LegacyTabHost.jsx   screens not yet redesigned, with the props they always had
 lib/attention.js           the one builder for the Needs attention queue
 hooks/useOverviewData.js   Overview data, one settled result per source
@@ -32,6 +33,10 @@ hooks/useReviewActions.js  approve/reject/resolve actions and the credential vie
 hooks/useUsersDirectory.js      Users page: server-side search and paging, exact total
 hooks/useBusinessesDirectory.js Businesses page: same, via the transport
 hooks/useUserActions.js         verify, suspend and delete a user
+hooks/useFinanceData.js        transactions and withdrawals, one settled result per source
+hooks/useReconciliation.js     money check findings, decisions and "run now"
+hooks/useWithdrawalActions.js  reject a withdrawal, refreshing the list on every outcome
+lib/financeFormat.js       the legacy money maths (revenue, top-ups, coins to naira, masking), pinned by tests
 lib/bulkModeration.js      runBulk: bulk actions act only on the types their labels name
 repositories/transport.js  `or` filter op (every term quoted and escaped) and `likeContains`
 ui/                        MetricStrip, SplitBar, ReviewQueue, ReviewDrawer, DirectoryTable,
@@ -41,7 +46,10 @@ ui/                        MetricStrip, SplitBar, ReviewQueue, ReviewDrawer, Dir
 The section list in the legacy host no longer includes the four trust tabs
 (Verification, Claims, Reports, Moderation) or Users and Businesses, and the host no
 longer holds Users or Businesses state. `users` stays in `useAdminData` for Go Live (guest
-picker); no screen reads the businesses or phone data from it any more. `PostsTab` still uses the moderation
+picker); no screen reads the businesses or phone data from it any more. The Finance tabs (Revenue, Orders, Withdrawals, Money checks) have left the host too. `transactions`
+and `withdrawals` still come from `useAdminData` for the Overview and notifications, while the Finance
+screens read through `useFinanceData`. `components/StatusDot` and `RowActions` remain because
+`ShopTab` uses them. `PostsTab` still uses the moderation
 store, so `LegacyTabHost` keeps its own `ModerationProvider`.
 
 Session checks are unchanged: `AdminProvider` calls `getSession` and the server's
@@ -214,6 +222,56 @@ Backend, SQL and financial calculations are out of scope for this work.
     The directory pager now also says "Page N" in a polite live region, and an open drawer
     survives list refreshes that move its row off the page (9397528).
 
+45. Revenue's "Total Revenue", "Top-ups" and "Withdrawals" figures were computed from only the
+    latest 50 transactions (`list_transactions` has `limit(50)`, all types and statuses), and the
+    top-up sum ignores `status`; they are not totals. **Labelled** (the cards now say "(latest 50)"
+    and "of any status"); the calculation is unchanged and pinned by the `financeFormat` tests
+    (1b5759e, c94f7af).
+46. Revenue divides `naira_amount` by 100; Orders shows the same field undivided. One of them is
+    wrong by 100x. Left as is on both and labelled ("Amount as stored"); needs the backend and
+    finance owner (c94f7af, d59cf35). Display only: Revenue's ₦ column shows "—" when
+    `naira_amount` is 0 or missing; the legacy tab rendered a stray "0" for 0.
+47. "Orders" lists wallet transactions (the same 50 rows), not shop orders, and sits under
+    Marketplace in navigation. Documented.
+48. Withdrawals converts coins to naira with a fixed 200 per coin in the UI (`nairaFromCoins`).
+    Now labelled "about ₦X at 200 per coin" (ddc5f42).
+49. `list_transactions` and `list_withdrawal_requests` are readable by any valid admin token
+    (finding 1 applies to money data); hiding the tabs is cosmetic. Money data is read through the
+    same endpoints as before. `reject_withdrawal` itself also only checks `verifyToken`
+    (`admin-auth.js` ~345-347), so per finding 1 roles are not enforced on the money action
+    either: any admin role can reject a withdrawal. Documented.
+50. The legacy withdrawal reject toasted any server error and did not refresh, although a 409
+    "confirmed paid" had already settled the request. **Fixed**: the new action refreshes the list
+    on every outcome (010eb04; a late result can no longer land on a different open drawer, 1a70b26).
+    A refusal that arrives after its drawer was closed or replaced is toasted ("Couldn't reject the
+    withdrawal: …") instead of being dropped, and a refresh or toast that throws after the server
+    committed no longer reports the reject as failed (this wave's fix commits; see finding 55 on
+    audit).
+51. Account numbers were shown in full in the list. **Fixed**: the Withdrawals table shows the last
+    four digits and the drawer the full number (ddc5f42). The drawer shows only the fields the
+    legacy screen showed (person, amount, bank, account number and name, status, requested); the
+    Paystack reference is not shown.
+52. `reject_withdrawal` can record a request as PAID (Paystack says the transfer succeeded) while
+    returning HTTP 409, refund it, or block it (`decideAdminReject`; `admin-auth.js` ~344-383). The
+    legacy "Reject and refund" label promised a refund that happens in only one of the three
+    outcomes. **Fixed**: the button is now "Reject withdrawal" and the confirmation states the
+    outcomes (5439a32). Follow-up: the server should return a distinguishable code for the
+    settled-as-paid case so the drawer can show it as information, not an error.
+53. Orders' status badge uses `StatusBadge`, which has no `success` entry, so a `success` row shows
+    as a gray pill where legacy coloured it green. Display only; the fix belongs in the design
+    system. Documented.
+54. The shared `ReviewQueue` labels its tabs Pending and All, so for withdrawals "Pending" means in
+    progress (`reserved` or `processing`). The empty message says "Nothing in progress". Documented.
+55. No audit row or action history is written for the withdrawal reject, the most consequential
+    admin money action, before or after this phase (`useWithdrawalActions` matches the legacy
+    handler). Owner follow-up recommended: the server should write the audit row in
+    `reject_withdrawal`, so it cannot be skipped by a client. Also recorded:
+    - A failed list refresh after a reject hides the drawer (and the message in it) until the list
+      recovers. This is shared `ReviewQueue` behaviour (the selection is kept and the drawer comes
+      back with the row). A refusal whose drawer is already hidden this way is toasted.
+    - The Money checks Retry button gives no feedback while retrying: react-query keeps `isError`
+      true during the refetch, so the error and Retry stay on screen until it settles.
+
 ## Verification state
 
 Phase 1: unit and component tests cover the queue builder, navigation, Overview data,
@@ -237,3 +295,10 @@ and 1920 has NOT been measured in a browser (no admin session was available). Th
 clause is verified at string level against PostgREST's documented quoting rules and the
 postgrest-js source, not against a live PostgREST. The suspension and delete behaviours in
 findings 37-39 are read from the handlers, not exercised.
+
+Phase 3: unit and component tests cover `financeFormat`, `useFinanceData`, `useReconciliation`,
+`useWithdrawalActions`, `RevenueSection`, `OrdersSection`, `WithdrawalsSection`,
+`MoneyChecksSection` and the panel routing test. The money figures are pinned to the legacy
+maths by tests. Responsive layout at 375, 390, 768, 1024, 1440 and 1920 has NOT been measured in a
+browser (no admin session was available). The Paystack reject outcomes are read from the code
+(`decideAdminReject`, `decideTransferAction`, `reject_withdrawal`), not exercised.

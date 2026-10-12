@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 
-// AdminPanel's routing of the Phase 2a and 2b tabs. The sections, the shell and
+// AdminPanel's routing of the Phase 2a, 2b and 3 tabs. The sections, the shell and
 // the provider are stubbed so the test exercises only AdminPanel's own choice
 // of section and its permission gate (`isAllowed` from the real navigation).
 // The stub shell lists only what `visibleGroups` lets the role see, as the real
@@ -39,6 +39,10 @@ vi.mock('./sections/ReportsSection.jsx', () => ({ default: () => <h1>Reports</h1
 vi.mock('./sections/ModerationSection.jsx', () => ({ default: () => <h1>Moderation</h1> }))
 vi.mock('./sections/UsersSection.jsx', () => ({ default: () => <h1>Users</h1> }))
 vi.mock('./sections/BusinessesSection.jsx', () => ({ default: () => <h1>Businesses</h1> }))
+vi.mock('./sections/RevenueSection.jsx', () => ({ default: () => <h1>Revenue</h1> }))
+vi.mock('./sections/OrdersSection.jsx', () => ({ default: () => <h1>Orders</h1> }))
+vi.mock('./sections/WithdrawalsSection.jsx', () => ({ default: () => <h1>Withdrawals</h1> }))
+vi.mock('./sections/MoneyChecksSection.jsx', () => ({ default: () => <h1>Money checks</h1> }))
 vi.mock('./legacy/LegacyTabHost.jsx', () => ({ default: ({ tab }) => <h1>Legacy {tab}</h1> }))
 
 import AdminPanel from './AdminPanel.jsx'
@@ -51,6 +55,10 @@ const TABS = [
   { nav: 'Moderation queue', key: 'moderation', heading: 'Moderation' },
   { nav: 'Users', key: 'users', heading: 'Users' },
   { nav: 'Businesses', key: 'businesses', heading: 'Businesses' },
+  { nav: 'Revenue', key: 'revenue', heading: 'Revenue' },
+  { nav: 'Orders', key: 'orders', heading: 'Orders' },
+  { nav: 'Withdrawals', key: 'withdrawals', heading: 'Withdrawals' },
+  { nav: 'Money checks', key: 'reconciliation', heading: 'Money checks' },
 ]
 
 const nav = () => within(screen.getByRole('navigation', { name: 'Admin sections' }))
@@ -58,7 +66,7 @@ const heading = () => screen.getByRole('heading', { level: 1 })
 
 beforeEach(() => { admin.permissions = {} })
 
-describe('AdminPanel: the Phase 2a and 2b tabs', () => {
+describe('AdminPanel: the Phase 2a, 2b and 3 tabs', () => {
   it('starts on the Overview', () => {
     render(<AdminPanel />)
     expect(heading()).toHaveTextContent('Overview')
