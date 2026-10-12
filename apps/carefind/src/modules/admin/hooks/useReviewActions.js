@@ -61,9 +61,13 @@ export function useReviewActions() {
   // Resolve a private credential document to a short-lived signed URL. The tab
   // is opened SYNCHRONOUSLY inside the click's user-activation window and then
   // pointed at the URL; window.open after an await is blocked by Chrome/Safari.
+  // `noopener` is deliberately NOT passed: it makes window.open return null, so
+  // the tab could never be pointed at the URL. Instead the opener is severed by
+  // hand before navigating, so the signed-URL page cannot reach back to us.
   const openCredential = useCallback(async (requestId) => {
     setBusyId(requestId)
-    const tab = window.open('', '_blank', 'noopener,noreferrer')
+    const tab = window.open('', '_blank')
+    if (tab) { try { tab.opener = null } catch { /* best effort */ } }
     try {
       const { url } = await callAdminAuth('credential_url', { requestId })
       if (!tab) return { ok: false, error: 'Your browser blocked the document window. Allow popups for this site and try again.' }

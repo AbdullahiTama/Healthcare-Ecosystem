@@ -65,12 +65,15 @@ describe('useReviewActions', () => {
   })
 
   it('opens the credential tab synchronously, then points it at the signed URL', async () => {
-    const tab = { location: '', close: vi.fn() }
+    const tab = { location: '', opener: {}, close: vi.fn() }
     const open = vi.spyOn(window, 'open').mockReturnValue(tab)
     callAdminAuth.mockResolvedValueOnce({ url: 'https://signed.example/doc' })
     const { result } = renderHook(() => useReviewActions())
     const out = await run(() => result.current.openCredential('v1'))
-    expect(open).toHaveBeenCalledWith('', '_blank', 'noopener,noreferrer')
+    expect(open).toHaveBeenCalledWith('', '_blank')
+    expect(open.mock.calls[0]).toHaveLength(2)
+    expect(tab.opener).toBeNull()
+    expect(open.mock.invocationCallOrder[0]).toBeLessThan(callAdminAuth.mock.invocationCallOrder[0])
     expect(callAdminAuth).toHaveBeenCalledWith('credential_url', { requestId: 'v1' })
     expect(tab.location).toBe('https://signed.example/doc')
     expect(out.ok).toBe(true)
@@ -88,7 +91,7 @@ describe('useReviewActions', () => {
   })
 
   it('closes the blank tab and reports the error when signing fails', async () => {
-    const tab = { location: '', close: vi.fn() }
+    const tab = { location: '', opener: {}, close: vi.fn() }
     const open = vi.spyOn(window, 'open').mockReturnValue(tab)
     callAdminAuth.mockRejectedValueOnce(new Error('no file'))
     const { result } = renderHook(() => useReviewActions())
