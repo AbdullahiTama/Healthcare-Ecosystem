@@ -10,8 +10,9 @@ Code: `apps/carefind/src/modules/admin/`.
 | 1 | Foundation: `AdminProvider`, shell and topbar, Overview with Needs attention | built (PR #22) |
 | 2a | Trust queues: Verification, Claims, Reports, Moderation | built (PR #23) (Verification, Claims, Reports, Moderation) |
 | 2b | People: Users, Businesses | built (PR #24) (Users, Businesses) |
-| 3 | Finance: Revenue, Withdrawals, Orders, Money checks | built on `feat/carefind-admin-phase3` (Revenue, Orders, Withdrawals, Money checks) |
-| 4 | Content and Live: Posts, Stories, News, Promotions, Go live | not started |
+| 3 | Finance: Revenue, Withdrawals, Orders, Money checks | built (PR #25) (Revenue, Orders, Withdrawals, Money checks) |
+| 4a | Content: Posts, Stories, News, Promotions | built on `feat/carefind-admin-phase4` (Posts, Stories, News, Promotions) |
+| 4b | Live: Go live | not started (Go live) |
 | 5 | System: Teams, Audit, Errors, Searches, Drug intel, Email templates, Shop; delete `legacy/` | not started |
 
 ## How the code is organised
@@ -24,7 +25,8 @@ navigation.js              the nine groups; every tab key lives here once
 sections/                  redesigned screens (OverviewSection, FeedRankingSection,
                            VerificationsSection, ClaimsSection, ReportsSection, ModerationSection,
                            UsersSection, BusinessesSection, RevenueSection, OrdersSection,
-                           WithdrawalsSection, MoneyChecksSection)
+                           WithdrawalsSection, MoneyChecksSection, PostsSection, StoriesSection,
+                           NewsSection, PromotionsSection)
 legacy/LegacyTabHost.jsx   screens not yet redesigned, with the props they always had
 lib/attention.js           the one builder for the Needs attention queue
 hooks/useOverviewData.js   Overview data, one settled result per source
@@ -36,6 +38,11 @@ hooks/useUserActions.js         verify, suspend and delete a user
 hooks/useFinanceData.js        transactions and withdrawals, one settled result per source
 hooks/useReconciliation.js     money check findings, decisions and "run now"
 hooks/useWithdrawalActions.js  reject a withdrawal, refreshing the list on every outcome
+lib/uploadMedia.js         uploadToBucket: returns an upload failure instead of ignoring it
+hooks/usePostsDirectory.js     Posts page: server-side search, filters and paging
+hooks/useContentLists.js       stories, news and promotions lists; a failed load is an error
+hooks/useNewsActions.js        approve, reject and delete news, one refresh per action
+hooks/useContentActions.js     create and delete stories and promotions
 lib/financeFormat.js       the legacy money maths (revenue, top-ups, coins to naira, masking), pinned by tests
 lib/bulkModeration.js      runBulk: bulk actions act only on the types their labels name
 repositories/transport.js  `or` filter op (every term quoted and escaped) and `likeContains`
@@ -49,8 +56,12 @@ longer holds Users or Businesses state. `users` stays in `useAdminData` for Go L
 picker); no screen reads the businesses or phone data from it any more. The Finance tabs (Revenue, Orders, Withdrawals, Money checks) have left the host too. `transactions`
 and `withdrawals` still come from `useAdminData` for the Overview and notifications, while the Finance
 screens read through `useFinanceData`. `components/StatusDot` and `RowActions` remain because
-`ShopTab` uses them. `PostsTab` still uses the moderation
-store, so `LegacyTabHost` keeps its own `ModerationProvider`.
+`ShopTab` uses them. The Content tabs (Posts, Stories, News, Promotions) have left the host too (af62a42).
+`LegacyTabHost` now holds only Go live and the Phase 5 tabs. `ModerationProvider` is no longer
+mounted by the host; `AdminPanel` mounts it only around the Moderation section. The legacy hooks
+`useAdminStories`, `useAdminNews` and `useAdminPromotions` in `hooks/queries.js` remain: the shell
+uses `useAdminNews` for the session-expired toast, and Phase 5 retires the rest. The Content
+screens read through `useContentLists`.
 
 Session checks are unchanged: `AdminProvider` calls `getSession` and the server's
 `verify` action, and renders nothing without a verified admin. `permissions` only
@@ -272,6 +283,41 @@ Backend, SQL and financial calculations are out of scope for this work.
     - The Money checks Retry button gives no feedback while retrying: react-query keeps `isError`
       true during the refetch, so the error and Retry stay on screen until it settles.
 
+56. Story and promotion image uploads (and the scheduled-show trailer and live-image uploads)
+    ignored a failed upload (`if (!upErr)`): the item was created without its image, the show
+    scheduled without its trailer, or the live image dropped (and cleared from the form), with no
+    message. **Fixed** for stories and promotions (e734b52, 8ff72d5, 6f416a3, aa68240): a failed
+    upload now stops creation, shows the error and keeps what the admin typed. The live paths
+    (`LegacyTabHost.jsx` ~102 and ~210) are Phase 4b.
+57. Posts loaded the newest 50 posts and filtered them in the browser (same blind spot as Users,
+    finding 29). **Fixed** (7d963bf, 700f208) with the `list_posts` server-side filters and
+    paging; the posts total shows only when unfiltered.
+58. `useAdminNews` turned any non-auth error into an empty list, and stories and promotions
+    defaulted to `[]` on failure, so a failed load looked like "no news submissions yet".
+    **Fixed** in the new hooks (1186d48): failures are errors and show Retry.
+59. `list_news` (`apps/carefind/api/_handlers/admin-auth.js` ~697-709) ignores its query error
+    and returns `[]`, is capped at 60 rows (shown as a cap note), and returns submitter phone
+    numbers taken from verification requests. Documented, not changed.
+60. Uploads go straight from the browser to storage buckets (`story-images`, `promo-images`);
+    the trust boundary is the bucket policies, not the admin API (Phase 1 finding 11).
+    Documented.
+61. The legacy news handlers edited the query cache optimistically and called `invalidateAdmin()`
+    twice; replaced by one refresh (036d9ac). Also: the legacy Reject on a news item did not ask
+    for confirmation; it does now (1242e9f). Failed creates keep the form.
+62. `approve_news` (`admin-auth.js` ~509-522) spreads the client's `edits` object straight into
+    the update (`...(edits || {})`), so any valid admin token can write arbitrary columns of a
+    news row (for example `author_id` or `status`) through it; the UI only sends `headline`,
+    `subtitle` and `body`. Backend; documented, not changed. Approving PUBLISHES the item
+    (status approved and `published_at`), so the button is now labelled "Approve and publish".
+
+Phase 4a follow-ups, documented:
+
+- The News "Submitted" column is not sortable (the server returns the newest 60 only). The Posts
+  "Posted" column sorts only the 25 rows on the page, which can read as a global sort (finding 44);
+  a real sort needs an `order` parameter on `list_posts`.
+- The shared `DateRange` labels (From, To) in `ui/FilterPills.jsx` are not linked to their inputs
+  (no `htmlFor`/`id`), an accessibility defect shared with `DrugsTab`.
+
 ## Verification state
 
 Phase 1: unit and component tests cover the queue builder, navigation, Overview data,
@@ -302,3 +348,10 @@ Phase 3: unit and component tests cover `financeFormat`, `useFinanceData`, `useR
 maths by tests. Responsive layout at 375, 390, 768, 1024, 1440 and 1920 has NOT been measured in a
 browser (no admin session was available). The Paystack reject outcomes are read from the code
 (`decideAdminReject`, `decideTransferAction`, `reject_withdrawal`), not exercised.
+
+Phase 4a: unit and component tests cover `uploadMedia`, `usePostsDirectory`, `useContentLists`,
+`useNewsActions`, `useContentActions`, `PostsSection`, `StoriesSection`, `NewsSection`,
+`PromotionsSection` and the panel routing test. Responsive layout at 375, 390, 768, 1024, 1440
+and 1920 has NOT been measured in a browser (no admin session was available). Uploads were never
+exercised against real buckets (the storage client is mocked). The server handlers' behaviour
+(`list_posts`, `list_news`, `approve_news`) is read from the code, not exercised.
