@@ -8,8 +8,8 @@ Code: `apps/carefind/src/modules/admin/`.
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Foundation: `AdminProvider`, shell and topbar, Overview with Needs attention | built (PR #22) |
-| 2a | Trust queues: Verification, Claims, Reports, Moderation | built on `feat/carefind-admin-phase2a` (Verification, Claims, Reports, Moderation) |
-| 2b | People: Users, Businesses | not started (Users, Businesses) |
+| 2a | Trust queues: Verification, Claims, Reports, Moderation | built (PR #23) (Verification, Claims, Reports, Moderation) |
+| 2b | People: Users, Businesses | built on `feat/carefind-admin-phase2b` (Users, Businesses) |
 | 3 | Finance: Revenue, Withdrawals, Orders, Money checks | not started |
 | 4 | Content and Live: Posts, Stories, News, Promotions, Go live | not started |
 | 5 | System: Teams, Audit, Errors, Searches, Drug intel, Email templates, Shop; delete `legacy/` | not started |
@@ -22,19 +22,26 @@ provider/AdminProvider.jsx session verify, permissions, toast, confirm, realtime
 shell/                     AdminNav, Topbar, AdminShell (uses the design-system DashboardShell)
 navigation.js              the nine groups; every tab key lives here once
 sections/                  redesigned screens (OverviewSection, FeedRankingSection,
-                           VerificationsSection, ClaimsSection, ReportsSection, ModerationSection)
+                           VerificationsSection, ClaimsSection, ReportsSection, ModerationSection,
+                           UsersSection, BusinessesSection)
 legacy/LegacyTabHost.jsx   screens not yet redesigned, with the props they always had
 lib/attention.js           the one builder for the Needs attention queue
 hooks/useOverviewData.js   Overview data, one settled result per source
 hooks/useTrustQueues.js    verification, claim and report lists, one settled result per source
 hooks/useReviewActions.js  approve/reject/resolve actions and the credential viewer
+hooks/useUsersDirectory.js      Users page: server-side search and paging, exact total
+hooks/useBusinessesDirectory.js Businesses page: same, via the transport
+hooks/useUserActions.js         verify, suspend and delete a user
 lib/bulkModeration.js      runBulk: bulk actions act only on the types their labels name
-ui/                        MetricStrip, SplitBar, ReviewQueue, ReviewDrawer,
-                           admin.css (admin-scoped tokens)
+repositories/transport.js  `or` filter op (every term quoted and escaped) and `likeContains`
+ui/                        MetricStrip, SplitBar, ReviewQueue, ReviewDrawer, DirectoryTable,
+                           useDebounced, admin.css (admin-scoped tokens)
 ```
 
 The section list in the legacy host no longer includes the four trust tabs
-(Verification, Claims, Reports, Moderation). `PostsTab` still uses the moderation
+(Verification, Claims, Reports, Moderation) or Users and Businesses, and the host no
+longer holds Users or Businesses state. `users` stays in `useAdminData` for Go Live (guest
+picker); no screen reads the businesses or phone data from it any more. `PostsTab` still uses the moderation
 store, so `LegacyTabHost` keeps its own `ModerationProvider`.
 
 Session checks are unchanged: `AdminProvider` calls `getSession` and the server's
@@ -133,6 +140,47 @@ Backend, SQL and financial calculations are out of scope for this work.
     interactive controls on phones (DataTable `onRowClick` makes each mobile card
     `role="button"` with the Review button inside). Documented.
 
+29. Users and Businesses loaded the newest 100 rows (`useAdminData`: `getUsers({limit:100})`,
+    `commerceRepository.getBusinesses`) and filtered in the browser, so search could not find
+    older rows and the header "N total users" showed the loaded count. **Fixed** (commits
+    dba466b, e2034d6, ca00dbd, 7ccc7b2): server-side search and paging (`list_user_profiles`
+    params; `adminTransport.query` with exact counts).
+30. `list_user_profiles` (`apps/carefind/api/_handlers/admin-auth.js`, ~line 606) interpolates
+    the search term into `.or(...)`, so a comma or parenthesis in the term can change the
+    filter. Backend; documented, not changed. The new Businesses filter cannot be injected
+    (commit 1d13813: the `or` op quotes and escapes every term, with tests). Also, `*` in a
+    search term acts as an ilike wildcard (PostgREST rewrites `*` to `%`), which can widen a
+    match within the same column but never add a clause.
+31. `phoneMap` is built only from verification requests, so most users have no Call button in
+    the new drawer. Documented.
+32. The Users "title" filter filtered `verification_label` in the browser while the server
+    filters `specialty`; they never matched. **Fixed** (ca00dbd): the filter is now "Specialty".
+33. `BusinessesTab` received an unused raw `supabase` client prop. Removed with the tab (7ccc7b2, 303925f).
+34. Suspend fired with no confirmation. **Fixed**: it confirms (d5eca97, ca00dbd).
+35. `manual_verify` writes no audit row and no action history, unlike suspend and delete.
+    Kept as legacy parity; owner decision.
+36. The legacy delete closed the user panel even when the delete failed, and refreshed anyway.
+    **Fixed**: the drawer stays open with the error.
+37. `suspend_user` sets `profiles.suspended_until` AND `is_verified = false`: suspending a user
+    silently removes their verified status, and the legacy UI never said so. The new
+    confirmation says so.
+38. Suspension appears not to be enforced: nothing in the app, API or SQL in this repo reads
+    `suspended_until` (only `suspend_user` writes it; an RLS SQL comment mentions it). It may be
+    enforced in the live database or an auth hook, which this repo does not show. Needs a
+    backend/product decision. The confirmation says "marked as suspended" and does not claim
+    the user is blocked.
+39. `delete_user` (`admin-auth.js` ~258-273) deletes reactions, comments, saved posts, follows
+    (both directions), posts and the profile, but NOT the auth (sign-in) account, and ignores
+    errors from the preliminary deletes, so a failed final delete can leave the content gone
+    and the profile in place. The legacy wording "permanently deletes the account and all their
+    posts" was not fully true; the new text says what the handler does.
+40. The server does not stop an admin suspending or deleting their own account. The Users
+    drawer hides both for the signed-in admin (and while the admin user is unknown); that is UI
+    only. Also minor: `DirectoryTable`'s search box can drop a search retyped within 300 ms of
+    "Clear filters"; the shared `FilterPills` has no `aria-pressed`; the Businesses average
+    rating counts a null or non-numeric rating as 0; `useTrustQueues` is loaded on the Users
+    tab only to build phone links. Documented.
+
 ## Verification state
 
 Phase 1: unit and component tests cover the queue builder, navigation, Overview data,
@@ -148,3 +196,11 @@ the live backend. Bulk approval of verifications has no confirmation step (this 
 the spec; consider adding one). Responsive widths, the credential popup across browsers,
 and where focus lands after an action removes a row all remain unverified without a
 browser and an admin session.
+
+Phase 2b: unit and component tests cover the transport `or` op, `useUsersDirectory`,
+`useBusinessesDirectory`, `useUserActions`, `useDebounced`, `DirectoryTable`, `UsersSection`,
+`BusinessesSection` and the panel routing test. Responsive layout at 375, 390, 768, 1024, 1440
+and 1920 has NOT been measured in a browser (no admin session was available). The escaped `or`
+clause is verified at string level against PostgREST's documented quoting rules and the
+postgrest-js source, not against a live PostgREST. The suspension and delete behaviours in
+findings 37-39 are read from the handlers, not exercised.
