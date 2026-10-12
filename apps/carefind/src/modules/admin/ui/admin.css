@@ -150,3 +150,11 @@ button.adm-item:hover { background: var(--adm-line-soft); }
 .adm-live-failures li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .adm-live-comment-hidden { opacity: 0.4; }
 .adm-live-hidden-mark { font-size: 12px; font-style: italic; color: var(--adm-ink-soft); }
+.adm-live-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.adm-live-guests, .adm-live-schedule { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.adm-live-schedule { padding-top: 14px; border-top: 1px solid var(--adm-line); }
+.adm-live-guest-results { max-height: 220px; overflow-y: auto; }
+.adm-live-guest { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 6px; border-radius: 6px; background: var(--adm-line-soft); }
+.adm-live-avatar { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; font-size: 12px; font-weight: 800; color: #fff; background: var(--teal-deep, #0e6f5a); }
+.adm-live-guest-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--adm-ink); overflow-wrap: anywhere; }
+.adm-live-guest-check { width: 20px; height: 20px; flex-shrink: 0; }
