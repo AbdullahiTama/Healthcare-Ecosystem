@@ -148,3 +148,5 @@ button.adm-item:hover { background: var(--adm-line-soft); }
 .adm-live-comment-text strong { color: var(--adm-ink); }
 .adm-live-failures { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .adm-live-failures li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.adm-live-comment-hidden { opacity: 0.4; }
+.adm-live-hidden-mark { font-size: 12px; font-style: italic; color: var(--adm-ink-soft); }

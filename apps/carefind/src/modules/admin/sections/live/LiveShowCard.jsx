@@ -63,11 +63,14 @@ function PostedItem({ item }) {
   if (kind === 'voice') return isHttpUrl(content) ? <audio controls src={content} className="adm-live-audio" /> : <Unsupported />
   if (kind === 'video') return isHttpUrl(content) ? <video controls playsInline src={content} className="adm-live-media" /> : <Unsupported />
   if (kind === 'slide') {
-    const [src, page] = String(content || '').split('|||')
+    const [src, rawPage] = String(content || '').split('|||')
+    // A value without the page marker is labelled plainly, never "Slide undefined".
+    const page = (rawPage || '').trim()
+    const label = page ? `Slide ${page}` : 'Slide'
     return (
       <div>
-        <span className="adm-live-slide-label">Slide {page}</span>
-        {isHttpUrl(src) ? <img src={src} alt={`Slide ${page}`} className="adm-live-media" loading="lazy" /> : <div><Unsupported /></div>}
+        <span className="adm-live-slide-label">{label}</span>
+        {isHttpUrl(src) ? <img src={src} alt={page ? label : 'Slide image'} className="adm-live-media" loading="lazy" /> : <div><Unsupported /></div>}
       </div>
     )
   }
@@ -123,6 +126,7 @@ export default function LiveShowCard({ show }) {
     if (res.ok) {
       // Only clear what was sent: anything typed since stays.
       setText(t => (t === sentText ? '' : t))
+      setComposerError('')
       removeFile()
       return
     }
@@ -172,7 +176,7 @@ export default function LiveShowCard({ show }) {
     },
   })
 
-  const { data, isLoading, isError, refetch, dataUpdatedAt } = control || {}
+  const { data, isLoading, isError, isFetching = false, refetch, dataUpdatedAt } = control || {}
   // Settled without data is a failure, never an empty control room.
   const loadFailed = !data && !isLoading
   const retry = () => refetch?.()
@@ -184,7 +188,7 @@ export default function LiveShowCard({ show }) {
         {isError && (
           <div role="alert" className="adm-live-warn">
             <span>Couldn't refresh the control room</span>
-            <Button variant="ghost" size="sm" onClick={retry}>Retry</Button>
+            <Button variant="ghost" size="sm" onClick={retry} loading={isFetching} loadingText="Retrying…">Retry</Button>
           </div>
         )}
         <ul className="adm-live-stats" aria-label="Live show stats">
@@ -202,7 +206,7 @@ export default function LiveShowCard({ show }) {
     statsArea = (
       <div role="alert" className="adm-live-warn">
         <span>Couldn't load the control room</span>
-        <Button variant="ghost" size="sm" onClick={retry}>Retry</Button>
+        <Button variant="ghost" size="sm" onClick={retry} loading={isFetching} loadingText="Retrying…">Retry</Button>
       </div>
     )
   } else {
@@ -311,9 +315,9 @@ export default function LiveShowCard({ show }) {
                   {data.comments.map(c => {
                     const name = author(c)
                     return (
-                      <li key={c.id} className="adm-live-comment" style={{ opacity: c.hidden ? 0.4 : 1 }}>
+                      <li key={c.id} className={c.hidden ? 'adm-live-comment adm-live-comment-hidden' : 'adm-live-comment'}>
                         <span className="adm-live-comment-text">
-                          <strong>{name}:</strong> {c.content}
+                          <strong>{name}</strong>{c.hidden && <span className="adm-live-hidden-mark"> (hidden)</span>}<strong>:</strong> {c.content}
                         </span>
                         {!c.hidden && (
                           <Button variant="ghost" size="sm" disabled={isBusy('hideComment', c.id)}

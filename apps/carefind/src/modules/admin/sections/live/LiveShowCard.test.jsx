@@ -203,6 +203,24 @@ describe('LiveShowCard stats', () => {
     expect(draftBox()).toBeEnabled()
   })
 
+  it('disables both Retry buttons and says Retrying while a refetch runs', () => {
+    control.byShow[show.id] = { data: undefined, isLoading: false, isError: true, isFetching: true, refetch: vi.fn(), dataUpdatedAt: 0 }
+    const { unmount } = render(<LiveShowCard show={show} />)
+    expect(within(card()).getByRole('button', { name: 'Retrying…' })).toBeDisabled()
+    expect(within(card()).queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+    unmount()
+    control.byShow[show.id] = loaded({ isError: true, isFetching: true })
+    render(<LiveShowCard show={show} />)
+    expect(within(card()).getByRole('button', { name: 'Retrying…' })).toBeDisabled()
+  })
+
+  it('treats an absent isFetching as not fetching', () => {
+    control.byShow[show.id] = loaded({ isError: true })
+    expect('isFetching' in control.byShow[show.id]).toBe(false)
+    render(<LiveShowCard show={show} />)
+    expect(within(card()).getByRole('button', { name: 'Retry' })).toBeEnabled()
+  })
+
   it('a failed refresh keeps the last data and the last good stamp, and warns', async () => {
     const refetch = vi.fn()
     control.byShow[show.id] = loaded({ isError: true, refetch })
@@ -282,6 +300,18 @@ describe('LiveShowCard composer', () => {
     expect(draftBox()).toHaveValue('')
     expect(screen.queryByText('poster.png')).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('clears an earlier composer error when a later post succeeds', async () => {
+    actions.postItem.mockResolvedValueOnce({ ok: false, error: 'Server busy' }).mockResolvedValueOnce({ ok: true })
+    render(<LiveShowCard show={show} />)
+    fireEvent.change(draftBox(), { target: { value: 'Try again' } })
+    await click(postButton())
+    expect(screen.getByRole('alert')).toHaveTextContent('Server busy')
+    // The draft was kept, so the operator just posts again.
+    await click(postButton())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(draftBox()).toHaveValue('')
   })
 
   it('a failed image upload keeps the text and the file and shows the error', async () => {
@@ -491,6 +521,15 @@ describe('LiveShowCard posted items', () => {
     expect(within(c).getByText('Slide 1')).toBeInTheDocument()
   })
 
+  it('labels a slide with no page number as "Slide", never "Slide undefined"', () => {
+    control.byShow[show.id] = loaded({ data: controlData({ items: [{ id: 'm1', kind: 'slide', content: 'https://cdn/plain.jpg' }] }) })
+    render(<LiveShowCard show={show} />)
+    const list = within(card()).getByRole('list', { name: 'Posted items' })
+    expect(within(list).getByText('Slide', { exact: true })).toBeInTheDocument()
+    expect(within(list).getByAltText('Slide image')).toHaveAttribute('src', 'https://cdn/plain.jpg')
+    expect(list.innerHTML).not.toMatch(/undefined/)
+  })
+
   it('says so when nothing has been posted yet', () => {
     control.byShow[show.id] = loaded({ data: controlData({ items: [] }) })
     render(<LiveShowCard show={show} />)
@@ -509,10 +548,16 @@ describe('LiveShowCard comments', () => {
     expect(items[0]).toHaveTextContent('Great show')
     expect(within(items[0]).getByRole('button', { name: /hide/i })).toBeInTheDocument()
     expect(items[1]).toHaveTextContent('spammer')
-    expect(items[1].style.opacity).toBe('0.4')
+    expect(items[1]).toHaveTextContent('(hidden)')
+    expect(items[1]).toHaveClass('adm-live-comment-hidden')
+    expect(items[1].style.opacity).toBe('')
     expect(within(items[1]).queryByRole('button', { name: /hide/i })).not.toBeInTheDocument()
     expect(items[2]).toHaveTextContent('User')
-    expect(items[2].style.opacity).not.toBe('0.4')
+    expect(items[2]).not.toHaveClass('adm-live-comment-hidden')
+    expect(items[0]).not.toHaveTextContent('(hidden)')
+    expect(items[2]).not.toHaveTextContent('(hidden)')
+    const css = readFileSync(resolve(__dirname, '../../ui/admin.css'), 'utf8')
+    expect(css).toMatch(/\.adm-live-comment-hidden \{[^}]*opacity: 0\.4/)
   })
 
   it('Hide calls hideComment with the comment id', async () => {
