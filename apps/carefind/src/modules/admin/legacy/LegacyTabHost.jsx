@@ -10,12 +10,9 @@ import { ALL_TABS } from '../navigation'
 import { useAdminData, useAdminStories, useAdminNews, useAdminPromotions, useAdminSearchLogs, useAdminLiveShows, useAdminShopData, useAdminRoles } from '../../../hooks/queries'
 import ShopTab from '../tabs/ShopTab.jsx'
 import PostsTab from '../tabs/PostsTab.jsx'
-import RevenueTab from '../tabs/RevenueTab.jsx'
 import DrugsTab from '../tabs/DrugsTab.jsx'
 import TasksTab from '../tabs/TasksTab.jsx'
 import TeamsTab from '../tabs/TeamsTab.jsx'
-import WithdrawalsTab from '../tabs/WithdrawalsTab.jsx'
-import ReconciliationTab from '../tabs/ReconciliationTab.jsx'
 import StoriesTab from '../tabs/StoriesTab.jsx'
 import NewsTab from '../tabs/NewsTab.jsx'
 import PromotionsTab from '../tabs/PromotionsTab.jsx'
@@ -24,7 +21,6 @@ import GoLiveTab from '../tabs/GoLiveTab.jsx'
 import NotificationsTab from '../tabs/NotificationsTab.jsx'
 import EmailTemplatesTab from '../tabs/EmailTemplatesTab.jsx'
 import AuditLog from '../components/AuditLog.jsx'
-import OrdersTab from '../tabs/OrdersTab.jsx'
 import ErrorsTab from '../tabs/ErrorsTab.jsx'
 import { ModerationProvider } from '../stores/moderationStore'
 
@@ -104,7 +100,7 @@ export default function LegacyTabHost({ tab, setTab }) {
   const { data: shopData } = useAdminShopData(!!adminUser)
   const { data: adminRoles = [] } = useAdminRoles(!!adminUser)
 
-  const { posts = [], users = [], transactions = [], tasks = [], teams = [], staff = [], withdrawals = [], notifications = [], notifCount = 0, roleNotifCount = 0, stats = {} } = adminData || {}
+  const { posts = [], users = [], tasks = [], teams = [], staff = [], notifications = [], notifCount = 0, roleNotifCount = 0, stats = {} } = adminData || {}
   const newsItems = newsData?.items || []
   const newsPhones = newsData?.phones || {}
   const activeShows = liveShowsData?.active || []
@@ -123,7 +119,6 @@ export default function LegacyTabHost({ tab, setTab }) {
       })
     } catch { /* non-blocking — audit failure must not block moderation */ }
   }
-  const loadAll = invalidateAdmin
 
   async function updateEcomApp(id, status) {
     try {
@@ -526,14 +521,10 @@ export default function LegacyTabHost({ tab, setTab }) {
       <div>
         {tab === 'audit_log' && <AuditLog />}
         {tab === 'errors' && <ErrorsTab showToast={showToast} />}
-        {tab === 'reconciliation' && <ReconciliationTab showToast={showToast} />}
         {tab === 'posts' && <PostsTab posts={posts} selectedPost={selectedPost} setSelectedPost={setSelectedPost} postAuthor={postAuthor} setPostAuthor={setPostAuthor} postSearch={postSearch} setPostSearch={setPostSearch} postTypeFilter={postTypeFilter} setPostTypeFilter={setPostTypeFilter} postDateFrom={postDateFrom} setPostDateFrom={setPostDateFrom} postDateTo={postDateTo} setPostDateTo={setPostDateTo} viewPostDetails={viewPostDetails} deletePost={deletePost} />}
-        {tab === 'revenue' && <RevenueTab transactions={transactions} />}
-        {tab === 'orders' && <OrdersTab transactions={transactions} showToast={showToast} loadAll={loadAll} />}
         {tab === 'drugs' && <DrugsTab drugSearch={drugSearch} setDrugSearch={setDrugSearch} drugReviews={drugReviews} drugName={drugName} setDrugName={setDrugName} drugRatingFilter={drugRatingFilter} setDrugRatingFilter={setDrugRatingFilter} drugDateFrom={drugDateFrom} setDrugDateFrom={setDrugDateFrom} drugDateTo={drugDateTo} setDrugDateTo={setDrugDateTo} searchDrugs={searchDrugs} />}
         {tab === 'tasks' && <TasksTab tasks={tasks} taskTitle={taskTitle} setTaskTitle={setTaskTitle} taskDesc={taskDesc} setTaskDesc={setTaskDesc} taskComp={taskComp} setTaskComp={setTaskComp} taskSpec={taskSpec} setTaskSpec={setTaskSpec} savingTask={savingTask} createTask={createTask} />}
         {tab === 'teams' && <TeamsTab teams={teams} staff={staff} teamName={teamName} setTeamName={setTeamName} createTeam={createTeam} staffName={staffName} setStaffName={setStaffName} staffEmail={staffEmail} setStaffEmail={setStaffEmail} staffPass={staffPass} setStaffPass={setStaffPass} staffRole={staffRole} setStaffRole={setStaffRole} staffTeam={staffTeam} setStaffTeam={setStaffTeam} savingStaff={savingStaff} staffMsg={staffMsg} setStaffMsg={setStaffMsg} createStaff={createStaff} adminUser={adminUser} adminRoles={adminRoles} newRoleName={newRoleName} setNewRoleName={setNewRoleName} newRoleDesc={newRoleDesc} setNewRoleDesc={setNewRoleDesc} newRoleTabs={newRoleTabs} setNewRoleTabs={setNewRoleTabs} editingRoleId={editingRoleId} setEditingRoleId={setEditingRoleId} editingRoleTabs={editingRoleTabs} setEditingRoleTabs={setEditingRoleTabs} savingRole={savingRole} loadAdminRoles={invalidateAdmin} showToast={showToast} ALL_TABS={ALL_TABS} />}
-        {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} onReject={async (id) => { try { await callAdminAuth('reject_withdrawal', {  id }); invalidateAdmin(); showToast('Withdrawal rejected', { type: 'success' }) } catch (err) { showToast(`Couldn't reject the withdrawal: ${err.message}`, { type: 'error' }) } }} />}
         {tab === 'stories' && <StoriesTab stories={stories} storyTitle={storyTitle} setStoryTitle={setStoryTitle} storyBody={storyBody} setStoryBody={setStoryBody} storyBg={storyBg} setStoryBg={setStoryBg} storyImageFile={storyImageFile} setStoryImageFile={setStoryImageFile} savingStory={savingStory} createStory={createStory} deleteStory={deleteStory} />}
         {tab === 'news' && <NewsTab newsItems={newsItems} editingNews={editingNews} setEditingNews={setEditingNews} newsPhones={newsPhones} savingNews={savingNews} approveNews={approveNews} rejectNews={rejectNews} deleteNews={deleteNews} />}
         {tab === 'promotions' && <PromotionsTab promotions={promotions} promoTitle={promoTitle} setPromoTitle={setPromoTitle} promoLink={promoLink} setPromoLink={setPromoLink} promoDays={promoDays} setPromoDays={setPromoDays} promoImage={promoImage} setPromoImage={setPromoImage} savingPromo={savingPromo} createPromotion={createPromotion} deletePromotion={deletePromotion} />}

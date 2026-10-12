@@ -10,6 +10,10 @@ import ReportsSection from './sections/ReportsSection.jsx'
 import ModerationSection from './sections/ModerationSection.jsx'
 import UsersSection from './sections/UsersSection.jsx'
 import BusinessesSection from './sections/BusinessesSection.jsx'
+import RevenueSection from './sections/RevenueSection.jsx'
+import OrdersSection from './sections/OrdersSection.jsx'
+import WithdrawalsSection from './sections/WithdrawalsSection.jsx'
+import MoneyChecksSection from './sections/MoneyChecksSection.jsx'
 import { ModerationProvider } from './stores/moderationStore'
 import LegacyTabHost from './legacy/LegacyTabHost.jsx'
 import { isAllowed } from './navigation'
@@ -33,6 +37,10 @@ function ActiveSection({ tab, setTab }) {
   if (tab === 'moderation') return <ModerationProvider><ModerationSection /></ModerationProvider>
   if (tab === 'users') return <UsersSection />
   if (tab === 'businesses') return <BusinessesSection />
+  if (tab === 'revenue') return <RevenueSection />
+  if (tab === 'orders') return <OrdersSection />
+  if (tab === 'withdrawals') return <WithdrawalsSection />
+  if (tab === 'reconciliation') return <MoneyChecksSection />
   return <LegacyTabHost tab={tab} setTab={setTab} />
 }
 
