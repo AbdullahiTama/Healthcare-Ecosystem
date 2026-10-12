@@ -54,6 +54,8 @@ components (`HealthPulse`, `DashboardTab`, `OverviewTab`).
 9. `postLiveItem` reads `localStorage.admin_token`, which `callAdminAuth` strips; dead, harmless.
 10. Browser uploads straight to storage buckets; `BusinessesTab` receives the raw `supabase` client (Phase 2/4).
 11. `amount * 200` currency conversion is performed in notification display code (kept, flagged).
+12. The old Overview shows revenue twice with different maths: `DashboardTab` divides the top-up sum by 100, `OverviewTab` shows `stats.revenue` undivided. Financial display, reported only.
+13. `dashboardRepository.getHealthPulse()` has no caller once `HealthPulse` is retired; left in place with its tests, flagged for Phase 3.
 
 ## 3. Architecture (approach A: provider + adapter)
 
@@ -73,7 +75,7 @@ modules/admin/
     attention.js          single pure queue builder
   hooks/
     useOverviewData.js
-  ui/                     MetricCard, StatusBadge, DataTable, Drawer, StateBlock
+  ui/                     MetricStrip, SplitBar (admin-only; everything else is reused)
   legacy/
     LegacyTabHost.jsx     today's props for unmigrated tabs; shrinks per phase
 ```
@@ -96,7 +98,7 @@ System (Audit Log, Errors, Email Templates). Permission filtering is retained.
 
 ### Data
 `useOverviewData` fetches each source independently with `Promise.allSettled`;
-each yields `{status: 'ok'|'error'|'forbidden', data}`. User and business totals use
+each yields `{status: 'ok'|'error', data}`. User and business totals use
 head counts, not list length. Sources: verification requests, claims, reports,
 transactions, withdrawals, task submissions, consultations, news.
 
@@ -110,8 +112,20 @@ stay for now and are flagged for removal when the Alerts tab migrates.
 ### Metric grid
 Users, businesses, pending verification, pending claims, open reports, transactions
 (count), pending withdrawals, platform activity (posts in the last 24 hours, head count).
-Finance cards hide on permission `false` or API 401/403 (courtesy only, see finding 7).
+A card or queue row is hidden when the tab it opens is hidden by `permissions`
+(courtesy only, see finding 7). `callAdminAuth` discards the HTTP status and is out of
+scope to change, so a refused source shows the same error state as any other failure.
 No invented values, no trend lines.
+
+### Features moved off the old Overview (kept reachable)
+- Feed ranking and distribution experiments (`FeedRankingConfig`,
+  `DistributionExperiments`) get their own Analytics item, "Feed ranking", gated by the
+  same `overview` permission that shows them today, so access neither widens nor narrows.
+- "Activity in range" (date filter) stays on Overview, but counts users and posts with
+  head counts instead of the capped 50/100 lists it uses today.
+- Revenue totals stay in Finance > Revenue. The old Overview showed two different
+  revenue figures (one divided by 100, one not; finding 12), so Overview shows the
+  transaction count only.
 
 ### Platform health
 No historical series exist, so show current-state breakdowns (verification status
@@ -128,7 +142,7 @@ mockup wins.
 - Sidebar: 232px on the canvas colour with a hairline right border. Group labels
   11px uppercase; items 32px tall, 13px label; active item has a 2px accent left bar
   and a panel-coloured fill. Pending counts are plain grey numerals, right-aligned.
-  Collapsible to a 56px icon rail by the user; off-canvas under 900px, opened from a
+  Collapsible by the user to the design system's 72px icon rail; off-canvas under 900px, opened from a
   topbar menu button.
 - Topbar: 52px, hairline bottom border. Breadcrumb left; a search field up to 360px
   that opens the existing `CommandPalette` (Ctrl/Cmd+K); then alerts with the existing
@@ -143,19 +157,23 @@ mockup wins.
   (dot plus word), relative time and a chevron; severity filter tabs with counts on top.
   Under 560px the chip and time wrap to a second line.
 - Type scale: 11 / 12 / 13 / 15 / 20 / 26. `font-variant-numeric: tabular-nums`.
-- Colour: canvas `--color-bg`, panels white (`--color-surface` in dark), 1px borders,
+- Colour: canvas `--bg`, panels white, 1px borders,
   10px radius, no shadows. Accent (`--color-primary`) only for the active nav item,
   primary buttons, links and focus rings. Urgent is amber-brown, not red; red is kept
   for destructive buttons. Use existing tokens from `tokens.css`; add admin-scoped
-  tokens only where none exists (severity washes), defined for light and dark.
-- Drawer: 480px from the right, header (title, status, close), scrolling body, sticky
+  tokens only where none exists (severity washes).
+- Drawer: the shared `Modal variant="drawer"` (500px) from the right, header (title, status, close), scrolling body, sticky
   footer with the primary action on the right; page behind dimmed. Full screen on phones.
-- Components: `MetricCard`, `StatusBadge` (single status-to-tone map), `DataTable`
-  (compact, sortable only where the page holds full data, pagination, stacked rows
-  under 768px), `Drawer` (right panel desktop, full-screen mobile, focus trap, Esc),
-  `StateBlock` (loading / empty / error with retry). Reuse `ConfirmDialog`, `Toast`,
-  `Loading`. Phase 1 uses `DataTable` and `Drawer` only in Needs Attention; Users and
-  Businesses adopt them in Phase 2.
+- Components (amended 2026-10-12 after reading `packages/design-system`): the shared
+  design system already provides `DashboardShell` (232px rail, topbar slot, skip link),
+  `DataTable` (sorting, pagination, mobile card transform, loading/error/empty),
+  `StatusBadge`, `Modal variant="drawer"` (focus trap, Esc, focus return), `UserMenu`,
+  `Skeleton`, `Empty`, `ErrorState`, `ConfirmDialog`, `Toast`. Phase 1 reuses all of
+  them and builds no table, drawer, badge or state component. New admin-only pieces:
+  `MetricStrip` (the divided strip; `StatCard` has no error state and is a card) and
+  `SplitBar` (stacked status split; `BarList` ranks, it does not stack). Later phases
+  adopt `DataTable` and the drawer for Users and Businesses.
+- CareFind is light mode only (`styles/theme.js`), so there is no dark variant.
 - Motion: drawer slides 16px with a fade over 180ms, menus fade over 120ms, nothing
   animates on load; all disabled under `prefers-reduced-motion`.
 - Accessibility: one `h1` per section, `nav` landmark with `aria-current`, visible
@@ -174,11 +192,11 @@ mockup wins.
 ## 7. Testing
 
 - Unit: `attention.js` (shape, ordering, severity, withdrawal statuses),
-  `StatusBadge` mapping, `DataTable` sort and paging.
-- Component: `OverviewSection` loading, per-source error, forbidden, empty;
+  `navigation.js` (every existing tab key present once, permission filtering).
+- Component: `OverviewSection` loading, per-source error, permission-hidden, empty;
   shell nav filtering by permission; drawer focus trap; sign-out behaviour.
 - Regression: `UsersTab.test`, `ReconciliationTab.test`, `CommandPalette.test`,
-  `HealthPulse.test` (moved with the component) still pass.
+  `AdminPanel.news.test` still pass; `HealthPulse.test` is deleted with the component.
 - Gates: tests, lint, build. Responsive verified by measurement at 375, 390, 768,
   1024, 1440, 1920 (screenshots are unreliable in this repo's browser tooling).
 
