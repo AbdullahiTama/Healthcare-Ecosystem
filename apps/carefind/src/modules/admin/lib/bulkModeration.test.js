@@ -67,6 +67,15 @@ describe('runBulk', () => {
     expect(res.skipped).toHaveLength(1)
   })
 
+  it('skips a report whose post is gone instead of deleting a null id', async () => {
+    const d = deps()
+    const gone = { id: 'r9', source: 'report', title: 'abuse', target_id: null, raw: { id: 'r9', post_id: null, status: 'pending', posts: null } }
+    const res = await runBulk('delete_posts', [gone], d)
+    expect(d.call).not.toHaveBeenCalledWith('delete_post', expect.anything())
+    expect(res.done).toBe(0)
+    expect(res.skipped).toEqual([{ id: 'r9', title: 'abuse', why: 'no post to delete' }])
+  })
+
   it('records a failed item with its reason and carries on', async () => {
     const d = deps({ call: vi.fn().mockRejectedValueOnce(new Error('Not allowed')).mockResolvedValue({}) })
     const res = await runBulk('reject_verifications', [ver, { ...ver, id: 'v2', title: 'Verification: Bola' }], d)

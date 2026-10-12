@@ -38,6 +38,8 @@ export async function runBulk(action, items, { reports = [], call, audit }) {
         }
       } else if (action === 'delete_posts') {
         if (item.source !== 'report' && item.source !== 'post') { note(result.skipped, item, 'not a post'); continue }
+        // A report whose post was already deleted has no post id; never send delete_post { id: null }.
+        if (!item.target_id) { note(result.skipped, item, 'no post to delete'); continue }
         await call('delete_post', { id: item.target_id })
         await safeAudit('delete', 'post', item.target_id, { reason: item.source === 'report' ? 'reported content' : 'flagged content' })
       } else {

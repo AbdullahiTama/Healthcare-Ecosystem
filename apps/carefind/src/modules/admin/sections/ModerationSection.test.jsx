@@ -159,6 +159,17 @@ describe('ModerationSection', () => {
     expect(admin.showToast).toHaveBeenCalledWith('Deleted 2. Skipped: Verification: Amina Yusuf (not a post)', { type: 'warning' })
   })
 
+  it('Delete posts skips a report whose post is gone and names it', async () => {
+    queues.value = { ...queues.value, reports: { status: 'ok', data: [report({ id: 'r9', post_id: null, reason: 'abuse', posts: null })] } }
+    adminData.value = { posts: [] }
+    renderSection()
+    select('abuse')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete posts' }))
+    await runConfirmed()
+    expect(calls('delete_post')).toEqual([])
+    expect(admin.showToast).toHaveBeenCalledWith('Deleted 0. Skipped: abuse (no post to delete)', { type: 'warning' })
+  })
+
   it('names a failed item in an error toast', async () => {
     api.callAdminAuth.mockImplementation(async (action) => { if (action === 'approve_verification') throw new Error('Not allowed'); return {} })
     renderSection()
