@@ -4,6 +4,7 @@ import { theme } from '../../../styles/theme'
 import { Card, Button, Empty } from '@care-ecosystem/design-system/components/ui'
 import { AdminPageHeader, timeAgo } from '../ui'
 import { getModerationItems } from '../lib/priorityScoring'
+import { reportsToResolve } from '../lib/bulkModeration'
 import { useModerationStore } from '../stores/moderationStore'
 import PriorityBadge from '../components/PriorityBadge'
 import { BulkActionBar } from '../components/BulkActionBar'
@@ -90,8 +91,12 @@ export default function ModerationQueue({ reports, posts, verifications, showToa
             await logAudit('approve', 'verification', item.id, { userId: item.target_id })
             approved++
           } else if (item.source === 'report') {
-            await callAdminAuth('resolve_report', { token, id: item.id })
-            await logAudit('resolve', 'report', item.id, {})
+            const toResolve = reportsToResolve(item, reports)
+            if (toResolve.length === 0) { skipped++; continue }
+            for (const rep of toResolve) {
+              await callAdminAuth('resolve_report', { token, id: rep.id })
+              await logAudit('resolve', 'report', rep.id, {})
+            }
             approved++
           } else {
             skipped++
@@ -123,8 +128,12 @@ export default function ModerationQueue({ reports, posts, verifications, showToa
             await logAudit('reject', 'verification', item.id, {})
             rejected++
           } else if (item.source === 'report') {
-            await callAdminAuth('resolve_report', { token, id: item.id })
-            await logAudit('resolve', 'report', item.id, {})
+            const toResolve = reportsToResolve(item, reports)
+            if (toResolve.length === 0) { skipped++; continue }
+            for (const rep of toResolve) {
+              await callAdminAuth('resolve_report', { token, id: rep.id })
+              await logAudit('resolve', 'report', rep.id, {})
+            }
             rejected++
           } else {
             skipped++
