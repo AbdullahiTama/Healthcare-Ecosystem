@@ -8,6 +8,7 @@ import VoiceRecorder from '../../../../components/VoiceRecorder.jsx'
 import SlideUploader from '../../../../components/SlideUploader.jsx'
 import VideoRecorder from '../../../../components/VideoRecorder.jsx'
 import VideoUploader from '../../../../components/VideoUploader.jsx'
+import { isHttpUrl } from './mediaUrl.js'
 import '../../ui/admin.css'
 
 // The control room for one live show, used while the show is on air. It reads
@@ -23,10 +24,6 @@ import '../../ui/admin.css'
 // - a failure that arrives after the card has gone is toasted, not dropped.
 
 export const END_CONSEQUENCE = 'This immediately ends the live broadcast for everyone watching. The show cannot be resumed once ended.'
-
-// Item content comes from the database: media is only ever loaded from an
-// http(s) URL.
-const isHttpUrl = (url) => typeof url === 'string' && /^https?:\/\//i.test(url)
 
 const pad = (n) => String(n).padStart(2, '0')
 const clockTime = (ms) => {
