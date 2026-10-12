@@ -77,4 +77,21 @@ describe('useLiveShows', () => {
     await act(async () => { lastConfig().onAny({ eventType: 'UPDATE' }) })
     await waitFor(() => expect(repo.getActiveShows).toHaveBeenCalledTimes(2))
   })
+  it('makes no repository calls while disabled, and the handlers do not refetch', async () => {
+    const { result } = renderHook(() => useLiveShows(false), { wrapper: makeWrapper() })
+    expect(result.current.fetchStatus).toBe('idle')
+    await act(async () => { lastConfig().onAny({ eventType: 'UPDATE' }); lastConfig().pollFn() })
+    expect(repo.getActiveShows).not.toHaveBeenCalled()
+    expect(repo.getScheduledShows).not.toHaveBeenCalled()
+  })
+
+  it('starts refetching on handler calls once enabled, with the same handler identities', async () => {
+    const { result, rerender } = renderHook(({ on }) => useLiveShows(on), { wrapper: makeWrapper(), initialProps: { on: false } })
+    const first = lastConfig()
+    rerender({ on: true })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(lastConfig().onAny).toBe(first.onAny)
+    await act(async () => { lastConfig().pollFn() })
+    await waitFor(() => expect(repo.getActiveShows).toHaveBeenCalledTimes(2))
+  })
 })

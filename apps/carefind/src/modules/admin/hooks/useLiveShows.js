@@ -18,7 +18,7 @@ const settle = async (promise) => {
   }
 }
 
-export async function loadLiveShows() {
+async function loadLiveShows() {
   const [active, scheduled] = await Promise.all([
     settle(liveRepository.getActiveShows()),
     settle(liveRepository.getScheduledShows()),
@@ -33,7 +33,13 @@ export function useLiveShows(enabled = true) {
   // handler is stable and reaches the latest refetch through a ref.
   const refetchRef = useRef(query.refetch)
   useEffect(() => { refetchRef.current = query.refetch }, [query.refetch])
-  const refetchStable = useCallback(() => { refetchRef.current() }, [])
+  // A disabled caller must not query: the channel and poll stay mounted, so the
+  // handler itself checks the latest `enabled`.
+  const enabledRef = useRef(enabled)
+  useEffect(() => { enabledRef.current = enabled })
+  const refetchStable = useCallback(() => {
+    if (enabledRef.current) refetchRef.current()
+  }, [])
 
   useRealtimeChannel({
     channelName: 'admin-live-shows',
