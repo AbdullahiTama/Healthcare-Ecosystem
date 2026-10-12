@@ -100,12 +100,12 @@ export function AdminProvider({ children }) {
     }
 
     verifySession()
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- verify once per mount, as before
+  // Verify once per mount, as before.
   }, [])
 
   useEffect(() => {
     if (adminUser) invalidateAdmin()
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when the admin is first known
+  // Refresh the admin data once the admin is first known.
   }, [adminUser])
 
   useRealtimeChannel({

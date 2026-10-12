@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import '../../styles/tokens.css'
-import { AdminProvider } from './provider/AdminProvider.jsx'
+import { AdminProvider, useAdmin } from './provider/AdminProvider.jsx'
 import AdminShell from './shell/AdminShell.jsx'
 import OverviewSection from './sections/OverviewSection.jsx'
 import FeedRankingSection from './sections/FeedRankingSection.jsx'
 import LegacyTabHost from './legacy/LegacyTabHost.jsx'
-import { useAdmin } from './provider/AdminProvider.jsx'
 import { isAllowed } from './navigation'
 
 // The admin console. AdminProvider verifies the session and holds what every
