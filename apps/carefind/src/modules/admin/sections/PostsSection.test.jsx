@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, within, act } from '@testing-library/react'
+import { render, screen, fireEvent, within, act, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 // The directory hook records every set of params it is called with and returns
@@ -292,10 +292,11 @@ describe('PostsSection', () => {
     expect(await within(dialog).findByText("Couldn't load the author")).toBeInTheDocument()
     unmount()
 
-    wrapper = makeWrapper()
     api.callAdminAuth.mockResolvedValue({ data: 'Ada' })
     renderSection()
     dialog = openFirst()
+    // The same client refetches on the new mount, so this is the 'Ada' response.
+    await waitFor(() => expect(api.callAdminAuth).toHaveBeenCalledTimes(2))
     expect(await within(dialog).findByText("Couldn't load the author")).toBeInTheDocument()
     expect(within(dialog).queryByText(/Unknown user/)).not.toBeInTheDocument()
   })
