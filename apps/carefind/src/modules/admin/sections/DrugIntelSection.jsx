@@ -40,7 +40,11 @@ export default function DrugIntelSection() {
   const canSearch = !searching && term.trim() !== ''
   const submit = (e) => {
     e.preventDefault()
-    if (canSearch) search(term.trim())
+    if (!canSearch) return
+    const next = term.trim()
+    // Filters set for one search must not silently hide another's reviews.
+    if (next !== result?.term) { setRating('all'); setFrom(''); setTo('') }
+    search(next)
   }
 
   const hasFilters = rating !== 'all' || !!from || !!to
@@ -61,7 +65,7 @@ export default function DrugIntelSection() {
   const exportReviews = () => {
     exportCSV(
       filtered.map(r => ({ id: r.id, rating: r.rating, comment: r.comment, created_at: r.created_at })),
-      `${result.product.name}_filtered_reviews.csv`,
+      `${result.matches > 1 ? result.term : result.product.name}_filtered_reviews.csv`,
     )
   }
 
@@ -95,8 +99,10 @@ export default function DrugIntelSection() {
         <section className="adm-panel" aria-labelledby="drug-summary-h">
           <div className="adm-drug-summary">
             <div>
-              <h2 id="drug-summary-h">Reviews for {product.name}</h2>
-              {matches > 1 && <p className="adm-note">Showing the first of {matches} matches</p>}
+              <h2 id="drug-summary-h">
+                {matches > 1 ? `Reviews for ${matches} products matching “${result.term}”` : `Reviews for ${product.name}`}
+              </h2>
+              {matches > 1 && <p className="adm-note">Reviews from all {matches} matching products are combined.</p>}
               {filtered.length > 0 && (
                 <p className="adm-note">
                   {filtered.length} reviews · Avg: <Star size={12} aria-hidden="true" className="adm-star-inline" /> {avg}

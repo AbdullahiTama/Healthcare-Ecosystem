@@ -106,19 +106,43 @@ describe('DrugIntelSection', () => {
     expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled()
   })
 
-  it('names the product, average and counts, and notes extra matches', () => {
-    setHook({ result: ok({ matches: 3 }) })
+  it('names the product, average and counts for a single match', () => {
+    setHook({ result: ok() })
     render(<DrugIntelSection />)
     expect(screen.getByRole('heading', { name: 'Reviews for Paracetamol' })).toBeInTheDocument()
-    expect(screen.getByText('Showing the first of 3 matches')).toBeInTheDocument()
+    expect(screen.queryByText(/combined/)).not.toBeInTheDocument()
     expect(screen.getByText(/5 reviews/)).toBeInTheDocument()
     expect(screen.getByText(/Avg:/)).toHaveTextContent('3.0')
   })
 
-  it('omits the matches note for a single match', () => {
+  it('says reviews are combined, and names the term, when several products match', () => {
+    setHook({ result: ok({ matches: 3 }) })
+    render(<DrugIntelSection />)
+    expect(screen.getByRole('heading', { name: 'Reviews for 3 products matching “para”' })).toBeInTheDocument()
+    expect(screen.getByText('Reviews from all 3 matching products are combined.')).toBeInTheDocument()
+    expect(screen.queryByText(/first of/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Paracetamol/ })).not.toBeInTheDocument()
+  })
+
+  it('names the CSV after the term when several products match', () => {
+    setHook({ result: ok({ matches: 2 }) })
+    render(<DrugIntelSection />)
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }))
+    expect(hook.exportCSV.mock.calls[0][1]).toBe('para_filtered_reviews.csv')
+  })
+
+  it('resets filters for a new term but keeps them when the same term is searched again', () => {
     setHook({ result: ok() })
     render(<DrugIntelSection />)
-    expect(screen.queryByText(/Showing the first of/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '5 Stars' }))
+    expect(screen.queryByText('Comment r2')).not.toBeInTheDocument()
+    fireEvent.change(box(), { target: { value: 'para' } })
+    fireEvent.submit(box().closest('form'))
+    expect(screen.queryByText('Comment r2')).not.toBeInTheDocument()
+    fireEvent.change(box(), { target: { value: 'ibuprofen' } })
+    fireEvent.submit(box().closest('form'))
+    expect(screen.getByText('Comment r2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('counts sentiment: positive 4-5, neutral the rest, negative 1-2', () => {
