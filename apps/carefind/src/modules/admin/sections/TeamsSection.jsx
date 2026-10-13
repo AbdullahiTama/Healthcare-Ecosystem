@@ -35,7 +35,7 @@ export default function TeamsSection() {
   } else {
     body = (
       <>
-        <TeamsPanel teams={data.teams} staff={data.staff} onRetry={refetch} />
+        <TeamsPanel teams={data.teams} staff={data.staff} canCreate={isSuper} onRetry={refetch} />
         {isSuper ? (
           <>
             <CreateStaffPanel teams={data.teams} roles={data.roles} onRetry={refetch} />

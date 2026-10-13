@@ -8,7 +8,7 @@ vi.mock('../hooks/useTeamsData', () => ({
 }))
 vi.mock('../provider/AdminProvider.jsx', () => ({ useAdmin: () => state.admin }))
 vi.mock('./teams/TeamsPanel.jsx', () => ({
-  default: (p) => <div data-testid="teams-panel" data-props={JSON.stringify({ teams: p.teams, staff: p.staff })}><button onClick={p.onRetry}>teams retry</button></div>,
+  default: (p) => <div data-testid="teams-panel" data-props={JSON.stringify({ teams: p.teams, staff: p.staff, canCreate: p.canCreate })}><button onClick={p.onRetry}>teams retry</button></div>,
 }))
 vi.mock('./teams/StaffDirectory.jsx', () => ({
   default: (p) => <div data-testid="staff-directory" data-props={JSON.stringify({ staff: p.staff, roles: p.roles, teams: p.teams, currentAdminId: p.currentAdminId ?? null })} data-has-id={String('currentAdminId' in p)} />,
@@ -44,7 +44,7 @@ describe('TeamsSection', () => {
   it('gives a super admin every panel with the settled sources and the admin id', () => {
     render(<TeamsSection />)
     expect(state.teamsCalls.at(-1)).toEqual({ canSeeStaff: true })
-    expect(props('teams-panel')).toEqual({ teams, staff })
+    expect(props('teams-panel')).toEqual({ teams, staff, canCreate: true })
     expect(props('create-staff')).toEqual({ teams, roles })
     expect(props('staff-directory')).toEqual({ staff, roles, teams, currentAdminId: 'a1' })
     expect(props('roles-panel')).toEqual({ roles })
@@ -63,7 +63,7 @@ describe('TeamsSection', () => {
     state.query = { data: { teams, roles, staff: { status: 'restricted' } }, isLoading: false, isError: false, refetch: vi.fn() }
     render(<TeamsSection />)
     expect(state.teamsCalls.at(-1)).toEqual({ canSeeStaff: false })
-    expect(screen.getByTestId('teams-panel')).toBeInTheDocument()
+    expect(props('teams-panel').canCreate).toBe(false)
     expect(screen.queryByTestId('create-staff')).toBeNull()
     expect(screen.queryByTestId('staff-directory')).toBeNull()
     expect(screen.queryByTestId('roles-panel')).toBeNull()

@@ -22,7 +22,7 @@ const staff = {
   ],
 }
 
-const renderPanel = (props = {}) => render(<TeamsPanel teams={teams} staff={staff} onRetry={vi.fn()} {...props} />)
+const renderPanel = (props = {}) => render(<TeamsPanel teams={teams} staff={staff} canCreate onRetry={vi.fn()} {...props} />)
 const teamBox = () => screen.getByLabelText('Team name')
 const addButton = () => screen.getByRole('button', { name: /^(add team|adding…)$/i })
 const type = (el, value) => fireEvent.change(el, { target: { value } })
@@ -57,20 +57,23 @@ describe('TeamsPanel lists', () => {
     expect(screen.queryByText('No members yet')).not.toBeInTheDocument()
   })
 
-  it('a failed staff read says so with Retry and never "No members yet"', () => {
-    const onRetry = vi.fn()
-    renderPanel({ staff: { status: 'error' }, onRetry })
-    expect(screen.getByText("Couldn't load staff")).toBeInTheDocument()
+  it('a failed staff read is a quiet per-team line here, with no alert and no Retry (the directory owns it)', () => {
+    renderPanel({ staff: { status: 'error' } })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /staff/i })).not.toBeInTheDocument()
     expect(screen.queryByText('No members yet')).not.toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Team Trust' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Retry loading staff' }))
-    expect(onRetry).toHaveBeenCalledTimes(1)
+    for (const name of ['Trust', 'Support']) {
+      expect(within(team(name)).getByText('Members unavailable')).toBeInTheDocument()
+    }
   })
 
-  it('restricted staff says only a super admin can see it, never "No members yet"', () => {
-    renderPanel({ staff: { status: 'restricted' } })
-    expect(screen.getByText('Only a super admin can see staff accounts')).toBeInTheDocument()
+  it('restricted staff is one quiet note: no alert, no per-team member text, never "No members yet"', () => {
+    renderPanel({ staff: { status: 'restricted' }, canCreate: false })
+    expect(screen.getAllByText('Members are visible to super admins')).toHaveLength(1)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.queryByText('No members yet')).not.toBeInTheDocument()
+    expect(screen.queryByText('Members unavailable')).not.toBeInTheDocument()
+    expect(screen.queryByText('Only a super admin can see staff accounts')).not.toBeInTheDocument()
   })
 
   it('a failed teams read says so with Retry and no empty-teams text', () => {
@@ -198,5 +201,19 @@ describe('TeamsPanel when the server does not return team_id', () => {
   it('an empty staff list is still "No members yet"', () => {
     renderPanel({ staff: { status: 'ok', data: [] } })
     expect(within(team('Trust')).getByText('No members yet')).toBeInTheDocument()
+  })
+})
+
+describe('TeamsPanel create form is for super admins', () => {
+  it('shows the create form when canCreate', () => {
+    renderPanel()
+    expect(screen.getByRole('form', { name: 'Create a team' })).toBeInTheDocument()
+  })
+
+  it.each([false, undefined])('hides the create form when canCreate is %s', (canCreate) => {
+    renderPanel({ canCreate })
+    expect(screen.queryByRole('form', { name: 'Create a team' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Team name')).not.toBeInTheDocument()
+    expect(within(team('Trust')).getByText('Ada Obi')).toBeInTheDocument()
   })
 })

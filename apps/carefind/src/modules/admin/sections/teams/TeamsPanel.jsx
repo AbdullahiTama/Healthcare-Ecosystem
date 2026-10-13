@@ -7,9 +7,11 @@ import { useAdmin } from '../../provider/AdminProvider.jsx'
 import '../../ui/admin.css'
 
 // Teams and who is on them. `teams` and `staff` are the settled sources from
-// useTeamsData. A source that failed says so with Retry; "No members yet" is
-// only said when staff really loaded and the team really has none. Names and
-// roles are rendered as text, never as markup.
+// useTeamsData. A failed teams read says so with Retry; "No members yet" is
+// only said when staff really loaded and the team really has none. Staff
+// problems are not alerted here (the staff directory, or the section's own
+// note for a non-super admin, owns that). The create form is only for a super
+// admin (`canCreate`). Names and roles are rendered as text, never as markup.
 
 const roleLabel = (role) => (typeof role === 'string' && role ? role.replace(/_/g, ' ') : '—')
 const memberName = (m) => m.full_name || m.email || 'Unnamed'
@@ -56,6 +58,9 @@ function CreateTeamForm() {
 }
 
 function Members({ team, staff }) {
+  // Loading and restricted are said once for the panel; a failed read is said
+  // here quietly, because the staff directory owns the alert and its Retry.
+  if (staff?.status === 'error') return <p className="adm-note">Members unavailable</p>
   if (!isOk(staff)) return null
   if (!hasTeamIds(staff)) return <p className="adm-note">Team membership isn't available yet</p>
   const members = staff.data.filter(s => s.team_id === team.id)
@@ -75,14 +80,16 @@ function Members({ team, staff }) {
   )
 }
 
-export default function TeamsPanel({ teams, staff, onRetry }) {
+export default function TeamsPanel({ teams, staff, canCreate = false, onRetry }) {
   const teamsNotice = <SourceNotice source={teams} noun="teams" onRetry={onRetry} />
   return (
     <section className="adm-teams" aria-label="Teams">
-      <CreateTeamForm />
+      {canCreate && <CreateTeamForm />}
       {teamsNotice}
-      {/* Staff is read once for the whole list, so its failure is said once. */}
-      {isOk(teams) && <SourceNotice source={staff} noun="staff" onRetry={onRetry} />}
+      {/* Only the loading placeholder and the restricted note live here; a
+          failed or stale staff read is alerted by the staff directory. */}
+      {isOk(teams) && (!staff || staff.status === 'loading') && <SourceNotice source={staff} noun="staff" onRetry={onRetry} />}
+      {isOk(teams) && staff?.status === 'restricted' && <p className="adm-note">Members are visible to super admins</p>}
       {isOk(teams) && (teams.data.length === 0
         ? <Empty message="No teams yet" cause="none" />
         : teams.data.map(t => (
