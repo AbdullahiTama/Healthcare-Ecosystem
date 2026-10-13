@@ -58,6 +58,11 @@ export default function CreateStaffPanel({ teams, roles, onRetry }) {
   const rolesFailed = !isOk(roles) && roles?.status !== 'loading' && roles != null
   const teamsOk = isOk(teams)
 
+  // A custom role that vanishes on a refresh must not stay chosen unseen.
+  useEffect(() => {
+    if (roleValue && !SYSTEM_ROLES.includes(roleValue) && !custom.some(r => String(r.id) === roleValue)) setRoleValue('')
+  }, [roleValue, custom])
+
   const running = busy === 'createStaff'
   const valid = !!name.trim() && !!email.trim() && password.length >= MIN_PASSWORD && (isSystemChoice || !!customChoice)
 
@@ -78,6 +83,9 @@ export default function CreateStaffPanel({ teams, roles, onRetry }) {
         roleId: customChoice ? customChoice.id : undefined,
         teamId,
       })
+    } catch (err) {
+      // The hook resolves failures, but a throw must not leave the password behind.
+      res = { ok: false, error: err?.message || 'Something went wrong' }
     } finally {
       inFlight.current = false
     }
@@ -104,12 +112,12 @@ export default function CreateStaffPanel({ teams, roles, onRetry }) {
       </div>
       <form onSubmit={submit} aria-label="Create a staff account" className="adm-staff-form">
         <Input id={`${ids}-name`} label="Full name" value={name} onChange={edit(setName)} autoComplete="off"
-          aria-required="true" disabled={running} />
+          required disabled={running} />
         <Input id={`${ids}-email`} label="Email" type="email" value={email} onChange={edit(setEmail)} autoComplete="off"
-          aria-required="true" disabled={running} />
+          required disabled={running} />
         <div className="adm-password-row">
           <Input id={`${ids}-password`} label="Password" type={showPassword ? 'text' : 'password'} value={password}
-            onChange={edit(setPassword)} autoComplete="new-password" aria-required="true" disabled={running}
+            onChange={edit(setPassword)} autoComplete="new-password" required disabled={running}
             helperText={`At least ${MIN_PASSWORD} characters`} />
           <Button type="button" variant="ghost" size="sm" aria-pressed={showPassword} disabled={running}
             aria-label={showPassword ? 'Hide password' : 'Show password'}
@@ -120,8 +128,13 @@ export default function CreateStaffPanel({ teams, roles, onRetry }) {
         </div>
         <div>
           <Select id={`${ids}-role`} label="Role" value={roleValue} onChange={edit(setRoleValue)} placeholder="Choose a role"
-            options={roleOptions} aria-required="true" disabled={running} />
-          {rolesFailed && <p className="adm-note">Couldn't load custom roles</p>}
+            options={roleOptions} required disabled={running} />
+          {rolesFailed && (
+            <div className="adm-live-warn">
+              <span>Couldn't load custom roles</span>
+              <Button type="button" variant="ghost" size="sm" onClick={onRetry} aria-label="Retry loading roles">Retry</Button>
+            </div>
+          )}
         </div>
         <div>
           <Select id={`${ids}-team`} label="Team" value={teamId} onChange={edit(setTeamId)} placeholder="No team"

@@ -84,7 +84,7 @@ function CreateRoleForm() {
       </div>
       <form onSubmit={submit} aria-label="Create a role" className="adm-staff-form">
         <Input id={`${ids}-name`} label="Role name" value={name} onChange={setName} placeholder="e.g. Night lead"
-          aria-required="true" disabled={running} />
+          required disabled={running} />
         <Input id={`${ids}-desc`} label="Description" value={description} onChange={setDescription} disabled={running} />
         <PermissionMatrix value={tabs} onChange={setTabs} disabled={running} />
         {error && <p role="alert" className="adm-live-alert">{error}</p>}

@@ -104,21 +104,26 @@ describe('RolesPanel list', () => {
 })
 
 describe('RolesPanel create', () => {
+  it('marks the role name natively required', () => {
+    renderPanel()
+    expect(screen.getByRole('textbox', { name: 'Role name' })).toHaveAttribute('required')
+  })
+
   it('disables Create until there is a name', () => {
     renderPanel()
     expect(createBtn()).toBeDisabled()
-    type(screen.getByLabelText('Role name'), '  ')
+    type(screen.getByRole('textbox', { name: 'Role name' }), '  ')
     expect(createBtn()).toBeDisabled()
   })
 
   it('sends name, description and the permission map, then clears', async () => {
     renderPanel()
-    type(screen.getByLabelText('Role name'), 'Night lead')
+    type(screen.getByRole('textbox', { name: 'Role name' }), 'Night lead')
     type(screen.getByLabelText('Description'), 'Works nights')
     fireEvent.click(within(createForm()).getByRole('checkbox', { name: 'Posts' }))
     await act(async () => { fireEvent.click(createBtn()) })
     expect(actions.createRole).toHaveBeenCalledWith({ name: 'Night lead', description: 'Works nights', tabs: expect.objectContaining({ posts: true }) })
-    expect(screen.getByLabelText('Role name')).toHaveValue('')
+    expect(screen.getByRole('textbox', { name: 'Role name' })).toHaveValue('')
     expect(screen.getByLabelText('Description')).toHaveValue('')
     expect(within(createForm()).getByRole('checkbox', { name: 'Posts' })).not.toBeChecked()
   })
@@ -126,11 +131,11 @@ describe('RolesPanel create', () => {
   it('keeps everything and shows the error on failure', async () => {
     actions.createRole.mockResolvedValue({ ok: false, error: 'That role name is reserved' })
     renderPanel()
-    type(screen.getByLabelText('Role name'), 'super admin')
+    type(screen.getByRole('textbox', { name: 'Role name' }), 'super admin')
     fireEvent.click(within(createForm()).getByRole('checkbox', { name: 'Posts' }))
     await act(async () => { fireEvent.click(createBtn()) })
     expect(within(createForm()).getByRole('alert')).toHaveTextContent('That role name is reserved')
-    expect(screen.getByLabelText('Role name')).toHaveValue('super admin')
+    expect(screen.getByRole('textbox', { name: 'Role name' })).toHaveValue('super admin')
     expect(within(createForm()).getByRole('checkbox', { name: 'Posts' })).toBeChecked()
   })
 
@@ -138,7 +143,7 @@ describe('RolesPanel create', () => {
     let release
     actions.createRole.mockReturnValue(new Promise(r => { release = r }))
     renderPanel()
-    type(screen.getByLabelText('Role name'), 'Night lead')
+    type(screen.getByRole('textbox', { name: 'Role name' }), 'Night lead')
     fireEvent.click(createBtn()); fireEvent.click(createBtn())
     expect(actions.createRole).toHaveBeenCalledTimes(1)
     await act(async () => { release({ ok: true }) })
@@ -148,7 +153,7 @@ describe('RolesPanel create', () => {
     let release
     actions.createRole.mockReturnValue(new Promise(r => { release = r }))
     const { unmount } = renderPanel()
-    type(screen.getByLabelText('Role name'), 'Night lead')
+    type(screen.getByRole('textbox', { name: 'Role name' }), 'Night lead')
     fireEvent.click(createBtn())
     unmount()
     await act(async () => { release({ ok: false, error: 'boom' }) })

@@ -27,11 +27,11 @@ const SECRET = 'hunter2-secret'
 
 const renderPanel = (props = {}) => render(<CreateStaffPanel teams={teams} roles={roles} onRetry={vi.fn()} {...props} />)
 const type = (el, value) => fireEvent.change(el, { target: { value } })
-const nameBox = () => screen.getByLabelText('Full name')
-const emailBox = () => screen.getByLabelText('Email')
-const passBox = () => screen.getByLabelText('Password')
-const roleSel = () => screen.getByLabelText('Role')
-const teamSel = () => screen.getByLabelText('Team')
+const nameBox = () => screen.getByRole('textbox', { name: 'Full name' })
+const emailBox = () => screen.getByRole('textbox', { name: 'Email' })
+const passBox = () => screen.getByLabelText(/^Password/)
+const roleSel = () => screen.getByRole('combobox', { name: 'Role' })
+const teamSel = () => screen.getByRole('combobox', { name: 'Team' })
 const submit = () => screen.getByRole('button', { name: /^(create staff account|creating…)$/i })
 const fill = (password = SECRET) => {
   type(nameBox(), 'Ada Obi'); type(emailBox(), 'ada@example.com'); type(passBox(), password)
@@ -94,13 +94,48 @@ describe('CreateStaffPanel', () => {
     expect(passBox()).toHaveValue('')
   })
 
-  it('blocks a password under 8 characters with a visible message and no call', async () => {
+  it('keeps Submit disabled for a 7-character password and enables it at 8', () => {
     renderPanel()
-    fill('short'); type(roleSel(), 'moderator')
+    fill('1234567'); type(roleSel(), 'moderator')
     expect(submit()).toBeDisabled()
     fireEvent.submit(submit().closest('form'))
     expect(actions.createStaff).not.toHaveBeenCalled()
+    type(passBox(), '12345678')
+    expect(submit()).toBeEnabled()
     expect(screen.getByText('At least 8 characters')).toBeInTheDocument()
+  })
+
+  it('marks the required fields natively', () => {
+    renderPanel()
+    for (const el of [nameBox(), emailBox(), passBox(), roleSel()]) expect(el).toHaveAttribute('required')
+  })
+
+  it('clears the password and shows an error when createStaff throws', async () => {
+    actions.createStaff.mockRejectedValue(new Error('network down'))
+    renderPanel()
+    fill(); type(roleSel(), 'moderator')
+    await send()
+    expect(passBox()).toHaveValue('')
+    expect(nameBox()).toHaveValue('Ada Obi')
+    expect(screen.getByRole('alert')).toHaveTextContent('network down')
+  })
+
+  it('resets the role when the chosen custom role disappears on refresh', () => {
+    const { rerender } = renderPanel()
+    type(roleSel(), 'r3')
+    expect(roleSel()).toHaveValue('r3')
+    rerender(<CreateStaffPanel teams={teams} roles={{ status: 'ok', data: [roles.data[0]] }} onRetry={vi.fn()} />)
+    expect(roleSel()).toHaveValue('')
+    // The stale choice is gone from state too: it does not come back with the role.
+    rerender(<CreateStaffPanel teams={teams} roles={roles} onRetry={vi.fn()} />)
+    expect(roleSel()).toHaveValue('')
+  })
+
+  it('keeps a system role chosen across a roles refresh', () => {
+    const { rerender } = renderPanel()
+    type(roleSel(), 'moderator')
+    rerender(<CreateStaffPanel teams={teams} roles={{ status: 'error', data: null }} onRetry={vi.fn()} />)
+    expect(roleSel()).toHaveValue('moderator')
   })
 
   it('toggles the password between hidden and shown', () => {
@@ -139,6 +174,13 @@ describe('CreateStaffPanel', () => {
     renderPanel({ roles: { status: 'error', data: null } })
     expect(screen.getByText("Couldn't load custom roles")).toBeInTheDocument()
     expect(roleSel().querySelectorAll('option')).toHaveLength(6)
+  })
+
+  it('offers Retry for custom roles', () => {
+    const onRetry = vi.fn()
+    renderPanel({ roles: { status: 'error', data: null }, onRetry })
+    fireEvent.click(screen.getByRole('button', { name: 'Retry loading roles' }))
+    expect(onRetry).toHaveBeenCalled()
   })
 
   it('disables the team select with a note and Retry when teams failed', () => {
