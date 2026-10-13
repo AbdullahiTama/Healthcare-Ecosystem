@@ -105,6 +105,11 @@ describe('super_admin is never created or assigned', () => {
     expect(await run(() => result.current.createRole({ name, tabs: {} }))).toEqual({ ok: false, error: 'That role name is reserved' })
     expect(callAdminAuth).not.toHaveBeenCalled()
   })
+  it.each(['moderator', 'Verification Officer', ' BUSINESS_MANAGER ', 'support_agent', 'Analytics  Manager'])('createRole refuses the system role name %j', async (name) => {
+    const { result } = setup()
+    expect(await run(() => result.current.createRole({ name, tabs: {} }))).toEqual({ ok: false, error: 'That role name is reserved' })
+    expect(callAdminAuth).not.toHaveBeenCalled()
+  })
   it.each(['Super Admin', 'super_admin', ' SUPER_ADMIN '])('assignRole refuses roleName %j', async (roleName) => {
     const { result } = setup()
     expect(await run(() => result.current.assignRole({ staffId: 's1', roleId: 'r1', roleName }))).toEqual({ ok: false, error: "The console can't promote someone to super admin" })

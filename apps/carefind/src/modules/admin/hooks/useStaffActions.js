@@ -5,6 +5,7 @@ import { bestEffort } from '../lib/bestEffort'
 import { capped } from '../lib/capped'
 import { ALL_TABS } from '../navigation'
 import { norm } from '../lib/normName'
+import { SYSTEM_ROLES } from '../sections/teams/roleNames.js'
 
 // Team, staff and role actions for the Teams screen. Each resolves { ok } or
 // { ok: false, error } so the form can show a failure where the admin is
@@ -116,7 +117,8 @@ export function useStaffActions() {
   const createRole = useCallback(({ name, description, tabs }) => {
     const clean = (name || '').trim()
     if (!clean) return Promise.resolve({ ok: false, error: 'Enter a role name' })
-    if (norm(clean) === 'super_admin') return Promise.resolve({ ok: false, error: 'That role name is reserved' })
+    // A custom role named like a system role would be indistinguishable from it.
+    if (norm(clean) === 'super_admin' || SYSTEM_ROLES.includes(norm(clean))) return Promise.resolve({ ok: false, error: 'That role name is reserved' })
     const carefindTabs = withOverview(tabs)
     return perform('createRole', null, 'create_admin_role', { name: clean, description: description || '', carefindTabs },
       ['create_role', 'admin_role', clean, { tabs: enabledTabs(carefindTabs) }], 'Role created')
