@@ -186,7 +186,12 @@ describe('RolesPanel edit', () => {
     const form = open()
     fireEvent.click(within(form).getByRole('checkbox', { name: 'Users' }))
     await act(async () => { fireEvent.click(within(form).getByRole('button', { name: 'Save' })) })
-    expect(actions.updateRole).toHaveBeenCalledWith({ roleId: 'r3', tabs: { overview: true, posts: true, users: true } })
+    const arg = actions.updateRole.mock.calls[0][0]
+    expect(Object.keys(arg)).toEqual(['roleId', 'tabs'])
+    // Users flips to its opposite of the effective state (allowed), everything else is kept.
+    expect(arg.tabs.users).toBe(false)
+    expect(arg.tabs.posts).toBe(true)
+    expect(arg.tabs.overview).toBe(true)
   })
 
   it('keeps the editor open with the error on failure', async () => {
@@ -230,5 +235,55 @@ describe('RolesPanel delete', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete content lead' }))
     await act(async () => { await admin.askConfirm.mock.calls[0][0].action() })
     expect(admin.showToast).toHaveBeenCalledWith("Couldn't delete the role: Role is in use", { type: 'error' })
+  })
+})
+
+describe('RolesPanel effective access', () => {
+  const sparse = { status: 'ok', data: [{ id: 'r9', name: 'legacy', is_system: false, description: '', carefind_tabs: { overview: true, posts: false, feed_ranking: false, mystery: true } }] }
+  const sparse2 = { status: 'ok', data: [{ id: 'r9', name: 'legacy', is_system: false, description: '', carefind_tabs: { overview: true, posts: true } }] }
+  const openLegacy = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Edit legacy' }))
+    return screen.getByRole('form', { name: 'Edit legacy' })
+  }
+
+  it('lists a missing key as allowed and an explicit false as off', () => {
+    renderPanel({ roles: sparse2 })
+    const text = within(roleItem('legacy')).getByText(/^Sections:/).textContent
+    expect(text).toContain('Users')
+    expect(text).toContain('Posts')
+  })
+
+  it('shows boxes checked for missing keys and leaves Save disabled', () => {
+    renderPanel({ roles: sparse2 })
+    const form = openLegacy()
+    expect(within(form).getByRole('checkbox', { name: 'Users' })).toBeChecked()
+    expect(within(form).getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('treats a null map as everything allowed', () => {
+    renderPanel({ roles: { status: 'ok', data: [{ id: 'r9', name: 'legacy', is_system: false, carefind_tabs: null }] } })
+    const form = openLegacy()
+    expect(within(form).getByRole('checkbox', { name: 'Users' })).toBeChecked()
+  })
+
+  it('saves a one-box change with every other effective key true and unknown keys kept', async () => {
+    renderPanel({ roles: sparse })
+    const form = openLegacy()
+    fireEvent.click(within(form).getByRole('checkbox', { name: 'Users' }))
+    await act(async () => { fireEvent.click(within(form).getByRole('button', { name: 'Save' })) })
+    const { tabs } = actions.updateRole.mock.calls[0][0]
+    expect(tabs.users).toBe(false)
+    expect(tabs.orders).toBe(true)
+    expect(tabs.posts).toBe(false)
+    expect(tabs.feed_ranking).toBe(false)
+    expect(tabs.mystery).toBe(true)
+  })
+
+  it('leaves Save disabled after a box is toggled on then off', () => {
+    renderPanel({ roles: sparse2 })
+    const form = openLegacy()
+    const box = within(form).getByRole('checkbox', { name: 'Users' })
+    fireEvent.click(box); fireEvent.click(box)
+    expect(within(form).getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 })

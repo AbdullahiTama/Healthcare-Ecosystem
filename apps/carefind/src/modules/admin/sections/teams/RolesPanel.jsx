@@ -4,7 +4,7 @@ import { Button, Input } from '@care-ecosystem/design-system/components/ui'
 import PermissionMatrix from '../../ui/PermissionMatrix.jsx'
 import SourceNotice, { isOk } from './SourceNotice.jsx'
 import { norm, spaced, isSystemRole } from './roleNames.js'
-import { NAV_GROUPS } from '../../navigation'
+import { ALL_TABS, NAV_GROUPS } from '../../navigation'
 import { useStaffActions } from '../../hooks/useStaffActions'
 import { useAdmin } from '../../provider/AdminProvider.jsx'
 import '../../ui/admin.css'
@@ -21,15 +21,17 @@ import '../../ui/admin.css'
 
 const DELETE_CONSEQUENCE = 'This permanently deletes the role. Check the access of any staff who have it.'
 
-// The sections the permission grid can switch, in navigation order.
+// The console treats any section key that is not false as allowed (navigation's
+// isAllowed), and roles made by the legacy form stored only the checked keys, so
+// a missing key means allowed. Everything here works on that effective state:
+// unknown keys are kept, every section the console knows is made explicit.
 const GRID_ITEMS = NAV_GROUPS.flatMap(g => g.items).filter(i => i.key !== 'overview' && !i.permissionKey)
-const enabledKeys = (tabs) => GRID_ITEMS.filter(i => tabs?.[i.key] === true).map(i => i.key)
-const sameSections = (a, b) => {
-  const x = enabledKeys(a)
-  const y = enabledKeys(b)
-  return x.length === y.length && x.every(k => y.includes(k))
+const effective = (t) => ({ ...(t || {}), ...Object.fromEntries(ALL_TABS.map(i => [i.key, t?.[i.key] !== false])) })
+const sameSections = (a, b) => ALL_TABS.every(i => (a?.[i.key] === true) === (b?.[i.key] === true))
+const sectionsText = (tabs) => {
+  const on = effective(tabs)
+  return `Sections: ${['Dashboard', ...GRID_ITEMS.filter(i => on[i.key] === true).map(i => i.label)].join(', ')}`
 }
-const sectionsText = (tabs) => `Sections: ${['Dashboard', ...GRID_ITEMS.filter(i => tabs?.[i.key] === true).map(i => i.label)].join(', ')}`
 
 function useMounted() {
   const mounted = useRef(true)
@@ -105,9 +107,9 @@ function RoleEditor({ role, onClose }) {
   const inFlight = useRef(false)
 
   const initialDescription = role.description || ''
-  const initialTabs = role.carefind_tabs || {}
+  const initialTabs = effective(role.carefind_tabs)
   const [description, setDescription] = useState(initialDescription)
-  const [tabs, setTabs] = useState(() => ({ ...initialTabs }))
+  const [tabs, setTabs] = useState(initialTabs)
   const [error, setError] = useState('')
 
   const running = isBusy('updateRole', role.id)
