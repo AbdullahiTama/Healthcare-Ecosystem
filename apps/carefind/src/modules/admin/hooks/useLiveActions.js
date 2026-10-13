@@ -16,7 +16,8 @@ import { uploadToBucket } from '../lib/uploadMedia'
 // result carries partial: true, so the caller keeps only the text draft.
 //
 // In-flight guard: each run has a key `${action}:${targetId ?? ''}` (e.g.
-// 'endShow:<showId>', 'hideComment:<commentId>', 'startShow:'). A run whose key
+// 'endShow:<showId>', 'hideComment:<commentId>', 'startShow:'; a media post is keyed by show and content, so
+// two different items post together and only a true duplicate is refused). A run whose key
 // is already running resolves { ok: false, error: 'Already running' } with no
 // server call, so a double click cannot post or end twice. Different keys may
 // overlap (hide a comment while a slide uploads). The key covers uploads too and
@@ -111,7 +112,7 @@ export function useLiveActions() {
     })
   }, [perform])
 
-  const postMedia = useCallback(({ showId, kind, content }) => simple('postMedia', showId, 'post_live_item', { showId, kind, content }), [simple])
+  const postMedia = useCallback(({ showId, kind, content }) => simple('postMedia', `${showId}:${content}`, 'post_live_item', { showId, kind, content }), [simple])
   const hideComment = useCallback((id) => simple('hideComment', id, 'hide_live_comment', { id }), [simple])
 
   return { busy, busyKeys, isBusy, startShow, scheduleShow, startScheduled, cancelScheduled, endShow, postItem, postMedia, hideComment }

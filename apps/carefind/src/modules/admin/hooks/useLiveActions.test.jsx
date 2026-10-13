@@ -307,4 +307,22 @@ describe('in-flight guard', () => {
     await run(() => result.current.endShow('a'))
     expect(await run(() => result.current.endShow('a'))).toEqual({ ok: true })
   })
+
+  it('two different media items on one show both post; only a true duplicate is refused', async () => {
+    const d = deferred()
+    callAdminAuth.mockImplementation(() => d.p)
+    const { result } = setup()
+    let a, b, dup
+    act(() => {
+      a = result.current.postMedia({ showId: 's', kind: 'voice', content: 'u1' })
+      b = result.current.postMedia({ showId: 's', kind: 'voice', content: 'u2' })
+    })
+    await act(async () => { dup = await result.current.postMedia({ showId: 's', kind: 'voice', content: 'u1' }) })
+    expect(dup).toEqual({ ok: false, error: 'Already running' })
+    await act(async () => { d.resolve({}); await Promise.all([a, b]) })
+    expect(callAdminAuth.mock.calls).toEqual([
+      ['post_live_item', { showId: 's', kind: 'voice', content: 'u1' }],
+      ['post_live_item', { showId: 's', kind: 'voice', content: 'u2' }],
+    ])
+  })
 })
