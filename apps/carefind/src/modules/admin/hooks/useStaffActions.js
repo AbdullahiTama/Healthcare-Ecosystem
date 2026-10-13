@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { callAdminAuth } from '../adminApi'
 import { useAdmin } from '../provider/AdminProvider.jsx'
 import { bestEffort } from '../lib/bestEffort'
+import { ALL_TABS } from '../navigation'
 
 // Team, staff and role actions for the Teams screen. Each resolves { ok } or
 // { ok: false, error } so the form can show a failure where the admin is
@@ -32,8 +33,16 @@ const MIN_PASSWORD = 8
 // The server's rule for role names (create_admin_role): trimmed, lower-cased,
 // spaces to underscores. super_admin must never be created or assigned from here.
 const norm = (s) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, '_')
-const withOverview = (tabs) => ({ ...tabs, overview: true })
-const enabledTabs = (tabs) => Object.keys(tabs).filter(k => tabs[k]).sort()
+// navigation's isAllowed treats any key that is not false as allowed, so the
+// saved map must be complete: every assignable section is explicitly true or
+// false (true only when passed as exactly true), plus overview. Unknown keys
+// the caller passed are kept.
+const withOverview = (tabs = {}) => ({
+  ...tabs,
+  ...Object.fromEntries(ALL_TABS.map(t => [t.key, tabs[t.key] === true])),
+  overview: true,
+})
+const enabledTabs = (tabs) => Object.keys(tabs).filter(k => tabs[k] === true).sort()
 
 export function useStaffActions() {
   const { showToast, invalidateAdmin } = useAdmin()

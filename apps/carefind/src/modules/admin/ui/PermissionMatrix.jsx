@@ -40,7 +40,7 @@ export default function PermissionMatrix({ value, onChange, disabled = false, la
         ))}
       </div>
       {disabled && (
-        <p className="adm-matrix-summary">{enabled.length ? `Allowed: ${enabled.map(i => i.label).join(', ')}` : 'Dashboard only'}</p>
+        <p className="adm-matrix-summary">{enabled.length ? `Switched on: ${enabled.map(i => i.label).join(', ')}` : 'Dashboard only'}</p>
       )}
     </fieldset>
   )

@@ -7,6 +7,10 @@ vi.mock('../adminApi', () => ({ callAdminAuth }))
 vi.mock('../provider/AdminProvider.jsx', () => ({ useAdmin: () => admin }))
 
 import { useStaffActions } from './useStaffActions'
+import { ALL_TABS } from '../navigation'
+
+// The complete map the server should receive: every assignable key explicit.
+const fullMap = (on = {}) => ({ ...Object.fromEntries(ALL_TABS.map(t => [t.key, false])), ...on, overview: true })
 
 const run = async (fn) => { let out; await act(async () => { out = await fn() }); return out }
 const setup = () => renderHook(() => useStaffActions())
@@ -133,9 +137,15 @@ describe('other actions', () => {
   it('createRole always includes overview and audits sorted enabled tabs', async () => {
     const { result } = setup()
     await run(() => result.current.createRole({ name: ' Mod ', description: undefined, tabs: { users: true, posts: true, shop: false } }))
-    expect(serverCalls()).toEqual([['create_admin_role', { name: 'Mod', description: '', carefindTabs: { overview: true, users: true, posts: true, shop: false } }]])
+    expect(serverCalls()).toEqual([['create_admin_role', { name: 'Mod', description: '', carefindTabs: fullMap({ users: true, posts: true }) }]])
     expect(auditCalls()[0][1]).toEqual({ auditAction: 'create_role', targetType: 'admin_role', targetId: 'Mod', metadata: { tabs: ['overview', 'posts', 'users'] } })
     expect(admin.showToast).toHaveBeenCalledWith('Role created', { type: 'success' })
+  })
+  it('role maps are explicit: unchecked is false, only exactly true counts, unknown keys are kept', async () => {
+    const { result } = setup()
+    await run(() => result.current.createRole({ name: 'X', tabs: { users: 'yes', posts: true, legacy_tab: true } }))
+    expect(serverCalls()[0][1].carefindTabs).toEqual({ ...fullMap({ posts: true }), legacy_tab: true })
+    expect(serverCalls()[0][1].carefindTabs.users).toBe(false)
   })
   it('createRole with a blank name makes no call', async () => {
     const { result } = setup()
@@ -145,9 +155,9 @@ describe('other actions', () => {
   it('updateRole sends description only when given and forces overview', async () => {
     const { result } = setup()
     await run(() => result.current.updateRole({ roleId: 'r1', tabs: { users: true, overview: false } }))
-    expect(serverCalls()[0]).toEqual(['update_admin_role', { roleId: 'r1', carefindTabs: { overview: true, users: true } }])
+    expect(serverCalls()[0]).toEqual(['update_admin_role', { roleId: 'r1', carefindTabs: fullMap({ users: true }) }])
     await run(() => result.current.updateRole({ roleId: 'r1', description: 'd', tabs: {} }))
-    expect(serverCalls()[1][1]).toEqual({ roleId: 'r1', carefindTabs: { overview: true }, description: 'd' })
+    expect(serverCalls()[1][1]).toEqual({ roleId: 'r1', carefindTabs: fullMap(), description: 'd' })
     expect(auditCalls()[0][1]).toMatchObject({ auditAction: 'update_role', targetType: 'admin_role', targetId: 'r1' })
     expect(admin.showToast).toHaveBeenCalledWith('Role updated', { type: 'success' })
   })

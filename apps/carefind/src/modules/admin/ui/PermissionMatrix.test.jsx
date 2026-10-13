@@ -65,7 +65,7 @@ describe('PermissionMatrix', () => {
   it('disabled disables every checkbox and lists the enabled sections as text', () => {
     setup({ disabled: true })
     screen.getAllByRole('checkbox').forEach(b => expect(b).toBeDisabled())
-    expect(screen.getByText('Allowed: Users')).toBeInTheDocument()
+    expect(screen.getByText('Switched on: Users')).toBeInTheDocument()
   })
 
   it('disabled with nothing enabled says so', () => {
