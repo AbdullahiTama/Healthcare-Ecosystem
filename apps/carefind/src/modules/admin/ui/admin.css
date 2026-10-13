@@ -209,3 +209,15 @@ button.adm-alert:hover { background: var(--adm-line-soft); }
 .adm-star { color: var(--adm-line); fill: none; }
 .adm-star--on { color: var(--color-star); fill: var(--color-star); }
 .adm-star-inline { display: inline-block; vertical-align: middle; color: var(--color-star); fill: var(--color-star); }
+
+/* Permission matrix */
+.adm-matrix { margin: 0; padding: 12px 16px; min-width: 0; border: 1px solid var(--adm-line); border-radius: 10px; background: var(--adm-panel); }
+.adm-matrix-legend { padding: 0 6px; font-size: 13px; font-weight: 600; color: var(--adm-ink); }
+.adm-matrix-note, .adm-matrix-summary { margin: 0 0 8px; font-size: 12px; color: var(--adm-ink-soft); }
+.adm-matrix-summary { margin: 12px 0 0; overflow-wrap: anywhere; }
+.adm-matrix-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 12px 16px; }
+.adm-matrix-group { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.adm-matrix-heading { margin: 0 0 2px; font-size: 12px; font-weight: 600; color: var(--adm-ink-soft); }
+.adm-matrix-item { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 13px; color: var(--adm-ink); overflow-wrap: anywhere; }
+.adm-matrix-item input { flex: none; width: 16px; height: 16px; accent-color: var(--teal-deep); }
+.adm-matrix-item input:focus-visible { outline: 2px solid var(--teal-deep); outline-offset: 2px; }
