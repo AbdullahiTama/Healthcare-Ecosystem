@@ -130,6 +130,9 @@ export default function AuditLogSection() {
     return { ...query, data: { ...query.data, rows: rows.filter(log => actorOf(log).toLowerCase().includes(needle)) } }
   }, [query, needle])
   const rows = shown.data?.rows || []
+  // Rows were loaded but the actor filter hid them all: say so, instead of the
+  // table's "no entries" / "none on this page", which would be false.
+  const actorMiss = !!needle && (query.data?.rows?.length || 0) > 0 && rows.length === 0
 
   const renderDrawer = (log) => ({
     title: `${actionOf(log) || 'Action'} · ${targetOf(log) || 'unknown target'}`,
@@ -164,6 +167,7 @@ export default function AuditLogSection() {
       onPage={(n) => setFilters(prev => ({ ...prev, page: n }))}
       renderDrawer={renderDrawer}
       rowLabel={rowLabel}
+      emptyNote={actorMiss ? 'No entries on this page match this actor. Try Next or Previous, or clear the actor filter.' : undefined}
       toolbar={(
         <Button variant="ghost" size="sm" leftIcon={<Download size={14} aria-hidden="true" />}
           disabled={rows.length === 0 || query.isPlaceholderData}

@@ -131,6 +131,16 @@ describe('DirectoryTable', () => {
     expect(screen.getByText('No businesses on this page')).toBeInTheDocument()
   })
 
+  it('shows an emptyNote instead of the standard empty message when given', () => {
+    const empty = ok({ data: { rows: [], hasNext: true, total: 0 } })
+    const { props, rerender } = setup({ page: 2, query: empty, filtersActive: true, emptyNote: 'Nothing here matches that.' })
+    expect(screen.getByText('Nothing here matches that.')).toBeInTheDocument()
+    expect(screen.queryByText('No users on this page')).not.toBeInTheDocument()
+    expect(screen.queryByText('No users match these filters')).not.toBeInTheDocument()
+    rerender(<DirectoryTable {...props} emptyNote={undefined} />)
+    expect(screen.getByText('No users on this page')).toBeInTheDocument()
+  })
+
   it('shows no count and no empty text while loading', () => {
     setup({ query: ok({ isLoading: true, data: undefined }) })
     expect(screen.queryByText(/users$/)).not.toBeInTheDocument()

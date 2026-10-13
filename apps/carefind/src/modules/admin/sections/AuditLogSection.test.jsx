@@ -164,15 +164,57 @@ describe('AuditLogSection', () => {
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
   })
 
-  it('an actor with no loaded match shows the no-match state and Clear filters resets', () => {
+  it('clearing the actor box after a miss brings the rows back', () => {
     vi.useFakeTimers()
     render(<AuditLogSection />)
     fireEvent.change(actorBox(), { target: { value: 'zzz' } })
     act(() => { vi.advanceTimersByTime(300) })
-    expect(screen.getByText(/No audit log entries match/)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByText(/No entries on this page match this actor/)).toBeInTheDocument()
+    fireEvent.change(actorBox(), { target: { value: '' } })
+    act(() => { vi.advanceTimersByTime(300) })
     expect(screen.getAllByRole('row')).toHaveLength(5)
     expect(actorBox()).toHaveValue('')
+  })
+
+  it('an actor miss on page 0 says no entries on this page match, not that the trail is empty', () => {
+    vi.useFakeTimers()
+    render(<AuditLogSection />)
+    fireEvent.change(actorBox(), { target: { value: 'zzz' } })
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(screen.getByText(/No entries on this page match this actor/)).toBeInTheDocument()
+    expect(screen.queryByText(/No audit log entries/)).not.toBeInTheDocument()
+  })
+
+  it('an actor miss on a later page never shows the false "on this page" empty state', () => {
+    vi.useFakeTimers()
+    render(<AuditLogSection />)
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(last().page).toBe(1)
+    fireEvent.change(actorBox(), { target: { value: 'zzz' } })
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(screen.getByText('No entries on this page match this actor. Try Next or Previous, or clear the actor filter.')).toBeInTheDocument()
+    expect(screen.queryByText(/No audit log entries/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Back to first page' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeEnabled()
+  })
+
+  it('a truly empty page keeps the standard empty message under an actor filter', () => {
+    vi.useFakeTimers()
+    audit.result = ok({}, { rows: [], hasNext: false })
+    render(<AuditLogSection />)
+    fireEvent.change(actorBox(), { target: { value: 'zzz' } })
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(screen.queryByText(/No entries on this page match/)).not.toBeInTheDocument()
+    expect(screen.getByText(/No audit log entries/)).toBeInTheDocument()
+  })
+
+  it('server filters with no result show the no-match state and Clear filters resets them', () => {
+    audit.result = ok({}, { rows: [], hasNext: false })
+    render(<AuditLogSection />)
+    fireEvent.click(within(screen.getByRole('group', { name: 'Action' })).getByRole('button', { name: 'Rejected' }))
+    expect(screen.getByText(/No audit log entries match/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(last()).toEqual(NONE)
   })
 
   it('when capped it says so, and Next is disabled with no next page', () => {
