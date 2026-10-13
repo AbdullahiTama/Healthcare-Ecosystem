@@ -1,4 +1,4 @@
-import { checkOtp, OTP_PURPOSES, checkWithdrawalPin, verifyBankAccount, settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForDestination, sendSecurityAlert, limitMessage } from '@care-ecosystem/shared-payments'
+import { checkOtp, OTP_PURPOSES, checkWithdrawalPin, verifyBankAccount, settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForDestination, sendSecurityAlert, limitMessage, getWithdrawalDraft } from '@care-ecosystem/shared-payments'
 import { getSecurityMailer } from '../_lib/securityMailer.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { supabase } from '../_lib/supabase.js'
@@ -59,6 +59,15 @@ export default async function handler(req, res) {
   })
   if (!pinCheck.ok) {
     return res.status(pinCheck.status).json({ error: pinCheck.error, code: pinCheck.code, ...(pinCheck.code === 'pin_not_set' ? { needsPin: true } : {}) })
+  }
+
+  // The submit must match the request the code was issued for: a resumed or
+  // repurposed form forces a fresh code instead of burning this one (Phase 1).
+  {
+    const draft = await getWithdrawalDraft(supabase, { userId: user.id }).catch(() => null)
+    if (!draft || Number(draft.amount) !== amountKobo) {
+      return res.status(400).json({ error: 'Your withdrawal details changed — request a fresh code.', code: 'draft_mismatch' })
+    }
   }
 
   // Third factor: a fresh code emailed to the owner, checked LAST - after the PIN and before the account is resolved or

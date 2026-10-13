@@ -10,6 +10,7 @@ const h = vi.hoisted(() => {
       if (name === 'set_withdrawal_pin') return { data: null, error: s.setError || null }
       if (name === 'verify_otp') return { data: s.otp ?? 'ok', error: null }
       if (name === 'issue_otp') return { data: s.issued ?? 'ok', error: null }
+      if (name === 'create_withdrawal_draft') return { data: { ok: true, draft_id: 'd-1' }, error: null }
       return { data: null }
     },
   }
@@ -127,7 +128,7 @@ describe('/api/withdrawal-pin', () => {
   })
 
   it('otp can also be asked for a withdrawal code, but never for another purpose', async () => {
-    let r = await call('otp', { purpose: 'withdrawal' })
+    let r = await call('otp', { purpose: 'withdrawal', amount: 500000 })
     expect(r.statusCode).toBe(200)
     expect(h.mailer.sendOtp).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'withdrawal' }))
     expect(rpcs('issue_otp')[0][1]).toMatchObject({ p_purpose: 'withdrawal' })

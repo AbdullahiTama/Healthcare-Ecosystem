@@ -7,16 +7,16 @@ const h = vi.hoisted(() => {
     trust: { trust_level: 'trusted', device_trust_enabled: false },
     created: { outcome: 'untraceable_credits', withdrawable_coins: 10, untraceable_coins: 5 },
   }
-  const builder = () => {
+  const builder = (table) => {
     const b = {
-      select: () => b, eq: () => b, in: () => b, is: () => b, order: () => b, limit: () => b, update: () => b,
-      maybeSingle: async () => ({ data: { balance: 150 } }),
+      select: () => b, eq: () => b, in: () => b, is: () => b, gt: () => b, order: () => b, limit: () => b, update: () => b,
+      maybeSingle: async () => (table === 'withdrawal_drafts' ? { data: { id: 'd-1', amount: 15 } } : { data: { balance: 150 } }),
       then: (resolve) => resolve({ error: null }),
     }
     return b
   }
   s.client = {
-    from: () => builder(),
+    from: (t) => builder(t),
     rpc: async (name, args) => {
       s.rpcCalls.push([name, args])
       if (name === 'get_withdrawal_trust') return { data: [s.trust] }

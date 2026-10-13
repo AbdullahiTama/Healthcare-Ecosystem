@@ -10,13 +10,13 @@ const h = vi.hoisted(() => {
     paystackFetch: vi.fn(),
     rpcCalls: [],
   }
-  const builderFor = () => {
-    const b = { select: () => b, eq: () => b, in: () => b, is: () => b, order: () => b, limit: () => b, update: () => b, maybeSingle: async () => ({ data: null }), then: (resolve) => resolve({ error: null }) }
+  const builderFor = (table) => {
+    const b = { select: () => b, eq: () => b, in: () => b, is: () => b, gt: () => b, order: () => b, limit: () => b, update: () => b, maybeSingle: async () => (table === 'withdrawal_drafts' ? { data: { id: 'd-1', amount: 10 } } : { data: null }), then: (resolve) => resolve({ error: null }) }
     return b
   }
   s.routes = {}
   s.client = {
-    from: () => builderFor(),
+    from: (t) => builderFor(t),
     rpc: async (name, args) => { s.rpcCalls.push([name, args]); const r = s.routes[name]; return typeof r === 'function' ? r(args) : r || { data: null } },
   }
   return s

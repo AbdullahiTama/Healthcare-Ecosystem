@@ -75,12 +75,15 @@ describe('initiate-withdrawal PIN gate', () => {
         ? Promise.resolve({ data: { balance: 100 }, error: null })
         : table === 'withdrawal_requests'
           ? Promise.resolve({ data: [{ id: 'wr-1', paystack_reference: null, paystack_transfer_code: null, created_at: new Date().toISOString() }], error: null })
-          : Promise.resolve({ data: null, error: null })
+          : table === 'withdrawal_drafts'
+            ? Promise.resolve({ data: { id: 'd-1', amount: 10 }, error: null })
+            : Promise.resolve({ data: null, error: null })
       const chain = Object.assign(result, {
         select: () => chain,
         eq: () => chain,
         in: () => chain,
         is: () => chain,
+        gt: () => chain,
         order: () => chain,
         limit: () => chain,
         maybeSingle: () => chain,

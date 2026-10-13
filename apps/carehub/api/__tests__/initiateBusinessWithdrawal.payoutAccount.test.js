@@ -6,10 +6,10 @@ const h = vi.hoisted(() => {
   const builderFor = (table) => {
     let rows = s.tables[table] || []
     const b = {
-      select: () => b, or: () => b, is: () => b, order: () => b, limit: () => b,
+      select: () => b, or: () => b, is: () => b, gt: () => b, order: () => b, limit: () => b,
       in: (col, vals) => { rows = rows.filter((r) => vals.includes(r[col])); return b },
       eq: (col, val) => { rows = rows.filter((r) => r[col] === val); return b },
-      maybeSingle: async () => ({ data: rows[0] ?? null }),
+      maybeSingle: async () => (table === 'withdrawal_drafts' ? { data: { id: 'd-1', amount: 500000 } } : { data: rows[0] ?? null }),
       then: (resolve) => resolve({ data: rows, error: null }),
     }
     return b

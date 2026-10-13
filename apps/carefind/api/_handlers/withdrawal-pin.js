@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { hashPin, isValidPin } from '../_lib/pinCrypto.js'
-import { issueOtpFromRequest, setWithdrawalPin, withdrawalPinStatus } from '@care-ecosystem/shared-payments'
+import { issueOtpFromRequest, setWithdrawalPin, withdrawalPinStatus, createWithdrawalDraft, getWithdrawalDraft } from '@care-ecosystem/shared-payments'
 import { getSecurityMailer } from '../_lib/securityMailer.js'
 
 const supabase = createClient(
@@ -46,8 +46,27 @@ export default async function handler(req, res) {
   if (action === 'otp') {
     // Two things need a code here: arming the PIN (default) and confirming a withdrawal ({ purpose: 'withdrawal' }).
     // Anything else is refused by the shared helper, so this endpoint cannot mint codes for other purposes.
+    if (((req.body || {}).purpose || 'pin_set') === 'withdrawal') {
+      // The code is issued for THIS request: the server owns the amount and
+      // destination in a draft first, so a resumed form cannot be repurposed
+      // (Phase 1). A code already on its way is not re-issued.
+      const { amount, payoutAccountId, bankCode, accountNumber } = req.body || {}
+      const coins = Number(amount)
+      if (!Number.isInteger(coins) || coins < 5) {
+        return res.status(400).json({ error: 'Enter an amount of at least 5 CareCoins first.', code: 'draft_amount' })
+      }
+      const draft = await createWithdrawalDraft(supabase, { userId: user.id, app: 'carefind', amount: coins, unit: 'coins', destination: { savedId: payoutAccountId, bankCode, accountNumber } })
+      if (draft.ok === false && draft.outcome === 'draft_active') {
+        return res.status(409).json({ error: 'A code is already on its way — check your email.', code: 'draft_active' })
+      }
+    }
     const r = await issueOtpFromRequest({ supabase, user, req, mailer: await getSecurityMailer() })
     return res.status(r.status).json(r.body)
+  }
+
+  if (action === 'draft') {
+    const draft = await getWithdrawalDraft(supabase, { userId: user.id })
+    return res.status(200).json({ draft })
   }
 
   if (action === 'set') {

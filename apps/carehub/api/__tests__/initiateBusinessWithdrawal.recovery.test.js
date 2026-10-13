@@ -6,8 +6,8 @@ const h = vi.hoisted(() => {
   const s = { initiateTransfer: vi.fn(), createTransferRecipient: vi.fn(), checkBalance: vi.fn(), resolveAccount: vi.fn(), paystackFetch: vi.fn(), rpcCalls: [], owned: true, auth: null, applied: [] }
   const builderFor = (table) => {
     const b = {
-      select: () => b, eq: () => b, or: () => b, in: () => b, is: () => b, order: () => b, limit: () => b,
-      maybeSingle: async () => (table === 'businesses' ? { data: s.owned ? { id: 'biz-1' } : null } : { data: null }),
+      select: () => b, eq: () => b, or: () => b, in: () => b, is: () => b, gt: () => b, order: () => b, limit: () => b,
+      maybeSingle: async () => (table === 'withdrawal_drafts' ? { data: { id: 'd-1', amount: 500000 } } : (table === 'businesses' ? { data: s.owned ? { id: 'biz-1' } : null } : { data: null })),
     }
     return b
   }

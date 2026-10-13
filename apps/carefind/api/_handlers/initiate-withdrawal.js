@@ -4,7 +4,7 @@ import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/e
 import { createTransferRecipient, initiateTransfer, checkBalance, resolveAccount } from '../_lib/paystackTransfer.js'
 import { getRequiredAuth, isInstantEligible, getDailyCap } from '../_lib/trustLevels.js'
 import { reconcileWithdrawal } from '../_lib/withdrawalRecovery.js'
-import { settleWithdrawal, checkOtp, checkWithdrawalPin, verifyBankAccount, sendSecurityAlert, OTP_PURPOSES, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForDestination, applyLimits, limitMessage } from '@care-ecosystem/shared-payments'
+import { settleWithdrawal, checkOtp, checkWithdrawalPin, verifyBankAccount, sendSecurityAlert, OTP_PURPOSES, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForDestination, applyLimits, limitMessage, getWithdrawalDraft } from '@care-ecosystem/shared-payments'
 import { getFinancialConfig } from '../_lib/financialConfig.js'
 import { getSecurityMailer } from '../_lib/securityMailer.js'
 
@@ -58,6 +58,15 @@ export default async function handler(req, res) {
   })
   if (!pinCheck.ok) {
     return res.status(pinCheck.status).json({ error: pinCheck.error, code: pinCheck.code, ...(pinCheck.code === 'pin_not_set' ? { needsPin: true } : {}) })
+  }
+
+  // The submit must match the request the code was issued for: a resumed or
+  // repurposed form forces a fresh code instead of burning this one (Phase 1).
+  {
+    const draft = await getWithdrawalDraft(supabase, { userId: user.id }).catch(() => null)
+    if (!draft || Number(draft.amount) !== coins) {
+      return res.status(400).json({ error: 'Your withdrawal details changed — request a fresh code.', code: 'draft_mismatch' })
+    }
   }
 
   // Third factor: a fresh code emailed to the account, checked LAST - after the PIN and before the account is resolved
