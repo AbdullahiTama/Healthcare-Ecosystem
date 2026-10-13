@@ -1,17 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within, act } from '@testing-library/react'
 
-const actions = vi.hoisted(() => ({ busy: null, busyKeys: [], toggleStaff: vi.fn(), assignRole: vi.fn() }))
+const actions = vi.hoisted(() => ({ busy: null, busyKeys: [], stateful: false, toggleStaff: vi.fn(), assignRole: vi.fn() }))
 const admin = vi.hoisted(() => ({ askConfirm: vi.fn(), showToast: vi.fn(), confirming: false }))
 
-vi.mock('../../hooks/useStaffActions', () => ({
-  useStaffActions: () => ({
-    busy: actions.busy,
-    isBusy: (action, id) => actions.busyKeys.includes(`${action}:${id ?? ''}`),
-    toggleStaff: actions.toggleStaff,
-    assignRole: actions.assignRole,
-  }),
-}))
+// Stateful mode gives every hook instance its own in-flight set, like the real
+// hook, so two instances in one screen cannot see each other's running action.
+vi.mock('../../hooks/useStaffActions', async () => {
+  const { useState } = await import('react')
+  return {
+    useStaffActions: () => {
+      const [keys, setKeys] = useState([])
+      if (!actions.stateful) {
+        return {
+          busy: actions.busy,
+          isBusy: (action, id) => actions.busyKeys.includes(`${action}:${id ?? ''}`),
+          toggleStaff: actions.toggleStaff,
+          assignRole: actions.assignRole,
+        }
+      }
+      const track = (name, fn) => async (arg) => {
+        const key = `${name}:${arg.id ?? arg.staffId}`
+        setKeys(k => [...k, key])
+        try { return await fn(arg) } finally { setKeys(k => k.filter(x => x !== key)) }
+      }
+      return {
+        busy: keys.length ? keys[0].split(':')[0] : null,
+        isBusy: (action, id) => keys.includes(`${action}:${id ?? ''}`),
+        toggleStaff: track('toggleStaff', actions.toggleStaff),
+        assignRole: track('assignRole', actions.assignRole),
+      }
+    },
+  }
+})
 vi.mock('../../provider/AdminProvider.jsx', () => ({
   useAdmin: () => ({ askConfirm: admin.askConfirm, showToast: admin.showToast, confirming: admin.confirming }),
 }))
@@ -49,6 +70,7 @@ const click = async (el) => { await act(async () => { fireEvent.click(el) }) }
 beforeEach(() => {
   actions.busy = null
   actions.busyKeys = []
+  actions.stateful = false
   actions.toggleStaff.mockReset().mockResolvedValue({ ok: true })
   actions.assignRole.mockReset().mockResolvedValue({ ok: true })
   admin.askConfirm.mockReset()
@@ -305,5 +327,56 @@ describe('StaffDirectory own account', () => {
     const dialog = openMember('Ada Obi')
     expect(within(dialog).getByRole('button', { name: 'Deactivate' })).toBeInTheDocument()
     expect(within(dialog).queryByText("You can't change your own account here.")).not.toBeInTheDocument()
+  })
+})
+
+describe('StaffDirectory one action at a time per member', () => {
+  const pending = () => { let resolve; const p = new Promise(r => { resolve = r }); return { p, resolve } }
+  const pick = (dialog, label) => {
+    const select = within(dialog).getByRole('combobox', { name: 'Change role' })
+    fireEvent.change(select, { target: { value: within(select).getByRole('option', { name: label }).value } })
+  }
+
+  it('while a deactivate runs, Change role and the select are disabled and cannot assign', async () => {
+    actions.stateful = true
+    const d = pending()
+    actions.toggleStaff.mockReturnValueOnce(d.p)
+    renderDir()
+    const dialog = openMember('Ada Obi')
+    pick(dialog, 'night shift')
+    await click(within(dialog).getByRole('button', { name: 'Deactivate' }))
+    act(() => { lastAsk().action() })
+    expect(within(dialog).getByRole('button', { name: 'Change role' })).toBeDisabled()
+    expect(within(dialog).getByRole('combobox', { name: 'Change role' })).toBeDisabled()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change role' }))
+    expect(admin.askConfirm).toHaveBeenCalledTimes(1)
+    expect(actions.assignRole).not.toHaveBeenCalled()
+    await act(async () => { d.resolve({ ok: true }) })
+  })
+
+  it('while a role change runs, Deactivate is disabled', async () => {
+    actions.stateful = true
+    const d = pending()
+    actions.assignRole.mockReturnValueOnce(d.p)
+    renderDir()
+    const dialog = openMember('Ada Obi')
+    pick(dialog, 'night shift')
+    await click(within(dialog).getByRole('button', { name: 'Change role' }))
+    act(() => { lastAsk().action() })
+    expect(within(dialog).getByRole('button', { name: 'Deactivate' })).toBeDisabled()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Deactivate' }))
+    expect(admin.askConfirm).toHaveBeenCalledTimes(1)
+    expect(actions.toggleStaff).not.toHaveBeenCalled()
+    await act(async () => { d.resolve({ ok: true }) })
+  })
+
+  it('an action running on a different member does not block this one', () => {
+    actions.stateful = false
+    actions.busy = 'toggleStaff'
+    actions.busyKeys = ['toggleStaff:s2']
+    renderDir()
+    const dialog = openMember('Ada Obi')
+    expect(within(dialog).getByRole('button', { name: 'Deactivate' })).toBeEnabled()
+    expect(within(dialog).getByRole('combobox', { name: 'Change role' })).toBeEnabled()
   })
 })

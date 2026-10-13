@@ -40,9 +40,8 @@ function assignableRoles(roles) {
 // While mounted it marks its member as the one on screen; unmounting (drawer
 // closed or another member opened) clears the mark, so a late result knows its
 // drawer is gone.
-function StaffBody({ member, teamName, isOwn, roles, onRetry, shownId, finish }) {
+function StaffBody({ member, teamName, isOwn, roles, onRetry, shownId, finish, assignRole, assigning, working }) {
   const { askConfirm } = useAdmin()
-  const { busy, isBusy, assignRole } = useStaffActions()
   const { id } = member
   useEffect(() => {
     shownId.current = id
@@ -55,7 +54,7 @@ function StaffBody({ member, teamName, isOwn, roles, onRetry, shownId, finish })
   const sameRole = !!chosen && norm(chosen.name) === norm(member.role)
 
   const confirmChange = () => {
-    if (!chosen || busy) return
+    if (!chosen || working) return
     askConfirm({
       title: `Change ${nameOf(member)}'s role?`,
       consequence: `They will have ${roleLabel(chosen.name)}'s access from their next request.`,
@@ -73,9 +72,9 @@ function StaffBody({ member, teamName, isOwn, roles, onRetry, shownId, finish })
     roleControl = (
       <>
         {roles.stale && <SourceNotice source={roles} noun="roles" onRetry={onRetry} />}
-        <Select label="Change role" value={roleId} onChange={setRoleId} placeholder="Choose a role" disabled={!!busy}
+        <Select label="Change role" value={roleId} onChange={setRoleId} placeholder="Choose a role" disabled={working}
           options={options.map(r => ({ value: String(r.id), label: roleLabel(r.name) }))} />
-        <Button variant="secondary" disabled={!chosen || sameRole || !!busy} loading={isBusy('assignRole', id)} loadingText="Changing…"
+        <Button variant="secondary" disabled={!chosen || sameRole || working} loading={assigning} loadingText="Changing…"
           onClick={confirmChange}>
           Change role
         </Button>
@@ -99,7 +98,9 @@ function StaffBody({ member, teamName, isOwn, roles, onRetry, shownId, finish })
 
 export default function StaffDirectory({ staff, roles, teams, currentAdminId, onRetry }) {
   const { askConfirm, confirming, showToast } = useAdmin()
-  const { busy, isBusy, toggleStaff } = useStaffActions()
+  // The one hook for the whole drawer: its in-flight guard is per instance, so a
+  // second instance could run a role change while a deactivate is running.
+  const { isBusy, toggleStaff, assignRole } = useStaffActions()
   const [openedId, setOpenedId] = useState(null)
   const [snapshot, setSnapshot] = useState(null)
   const [error, setError] = useState('')
@@ -146,11 +147,16 @@ export default function StaffDirectory({ staff, roles, teams, currentAdminId, on
     action: async () => finish(m.id, activate ? 'reactivate the account' : 'deactivate the account', await toggleStaff({ id: m.id, isActive: activate })),
   })
 
+  // Any action running on this member blocks every action on them; other
+  // members are not blocked.
+  const toggling = !!current && isBusy('toggleStaff', current.id)
+  const assigning = !!current && isBusy('assignRole', current.id)
+  const working = toggling || assigning
   const isOwn = !!current && currentAdminId != null && current.id === currentAdminId
   const activate = !!current && !current.is_active
 
   const footer = current && !isOwn ? (
-    <Button variant={activate ? 'primary' : 'danger'} fullWidth disabled={!!busy} loading={isBusy('toggleStaff', current.id)}
+    <Button variant={activate ? 'primary' : 'danger'} fullWidth disabled={working} loading={toggling}
       loadingText={activate ? 'Reactivating…' : 'Deactivating…'}
       leftIcon={activate ? <UserCheck size={14} aria-hidden="true" /> : <UserX size={14} aria-hidden="true" />}
       onClick={() => toggle(current, activate)}>
@@ -181,7 +187,8 @@ export default function StaffDirectory({ staff, roles, teams, currentAdminId, on
         onClose={close} error={error} footer={footer} preventClose={confirming}>
         {current && (
           <StaffBody key={current.id} member={current} teamName={teamOf(current)} isOwn={isOwn} roles={roles}
-            onRetry={onRetry} shownId={shownId} finish={finish} />
+            onRetry={onRetry} shownId={shownId} finish={finish}
+            assignRole={assignRole} assigning={assigning} working={working} />
         )}
       </ReviewDrawer>
     </section>
