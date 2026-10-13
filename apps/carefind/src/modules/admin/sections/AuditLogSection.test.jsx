@@ -152,7 +152,7 @@ describe('AuditLogSection', () => {
   it('the actor box narrows the loaded rows without changing the hook params', () => {
     vi.useFakeTimers()
     render(<AuditLogSection />)
-    expect(screen.getByText(/Filters the rows loaded/)).toBeInTheDocument()
+    expect(screen.getByText('Actor filter applies to the rows loaded.')).toBeInTheDocument()
     const before = audit.calls.length
     fireEvent.change(actorBox(), { target: { value: 'bayo' } })
     act(() => { vi.advanceTimersByTime(300) })
@@ -247,16 +247,16 @@ describe('AuditLogSection', () => {
     expect(within(dialog).queryAllByRole('region', { name: 'Details' })).toHaveLength(0)
   })
 
-  it('when capped it says so, and Next is disabled with no next page', () => {
-    audit.result = ok({}, { capped: true, hasNext: false })
+  it('always says the log is limited to the newest 200 entries, once', () => {
     render(<AuditLogSection />)
-    expect(screen.getByText('Showing the newest 200 entries')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
+    expect(screen.getAllByText('Shows up to the newest 200 entries.')).toHaveLength(1)
   })
 
-  it('does not show the capped note when not capped', () => {
+  it('when capped, Next is disabled with no next page and the limit is still stated once', () => {
+    audit.result = ok({}, { capped: true, hasNext: false })
     render(<AuditLogSection />)
-    expect(screen.queryByText(/newest 200/)).not.toBeInTheDocument()
+    expect(screen.getAllByText('Shows up to the newest 200 entries.')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
   })
 
   it('Export CSV exports the actor-filtered page rows as audit_log_page.csv', () => {
@@ -283,6 +283,12 @@ describe('AuditLogSection', () => {
 
   it('Export CSV is disabled when there are no rows', () => {
     audit.result = ok({}, { rows: [], hasNext: false })
+    render(<AuditLogSection />)
+    expect(screen.getByRole('button', { name: /Export CSV/ })).toBeDisabled()
+  })
+
+  it('Export CSV is disabled when a refresh failed, even with rows loaded', () => {
+    audit.result = ok({ isError: true })
     render(<AuditLogSection />)
     expect(screen.getByRole('button', { name: /Export CSV/ })).toBeDisabled()
   })

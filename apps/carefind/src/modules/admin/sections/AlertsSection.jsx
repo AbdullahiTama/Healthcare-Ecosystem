@@ -3,6 +3,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@care-ecosystem/design-system/components/ui'
 import { useAlerts } from '../hooks/useAlerts'
+import { ALERT_LABELS } from '../lib/buildAlerts'
 import { useAdmin } from '../provider/AdminProvider.jsx'
 import { isAllowed } from '../navigation'
 import { timeAgo } from '../ui'
@@ -85,7 +86,7 @@ export default function AlertsSection({ onOpenTab }) {
             <Button variant="ghost" size="sm" onClick={() => refetch()} loading={isFetching} loadingText="Checking…">Retry</Button>
           </div>
         )}
-        {alerts.length === 0 && (
+        {alerts.length === 0 && failed.length < ALERT_LABELS.length && (
           <div className="adm-clear adm-panel">
             <p>{failed.length === 0 ? 'Nothing pending in the sources checked' : 'Nothing pending in the sources that loaded'}</p>
             <p className="adm-note">Some reads can't report their own failures; this reflects what the server returned.</p>

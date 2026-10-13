@@ -152,14 +152,14 @@ export default function AuditLogSection() {
       searchPlaceholder="Filter loaded rows by actor…"
       filters={(
         <>
-          <p className="adm-note">Filters the rows loaded</p>
+          <p className="adm-note">Actor filter applies to the rows loaded.</p>
           <FilterPills label="Action" options={ACTION_OPTIONS} value={action} onChange={(v) => update({ action: v })} />
           <FilterPills label="Target type" options={TARGET_OPTIONS} value={targetType} onChange={(v) => update({ targetType: v })} />
           <div role="group" aria-label="Date range" className="adm-audit-dates">
             <DateRange from={dateFrom} to={dateTo}
               onFrom={(v) => update({ dateFrom: v })} onTo={(v) => update({ dateTo: v })} />
           </div>
-          {query.data?.capped && <p className="adm-note">Showing the newest 200 entries</p>}
+          <p className="adm-note">Shows up to the newest 200 entries.</p>
         </>
       )}
       filtersActive={!!(needle || action !== 'all' || targetType !== 'all' || dateFrom || dateTo)}
@@ -171,7 +171,7 @@ export default function AuditLogSection() {
       emptyNote={actorMiss ? 'No entries on this page match this actor. Try Next or Previous, or clear the actor filter.' : undefined}
       toolbar={(
         <Button variant="ghost" size="sm" leftIcon={<Download size={14} aria-hidden="true" />}
-          disabled={rows.length === 0 || query.isPlaceholderData}
+          disabled={rows.length === 0 || query.isPlaceholderData || query.isError}
           onClick={() => exportCSV(rows.map(csvRecord), 'audit_log_page.csv')}>
           Export CSV
         </Button>

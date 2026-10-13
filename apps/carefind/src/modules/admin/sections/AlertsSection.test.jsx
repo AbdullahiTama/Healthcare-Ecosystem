@@ -148,4 +148,11 @@ describe('AlertsSection', () => {
     expect(btn).toHaveTextContent('Checking…')
     expect(btn.textContent).not.toContain(String.fromCharCode(0xfffd))
   })
+
+  it('does not claim anything loaded when every source failed', () => {
+    setHook({ data: { alerts: [], failed: ['Verifications', 'Claims', 'Reports', 'Withdrawals', 'Task submissions', 'Consultations', 'News'] } })
+    render(<AlertsSection onOpenTab={() => {}} />)
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.queryByText(/Nothing pending/)).not.toBeInTheDocument()
+  })
 })
