@@ -104,6 +104,20 @@ describe('TasksSection list states', () => {
     expect(within(second).getByText('—')).toBeInTheDocument()
   })
 
+  it('shows a dash, never NaN or zero, for a missing or bad compensation', () => {
+    state.query = queryOf({ data: [
+      task({ id: 'a', title: 'NullPay', compensation: null }),
+      task({ id: 'b', title: 'UndefPay', compensation: undefined }),
+      task({ id: 'c', title: 'BadPay', compensation: 'abc' }),
+      task({ id: 'd', title: 'EmptyPay', compensation: '' }),
+    ] })
+    const { container } = render(<TasksSection />)
+    for (const name of ['NullPay', 'UndefPay', 'BadPay', 'EmptyPay']) {
+      expect(within(screen.getByText(name).closest('li')).getAllByText('—').length).toBeGreaterThan(0)
+    }
+    expect(container.textContent).not.toMatch(/NaN|₦0(?!\d)/)
+  })
+
   it('renders task text as inert text, never markup', () => {
     state.query = queryOf({ data: [task({ title: '<img src=x onerror=alert(1)>', specialty: '<b>bold</b>', description: '<script>x</script>' })] })
     const { container } = render(<TasksSection />)
@@ -149,6 +163,30 @@ describe('TasksSection create', () => {
     expect(screen.getByText('Enter a positive whole-number compensation')).toBeInTheDocument()
     expect(pay()).toHaveAttribute('aria-invalid', 'true')
     expect(title()).toHaveValue('  Review guide ')
+  })
+
+  it.each(['', '   '])('refuses blank compensation %j with a message and no call', async (bad) => {
+    render(<TasksSection />)
+    fill({ pay: bad })
+    await act(async () => { fireEvent.click(submit()) })
+    expect(state.actions.createTask).not.toHaveBeenCalled()
+    // An empty field is stopped by the browser's own required check; blanks are ours.
+    if (bad) expect(screen.getByText('Enter a positive whole-number compensation')).toBeInTheDocument()
+  })
+
+  it('passes whitespace-only title and description to the hook and shows its error', async () => {
+    state.actions.createTask.mockResolvedValue({ ok: false, error: 'Enter a task title' })
+    render(<TasksSection />)
+    fill({ title: '   ', desc: '  ' })
+    await act(async () => { fireEvent.submit(screen.getByRole('form', { name: 'Create a task' })) })
+    expect(state.actions.createTask).toHaveBeenCalledTimes(1)
+    expect(state.actions.createTask.mock.calls[0][0]).toMatchObject({ title: '', description: '' })
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a task title')
+  })
+
+  it('has the create heading as an h3 under the h1', () => {
+    render(<TasksSection />)
+    expect(screen.getByRole('heading', { level: 3, name: 'Create task' })).toBeInTheDocument()
   })
 
   it('clears the compensation message once the value is corrected', async () => {

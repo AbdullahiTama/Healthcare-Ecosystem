@@ -17,7 +17,10 @@ import '../ui/admin.css'
 const WHOLE_NUMBER = /^\d+$/
 const BAD_PAY = 'Enter a positive whole-number compensation'
 
-const naira = (c) => `₦${Number(c).toLocaleString()}`
+const naira = (c) => {
+  const n = Number(c)
+  return c == null || c === '' || !Number.isFinite(n) ? '—' : `₦${n.toLocaleString()}`
+}
 const created = (d) => {
   const t = d ? new Date(d).getTime() : NaN
   return Number.isNaN(t) ? '—' : timeAgo(d)
@@ -147,7 +150,7 @@ export default function TasksSection() {
 
       <section className="adm-panel adm-staff-create" aria-labelledby="tasks-create-h">
         <div className="adm-live-heading">
-          <h2 id="tasks-create-h">Create task</h2>
+          <h3 id="tasks-create-h">Create task</h3>
           <p className="adm-note">Assign a sponsored task with compensation</p>
         </div>
         <CreateTaskForm />
