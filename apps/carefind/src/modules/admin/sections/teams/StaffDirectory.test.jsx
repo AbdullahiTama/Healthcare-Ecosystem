@@ -442,3 +442,37 @@ describe('StaffDirectory when the server does not return team_id', () => {
     expect(within(openMember('Ada Obi')).getByText('Not provided by the server')).toBeInTheDocument()
   })
 })
+
+describe('StaffDirectory demoting or deactivating another super admin', () => {
+  const WARNING = " They can't be made super admin again from the console."
+  const choose = (dialog, label) => {
+    const select = within(dialog).getByRole('combobox', { name: 'Change role' })
+    fireEvent.change(select, { target: { value: within(select).getByRole('option', { name: label }).value } })
+  }
+
+  it('Deactivate adds the warning for a super admin, and only for them', async () => {
+    renderDir({ currentAdminId: 's1' })
+    await click(within(openMember('Chi Ude')).getByRole('button', { name: 'Deactivate' }))
+    expect(lastAsk().consequence).toBe('This stops them using the console: every request checks their account is active. Their account and history are kept.' + WARNING)
+  })
+
+  it('Deactivate for another role keeps the exact text with no warning', async () => {
+    renderDir({ currentAdminId: 's3' })
+    await click(within(openMember('Ada Obi')).getByRole('button', { name: 'Deactivate' }))
+    expect(lastAsk().consequence).toBe('This stops them using the console: every request checks their account is active. Their account and history are kept.')
+  })
+
+  it('Change role adds the warning for a super admin', async () => {
+    renderDir({ currentAdminId: 's1' })
+    const dialog = openMember('Chi Ude')
+    choose(dialog, 'verification officer')
+    await click(within(dialog).getByRole('button', { name: 'Change role' }))
+    expect(lastAsk().consequence).toBe("They will have verification officer's access from their next request." + WARNING)
+  })
+
+  it('a super admin written with spaces or capitals still gets the warning', async () => {
+    renderDir({ currentAdminId: 's1', staff: { status: 'ok', data: [{ ...staffRows[2], role: 'Super Admin' }, staffRows[0]] } })
+    await click(within(openMember('Chi Ude')).getByRole('button', { name: 'Deactivate' }))
+    expect(lastAsk().consequence.endsWith(WARNING)).toBe(true)
+  })
+})

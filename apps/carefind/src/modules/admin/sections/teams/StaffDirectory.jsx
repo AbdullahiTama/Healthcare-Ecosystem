@@ -23,6 +23,11 @@ const signedIn = (d) => (!d || Number.isNaN(new Date(d).getTime()) ? '—' : tim
 const statusOf = (s) => (s.is_active ? 'active' : 'suspended')
 
 const DEACTIVATE_CONSEQUENCE = 'This stops them using the console: every request checks their account is active. Their account and history are kept.'
+// The console can never make anyone a super admin (finding 87), so removing
+// that role, or the account, from another super admin cannot be undone here.
+const NO_PROMOTE_BACK = " They can't be made super admin again from the console."
+const isSuperRole = (member) => norm(member.role) === 'super_admin'
+
 const REACTIVATE_CONSEQUENCE = 'This lets them use the console again with their current role.'
 
 // The roles a staff member can be moved to: the five system roles that exist
@@ -54,7 +59,7 @@ function StaffBody({ member, teamName, isOwn, viewerKnown, roles, onRetry, shown
     if (!chosen || working) return
     askConfirm({
       title: `Change ${nameOf(member)}'s role?`,
-      consequence: `They will have ${spaced(chosen.name)}'s access from their next request.`,
+      consequence: `They will have ${spaced(chosen.name)}'s access from their next request.${isSuperRole(member) ? NO_PROMOTE_BACK : ''}`,
       confirmLabel: 'Change role',
       action: async () => finish(id, 'change the role', await assignRole({ staffId: id, roleId: chosen.id, roleName: chosen.name })),
     })
@@ -149,7 +154,7 @@ export default function StaffDirectory({ staff, roles, teams, currentAdminId, on
 
   const toggle = (m, activate) => askConfirm({
     title: `${activate ? 'Reactivate' : 'Deactivate'} ${nameOf(m)}?`,
-    consequence: activate ? REACTIVATE_CONSEQUENCE : DEACTIVATE_CONSEQUENCE,
+    consequence: activate ? REACTIVATE_CONSEQUENCE : DEACTIVATE_CONSEQUENCE + (isSuperRole(m) ? NO_PROMOTE_BACK : ''),
     confirmLabel: activate ? 'Reactivate' : 'Deactivate',
     action: async () => finish(m.id, activate ? 'reactivate the account' : 'deactivate the account', await toggleStaff({ id: m.id, isActive: activate })),
   })
