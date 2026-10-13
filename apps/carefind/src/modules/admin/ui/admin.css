@@ -179,7 +179,7 @@ button.adm-item:hover { background: var(--adm-line-soft); }
 .adm-srow-count { font-weight: 600; flex-shrink: 0; }
 .adm-rank { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 600; color: var(--adm-ink-soft); background: var(--adm-line-soft); }
 .adm-rank--top { color: var(--teal-deep, #0e6f5a); background: var(--teal-mist, #e3eee8); }
-.adm-sev--ok { color: var(--adm-ok); background: var(--adm-line-soft); }
+.adm-sev--ok { color: #1f6b3f; background: var(--adm-line-soft); }
 
 /* Alert cards */
 .adm-alert { display: grid; grid-template-columns: 36px minmax(0, 1fr) 16px; align-items: flex-start; gap: 12px; width: 100%; padding: 12px 16px; box-sizing: border-box; font-size: 13px; border-left: 3px solid var(--adm-muted); }

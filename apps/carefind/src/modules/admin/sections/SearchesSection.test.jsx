@@ -119,4 +119,26 @@ describe('SearchesSection', () => {
     expect(screen.getByText('No searches yet')).toBeInTheDocument()
     expect(screen.getByText('No recent searches')).toBeInTheDocument()
   })
+
+  it('keeps loaded data and says so when a refresh fails', () => {
+    setHook({ isError: true })
+    render(<SearchesSection />)
+    expect(screen.getByRole('status')).toHaveTextContent("Couldn't refresh, showing the last loaded data.")
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refreshing searches' }))
+    expect(hook.refetch).toHaveBeenCalled()
+    expect(within(cell('Searches')).getByText('4')).toBeInTheDocument()
+  })
+
+  it('does not show the refresh note when there is no data at all', () => {
+    setHook({ data: undefined, isError: true })
+    render(<SearchesSection />)
+    expect(screen.queryByText(/showing the last loaded data/)).not.toBeInTheDocument()
+  })
+
+  it('leaves no stray separator when a search has no category', () => {
+    setHook({ data: [row('n1', 'zinc', true, { category: null })] })
+    render(<SearchesSection />)
+    const item = within(screen.getByRole('list', { name: 'Recent searches' })).getByRole('listitem')
+    expect(within(item).getByText('Ada Obi')).toBeInTheDocument()
+  })
 })

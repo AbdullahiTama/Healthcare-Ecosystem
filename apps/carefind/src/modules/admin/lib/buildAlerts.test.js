@@ -72,4 +72,12 @@ describe('buildAlerts', () => {
       taskSubmissions: ok([{ id: 't', status: 'pending', tasks: null, profiles: null, created_at: '2026-01-01' }]),
     }))).not.toThrow()
   })
+
+  it('skips null elements inside a source array instead of throwing', () => {
+    const built = buildAlerts(sources({
+      reports: ok([null, { id: 'r', status: 'pending', reason: 'spam', created_at: '2026-10-01' }]),
+      consultations: ok([null, undefined]),
+    }))
+    expect(built.alerts.map(a => a.id)).toEqual(['r'])
+  })
 })

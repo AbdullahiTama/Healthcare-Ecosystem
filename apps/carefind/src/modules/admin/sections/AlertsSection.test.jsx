@@ -108,4 +108,41 @@ describe('AlertsSection', () => {
     expect(screen.getAllByText(MARKUP)).toHaveLength(2)
     expect(container.querySelector('img')).toBeNull()
   })
+
+  it('keeps loaded alerts and says so when a refresh fails', () => {
+    setHook({ isError: true })
+    render(<AlertsSection onOpenTab={() => {}} />)
+    expect(screen.getByRole('status')).toHaveTextContent("Couldn't refresh, showing the last loaded data.")
+    expect(screen.getByText('Title a1')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refreshing alerts' }))
+    expect(hook.refetch).toHaveBeenCalled()
+  })
+
+  it('does not show the refresh note when there is no data at all', () => {
+    setHook({ data: undefined, isError: true })
+    render(<AlertsSection onOpenTab={() => {}} />)
+    expect(screen.queryByText(/showing the last loaded data/)).not.toBeInTheDocument()
+  })
+
+  it('files an unknown severity under Info', () => {
+    setHook({ data: { alerts: [alert('u1', 'report', 'critical', 'reports')], failed: [] } })
+    render(<AlertsSection onOpenTab={() => {}} />)
+    expect(screen.getByRole('heading', { level: 2, name: 'Info' })).toBeInTheDocument()
+  })
+
+  it('opens overview for a consultation alert', () => {
+    const onOpenTab = vi.fn()
+    setHook({ data: { alerts: [alert('c1', 'consultation', 'info', 'overview')], failed: [] } })
+    render(<AlertsSection onOpenTab={onOpenTab} />)
+    fireEvent.click(screen.getByRole('button', { name: /Title c1/ }))
+    expect(onOpenTab).toHaveBeenCalledWith('overview')
+  })
+
+  it('disables Retry and says Checking while a re-check runs', () => {
+    setHook({ data: { alerts: [], failed: ['News'] }, isFetching: true })
+    render(<AlertsSection onOpenTab={() => {}} />)
+    const btn = within(screen.getByRole('alert')).getByRole('button')
+    expect(btn).toBeDisabled()
+    expect(btn).toHaveTextContent('Checking…')
+  })
 })

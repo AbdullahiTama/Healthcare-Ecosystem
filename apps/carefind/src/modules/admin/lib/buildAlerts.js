@@ -9,8 +9,8 @@ export const ALERT_LABELS = [
   ['news', 'News'],
 ]
 
-const rowsOf = (source) => (source?.status === 'ok' && Array.isArray(source.data) ? source.data : [])
-const pending = (rows) => rows.filter(r => r.status === 'pending')
+const rowsOf = (source) => (source?.status === 'ok' && Array.isArray(source.data) ? source.data.filter(r => r && typeof r === 'object') : [])
+const pending = (rows) => rows.filter(r => r?.status === 'pending')
 
 // Turns the independently settled sources into the alert list. The mapping is
 // the one the legacy useAdminData `notifications` block used, plus `failed`:

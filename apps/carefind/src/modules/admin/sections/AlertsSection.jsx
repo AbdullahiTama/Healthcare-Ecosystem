@@ -1,6 +1,7 @@
 import {
   Bell, Shield, Building2, AlertTriangle, DollarSign, ClipboardList, Newspaper, CalendarClock, ChevronRight,
 } from 'lucide-react'
+import { Button } from '@care-ecosystem/design-system/components/ui'
 import { useAlerts } from '../hooks/useAlerts'
 import { useAdmin } from '../provider/AdminProvider.jsx'
 import { isAllowed } from '../navigation'
@@ -50,10 +51,11 @@ function AlertCard({ alert, severity, label, canOpen, onOpen }) {
 // the screen says which could not be checked and never claims "all clear"
 // unless every source loaded and nothing is pending.
 export default function AlertsSection({ onOpenTab }) {
-  const { data, isLoading, isError, refetch } = useAlerts()
+  const { data, isLoading, isError, isFetching, refetch } = useAlerts()
   const { permissions } = useAdmin()
 
   const failedAll = !data && isError
+  const stale = !!data && isError
   const loading = !data && !failedAll && isLoading
   const alerts = data?.alerts || []
   const failed = data?.failed || []
@@ -63,7 +65,7 @@ export default function AlertsSection({ onOpenTab }) {
     body = (
       <div role="alert" className="adm-notice">
         Couldn't check alerts.{' '}
-        <button type="button" className="adm-btn-reset adm-retry" onClick={() => refetch()}>Retry</button>
+        <Button variant="ghost" size="sm" onClick={() => refetch()} loading={isFetching} loadingText="Checking…">Retry</Button>
       </div>
     )
   } else if (loading || !data) {
@@ -71,10 +73,16 @@ export default function AlertsSection({ onOpenTab }) {
   } else {
     body = (
       <>
+        {stale && (
+          <div role="status" className="adm-live-warn">
+            <span>Couldn't refresh, showing the last loaded data.</span>
+            <Button variant="ghost" size="sm" aria-label="Retry refreshing alerts" onClick={() => refetch()} loading={isFetching} loadingText="Checking…">Retry</Button>
+          </div>
+        )}
         {failed.length > 0 && (
           <div role="alert" className="adm-notice adm-panel">
             {`Couldn't check: ${failed.join(', ')}. Items of these kinds may be waiting. `}
-            <button type="button" className="adm-btn-reset adm-retry" onClick={() => refetch()}>Retry</button>
+            <Button variant="ghost" size="sm" onClick={() => refetch()} loading={isFetching} loadingText="Checking…">Retry</Button>
           </div>
         )}
         {alerts.length === 0 && (

@@ -1,5 +1,5 @@
 import { CheckCircle, BarChart3, Clock } from 'lucide-react'
-import { Button, Empty } from '@care-ecosystem/design-system/components/ui'
+import { Empty } from '@care-ecosystem/design-system/components/ui'
 import { useSearchAnalytics } from '../hooks/useSearchAnalytics'
 import { tallyTerms, demandGaps } from '../lib/searchTally'
 import MetricStrip from '../ui/MetricStrip.jsx'
@@ -47,6 +47,7 @@ function Panel({ id, title, subtitle, noun, query, isEmpty, emptyIcon, emptyText
 export default function SearchesSection() {
   const { data, isLoading, isError, refetch } = useSearchAnalytics()
   const failed = !data && isError
+  const stale = !!data && isError
   const loading = !data && !failed && isLoading
   const query = { failed, loading, refetch }
 
@@ -69,6 +70,13 @@ export default function SearchesSection() {
           <p className="adm-note">Track user search behavior and identify demand gaps. Based on the newest 300 searches.</p>
         </div>
       </header>
+
+      {stale && (
+        <div role="status" className="adm-live-warn">
+          <span>Couldn't refresh, showing the last loaded data.</span>
+          <button type="button" className="adm-btn-reset adm-retry" aria-label="Retry refreshing searches" onClick={() => refetch()}>Retry</button>
+        </div>
+      )}
 
       <MetricStrip items={cells} label="Search totals" />
 
@@ -109,7 +117,7 @@ export default function SearchesSection() {
             <li key={r.id} className="adm-srow">
               <span className="adm-srow-main adm-srow-stack">
                 <span>{r.query}</span>
-                <span className="adm-note">{r.category} · {userOf(r)}</span>
+                <span className="adm-note">{[r.category, userOf(r)].filter(Boolean).join(' · ')}</span>
               </span>
               <span className={`adm-sev ${r.found ? 'adm-sev--ok' : 'adm-sev--urgent'}`}>
                 {r.found ? `${r.results_count} found` : 'none'}
