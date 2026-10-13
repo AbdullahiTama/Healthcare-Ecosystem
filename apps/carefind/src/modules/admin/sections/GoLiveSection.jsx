@@ -33,7 +33,17 @@ function ShowList({ source, noun, emptyText, icon, retry, render }) {
   if (source.data.length === 0) {
     return <Empty icon={icon} message={emptyText} cause="none" />
   }
-  return <div className="adm-live-list adm-live-inset">{source.data.map(render)}</div>
+  return (
+    <>
+      {source.stale && (
+        <div role="alert" className="adm-live-warn adm-live-inset-warn">
+          <span>Couldn't refresh {noun}</span>
+          <Button variant="ghost" size="sm" onClick={retry} aria-label={`Retry refreshing ${noun}`}>Retry</Button>
+        </div>
+      )}
+      <div className="adm-live-list adm-live-inset">{source.data.map(render)}</div>
+    </>
+  )
 }
 
 export default function GoLiveSection() {

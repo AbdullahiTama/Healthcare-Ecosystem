@@ -94,4 +94,33 @@ describe('useLiveShows', () => {
     await act(async () => { lastConfig().pollFn() })
     await waitFor(() => expect(repo.getActiveShows).toHaveBeenCalledTimes(2))
   })
+
+  it('keeps the last good list as stale when a refresh fails, per source', async () => {
+    const { result } = renderHook(() => useLiveShows(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.data).toBeDefined())
+    repo.getActiveShows.mockRejectedValue(new Error('boom'))
+    await act(async () => { await result.current.refetch() })
+    await waitFor(() => expect(result.current.data.active).toEqual({ status: 'ok', data: [{ id: 'a1' }], stale: true }))
+    expect(result.current.data.scheduled).toEqual({ status: 'ok', data: [{ id: 's1' }] })
+  })
+
+  it('a first-ever failure is an error, not stale', async () => {
+    repo.getActiveShows.mockRejectedValue(new Error('boom'))
+    const { result } = renderHook(() => useLiveShows(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.data).toBeDefined())
+    expect(result.current.data.active).toEqual({ status: 'error' })
+    await act(async () => { await result.current.refetch() })
+    expect(result.current.data.active).toEqual({ status: 'error' })
+  })
+
+  it('a success after a stale refresh returns fresh data without stale', async () => {
+    const { result } = renderHook(() => useLiveShows(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.data).toBeDefined())
+    repo.getActiveShows.mockRejectedValueOnce(new Error('boom'))
+    await act(async () => { await result.current.refetch() })
+    await waitFor(() => expect(result.current.data.active.stale).toBe(true))
+    repo.getActiveShows.mockResolvedValue([{ id: 'a2' }])
+    await act(async () => { await result.current.refetch() })
+    await waitFor(() => expect(result.current.data.active).toEqual({ status: 'ok', data: [{ id: 'a2' }] }))
+  })
 })

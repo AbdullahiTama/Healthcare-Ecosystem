@@ -92,4 +92,28 @@ describe('GoLiveSection', () => {
     expect(screen.getAllByRole('alert')).toHaveLength(2)
     expect(screen.queryByText(/^No /)).toBeNull()
   })
+
+  it('keeps the live cards on screen with a retry warning when a refresh of the live list failed', () => {
+    shows.result = result({ status: 'ok', data: [{ id: 'a1', title: 'Show A' }], stale: true }, ok([]))
+    render(<GoLiveSection />)
+    const region = screen.getByRole('region', { name: /Currently live/ })
+    expect(within(region).getByRole('alert')).toHaveTextContent("Couldn't refresh live shows")
+    expect(screen.getAllByTestId('live-card')).toHaveLength(1)
+    expect(screen.queryByText('No live shows right now')).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Currently live (1)' })).toBeInTheDocument()
+    expect(shows.panelProps.at(-1)).toEqual({ liveCount: 1 })
+    fireEvent.click(within(region).getByRole('button', { name: 'Retry refreshing live shows' }))
+    expect(shows.result.refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the scheduled cards on screen with a retry warning when a refresh failed', () => {
+    shows.result = result(ok([]), { status: 'ok', data: [{ id: 's1', title: 'Later' }], stale: true })
+    render(<GoLiveSection />)
+    const region = screen.getByRole('region', { name: 'Scheduled shows' })
+    expect(within(region).getByRole('alert')).toHaveTextContent("Couldn't refresh scheduled shows")
+    expect(screen.getAllByTestId('scheduled-card')).toHaveLength(1)
+    expect(screen.queryByText('No scheduled shows')).toBeNull()
+    fireEvent.click(within(region).getByRole('button', { name: 'Retry refreshing scheduled shows' }))
+    expect(shows.result.refetch).toHaveBeenCalledTimes(1)
+  })
 })
