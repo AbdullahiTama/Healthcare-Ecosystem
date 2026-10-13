@@ -565,9 +565,10 @@ Phase 5b (system tabs; commits cbf8b31 through 9f4e1af on `feat/carefind-admin-p
     `is_active` and does not revoke the Supabase session; `delete_admin_role` deletes only the role row
     (it refuses system roles and does not touch `admin_users`).
 82. `list_staff` is super-admin only but its failure was turned into `[]`, so a non-super admin with the
-    Teams permission saw "No members yet" for every team. **Fixed**: an explicit restricted state, no
-    `list_staff` call is made for a non-super admin, and "No members yet" is said only when staff really
-    loaded.
+    Teams permission saw "No members yet" for every team. **Fixed in part**: the Teams section shows an
+    explicit restricted state and makes no `list_staff` call for a non-super admin (`AdminShell`'s
+    `useAdminData` still requests it for every admin), and "No members yet" is said only when staff
+    really loaded and the rows carry team ids (finding 91).
 83. `create_staff` accepts any `newRole` string including `super_admin`, and `update_admin_role` has no
     `is_system` check, so a super admin can edit a system role's permissions. The UI offers neither; the
     server still allows both (documented, not changed).
@@ -597,6 +598,20 @@ Phase 5b (system tabs; commits cbf8b31 through 9f4e1af on `feat/carefind-admin-p
     normalises to `super_admin`.
 90. As finding 83, the `create_staff` action accepts `super_admin` as `newRole`. The client refuses it in
     both `createStaff` and `assignRole` (and never offers it), but the server does not.
+91. `list_staff` (`admin-auth.js`, ~line 145) selects only `id, email, full_name, role, is_active,
+    last_login, created_at`: no `team_id` and no `role_id`. Every staff row therefore arrives without a
+    team, so "who is on which team" cannot be shown from it. The console now treats a loaded, non-empty
+    staff list in which no row has a `team_id` key as "membership unavailable": each team says "Team
+    membership isn't available yet" and the staff table and drawer say "Not provided by the server" (never
+    "No members yet" or "No team"). Rows that do carry `team_id` (including null) keep the normal logic.
+    The owner should add `team_id` (and `role_id`) to the select; until then the console says membership
+    is unavailable. The legacy tab had the same blind spot and showed false empty teams.
+92. `toggle_staff` ignores the error of its update and always returns `{ success: true }`, so a failed
+    activate/deactivate (for example a database error or a staff id that matches no row) reports success.
+    Also `list_staff`, `list_teams` and `list_admin_roles` return `data || []` and never look at the
+    query error, so the client's rule that a failed read is never shown as empty cannot hold for database
+    errors on those three actions (the same family as findings 27, 59 and 76). Documented, not changed;
+    the console cannot tell these cases apart.
 
 Phase 5b behaviour changes from legacy:
 
@@ -611,10 +626,25 @@ Phase 5b behaviour changes from legacy:
 - Audit entries are written for staff, team and role changes. The create-staff password lives only in the
   form's state, is cleared after every attempt, and appears in no audit entry, toast or log.
 - Create staff: password minimum 8 on the client (the server has none); a failure keeps the other fields.
-  `roleId` is sent for custom roles.
+  `roleId` is sent for custom roles; `createStaff` trusts the caller to pass the role row matching `role`
+  (the same gap as `assignRole`'s `roleName`). While the password is typed it is in the input's own
+  `value` attribute (React keeps it in sync); it is never rendered as text, in a title, label or data
+  attribute, and it is cleared after every attempt.
 - The roles panel shows and edits each role's effective access with the shared permission grid; system
   roles are read-only; deleting a role needs a confirmation whose wording makes no claim about staff on
   it; a description-only edit sends no permissions.
+- A non-super admin is not offered team creation (the form is for super admins only; the server refuses
+  `create_team` for them anyway). Staff problems are alerted once: the staff directory owns the failed or
+  stale alert and Retry; the teams panel says only "Members unavailable" (failed) or one note "Members
+  are visible to super admins" (restricted).
+- Super admins are listed with everyone else: the spec's "super admins in their own band" was dropped. A
+  super admin can deactivate or demote another super admin, and the console can never promote anyone
+  back (finding 87), so both confirmations then add "They can't be made super admin again from the
+  console."
+- A new custom role may not be named like a system role (moderator, verification_officer,
+  business_manager, support_agent, analytics_manager) or super_admin once normalised: "That role name is
+  reserved".
+- The create-team form has the same in-flight guard as the other forms and native `required`.
 - Sponsored Tasks: the compensation must be a positive whole number (legacy sent the raw field);
   validation is in both the screen and the hook; a failure keeps the form; a result that arrives after
   the screen has gone is toasted. The list is a real read (failed, empty and stale are different states).
@@ -627,9 +657,9 @@ Phase 5b known limits (not fixed):
 - The in-flight tests mock the hook, so a regression to per-editor hook instances (which would defeat
   the shared guard) would not be caught by the component tests.
 - There is no password reset or invite flow (finding 85).
-- Heading outline: Sponsored Tasks is h1 then h2s. Teams & Staff is h1, then h3 per team with no h2
-  above them (TeamsPanel), h2 for Staff and Roles, and h3 for the create forms: usable, but the teams
-  list has no h2 of its own.
+- Heading outline: Sponsored Tasks is h1 then h2s. Teams & Staff is not a clean outline: in page order
+  it is h1, an h3 per team (no h2 above them), h3 "Create staff account", h2 "Staff", h2 "Roles", h3
+  "Create a role".
 
 Phase 5a behaviour changes from legacy:
 
@@ -742,7 +772,7 @@ mocked transports, not run against the live backend.
 Phase 5b: unit and component tests cover `useTeamsData`, `useStaffActions`, `useTasksData` and
 `useTaskActions`, `capped`, `normName`, `PermissionMatrix`, `TeamsPanel`, `StaffDirectory`,
 `CreateStaffPanel`, `RolesPanel`, `SourceNotice`, `TeamsSection`, `TasksSection` and the panel routing
-test for the two tabs. At 9f4e1af the admin suite (82 files, 1119 tests) passed, the build succeeds and
+test for the two tabs. At 7cec1e8 the admin suite (83 files, 1142 tests) passed, the build succeeds and
 lint reports 0 errors. The full vitest suite has NOT been run for 5b. Responsive layout at 375, 390, 768,
 1024, 1440 and 1920 has NOT been measured in a browser (no admin session was available). Behaviour against
 the live admin has NOT been exercised: the staff and role actions, the confirmations and the audit entries
