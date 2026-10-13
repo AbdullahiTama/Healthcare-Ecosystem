@@ -24,6 +24,8 @@ import AuditLogSection from './sections/AuditLogSection.jsx'
 import SearchesSection from './sections/SearchesSection.jsx'
 import DrugIntelSection from './sections/DrugIntelSection.jsx'
 import ErrorsSection from './sections/ErrorsSection.jsx'
+import TeamsSection from './sections/TeamsSection.jsx'
+import TasksSection from './sections/TasksSection.jsx'
 import { ModerationProvider } from './stores/moderationStore'
 import LegacyTabHost from './legacy/LegacyTabHost.jsx'
 import { isAllowed } from './navigation'
@@ -61,6 +63,8 @@ function ActiveSection({ tab, setTab }) {
   if (tab === 'searches') return <SearchesSection />
   if (tab === 'drugs') return <DrugIntelSection />
   if (tab === 'errors') return <ErrorsSection />
+  if (tab === 'teams') return <TeamsSection />
+  if (tab === 'tasks') return <TasksSection />
   return <LegacyTabHost tab={tab} setTab={setTab} />
 }
 

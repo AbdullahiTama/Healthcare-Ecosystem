@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { callAdminAuth } from '../adminApi'
 import { useAdmin } from '../provider/AdminProvider.jsx'
 import { bestEffort } from '../lib/bestEffort'
+import { capped } from '../lib/capped'
 import { uploadToBucket } from '../lib/uploadMedia'
 
 // The live show handlers that used to live in LegacyTabHost, calling the same
@@ -31,14 +32,7 @@ import { uploadToBucket } from '../lib/uploadMedia'
 // controls disabled for good. `busyKeys` and `isBusy(action, targetId)`
 // drive the UI; `busy` is the action name of the oldest running key, or null.
 
-// Waits for `promise`, but at most `ms`; the timer is cleared when the promise
-// settles first, so none leaks.
 const REFRESH_CAP_MS = 10000
-const capped = (promise, ms) => {
-  let timer
-  const cap = new Promise(resolve => { timer = setTimeout(resolve, ms) })
-  return Promise.race([promise, cap]).finally(() => clearTimeout(timer))
-}
 
 export const slideContent = (url, num, total) => `${url}|||${num}|||${total}`
 

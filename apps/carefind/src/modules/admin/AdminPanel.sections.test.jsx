@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 
-// AdminPanel's routing of the Phase 2a, 2b, 3, 4a, 4b and 5a tabs. The sections, the shell and
+// AdminPanel's routing of the Phase 2a, 2b, 3, 4a, 4b, 5a and 5b tabs. The sections, the shell and
 // the provider are stubbed so the test exercises only AdminPanel's own choice
 // of section and its permission gate (`isAllowed` from the real navigation).
 // The stub shell lists only what `visibleGroups` lets the role see, as the real
@@ -53,6 +53,8 @@ vi.mock('./sections/AuditLogSection.jsx', () => ({ default: () => <h1>Audit log<
 vi.mock('./sections/SearchesSection.jsx', () => ({ default: () => <h1>Search Analytics</h1> }))
 vi.mock('./sections/DrugIntelSection.jsx', () => ({ default: () => <h1>Drug Intelligence</h1> }))
 vi.mock('./sections/ErrorsSection.jsx', () => ({ default: () => <h1>Error Inbox</h1> }))
+vi.mock('./sections/TeamsSection.jsx', () => ({ default: () => <h1>Teams & Staff</h1> }))
+vi.mock('./sections/TasksSection.jsx', () => ({ default: () => <h1>Sponsored Tasks</h1> }))
 vi.mock('./legacy/LegacyTabHost.jsx', () => ({ default: ({ tab }) => <h1>Legacy {tab}</h1> }))
 
 import AdminPanel from './AdminPanel.jsx'
@@ -79,6 +81,8 @@ const TABS = [
   { nav: 'Searches', key: 'searches', heading: 'Search Analytics' },
   { nav: 'Drug intel', key: 'drugs', heading: 'Drug Intelligence' },
   { nav: 'Errors', key: 'errors', heading: 'Error Inbox' },
+  { nav: 'Teams', key: 'teams', heading: 'Teams & Staff' },
+  { nav: 'Tasks', key: 'tasks', heading: 'Sponsored Tasks' },
 ]
 
 const nav = () => within(screen.getByRole('navigation', { name: 'Admin sections' }))
@@ -86,7 +90,7 @@ const heading = () => screen.getByRole('heading', { level: 1 })
 
 beforeEach(() => { admin.permissions = {} })
 
-describe('AdminPanel: the Phase 2a, 2b, 3, 4a, 4b and 5a tabs', () => {
+describe('AdminPanel: the Phase 2a, 2b, 3, 4a, 4b, 5a and 5b tabs', () => {
   it('starts on the Overview', () => {
     render(<AdminPanel />)
     expect(heading()).toHaveTextContent('Overview')
