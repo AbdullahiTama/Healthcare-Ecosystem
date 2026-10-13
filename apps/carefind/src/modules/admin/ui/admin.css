@@ -160,3 +160,14 @@ button.adm-item:hover { background: var(--adm-line-soft); }
 .adm-live-avatar { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; font-size: 12px; font-weight: 800; color: #fff; background: var(--teal-deep, #0e6f5a); }
 .adm-live-guest-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--adm-ink); overflow-wrap: anywhere; }
 .adm-live-guest-check { width: 20px; height: 20px; flex-shrink: 0; }
+
+/* Audit log */
+.adm-audit-action { display: inline-flex; align-items: center; gap: 8px; }
+.adm-audit-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.adm-audit-dot--danger { background: var(--adm-urgent); }
+.adm-audit-dot--success { background: var(--adm-ok); }
+.adm-audit-dot--warning { background: var(--adm-warn); }
+.adm-audit-dot--info { background: var(--adm-info); }
+.adm-audit-dates { flex: 1 1 260px; min-width: 0; }
+.adm-audit-heading { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.adm-audit-pre { margin: 0; overflow-x: auto; }
