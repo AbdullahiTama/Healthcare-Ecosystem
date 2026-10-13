@@ -128,8 +128,9 @@ describe('StaffDirectory table', () => {
     expect(within(ada).getByText('2d ago')).toBeInTheDocument()
     expect(within(bola).getByText('support agent')).toBeInTheDocument()
     expect(within(bola).getByText('Suspended')).toBeInTheDocument()
-    // No sign-in and an unreadable date are both an em dash; no team is too.
-    expect(within(bola).getAllByText('—')).toHaveLength(2)
+    // No sign-in is an em dash; no team says so.
+    expect(within(bola).getAllByText('—')).toHaveLength(1)
+    expect(within(bola).getByText('No team')).toBeInTheDocument()
     expect(within(chi).getByText('—')).toBeInTheDocument()
     expect(within(chi).queryByText(/Never|Unknown/)).not.toBeInTheDocument()
   })
@@ -404,5 +405,27 @@ describe('StaffDirectory fails closed when the signed-in admin is unknown', () =
     const other = openMember('Bola Eze')
     expect(within(other).getByRole('button', { name: 'Reactivate' })).toBeInTheDocument()
     expect(within(other).queryByText(/until your session loads|own account/)).not.toBeInTheDocument()
+  })
+})
+
+describe('StaffDirectory team column when teams may not have loaded', () => {
+  it.each([
+    ['error', { status: 'error' }],
+    ['loading', undefined],
+    ['restricted', { status: 'restricted' }],
+  ])('a member with a team shows Unavailable, never a dash, when teams is %s', (_n, bad) => {
+    renderDir({ teams: bad })
+    const [, ada, bola] = screen.getAllByRole('row')
+    expect(within(ada).getByText('Unavailable')).toBeInTheDocument()
+    // No team_id is still "No team": that is known without the teams list.
+    expect(within(bola).getByText('No team')).toBeInTheDocument()
+    const dialog = openMember('Ada Obi')
+    expect(within(dialog).getByText('Unavailable')).toBeInTheDocument()
+  })
+
+  it('a team_id missing from loaded teams shows Unknown team', () => {
+    renderDir({ teams: { status: 'ok', data: [{ id: 'other', name: 'Other' }] } })
+    expect(within(screen.getAllByRole('row')[1]).getByText('Unknown team')).toBeInTheDocument()
+    expect(within(openMember('Ada Obi')).getByText('Unknown team')).toBeInTheDocument()
   })
 })

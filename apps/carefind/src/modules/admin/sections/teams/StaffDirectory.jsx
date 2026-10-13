@@ -111,7 +111,12 @@ export default function StaffDirectory({ staff, roles, teams, currentAdminId, on
 
   const rows = useMemo(() => (isOk(staff) ? staff.data : []), [staff])
   const teamNames = useMemo(() => new Map((isOk(teams) ? teams.data : []).map(t => [t.id, t.name])), [teams])
-  const teamOf = (s) => (s.team_id && teamNames.get(s.team_id)) || '—'
+  // A failed or unloaded teams read is never shown as "no team".
+  const teamOf = (s) => {
+    if (!s.team_id) return 'No team'
+    if (!isOk(teams)) return 'Unavailable'
+    return teamNames.get(s.team_id) || 'Unknown team'
+  }
 
   // The drawer shows the row's fresh data while it is listed, else the last snapshot.
   const fresh = openedId == null ? null : rows.find(r => r.id === openedId) || null
