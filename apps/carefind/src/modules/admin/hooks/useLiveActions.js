@@ -21,7 +21,8 @@ import { uploadToBucket } from '../lib/uploadMedia'
 // is already running resolves { ok: false, error: 'Already running' } with no
 // server call, so a double click cannot post or end twice. Different keys may
 // overlap (hide a comment while a slide uploads). The key covers uploads too and
-// is always released in `finally`. `busyKeys` and `isBusy(action, targetId)`
+// is held until the server call and the list refresh have both finished (the
+// refresh is awaited, never able to fail the action), then released in `finally`. `busyKeys` and `isBusy(action, targetId)`
 // drive the UI; `busy` is the action name of the oldest running key, or null.
 
 export const slideContent = (url, num, total) => `${url}|||${num}|||${total}`
@@ -47,11 +48,15 @@ export function useLiveActions() {
       outcome = await work()
     } catch (err) {
       outcome = { result: { ok: false, error: err?.message || String(err) }, changed: false }
+    }
+    // The key is held until the refresh has landed: while the card is still
+    // shown, a second click must not re-send the server action.
+    try {
+      if (outcome.changed) await bestEffort(`refreshing after ${name}`, invalidateAdmin)
     } finally {
       running.current.delete(key)
       setBusyKeys([...running.current])
     }
-    if (outcome.changed) bestEffort(`refreshing after ${name}`, invalidateAdmin)
     if (outcome.result.ok && success) bestEffort(`toasting ${name}`, () => showToast(success, { type: 'success' }))
     return outcome.result
   }, [showToast, invalidateAdmin])

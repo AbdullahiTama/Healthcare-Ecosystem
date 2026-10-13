@@ -326,3 +326,33 @@ describe('in-flight guard', () => {
     ])
   })
 })
+
+describe('the guard is held until the refresh has landed', () => {
+  const deferred = () => { let resolve, reject; const p = new Promise((res, rej) => { resolve = res; reject = rej }); return { p, resolve, reject } }
+
+  it('a second endShow during the refresh is refused, and the guard is released afterwards', async () => {
+    const refresh = deferred()
+    admin.invalidateAdmin.mockImplementation(() => refresh.p)
+    const { result } = setup()
+    let first, second
+    act(() => { first = result.current.endShow('a') })
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(admin.invalidateAdmin).toHaveBeenCalledTimes(1)
+    expect(result.current.isBusy('endShow', 'a')).toBe(true)
+    await act(async () => { second = await result.current.endShow('a') })
+    expect(second).toEqual({ ok: false, error: 'Already running' })
+    expect(callAdminAuth).toHaveBeenCalledTimes(1)
+    await act(async () => { refresh.resolve(); await first })
+    expect(result.current.isBusy('endShow', 'a')).toBe(false)
+    expect(await run(() => result.current.endShow('a'))).toEqual({ ok: true })
+  })
+  it('a rejecting refresh still resolves { ok: true } and releases the guard', async () => {
+    admin.invalidateAdmin.mockImplementation(() => Promise.reject(new Error('refresh broke')))
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result } = setup()
+    expect(await run(() => result.current.startScheduled('s'))).toEqual({ ok: true })
+    expect(result.current.busyKeys).toEqual([])
+    expect(logged).toHaveBeenCalled()
+    logged.mockRestore()
+  })
+})
