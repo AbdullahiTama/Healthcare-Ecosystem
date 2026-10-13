@@ -19,6 +19,11 @@ import StoriesSection from './sections/StoriesSection.jsx'
 import NewsSection from './sections/NewsSection.jsx'
 import PromotionsSection from './sections/PromotionsSection.jsx'
 import GoLiveSection from './sections/GoLiveSection.jsx'
+import AlertsSection from './sections/AlertsSection.jsx'
+import AuditLogSection from './sections/AuditLogSection.jsx'
+import SearchesSection from './sections/SearchesSection.jsx'
+import DrugIntelSection from './sections/DrugIntelSection.jsx'
+import ErrorsSection from './sections/ErrorsSection.jsx'
 import { ModerationProvider } from './stores/moderationStore'
 import LegacyTabHost from './legacy/LegacyTabHost.jsx'
 import { isAllowed } from './navigation'
@@ -51,6 +56,11 @@ function ActiveSection({ tab, setTab }) {
   if (tab === 'news') return <NewsSection />
   if (tab === 'promotions') return <PromotionsSection />
   if (tab === 'golive') return <GoLiveSection />
+  if (tab === 'notifications') return <AlertsSection onOpenTab={setTab} />
+  if (tab === 'audit_log') return <AuditLogSection />
+  if (tab === 'searches') return <SearchesSection />
+  if (tab === 'drugs') return <DrugIntelSection />
+  if (tab === 'errors') return <ErrorsSection />
   return <LegacyTabHost tab={tab} setTab={setTab} />
 }
 

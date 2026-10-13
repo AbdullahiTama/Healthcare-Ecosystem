@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 
-// AdminPanel's routing of the Phase 2a, 2b, 3, 4a and 4b tabs. The sections, the shell and
+// AdminPanel's routing of the Phase 2a, 2b, 3, 4a, 4b and 5a tabs. The sections, the shell and
 // the provider are stubbed so the test exercises only AdminPanel's own choice
 // of section and its permission gate (`isAllowed` from the real navigation).
 // The stub shell lists only what `visibleGroups` lets the role see, as the real
@@ -48,6 +48,11 @@ vi.mock('./sections/StoriesSection.jsx', () => ({ default: () => <h1>Stories</h1
 vi.mock('./sections/NewsSection.jsx', () => ({ default: () => <h1>News</h1> }))
 vi.mock('./sections/PromotionsSection.jsx', () => ({ default: () => <h1>Promotions</h1> }))
 vi.mock('./sections/GoLiveSection.jsx', () => ({ default: () => <h1>Go Live</h1> }))
+vi.mock('./sections/AlertsSection.jsx', () => ({ default: () => <h1>Notifications</h1> }))
+vi.mock('./sections/AuditLogSection.jsx', () => ({ default: () => <h1>Audit log</h1> }))
+vi.mock('./sections/SearchesSection.jsx', () => ({ default: () => <h1>Search Analytics</h1> }))
+vi.mock('./sections/DrugIntelSection.jsx', () => ({ default: () => <h1>Drug Intelligence</h1> }))
+vi.mock('./sections/ErrorsSection.jsx', () => ({ default: () => <h1>Error Inbox</h1> }))
 vi.mock('./legacy/LegacyTabHost.jsx', () => ({ default: ({ tab }) => <h1>Legacy {tab}</h1> }))
 
 import AdminPanel from './AdminPanel.jsx'
@@ -69,6 +74,11 @@ const TABS = [
   { nav: 'News', key: 'news', heading: 'News' },
   { nav: 'Promotions', key: 'promotions', heading: 'Promotions' },
   { nav: 'Go live', key: 'golive', heading: 'Go Live' },
+  { nav: 'Alerts', key: 'notifications', heading: 'Notifications' },
+  { nav: 'Audit log', key: 'audit_log', heading: 'Audit log' },
+  { nav: 'Searches', key: 'searches', heading: 'Search Analytics' },
+  { nav: 'Drug intel', key: 'drugs', heading: 'Drug Intelligence' },
+  { nav: 'Errors', key: 'errors', heading: 'Error Inbox' },
 ]
 
 const nav = () => within(screen.getByRole('navigation', { name: 'Admin sections' }))
@@ -76,7 +86,7 @@ const heading = () => screen.getByRole('heading', { level: 1 })
 
 beforeEach(() => { admin.permissions = {} })
 
-describe('AdminPanel: the Phase 2a, 2b, 3, 4a and 4b tabs', () => {
+describe('AdminPanel: the Phase 2a, 2b, 3, 4a, 4b and 5a tabs', () => {
   it('starts on the Overview', () => {
     render(<AdminPanel />)
     expect(heading()).toHaveTextContent('Overview')
