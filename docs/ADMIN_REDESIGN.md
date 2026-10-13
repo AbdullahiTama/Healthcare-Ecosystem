@@ -12,8 +12,10 @@ Code: `apps/carefind/src/modules/admin/`.
 | 2b | People: Users, Businesses | built (PR #24) (Users, Businesses) |
 | 3 | Finance: Revenue, Withdrawals, Orders, Money checks | built (PR #25) (Revenue, Orders, Withdrawals, Money checks) |
 | 4a | Content: Posts, Stories, News, Promotions | built (PR #26) (Posts, Stories, News, Promotions) |
-| 4b | Live: Go live | built on `feat/carefind-admin-phase4b` (Go live) |
-| 5 | System: Teams, Audit, Errors, Searches, Drug intel, Email templates, Shop; delete `legacy/` | not started |
+| 4b | Live: Go live | built (PR #27) (Go live) |
+| 5a | Insight: Alerts, Audit log, Searches, Drug intel, Errors | built on `feat/carefind-admin-phase5a` (Alerts, Audit log, Searches, Drug intel, Errors) |
+| 5b | System: Teams, staff and roles, Tasks | not started |
+| 5c | System: Shop, Email templates; delete `legacy/` and the dead hooks | not started |
 
 ## How the code is organised
 
@@ -26,7 +28,8 @@ sections/                  redesigned screens (OverviewSection, FeedRankingSecti
                            VerificationsSection, ClaimsSection, ReportsSection, ModerationSection,
                            UsersSection, BusinessesSection, RevenueSection, OrdersSection,
                            WithdrawalsSection, MoneyChecksSection, PostsSection, StoriesSection,
-                           NewsSection, PromotionsSection, GoLiveSection)
+                           NewsSection, PromotionsSection, GoLiveSection, AlertsSection,
+                           AuditLogSection, SearchesSection, DrugIntelSection, ErrorsSection)
 legacy/LegacyTabHost.jsx   screens not yet redesigned, with the props they always had
 lib/attention.js           the one builder for the Needs attention queue
 hooks/useOverviewData.js   Overview data, one settled result per source
@@ -47,6 +50,12 @@ hooks/useLiveShows.js          live and scheduled shows, one settled result per 
 hooks/useLiveControl.js        one show's control room (items, comments, stats), per show; realtime plus a 10 s poll
 hooks/useLiveActions.js        start, schedule, end, post, hide; upload failures stop the action; per-action in-flight guard
 hooks/useGuestSearch.js        server-side guest search for a live show (debounced)
+hooks/useAuditLog.js           audit log page: server-side action, type and date filters, paging by growing `limit`
+hooks/useSearchAnalytics.js    the newest 300 searches; a failed read is an error
+hooks/useAlerts.js             seven alert sources, each settled on its own, built by lib/buildAlerts
+hooks/useDrugReviews.js        explicit drug search; a late result never overwrites a newer one
+lib/buildAlerts.js             the alert derivation (legacy titles, severities, tab and role keys) plus `failed` labels
+lib/searchTally.js             `tallyTerms` (top 12) and `demandGaps` (top 15)
 sections/live/                 LiveShowCard (control room), ScheduledShowCard, StartShowPanel, mediaUrl
 lib/financeFormat.js       the legacy money maths (revenue, top-ups, coins to naira, masking), pinned by tests
 lib/bulkModeration.js      runBulk: bulk actions act only on the types their labels name
@@ -73,6 +82,20 @@ host's twelve live state variables, every live handler and the `useAdminLiveShow
 `useAdminLiveShows` in `hooks/queries.js` has no consumers now and is dead code until Phase 5.
 The shared recorder and uploader components (`VoiceRecorder`, `SlideUploader`, `VideoRecorder`,
 `VideoUploader`) are unchanged (finding 72).
+
+Phase 5a moved the insight tabs out of the host (commits bfb0343 through 51d2f8e): Alerts (route
+key `notifications`), Audit log, Searches, Drug intel and Errors. `LegacyTabHost` now holds only Tasks,
+Teams, Shop and Email templates (5b and 5c). Deleted: `tabs/DrugsTab.jsx`, `SearchesTab.jsx`,
+`NotificationsTab.jsx`, `ErrorsTab.jsx` and `components/AuditLog.jsx`. Removed from the host: the six
+drug state variables, `searchDrugs`, the `commerceRepository` import and the `useAdminSearchLogs` call.
+Left in place on purpose:
+
+- `useAdminSearchLogs` in `hooks/queries.js` has no consumers: dead code until 5c.
+- The `notifications` derivation still also lives in `useAdminData` (`queries.js`, ~line 925) and in
+  `dashboardRepository.getNotifications` (finding 6); `useAdminData` is still read by Teams, Tasks and
+  Shop, so the block goes with 5b/5c. `lib/buildAlerts.js` is now the Alerts screen's builder.
+- `LegacyTabHost`'s `setTab` prop is unused now (only the deleted Notifications tab used it);
+  `AdminPanel` still passes it. Drop it in 5b or 5c.
 
 Session checks are unchanged: `AdminProvider` calls `getSession` and the server's
 `verify` action, and renders nothing without a verified admin. `permissions` only
@@ -451,6 +474,89 @@ Phase 4b behaviour changes from legacy:
   (start, schedule, end, cancel, post, hide). Documented gap, not changed.
 - `uploadToBucket` gained an optional `{ contentType }` (3336ff8), used for the trailer.
 
+Phase 5a (insight tabs; commits bfb0343 through 51d2f8e on `feat/carefind-admin-phase5a`):
+
+73. The Errors tab called `list_errors` and `resolve_error`, which exist nowhere in
+    `apps/carefind/api/_handlers/admin-auth.js` (grep finds neither action name in `api/` or `src/`
+    outside the replaced screen's comment). It could only ever show a load error, which could pass for
+    an empty inbox. **Replaced** (6476d27) by an honest unavailable state ("The error inbox isn't
+    connected yet") that makes no network call (the test spies on `callAdminAuth` and `fetch`).
+    Building the backend is separate work that needs approval.
+74. The audit log, searches and alerts turned a failed read into an empty list ("No audit log
+    entries", "No searches yet"), and Alerts could say "All clear" while a source could not be
+    checked (it was built from `useAdminData`, finding 3). **Fixed** (bfb0343, 5fb2410, 29265f3):
+    each failure is an error with Retry, and Alerts reads seven sources independently.
+75. The audit log loaded the newest rows and filtered them in the browser although
+    `list_audit_logs` filters `action`, `target_type` and dates on the server, and the search
+    analytics tally only the newest 300 searches while presented as overall. **Fixed** (bfb0343,
+    48def17): the filters go to the server, and the screens state their windows. The endpoint has no
+    offset, so page N asks for the first (N+1)*25+1 rows, capped at 200 by the client (the server
+    uses `limit(lim || 100)` and has no cap of its own); at the cap the screen says "Showing the
+    newest 200 entries" and older rows cannot be reached from it.
+76. `list_audit_logs` and `list_search_logs` only check that the token is valid, not the admin's
+    role, so any signed-in admin can read the audit trail and all search text (finding 1). Also,
+    `list_search_logs` ignores its query error and returns `[]` (as findings 27 and 59 describe for
+    other lists), so a failed query reaches the client as an empty window and the client cannot tell.
+    Documented, not changed (backend out of scope).
+77. Drug intel searched products by name (`searchProducts` returns at most 5), named only the FIRST
+    match, and loaded the reviews of ALL matches, so the heading could name one product over the
+    reviews of others; a failed lookup was not handled. **Fixed** (a25a4f0, 2c53b40, 73eec35): the
+    reviews are still pooled across all matching products, as legacy did, and the screen now says so
+    ("Reviews for N products matching “<term>”", "Reviews from all N matching products are
+    combined"; a single match is named). Filters reset when a different term is searched, a failed
+    search shows Retry (never "No medication matches"), and reviews without a numeric rating are
+    listed but excluded from the sentiment counts and the average (a null rating used to count as
+    negative).
+78. The legacy audit and error tabs sent `localStorage.admin_token` in the payload (a dead field,
+    see finding 10). Dropped; the new hooks send no `token`.
+79. The withdrawal alert converts `amount * 200` to naira with a hard-coded rate in the client
+    (`lib/buildAlerts.js`; the same maths is in `hooks/queries.js` and
+    `dashboardRepository.getNotifications`, finding 12). **Kept exactly as legacy** (financial
+    maths not changed). The rate is duplicated rather than sourced: the client repeats `200` in
+    several places (`financeFormat.nairaFromCoins`, `NAIRA_PER_COIN` in `subscriptions.js` and
+    `consultations.js`, `COIN_VALUE_NAIRA` in `Wallet.jsx`), while the server reads `coin_value_kobo`
+    through `getFinancialConfig` (seeded as 20000 kobo in
+    `supabase/migrations/carefind_20261003_payment_intents_foundation.sql`). If that config value is
+    ever changed, this alert and the Withdrawals screen would not follow it. Reported only; whether
+    the live row still holds 20000 was not checked.
+
+Phase 5a behaviour changes from legacy:
+
+- Audit log: action, target type and dates are sent to the server; the actor filter is client-side
+  over the loaded page, labelled "Filters the rows loaded", and when it hides every row of a loaded
+  page the table says "No entries on this page match this actor..." (a new optional `emptyNote` prop
+  on the shared `DirectoryTable`; default behaviour unchanged, a10687b). A server filter change returns
+  to page 1. Paging and the 200-row cap: finding 75. The CSV is one flat record per row (b95e115).
+- Searches states its window ("newest 300 searches") on the header and the metrics. Top terms, demand
+  gaps and recent searches keep the legacy calculation (12, 15 and 40 rows).
+- Alerts keeps the legacy derivation (titles, severities, tab and role keys) but builds it from
+  independently settled sources. If any could not be read it says "Couldn't check: <labels>" with
+  Retry and never "All clear"; it can still list alerts from the sources that loaded, and with none
+  pending says "Nothing pending in the sources that loaded". A card for a tab the role cannot open
+  renders without a link and says "Not available to your role" (UI courtesy only; the server decides).
+- A failed refresh of already loaded Searches or Alerts data keeps the data and shows "Couldn't
+  refresh, showing the last loaded data" with Retry (1303ce1). A first failure is a plain error.
+- Drug intel searches on the button or Enter (not per keystroke); see finding 77. Its CSV is flat and
+  is named after the product (or the search term when several products matched).
+- Errors makes no network call (finding 73).
+- No audit entries are written by these screens: they are read-only and perform no actions.
+
+Phase 5a known limits (not fixed):
+
+- The shared `exportCSV` (`ui/adminHelpers.js`) writes cells with `JSON.stringify`, so quotes are
+  escaped as `\"` rather than doubled as RFC 4180 requires, and it has no spreadsheet formula guard.
+  This extends finding 63: the audit log CSV (actor names, metadata text) and the drug intel CSV
+  (review comments) are two more callers exposed to CSV injection, and a cell containing a quote may
+  parse wrongly in a strict reader. The one shared helper is the place to fix both.
+- The shared `MetricStrip` error cell always reads "Couldn't load · Retry", so two failed cells (for
+  example Searches' two) are indistinguishable to a screen reader. Needs a per-cell accessible name
+  in the shared component.
+- The audit action filter list is the legacy one (approve, reject, delete, suspend, resolve and the
+  three bulk verbs); a recorded verb outside it is visible only under "All actions". The actor shown
+  is `admin_users.full_name`, or "Admin" when the server could not resolve it.
+- Alerts' `notifications` derivation also still lives in `useAdminData` until 5b/5c; the dead
+  `useAdminSearchLogs` and the unused `setTab` prop are listed under How the code is organised.
+
 ## Verification state
 
 Phase 1: unit and component tests cover the queue builder, navigation, Overview data,
@@ -498,3 +604,13 @@ available). Realtime and live-show behaviour has NOT been exercised against a re
 realtime hook is mocked in the tests), and uploads were never run against the real `live-media`
 bucket (the storage client is mocked). The Retry and aria labels, the failure list and the
 confirmations are only unit-tested.
+
+Phase 5a: unit and component tests cover `useAuditLog`, `useSearchAnalytics`, `searchTally`,
+`useAlerts`, `buildAlerts`, `useDrugReviews`, `AuditLogSection`, `SearchesSection`, `AlertsSection`,
+`DrugIntelSection`, `ErrorsSection`, the `DirectoryTable` `emptyNote` prop and the panel routing test
+for the five tabs. At 51d2f8e the admin suite (68 files, 898 tests) passed, the build succeeds and
+lint reports 0 errors. The full vitest suite has NOT been run for 5a. Responsive layout at 375, 390,
+768, 1024, 1440 and 1920 has NOT been measured in a browser (no admin session was available).
+Behaviour against production data has NOT been exercised: the audit paging and its 200-row cap, the
+server filters, the seven alert sources and the drug search are read from the code and tested with
+mocked transports, not run against the live backend.
