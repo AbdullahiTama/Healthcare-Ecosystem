@@ -11,8 +11,8 @@ Code: `apps/carefind/src/modules/admin/`.
 | 2a | Trust queues: Verification, Claims, Reports, Moderation | built (PR #23) (Verification, Claims, Reports, Moderation) |
 | 2b | People: Users, Businesses | built (PR #24) (Users, Businesses) |
 | 3 | Finance: Revenue, Withdrawals, Orders, Money checks | built (PR #25) (Revenue, Orders, Withdrawals, Money checks) |
-| 4a | Content: Posts, Stories, News, Promotions | built on `feat/carefind-admin-phase4` (Posts, Stories, News, Promotions) |
-| 4b | Live: Go live | not started (Go live) |
+| 4a | Content: Posts, Stories, News, Promotions | built (PR #26) (Posts, Stories, News, Promotions) |
+| 4b | Live: Go live | built on `feat/carefind-admin-phase4b` (Go live) |
 | 5 | System: Teams, Audit, Errors, Searches, Drug intel, Email templates, Shop; delete `legacy/` | not started |
 
 ## How the code is organised
@@ -26,7 +26,7 @@ sections/                  redesigned screens (OverviewSection, FeedRankingSecti
                            VerificationsSection, ClaimsSection, ReportsSection, ModerationSection,
                            UsersSection, BusinessesSection, RevenueSection, OrdersSection,
                            WithdrawalsSection, MoneyChecksSection, PostsSection, StoriesSection,
-                           NewsSection, PromotionsSection)
+                           NewsSection, PromotionsSection, GoLiveSection)
 legacy/LegacyTabHost.jsx   screens not yet redesigned, with the props they always had
 lib/attention.js           the one builder for the Needs attention queue
 hooks/useOverviewData.js   Overview data, one settled result per source
@@ -43,6 +43,11 @@ hooks/usePostsDirectory.js     Posts page: server-side search, filters and pagin
 hooks/useContentLists.js       stories, news and promotions lists; a failed load is an error
 hooks/useNewsActions.js        approve, reject and delete news, one refresh per action
 hooks/useContentActions.js     create and delete stories and promotions
+hooks/useLiveShows.js          live and scheduled shows, one settled result per source; realtime plus a 15 s poll
+hooks/useLiveControl.js        one show's control room (items, comments, stats), per show; realtime plus a 10 s poll
+hooks/useLiveActions.js        start, schedule, end, post, hide; upload failures stop the action; per-action in-flight guard
+hooks/useGuestSearch.js        server-side guest search for a live show (debounced)
+sections/live/                 LiveShowCard (control room), ScheduledShowCard, StartShowPanel, mediaUrl
 lib/financeFormat.js       the legacy money maths (revenue, top-ups, coins to naira, masking), pinned by tests
 lib/bulkModeration.js      runBulk: bulk actions act only on the types their labels name
 repositories/transport.js  `or` filter op (every term quoted and escaped) and `likeContains`
@@ -52,16 +57,22 @@ ui/                        MetricStrip, SplitBar, ReviewQueue, ReviewDrawer, Dir
 
 The section list in the legacy host no longer includes the four trust tabs
 (Verification, Claims, Reports, Moderation) or Users and Businesses, and the host no
-longer holds Users or Businesses state. `users` stays in `useAdminData` for Go Live (guest
-picker); no screen reads the businesses or phone data from it any more. The Finance tabs (Revenue, Orders, Withdrawals, Money checks) have left the host too. `transactions`
+longer holds Users or Businesses state. The Go live guest picker now searches server-side, so
+`users` is no longer destructured in `LegacyTabHost`; no screen reads the businesses or phone data from it any more. The Finance tabs (Revenue, Orders, Withdrawals, Money checks) have left the host too. `transactions`
 and `withdrawals` still come from `useAdminData` for the Overview and notifications, while the Finance
 screens read through `useFinanceData`. `components/StatusDot` and `RowActions` remain because
 `ShopTab` uses them. The Content tabs (Posts, Stories, News, Promotions) have left the host too (af62a42).
-`LegacyTabHost` now holds only Go live and the Phase 5 tabs. `ModerationProvider` is no longer
+`LegacyTabHost` now holds only the Phase 5 tabs. `ModerationProvider` is no longer
 mounted by the host; `AdminPanel` mounts it only around the Moderation section. The legacy hooks
 `useAdminStories`, `useAdminNews` and `useAdminPromotions` in `hooks/queries.js` remain: the shell
 uses `useAdminNews` for the session-expired toast, and Phase 5 retires the rest. The Content
 screens read through `useContentLists`.
+
+Go live (Phase 4b) has left the host too (7e8d30b): `tabs/GoLiveTab.jsx` is deleted, along with the
+host's twelve live state variables, every live handler and the `useAdminLiveShows` call.
+`useAdminLiveShows` in `hooks/queries.js` has no consumers now and is dead code until Phase 5.
+The shared recorder and uploader components (`VoiceRecorder`, `SlideUploader`, `VideoRecorder`,
+`VideoUploader`) are unchanged (finding 72).
 
 Session checks are unchanged: `AdminProvider` calls `getSession` and the server's
 `verify` action, and renders nothing without a verified admin. `permissions` only
@@ -355,6 +366,91 @@ Phase 4a follow-ups and final-review corrections (fix commits 22e511b, 8359054, 
 - The Stories and Promotions sections do not validate the chosen file's type or size (the input
   only hints `accept="image/*"`); the bucket policy is the boundary (finding 60).
 
+Phase 4b (Go live; commits 3336ff8 through b0dcc00 on `feat/carefind-admin-phase4b`):
+
+65. `useAdminLiveShows` defaulted a failed read to `[]`, so a failed read looked like "no live
+    shows" and the admin could not see or end a live show. **Fixed** in `useLiveShows` (899842f,
+    89faeab): each source settles on its own and a failure shows "Couldn't load" with Retry.
+66. The control room loaded once on a button press and never refreshed (stale comments and stats
+    during a show), shared one set of state across all live shows, and had no error handling
+    (`loadLiveControl` was an unhandled rejection on failure). **Fixed** (a254fe2, 20dbe18):
+    `useLiveControl` is per show, subscribes to `live_comments` and `live_items` and polls every
+    10 s, and a failed refetch keeps the last good data with an inline Retry. The "Updated
+    HH:MM:SS" stamp only moves on a successful load, so a failed refetch cannot make stale data
+    look fresh. The control room is open on every live card (no "Load Control Room" button).
+67. A failed trailer upload scheduled the show without its trailer, and a failed live-image upload
+    dropped the image and cleared it from the form, silently. **Fixed** (115e014): either failure
+    stops the action, makes no server call, shows the error and keeps the form or draft. These are
+    the live half of finding 56.
+68. The guest picker filtered the newest 100 users in the browser and showed 30. **Fixed** (c399161)
+    with a debounced server-side `list_user_profiles` search (20 results; characters that break
+    the PostgREST `or` filter are replaced by spaces first, as in finding 30).
+69. Nothing stopped starting a second live show, and "Go live now" and "Start now" had no
+    confirmation although they publish a LIVE indicator to every user. **Confirmations added**
+    (3aa722c); "Go live now" also states how many other shows are already live. Starting a
+    second show is still allowed.
+70. The realtime subscriptions (`live_shows`, `live_comments`, `live_items`) run through the
+    admin's browser Supabase session and may be silently filtered by row level security (a
+    channel can connect and deliver nothing). A poll runs alongside realtime for that reason
+    (`pollAlways`: 15 s for shows, 10 s for the control room). Unverified without an admin
+    session.
+71. The gifts figure sums `gifts.coins` where `post_id = showId` through the browser client
+    (money-adjacent; kept as legacy; RLS could make it read low). Documented, not changed.
+72. The shared recorder and uploader components (`VoiceRecorder`, `SlideUploader`,
+    `VideoRecorder`, `VideoUploader`) ignore the result of their callback and do not catch a
+    throw, so when `postMedia` fails they still show the item as sent. **Mitigated** in the live
+    card (6455f45, f192904): a persistent, named, dismissible "Couldn't post <label>" failure list.
+    A failed slide is named by its page ("Slide 3 of 8") and clears when the same slide later
+    succeeds; voice and video attempts are numbered per card ("Voice note 2") and clear only on
+    Dismiss. Not fixed at the source because the components are shared with the live session and
+    the feed.
+
+Phase 4b behaviour changes from legacy:
+
+- "Go live now" and "Start now" ask for confirmation (finding 69); End and Cancel keep their
+  legacy confirmations.
+- A failed trailer or live-image upload stops scheduling or posting (finding 67). If an image
+  posts but its text then fails, only the text draft is kept.
+- Every live card has its control room open, per show, kept live by realtime plus polling
+  (findings 66, 70).
+- Failed lists show Retry, never empty text; the empty cases are stated plainly ("No live shows
+  right now", "No scheduled shows").
+- `useLiveActions` has a per-action in-flight guard (key `action:target`, covering uploads): a
+  repeat of the same action on the same target is refused ("Already running") with no server
+  call, while different actions (for example hiding a comment during a slide upload) can run
+  together (fdf9dd1). A media post is keyed by show and content, so a second distinct item posts
+  while one is in flight and only a true duplicate (same show and content) is refused. The key is
+  held until the server call and the list refresh have both finished (`invalidateAdmin` returns
+  its promise and `bestEffort` awaits it without ever failing the action), so End show, Start now
+  and Cancel cannot be clicked again while the card is still on screen. Posting and hiding
+  refresh only that show's control room (`['admin','live','control',showId]`; `hideComment`
+  takes an optional `{ showId }` and falls back to a full refresh without it); start, schedule,
+  end and cancel still refresh all admin data.
+- A failed refresh of the shows list keeps the cards on screen: when a source last loaded fine
+  and the new read fails, `useLiveShows` returns `{ status: 'ok', data: <previous>, stale: true }`
+  and the section shows "Couldn't refresh live shows" / "Couldn't refresh scheduled shows" with
+  Retry above the cards (composer drafts, the failed-media list and End show survive). A first
+  failure is still a plain error, a later success drops `stale`, and a stale live list still
+  counts toward the live total. Realtime and poll refreshes pass `cancelRefetch: false`, so they
+  no longer cancel a load in progress.
+- A stale list that is empty still shows the "Couldn't refresh" warning with Retry above the
+  empty text, so "No live shows right now" is never shown alone after a failed refresh. While
+  the live list is stale the section passes `liveCount` as `null` (the last-known number is not
+  trusted), so the confirmation says it could not check.
+- The wait for the list refresh is capped at 10 s (`Promise.race` with a timer cleared when the
+  refresh settles first): after the cap the guard key is released and the action's result is
+  unchanged.
+- The Go live confirmation names the number of other live shows; when the live list could not be
+  read (failed or still loading) the section passes `liveCount` as `null` and the confirmation
+  says "Couldn't check how many shows are already live." instead of implying none. The started
+  toast reads "Live show started. Its control room is under Currently live."
+- The legacy `postLiveItem` read `admin_token` from `localStorage`, which never sent a token. The
+  read is dropped; calls go through `callAdminAuth` like every other action.
+- Media in the control room and on scheduled shows is shown only for http(s) URLs (308801f).
+- Unchanged and unaudited: as in legacy, Phase 4b records no audit entries for live actions
+  (start, schedule, end, cancel, post, hide). Documented gap, not changed.
+- `uploadToBucket` gained an optional `{ contentType }` (3336ff8), used for the trailer.
+
 ## Verification state
 
 Phase 1: unit and component tests cover the queue builder, navigation, Overview data,
@@ -392,3 +488,13 @@ Phase 4a: unit and component tests cover `uploadMedia`, `usePostsDirectory`, `us
 and 1920 has NOT been measured in a browser (no admin session was available). Uploads were never
 exercised against real buckets (the storage client is mocked). The server handlers' behaviour
 (`list_posts`, `list_news`, `approve_news`) is read from the code, not exercised.
+
+Phase 4b: unit and component tests cover `uploadMedia` (contentType), `useLiveShows`,
+`useLiveControl`, `useLiveActions`, `useGuestSearch`, `LiveShowCard`, `ScheduledShowCard`,
+`StartShowPanel`, `GoLiveSection` and the panel routing test. At 7e8d30b the admin suite
+(56 files, 737 tests) passed. After the final-review and re-review fixes (b0dcc00) the admin suite is 57 files, 757 tests, the build succeeds and lint reports 0 errors. Responsive layout at
+375, 390, 768, 1024, 1440 and 1920 has NOT been measured in a browser (no admin session was
+available). Realtime and live-show behaviour has NOT been exercised against a real show (the
+realtime hook is mocked in the tests), and uploads were never run against the real `live-media`
+bucket (the storage client is mocked). The Retry and aria labels, the failure list and the
+confirmations are only unit-tested.

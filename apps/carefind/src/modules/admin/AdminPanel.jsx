@@ -18,6 +18,7 @@ import PostsSection from './sections/PostsSection.jsx'
 import StoriesSection from './sections/StoriesSection.jsx'
 import NewsSection from './sections/NewsSection.jsx'
 import PromotionsSection from './sections/PromotionsSection.jsx'
+import GoLiveSection from './sections/GoLiveSection.jsx'
 import { ModerationProvider } from './stores/moderationStore'
 import LegacyTabHost from './legacy/LegacyTabHost.jsx'
 import { isAllowed } from './navigation'
@@ -49,6 +50,7 @@ function ActiveSection({ tab, setTab }) {
   if (tab === 'stories') return <StoriesSection />
   if (tab === 'news') return <NewsSection />
   if (tab === 'promotions') return <PromotionsSection />
+  if (tab === 'golive') return <GoLiveSection />
   return <LegacyTabHost tab={tab} setTab={setTab} />
 }
 

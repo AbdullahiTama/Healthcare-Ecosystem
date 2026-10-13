@@ -42,7 +42,7 @@ export function AdminProvider({ children }) {
   const signingOut = useRef(false)
 
   const invalidateAdmin = useCallback(() => {
-    qc.invalidateQueries({ queryKey: ['admin'] })
+    return qc.invalidateQueries({ queryKey: ['admin'] })
   }, [qc])
 
   // Generic confirmation dialog: { title, consequence, confirmLabel, action }.

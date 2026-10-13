@@ -42,4 +42,25 @@ describe('uploadToBucket', () => {
     storage.upload.mockRejectedValue(new Error('network down'))
     expect(await uploadToBucket('promo-images', file(), 'promo')).toEqual({ ok: false, error: 'network down' })
   })
+
+  it('passes the contentType to the upload when one is given', async () => {
+    const f = file('trailer.mp4')
+    await uploadToBucket('live-trailers', f, 'trailer', { contentType: 'video/mp4' })
+    const ts = new Date('2026-10-12T10:00:00Z').getTime()
+    expect(storage.upload).toHaveBeenCalledWith(`trailer-${ts}.mp4`, f, { contentType: 'video/mp4' })
+  })
+
+  it('keeps the two-argument upload call with no options or empty options', async () => {
+    const f = file()
+    await uploadToBucket('story-images', f, 'story')
+    await uploadToBucket('story-images', f, 'story', {})
+    expect(storage.upload).toHaveBeenCalledTimes(2)
+    for (const call of storage.upload.mock.calls) expect(call).toHaveLength(2)
+  })
+
+  it('still returns the error when an upload with a contentType fails', async () => {
+    storage.upload.mockResolvedValue({ error: { message: 'Too large' } })
+    const out = await uploadToBucket('live-trailers', file('t.mp4'), 'trailer', { contentType: 'video/mp4' })
+    expect(out).toEqual({ ok: false, error: 'Too large' })
+  })
 })
