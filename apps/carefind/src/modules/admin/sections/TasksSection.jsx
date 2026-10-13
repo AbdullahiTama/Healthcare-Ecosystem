@@ -150,7 +150,7 @@ export default function TasksSection() {
 
       <section className="adm-panel adm-staff-create" aria-labelledby="tasks-create-h">
         <div className="adm-live-heading">
-          <h3 id="tasks-create-h">Create task</h3>
+          <h2 id="tasks-create-h">Create task</h2>
           <p className="adm-note">Assign a sponsored task with compensation</p>
         </div>
         <CreateTaskForm />

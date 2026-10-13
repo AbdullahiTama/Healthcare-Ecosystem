@@ -184,9 +184,11 @@ describe('TasksSection create', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Enter a task title')
   })
 
-  it('has the create heading as an h3 under the h1', () => {
+  it('has a clean outline: one h1 and only h2s under it', () => {
     render(<TasksSection />)
-    expect(screen.getByRole('heading', { level: 3, name: 'Create task' })).toBeInTheDocument()
+    const levels = screen.getAllByRole('heading').map(h => h.tagName)
+    expect(levels).toEqual(['H1', 'H2', 'H2'])
+    expect(screen.getByRole('heading', { level: 2, name: 'Create task' })).toBeInTheDocument()
   })
 
   it('clears the compensation message once the value is corrected', async () => {

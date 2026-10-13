@@ -120,7 +120,7 @@ button.adm-item:hover { background: var(--adm-line-soft); }
 @media (prefers-reduced-motion: no-preference) { .adm-live-dot { animation: adm-live-pulse 2s ease-in-out infinite; } }
 @keyframes adm-live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .adm-live-heading { flex: 1 1 160px; min-width: 0; }
-.adm-live-heading h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--adm-ink); overflow-wrap: anywhere; }
+.adm-live-heading h2, .adm-live-heading h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--adm-ink); overflow-wrap: anywhere; }
 .adm-live-link { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 700; color: var(--teal-deep, #0e6f5a); background: var(--teal-mist, #e6f4f0); text-decoration: none; }
 .adm-live-link:focus-visible { outline: 2px solid var(--teal-deep, #0e6f5a); outline-offset: 2px; }
 .adm-live-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 1px; margin: 0; padding: 0; list-style: none; background: var(--adm-line); border: 1px solid var(--adm-line); border-radius: 8px; overflow: hidden; }
