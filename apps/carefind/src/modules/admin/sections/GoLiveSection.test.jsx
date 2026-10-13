@@ -62,7 +62,7 @@ describe('GoLiveSection', () => {
     expect(screen.queryByText('No live shows right now')).toBeNull()
     expect(screen.getByText('No scheduled shows')).toBeInTheDocument()
     expect(shows.panelProps.at(-1)).toEqual({ liveCount: 0 })
-    fireEvent.click(within(region).getByRole('button', { name: 'Retry' }))
+    fireEvent.click(within(region).getByRole('button', { name: 'Retry loading live shows' }))
     expect(shows.result.refetch).toHaveBeenCalledTimes(1)
   })
 
@@ -73,7 +73,7 @@ describe('GoLiveSection', () => {
     expect(within(region).getByRole('alert')).toHaveTextContent("Couldn't load scheduled shows")
     expect(screen.queryByText('No scheduled shows')).toBeNull()
     expect(screen.getAllByTestId('live-card')).toHaveLength(1)
-    fireEvent.click(within(region).getByRole('button', { name: 'Retry' }))
+    fireEvent.click(within(region).getByRole('button', { name: 'Retry loading scheduled shows' }))
     expect(shows.result.refetch).toHaveBeenCalledTimes(1)
   })
 

@@ -21,19 +21,19 @@ const sourceOf = (query, key) => {
 function ShowList({ source, noun, emptyText, icon, retry, render }) {
   if (source.status === 'error') {
     return (
-      <div role="alert" className="adm-live-warn" style={{ margin: 16 }}>
+      <div role="alert" className="adm-live-warn adm-live-inset-warn">
         <span>Couldn't load {noun}</span>
-        <Button variant="ghost" size="sm" onClick={retry}>Retry</Button>
+        <Button variant="ghost" size="sm" onClick={retry} aria-label={`Retry loading ${noun}`}>Retry</Button>
       </div>
     )
   }
   if (source.status === 'loading') {
-    return <p role="status" className="adm-note" style={{ padding: 16 }}>Loading {noun}…</p>
+    return <p role="status" className="adm-note adm-live-inset">Loading {noun}…</p>
   }
   if (source.data.length === 0) {
     return <Empty icon={icon} message={emptyText} cause="none" />
   }
-  return <div className="adm-live-list" style={{ padding: 16 }}>{source.data.map(render)}</div>
+  return <div className="adm-live-list adm-live-inset">{source.data.map(render)}</div>
 }
 
 export default function GoLiveSection() {

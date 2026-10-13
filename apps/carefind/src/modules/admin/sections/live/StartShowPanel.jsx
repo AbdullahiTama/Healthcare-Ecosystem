@@ -167,7 +167,7 @@ export default function StartShowPanel({ liveCount = 0 }) {
         </div>
       </div>
 
-      <div role="group" aria-label="Go live now" className="adm-live-composer">
+      <div role="group" aria-label="Go live" className="adm-live-composer">
         {goLiveError && <p role="alert" className="adm-live-alert">{goLiveError}</p>}
         <Button variant="primary" fullWidth disabled={busy || !hasTitle} loading={starting} loadingText="Starting…"
           leftIcon={<Radio size={16} aria-hidden="true" />} onClick={confirmGoLive}>

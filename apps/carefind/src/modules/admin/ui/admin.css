@@ -138,6 +138,8 @@ button.adm-item:hover { background: var(--adm-line-soft); }
 .adm-live-file-chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; overflow-wrap: anywhere; }
 .adm-live-subhead { margin: 0 0 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--adm-ink-soft); }
 .adm-live-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.adm-live-inset { padding: 16px; }
+.adm-live-inset-warn { margin: 16px; }
 .adm-live-item { padding: 8px 10px; border-radius: 6px; background: var(--adm-line-soft); min-width: 0; }
 .adm-live-text { margin: 0; font-size: 13px; color: var(--adm-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
 .adm-live-media { display: block; max-width: min(160px, 100%); border-radius: 6px; margin-top: 2px; }
