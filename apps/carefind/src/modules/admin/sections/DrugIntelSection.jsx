@@ -57,10 +57,13 @@ export default function DrugIntelSection() {
     const matchTo = !to || r.created_at <= `${to}T23:59:59`
     return matchRating && matchFrom && matchTo
   })
-  const positive = filtered.filter(r => r.rating >= 4).length
-  const negative = filtered.filter(r => r.rating <= 2).length
-  const neutral = filtered.length - positive - negative
-  const avg = filtered.length ? (filtered.reduce((s, r) => s + r.rating, 0) / filtered.length).toFixed(1) : '0'
+  // A review without a numeric rating is listed but is not a rating: it is in
+  // none of the sentiment counts and not in the average (`null <= 2` is true).
+  const rated = filtered.filter(r => Number.isFinite(r.rating))
+  const positive = rated.filter(r => r.rating >= 4).length
+  const negative = rated.filter(r => r.rating <= 2).length
+  const neutral = rated.length - positive - negative
+  const avg = rated.length ? (rated.reduce((s, r) => s + r.rating, 0) / rated.length).toFixed(1) : '0'
 
   const exportReviews = () => {
     exportCSV(

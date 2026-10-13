@@ -220,4 +220,20 @@ describe('DrugIntelSection', () => {
     expect(container.querySelectorAll('.adm-star')).toHaveLength(5)
     expect(container.querySelectorAll('.adm-star--on')).toHaveLength(3)
   })
+
+  it.each([['null', null], ['undefined', undefined], ['a non-numeric string', 'abc']])(
+    'does not count a review whose rating is %s as Negative or let it spoil the average', (_, bad) => {
+      setHook({ result: ok({ reviews: [review('r1', 5), review('r2', 3), review('bad', bad)] }) })
+      const { container } = render(<DrugIntelSection />)
+      const strip = screen.getByLabelText('Review sentiment')
+      const cell = (label) => within(strip).getByText(label).closest('div')
+      expect(cell('Positive')).toHaveTextContent('1')
+      expect(cell('Neutral')).toHaveTextContent('1')
+      expect(cell('Negative')).toHaveTextContent('0')
+      expect(screen.getByText(/Avg:/)).toHaveTextContent('4.0')
+      expect(screen.getByText(/Avg:/)).not.toHaveTextContent('NaN')
+      // The unrated review is still listed, with an empty star row.
+      expect(screen.getByText('Comment bad')).toBeInTheDocument()
+      expect(container.querySelectorAll('.adm-star--on')).toHaveLength(5 + 3)
+    })
 })
