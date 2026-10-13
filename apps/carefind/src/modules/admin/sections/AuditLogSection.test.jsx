@@ -196,7 +196,17 @@ describe('AuditLogSection', () => {
     expect(csv.exportCSV).toHaveBeenCalledTimes(1)
     const [rows, name] = csv.exportCSV.mock.calls[0]
     expect(name).toBe('audit_log_page.csv')
-    expect(rows.map(r => r.id)).toEqual(['a1', 'a4'])
+    // Flat records: no object values, so no cell can break the CSV columns.
+    expect(rows).toHaveLength(2)
+    for (const r of rows) {
+      expect(Object.keys(r)).toEqual(['time', 'actor', 'action', 'target_type', 'target_id', 'details'])
+      for (const v of Object.values(r)) expect(v === null || ['string', 'number'].includes(typeof v)).toBe(true)
+    }
+    expect(rows[0]).toEqual({
+      time: logs[0].created_at, actor: 'Ada Obi', action: 'bulk_delete', target_type: 'post', target_id: 'p-1',
+      details: JSON.stringify(logs[0].metadata),
+    })
+    expect(rows[1]).toMatchObject({ actor: 'Ada Obi', action: 'resolve', time: null, target_id: null, details: '' })
   })
 
   it('Export CSV is disabled when there are no rows', () => {

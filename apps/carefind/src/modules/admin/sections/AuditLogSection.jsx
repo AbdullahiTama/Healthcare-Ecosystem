@@ -73,6 +73,17 @@ const columns = [
   { key: 'metadata', label: 'Details', render: log => excerptOf(log) || '—' },
 ]
 
+// One flat record per row for the CSV: the shared exportCSV cannot quote an
+// object cell, so metadata goes out as a single-line string.
+const csvRecord = (log) => ({
+  time: log.created_at ?? null,
+  actor: actorOf(log),
+  action: typeof log.action === 'string' ? log.action : '',
+  target_type: targetOf(log),
+  target_id: log.target_id == null ? null : String(log.target_id),
+  details: metaText(log.metadata, false).replace(/\s+/g, ' ').trim(),
+})
+
 const rowLabel = (log) => `${actorOf(log)} ${actionOf(log)}`.trim()
 
 function AuditBody({ log }) {
@@ -156,7 +167,7 @@ export default function AuditLogSection() {
       toolbar={(
         <Button variant="ghost" size="sm" leftIcon={<Download size={14} aria-hidden="true" />}
           disabled={rows.length === 0 || query.isPlaceholderData}
-          onClick={() => exportCSV(rows, 'audit_log_page.csv')}>
+          onClick={() => exportCSV(rows.map(csvRecord), 'audit_log_page.csv')}>
           Export CSV
         </Button>
       )}
