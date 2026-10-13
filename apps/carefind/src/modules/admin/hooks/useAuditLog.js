@@ -25,7 +25,9 @@ async function loadAudit({ action, targetType, dateFrom, dateTo, page }) {
 }
 
 export function useAuditLog({ action = 'all', targetType = 'all', dateFrom = '', dateTo = '', page = 0 } = {}) {
-  const params = { action, targetType, dateFrom, dateTo, page }
+  // A non-negative integer, so a stray page never skews the limit math or the key.
+  const safePage = Math.max(0, Math.floor(Number(page)) || 0)
+  const params = { action, targetType, dateFrom, dateTo, page: safePage }
   return useQuery({
     queryKey: ['admin', 'audit', params],
     queryFn: () => loadAudit(params),

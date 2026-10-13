@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act, waitFor } from '@testing-library/react'
+import { renderHook, act } from '@testing-library/react'
 
 const searchProducts = vi.hoisted(() => vi.fn())
 const getProductReviews = vi.hoisted(() => vi.fn())
@@ -91,7 +91,7 @@ describe('useDrugReviews', () => {
     expect(result.current.searching).toBe(false)
   })
 
-  it('does not set state after unmount', async () => {
+  it('a search that resolves after unmount makes no further calls and logs nothing', async () => {
     const d = deferred()
     searchProducts.mockReturnValue(d.promise)
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -101,9 +101,23 @@ describe('useDrugReviews', () => {
     unmount()
     d.resolve([{ id: 'p1' }])
     await pending
-    await waitFor(() => expect(getProductReviews).toHaveBeenCalled())
-    await new Promise((r) => setTimeout(r, 0))
+    expect(getProductReviews).not.toHaveBeenCalled()
     expect(err).not.toHaveBeenCalled()
     err.mockRestore()
+  })
+
+  it('a superseded older search makes no reviews call', async () => {
+    const first = deferred()
+    searchProducts.mockImplementation((term) => (term === 'old' ? first.promise : Promise.resolve([{ id: 'n1' }])))
+    getProductReviews.mockResolvedValue([])
+    const { result } = renderHook(() => useDrugReviews())
+    let p1
+    act(() => { p1 = result.current.search('old') })
+    await act(async () => { await result.current.search('new') })
+    expect(getProductReviews).toHaveBeenCalledTimes(1)
+    expect(getProductReviews).toHaveBeenCalledWith(['n1'])
+    await act(async () => { first.resolve([{ id: 'o1' }]); await p1 })
+    expect(getProductReviews).toHaveBeenCalledTimes(1)
+    expect(result.current.result.term).toBe('new')
   })
 })

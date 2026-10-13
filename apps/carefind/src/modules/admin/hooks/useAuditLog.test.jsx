@@ -78,4 +78,20 @@ describe('useAuditLog', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data.rows[0]).toEqual(row)
   })
+
+  it('clamps a negative page to 0 for the limit and the rows', async () => {
+    callAdminAuth.mockResolvedValue({ data: rowsOf(26) })
+    const { result } = run({ page: -3 })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(callAdminAuth.mock.calls[0][1].limit).toBe(26)
+    expect(result.current.data.rows[0].id).toBe('a0')
+  })
+
+  it('floors a fractional page', async () => {
+    callAdminAuth.mockResolvedValue({ data: rowsOf(76) })
+    const { result } = run({ page: 1.7 })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(callAdminAuth.mock.calls[0][1].limit).toBe(51)
+    expect(result.current.data.rows[0].id).toBe('a25')
+  })
 })

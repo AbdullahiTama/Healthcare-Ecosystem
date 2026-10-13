@@ -11,4 +11,4 @@ function tally(rows, limit) {
 }
 
 export const tallyTerms = (rows, limit = 12) => tally(rows, limit)
-export const demandGaps = (rows, limit = 15) => tally(rows.filter(r => !r.found), limit)
+export const demandGaps = (rows, limit = 15) => tally(rows.filter(r => !r?.found), limit)

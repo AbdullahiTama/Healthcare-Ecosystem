@@ -27,6 +27,8 @@ export function useDrugReviews() {
     let next
     try {
       const products = await commerceRepository.searchProducts(q)
+      // A superseded or unmounted search stops here, before its reviews call.
+      if (!current()) return
       if (!Array.isArray(products)) throw new Error('searchProducts returned no list')
       if (products.length === 0) {
         next = { status: 'ok', term: q, product: null, matches: 0, reviews: [] }

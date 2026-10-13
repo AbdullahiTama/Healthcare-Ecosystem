@@ -28,6 +28,9 @@ describe('demandGaps', () => {
   it('honours the limit and ignores rows with no query', () => {
     expect(demandGaps([{ found: false }, q('a', false), q('b', false)], 1)).toEqual([['a', 1]])
   })
+  it('does not throw on a null row', () => {
+    expect(demandGaps([null, undefined, q('a', false)])).toEqual([['a', 1]])
+  })
   it('returns [] for empty input', () => {
     expect(demandGaps([])).toEqual([])
   })
