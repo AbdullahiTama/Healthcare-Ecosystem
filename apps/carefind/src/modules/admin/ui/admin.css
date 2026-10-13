@@ -221,3 +221,12 @@ button.adm-alert:hover { background: var(--adm-line-soft); }
 .adm-matrix-item { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 13px; color: var(--adm-ink); overflow-wrap: anywhere; }
 .adm-matrix-item input { flex: none; width: 16px; height: 16px; accent-color: var(--teal-deep); }
 .adm-matrix-item input:focus-visible { outline: 2px solid var(--teal-deep); outline-offset: 2px; }
+.adm-teams { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.adm-team-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.adm-team-form > :first-child { flex: 1 1 220px; min-width: 0; }
+.adm-team-card { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.adm-team-card h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--adm-ink); overflow-wrap: anywhere; }
+.adm-team-members { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.adm-team-member { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 6px; background: var(--adm-line-soft); min-width: 0; }
+.adm-team-member-name { display: flex; flex-direction: column; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.adm-staff-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
