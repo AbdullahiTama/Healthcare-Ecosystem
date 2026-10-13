@@ -31,7 +31,8 @@ const TARGET_OPTIONS = [
   { value: 'report', label: 'Reports' },
 ]
 
-const actorOf = (log) => log.actor_name || 'Unknown'
+const actorOf = (log) => (typeof log.actor_name === 'string' && log.actor_name ? log.actor_name : 'Unknown')
+const validDate = (value) => !!value && !Number.isNaN(new Date(value).getTime())
 // '' for anything that is not a string (a malformed row never crashes).
 const actionOf = (log) => (typeof log.action === 'string' ? log.action.replace(/_/g, ' ') : '')
 const targetOf = (log) => (typeof log.target_type === 'string' ? log.target_type : '')
@@ -57,7 +58,7 @@ const excerptOf = (log) => {
 }
 
 const columns = [
-  { key: 'created_at', label: 'Time', render: log => (log.created_at ? timeAgo(log.created_at) : '—') },
+  { key: 'created_at', label: 'Time', render: log => (validDate(log.created_at) ? timeAgo(log.created_at) : '—') },
   { key: 'actor_name', label: 'Actor', render: log => actorOf(log) },
   {
     key: 'action',
@@ -95,9 +96,9 @@ function AuditBody({ log }) {
         <dt>Action</dt><dd>{actionOf(log) || '—'}</dd>
         <dt>Target</dt><dd>{targetOf(log) || '—'}</dd>
         {log.target_id != null && log.target_id !== '' && (<><dt>Target id</dt><dd>{String(log.target_id)}</dd></>)}
-        <dt>When</dt><dd>{log.created_at ? `${timeAgo(log.created_at)} (${new Date(log.created_at).toLocaleString()})` : '—'}</dd>
+        <dt>When</dt><dd>{validDate(log.created_at) ? `${timeAgo(log.created_at)} (${new Date(log.created_at).toLocaleString()})` : '—'}</dd>
       </dl>
-      <section aria-label="Details">
+      <section>
         <h3 className="adm-audit-heading">Details</h3>
         {details
           ? <pre className="adm-drawer-text adm-audit-pre">{details}</pre>

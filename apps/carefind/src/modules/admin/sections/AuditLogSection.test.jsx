@@ -217,6 +217,36 @@ describe('AuditLogSection', () => {
     expect(last()).toEqual(NONE)
   })
 
+  it('a non-string actor name is Unknown and never breaks the actor filter', () => {
+    vi.useFakeTimers()
+    audit.result = ok({}, { rows: [
+      { id: 'n1', actor_name: 42, action: 'approve', target_type: 'post' },
+      { id: 'n2', actor_name: { x: 1 }, action: 'reject', target_type: 'post' },
+      { id: 'n3', actor_name: 'Ada', action: 'delete', target_type: 'post' },
+    ] })
+    render(<AuditLogSection />)
+    expect(screen.getAllByText('Unknown')).toHaveLength(2)
+    fireEvent.change(actorBox(), { target: { value: 'ada' } })
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(screen.getAllByRole('row')).toHaveLength(2)
+  })
+
+  it('an invalid created_at shows a dash in the row and the drawer', () => {
+    audit.result = ok({}, { rows: [{ id: 'b1', actor_name: 'Ada', action: 'approve', target_type: 'post', created_at: 'not a date' }] })
+    render(<AuditLogSection />)
+    expect(screen.queryByText(/Invalid Date|NaN/)).not.toBeInTheDocument()
+    const dialog = openRow('Ada approve')
+    expect(dialog.textContent).not.toMatch(/Invalid Date|NaN/)
+    expect(within(dialog).getByText('When').nextElementSibling.textContent).toBe('—')
+  })
+
+  it('the drawer has a single Details heading and no duplicate region name', () => {
+    render(<AuditLogSection />)
+    const dialog = openRow('Ada Obi bulk delete')
+    expect(within(dialog).getAllByRole('heading', { name: 'Details' })).toHaveLength(1)
+    expect(within(dialog).queryAllByRole('region', { name: 'Details' })).toHaveLength(0)
+  })
+
   it('when capped it says so, and Next is disabled with no next page', () => {
     audit.result = ok({}, { capped: true, hasNext: false })
     render(<AuditLogSection />)
