@@ -415,9 +415,28 @@ Phase 4b behaviour changes from legacy:
   (findings 66, 70).
 - Failed lists show Retry, never empty text; the empty cases are stated plainly ("No live shows
   right now", "No scheduled shows").
-- `useLiveActions` has a per-action in-flight guard (`action:target`, covering uploads): a repeat
-  click on the same action is refused ("Already running") with no server call, while different
-  actions (for example hiding a comment during a slide upload) can run together (fdf9dd1).
+- `useLiveActions` has a per-action in-flight guard (key `action:target`, covering uploads): a
+  repeat of the same action on the same target is refused ("Already running") with no server
+  call, while different actions (for example hiding a comment during a slide upload) can run
+  together (fdf9dd1). A media post is keyed by show and content, so a second distinct item posts
+  while one is in flight and only a true duplicate (same show and content) is refused. The key is
+  held until the server call and the list refresh have both finished (`invalidateAdmin` returns
+  its promise and `bestEffort` awaits it without ever failing the action), so End show, Start now
+  and Cancel cannot be clicked again while the card is still on screen. Posting and hiding
+  refresh only that show's control room (`['admin','live','control',showId]`; `hideComment`
+  takes an optional `{ showId }` and falls back to a full refresh without it); start, schedule,
+  end and cancel still refresh all admin data.
+- A failed refresh of the shows list keeps the cards on screen: when a source last loaded fine
+  and the new read fails, `useLiveShows` returns `{ status: 'ok', data: <previous>, stale: true }`
+  and the section shows "Couldn't refresh live shows" / "Couldn't refresh scheduled shows" with
+  Retry above the cards (composer drafts, the failed-media list and End show survive). A first
+  failure is still a plain error, a later success drops `stale`, and a stale live list still
+  counts toward the live total. Realtime and poll refreshes pass `cancelRefetch: false`, so they
+  no longer cancel a load in progress.
+- The Go live confirmation names the number of other live shows; when the live list could not be
+  read (failed or still loading) the section passes `liveCount` as `null` and the confirmation
+  says "Couldn't check how many shows are already live." instead of implying none. The started
+  toast reads "Live show started. Its control room is under Currently live."
 - The legacy `postLiveItem` read `admin_token` from `localStorage`, which never sent a token. The
   read is dropped; calls go through `callAdminAuth` like every other action.
 - Media in the control room and on scheduled shows is shown only for http(s) URLs (308801f).
@@ -466,7 +485,7 @@ exercised against real buckets (the storage client is mocked). The server handle
 Phase 4b: unit and component tests cover `uploadMedia` (contentType), `useLiveShows`,
 `useLiveControl`, `useLiveActions`, `useGuestSearch`, `LiveShowCard`, `ScheduledShowCard`,
 `StartShowPanel`, `GoLiveSection` and the panel routing test. At 7e8d30b the admin suite
-(56 files, 737 tests) passes, the build succeeds and lint reports 0 errors. Responsive layout at
+(56 files, 737 tests) passed; after the final review fixes it is 57 files, 752 tests, with the build and lint (0 errors) re-run, the build succeeds and lint reports 0 errors. Responsive layout at
 375, 390, 768, 1024, 1440 and 1920 has NOT been measured in a browser (no admin session was
 available). Realtime and live-show behaviour has NOT been exercised against a real show (the
 realtime hook is mocked in the tests), and uploads were never run against the real `live-media`
