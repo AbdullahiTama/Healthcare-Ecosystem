@@ -171,3 +171,12 @@ button.adm-item:hover { background: var(--adm-line-soft); }
 .adm-audit-dates { flex: 1 1 260px; min-width: 0; }
 .adm-audit-heading { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
 .adm-audit-pre { margin: 0; overflow-x: auto; }
+
+/* Search analytics rows and rank chip */
+.adm-srow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; font-size: 13px; color: var(--adm-ink); }
+.adm-srow-main { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+.adm-srow-stack { flex-direction: column; align-items: flex-start; gap: 2px; }
+.adm-srow-count { font-weight: 600; flex-shrink: 0; }
+.adm-rank { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; font-size: 11px; font-weight: 600; color: var(--adm-ink-soft); background: var(--adm-line-soft); }
+.adm-rank--top { color: var(--teal-deep, #0e6f5a); background: var(--teal-mist, #e3eee8); }
+.adm-sev--ok { color: var(--adm-ok); background: var(--adm-line-soft); }
