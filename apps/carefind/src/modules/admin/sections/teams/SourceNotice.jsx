@@ -16,7 +16,11 @@ export default function SourceNotice({ source, noun, onRetry }) {
     return <p role="status" className="adm-note">Loading {noun}…</p>
   }
   if (source.status === 'restricted') {
-    return <p className="adm-note">Only a super admin can see staff accounts</p>
+    return (
+      <p className="adm-note">
+        {noun === 'staff' ? 'Only a super admin can see staff accounts' : `You don't have access to ${noun}`}
+      </p>
+    )
   }
   if (!isOk(source)) {
     return (
