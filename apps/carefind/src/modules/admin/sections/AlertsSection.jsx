@@ -48,8 +48,8 @@ function AlertCard({ alert, severity, label, canOpen, onOpen }) {
 }
 
 // Everything pending that needs an admin. Sources are read independently, so
-// the screen says which could not be checked and never claims "all clear"
-// unless every source loaded and nothing is pending.
+// the screen says which could not be checked and never claims "all clear":
+// some server reads swallow their own failures, so it only reports what was returned.
 export default function AlertsSection({ onOpenTab }) {
   const { data, isLoading, isError, isFetching, refetch } = useAlerts()
   const { permissions } = useAdmin()
@@ -86,9 +86,10 @@ export default function AlertsSection({ onOpenTab }) {
           </div>
         )}
         {alerts.length === 0 && (
-          <p className="adm-clear adm-panel">
-            {failed.length === 0 ? 'All clear — nothing pending' : 'Nothing pending in the sources that loaded'}
-          </p>
+          <div className="adm-clear adm-panel">
+            <p>{failed.length === 0 ? 'Nothing pending in the sources checked' : 'Nothing pending in the sources that loaded'}</p>
+            <p className="adm-note">Some reads can't report their own failures; this reflects what the server returned.</p>
+          </div>
         )}
         {GROUPS.map(([key, label]) => {
           const group = alerts.filter(a => severityOf(a) === key)

@@ -53,10 +53,12 @@ describe('AlertsSection', () => {
     expect(screen.getByText('Nothing pending in the sources that loaded')).toBeInTheDocument()
   })
 
-  it('says all clear only when loaded, nothing failed and nothing pending', () => {
+  it('never says all clear; with nothing pending and nothing failed it says what was checked', () => {
     setHook({ data: { alerts: [], failed: [] } })
     render(<AlertsSection onOpenTab={() => {}} />)
-    expect(screen.getByText('All clear — nothing pending')).toBeInTheDocument()
+    expect(screen.getByText('Nothing pending in the sources checked')).toBeInTheDocument()
+    expect(screen.getByText("Some reads can't report their own failures; this reflects what the server returned.")).toBeInTheDocument()
+    expect(screen.queryByText(/All clear/)).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
