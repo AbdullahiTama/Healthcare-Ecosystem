@@ -26,8 +26,19 @@ import { uploadToBucket } from '../lib/uploadMedia'
 // server call, so a double click cannot post or end twice. Different keys may
 // overlap (hide a comment while a slide uploads). The key covers uploads too and
 // is held until the server call and the list refresh have both finished (the
-// refresh is awaited, never able to fail the action), then released in `finally`. `busyKeys` and `isBusy(action, targetId)`
+// refresh is awaited, never able to fail the action), then released in `finally`.
+// The wait for the refresh is capped at 10 s, so a hung query cannot keep the
+// controls disabled for good. `busyKeys` and `isBusy(action, targetId)`
 // drive the UI; `busy` is the action name of the oldest running key, or null.
+
+// Waits for `promise`, but at most `ms`; the timer is cleared when the promise
+// settles first, so none leaks.
+const REFRESH_CAP_MS = 10000
+const capped = (promise, ms) => {
+  let timer
+  const cap = new Promise(resolve => { timer = setTimeout(resolve, ms) })
+  return Promise.race([promise, cap]).finally(() => clearTimeout(timer))
+}
 
 export const slideContent = (url, num, total) => `${url}|||${num}|||${total}`
 
@@ -64,7 +75,7 @@ export function useLiveActions() {
         const refresh = controlShowId
           ? () => queryClient.invalidateQueries({ queryKey: ['admin', 'live', 'control', controlShowId] })
           : invalidateAdmin
-        await bestEffort(`refreshing after ${name}`, refresh)
+        await capped(bestEffort(`refreshing after ${name}`, refresh), REFRESH_CAP_MS)
       }
     } finally {
       running.current.delete(key)

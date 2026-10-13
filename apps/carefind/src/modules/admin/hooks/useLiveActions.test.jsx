@@ -373,3 +373,34 @@ describe('the guard is held until the refresh has landed', () => {
     logged.mockRestore()
   })
 })
+
+describe('the refresh wait is capped', () => {
+  it('a never-resolving refresh releases the guard after 10 s with the result unchanged', async () => {
+    vi.useFakeTimers()
+    try {
+      admin.invalidateAdmin.mockImplementation(() => new Promise(() => {}))
+      const { result } = setup()
+      let pending, out
+      act(() => { pending = result.current.endShow('a').then(r => { out = r }) })
+      await act(async () => { await vi.advanceTimersByTimeAsync(9999) })
+      expect(result.current.isBusy('endShow', 'a')).toBe(true)
+      expect(out).toBeUndefined()
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); await pending })
+      expect(out).toEqual({ ok: true })
+      expect(result.current.isBusy('endShow', 'a')).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('a fast refresh clears the timer', async () => {
+    vi.useFakeTimers()
+    try {
+      admin.invalidateAdmin.mockResolvedValue(undefined)
+      const { result } = setup()
+      await act(async () => { await result.current.endShow('a') })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
