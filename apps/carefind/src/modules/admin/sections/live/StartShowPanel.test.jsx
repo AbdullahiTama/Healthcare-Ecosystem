@@ -81,6 +81,16 @@ describe('StartShowPanel go live', () => {
     expect(lastAsk().consequence).toContain('3 other shows are already live')
   })
 
+  it('says it could not check when the live count is unknown, and not otherwise', async () => {
+    const { rerender } = render(<StartShowPanel liveCount={null} />)
+    type(titleBox(), 'Malaria Live')
+    await click(goLive())
+    expect(lastAsk().consequence).toContain("Couldn't check how many shows are already live.")
+    rerender(<StartShowPanel liveCount={0} />)
+    await click(goLive())
+    expect(lastAsk().consequence).not.toContain("Couldn't check")
+  })
+
   it('starts with the selected guest ids only after confirm, then clears the form', async () => {
     render(<StartShowPanel liveCount={0} />)
     type(titleBox(), 'Malaria Live')

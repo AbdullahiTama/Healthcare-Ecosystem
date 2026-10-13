@@ -54,14 +54,14 @@ describe('GoLiveSection', () => {
     expect(screen.queryByText('No live shows right now')).toBeNull()
   })
 
-  it('shows a failed active source with Retry, never the empty text, and passes liveCount 0', () => {
+  it('shows a failed active source with Retry, never the empty text, and passes an unknown liveCount', () => {
     shows.result = result(failed, ok([]))
     render(<GoLiveSection />)
     const region = screen.getByRole('region', { name: /Currently live/ })
     expect(within(region).getByRole('alert')).toHaveTextContent("Couldn't load live shows")
     expect(screen.queryByText('No live shows right now')).toBeNull()
     expect(screen.getByText('No scheduled shows')).toBeInTheDocument()
-    expect(shows.panelProps.at(-1)).toEqual({ liveCount: 0 })
+    expect(shows.panelProps.at(-1)).toEqual({ liveCount: null })
     fireEvent.click(within(region).getByRole('button', { name: 'Retry loading live shows' }))
     expect(shows.result.refetch).toHaveBeenCalledTimes(1)
   })
@@ -84,6 +84,7 @@ describe('GoLiveSection', () => {
     expect(screen.queryByText('No live shows right now')).toBeNull()
     expect(screen.queryByText('No scheduled shows')).toBeNull()
     expect(screen.getByTestId('start-panel')).toBeInTheDocument()
+    expect(shows.panelProps.at(-1)).toEqual({ liveCount: null })
   })
 
   it('treats a failed whole query as failed on both lists', () => {

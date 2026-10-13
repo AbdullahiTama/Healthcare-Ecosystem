@@ -19,6 +19,7 @@ const RESULT_LIMIT = 20
 const guestName = (u) => u.full_name || u.display_name || 'User'
 const initial = (u) => (u.full_name?.[0] || u.display_name?.[0] || '?').toUpperCase()
 
+// liveCount: the number of shows already live, or null when that is unknown.
 export default function StartShowPanel({ liveCount = 0 }) {
   const { isBusy, startShow, scheduleShow } = useLiveActions()
   const { askConfirm, showToast } = useAdmin()
@@ -72,11 +73,16 @@ export default function StartShowPanel({ liveCount = 0 }) {
     else setError(`${message}: ${res.error}`)
   }
 
+  // null means the live list could not be read: say so rather than imply none.
+  const otherLiveNote = liveCount == null
+    ? " Couldn't check how many shows are already live."
+    : liveCount > 0 ? ` ${liveCount} other show${liveCount === 1 ? ' is' : 's are'} already live.` : ''
+
   const confirmGoLive = () => {
     if (!hasTitle || busy) return
     askConfirm({
       title: 'Go live now?',
-      consequence: `This starts a live show that every CareFind user will see. It stays live until you end it.${liveCount > 0 ? ` ${liveCount} other show${liveCount === 1 ? ' is' : 's are'} already live.` : ''}`,
+      consequence: `This starts a live show that every CareFind user will see. It stays live until you end it.${otherLiveNote}`,
       confirmLabel: 'Go live',
       action: async () => {
         if (mounted.current) { setGoLiveError(''); setScheduleError('') }

@@ -51,7 +51,9 @@ export default function GoLiveSection() {
   const retry = () => query.refetch()
   const active = sourceOf(query, 'active')
   const scheduled = sourceOf(query, 'scheduled')
-  const liveCount = active.status === 'ok' ? active.data.length : 0
+  // null when the live list could not be read, so the confirmation says so
+  // instead of implying nothing else is live.
+  const liveCount = active.status === 'ok' ? active.data.length : null
 
   return (
     <div className="adm-page">
