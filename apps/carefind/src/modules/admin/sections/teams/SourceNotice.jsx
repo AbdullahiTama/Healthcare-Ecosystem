@@ -11,6 +11,12 @@ import '../../ui/admin.css'
 // undefined while it is still loading.
 export const isOk = (source) => source?.status === 'ok' && Array.isArray(source.data)
 
+// list_staff selects no team_id, so rows from the real server carry no team_id
+// key at all. A loaded, non-empty staff list where no row has the key means the
+// server did not say who is on which team: that is "unavailable", not "no team"
+// (a row that has the key, even null, means the server does say).
+export const hasTeamIds = (staff) => !isOk(staff) || staff.data.length === 0 || staff.data.some(s => s && 'team_id' in s)
+
 export default function SourceNotice({ source, noun, onRetry }) {
   if (!source || source.status === 'loading') {
     return <p role="status" className="adm-note">Loading {noun}…</p>

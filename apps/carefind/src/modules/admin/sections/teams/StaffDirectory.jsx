@@ -3,7 +3,7 @@ import { UserCheck, UserX } from 'lucide-react'
 import { Button, DataTable, Empty, Select, StatusBadge } from '@care-ecosystem/design-system/components/ui'
 import ReviewDrawer from '../../ui/ReviewDrawer.jsx'
 import { timeAgo } from '../../ui'
-import SourceNotice, { isOk } from './SourceNotice.jsx'
+import SourceNotice, { hasTeamIds, isOk } from './SourceNotice.jsx'
 import { norm, spaced, SYSTEM_ROLES, assignableCustomRoles } from './roleNames.js'
 import { useStaffActions } from '../../hooks/useStaffActions'
 import { useAdmin } from '../../provider/AdminProvider.jsx'
@@ -109,7 +109,10 @@ export default function StaffDirectory({ staff, roles, teams, currentAdminId, on
   const rows = useMemo(() => (isOk(staff) ? staff.data : []), [staff])
   const teamNames = useMemo(() => new Map((isOk(teams) ? teams.data : []).map(t => [t.id, t.name])), [teams])
   // A failed or unloaded teams read is never shown as "no team".
+  // list_staff returns no team_id, which is said as such and never as "No team".
+  const teamsKnown = hasTeamIds(staff)
   const teamOf = (s) => {
+    if (!teamsKnown) return 'Not provided by the server'
     if (!s.team_id) return 'No team'
     if (!isOk(teams)) return 'Unavailable'
     return teamNames.get(s.team_id) || 'Unknown team'

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Users } from 'lucide-react'
 import { Button, Empty, Input, StatusBadge } from '@care-ecosystem/design-system/components/ui'
-import SourceNotice, { isOk } from './SourceNotice.jsx'
+import SourceNotice, { hasTeamIds, isOk } from './SourceNotice.jsx'
 import { useStaffActions } from '../../hooks/useStaffActions'
 import { useAdmin } from '../../provider/AdminProvider.jsx'
 import '../../ui/admin.css'
@@ -57,6 +57,7 @@ function CreateTeamForm() {
 
 function Members({ team, staff }) {
   if (!isOk(staff)) return null
+  if (!hasTeamIds(staff)) return <p className="adm-note">Team membership isn't available yet</p>
   const members = staff.data.filter(s => s.team_id === team.id)
   if (members.length === 0) return <p className="adm-note">No members yet</p>
   return (

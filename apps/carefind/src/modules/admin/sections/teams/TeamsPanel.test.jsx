@@ -170,3 +170,33 @@ describe('TeamsPanel create team', () => {
     expect(admin.showToast).not.toHaveBeenCalled()
   })
 })
+
+// What list_staff really returns: no team_id key on any row.
+const serverStaff = {
+  status: 'ok',
+  data: [
+    { id: 's1', full_name: 'Ada Obi', email: 'ada@example.com', role: 'support_agent', is_active: true, last_login: null, created_at: '2026-01-01' },
+  ],
+}
+
+describe('TeamsPanel when the server does not return team_id', () => {
+  it('says membership is unavailable for every team, never "No members yet"', () => {
+    renderPanel({ staff: serverStaff })
+    for (const name of ['Trust', 'Support']) {
+      expect(within(team(name)).getByText("Team membership isn't available yet")).toBeInTheDocument()
+    }
+    expect(screen.queryByText('No members yet')).not.toBeInTheDocument()
+    expect(screen.queryByText('Ada Obi')).not.toBeInTheDocument()
+  })
+
+  it('keeps the normal logic when any row carries team_id, even null', () => {
+    renderPanel({ staff: { status: 'ok', data: [{ id: 's1', full_name: 'Ada', role: 'moderator', team_id: null, is_active: true }] } })
+    expect(within(team('Trust')).getByText('No members yet')).toBeInTheDocument()
+    expect(screen.queryByText("Team membership isn't available yet")).not.toBeInTheDocument()
+  })
+
+  it('an empty staff list is still "No members yet"', () => {
+    renderPanel({ staff: { status: 'ok', data: [] } })
+    expect(within(team('Trust')).getByText('No members yet')).toBeInTheDocument()
+  })
+})

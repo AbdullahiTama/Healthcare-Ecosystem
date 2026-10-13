@@ -429,3 +429,16 @@ describe('StaffDirectory team column when teams may not have loaded', () => {
     expect(within(openMember('Ada Obi')).getByText('Unknown team')).toBeInTheDocument()
   })
 })
+
+describe('StaffDirectory when the server does not return team_id', () => {
+  const serverRows = staffRows.map(({ team_id, ...rest }) => rest)
+  it('says the team is not provided, never "No team" or a dash, in the table and the drawer', () => {
+    renderDir({ staff: { status: 'ok', data: serverRows } })
+    const [, ada, bola] = screen.getAllByRole('row')
+    expect(within(ada).getByText('Not provided by the server')).toBeInTheDocument()
+    expect(within(bola).getByText('Not provided by the server')).toBeInTheDocument()
+    expect(screen.queryByText('No team')).not.toBeInTheDocument()
+    expect(within(bola).getAllByText('—')).toHaveLength(1)
+    expect(within(openMember('Ada Obi')).getByText('Not provided by the server')).toBeInTheDocument()
+  })
+})
