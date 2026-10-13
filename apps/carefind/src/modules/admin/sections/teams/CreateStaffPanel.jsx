@@ -12,7 +12,8 @@ import '../../ui/admin.css'
 // Security: this creates a privileged account with a password the admin types.
 // The password lives only in this component's state and goes to createStaff and
 // nowhere else: it is never rendered as text or put in a title, aria-label or
-// data attribute, and it is cleared after every attempt, success or failure, so
+// data attribute (except the input's own value attribute, which React keeps in
+// sync while it is typed), and it is cleared after every attempt, success or failure, so
 // a retry needs it typed again. super_admin is never offered (the hook refuses
 // it as well). A failure keeps name, email, role and team so only the password
 // is retyped; success clears the whole form.

@@ -21,6 +21,7 @@ function CreateTeamForm() {
   const { showToast } = useAdmin()
   const ids = useId()
   const mounted = useRef(true)
+  const inFlight = useRef(false)
   useEffect(() => {
     mounted.current = true
     return () => { mounted.current = false }
@@ -32,9 +33,17 @@ function CreateTeamForm() {
 
   const submit = async (e) => {
     e.preventDefault()
-    if (running) return
+    if (running || inFlight.current) return
+    inFlight.current = true
     setError('')
-    const res = await createTeam({ name })
+    let res
+    try {
+      res = await createTeam({ name })
+    } catch (err) {
+      res = { ok: false, error: err?.message || 'Something went wrong' }
+    } finally {
+      inFlight.current = false
+    }
     // A result after the panel has gone is toasted, not dropped.
     if (!mounted.current) {
       if (!res.ok) showToast(`Couldn't create the team: ${res.error}`, { type: 'error' })
@@ -47,7 +56,7 @@ function CreateTeamForm() {
   return (
     <form onSubmit={submit} aria-label="Create a team" className="adm-team-form">
       <Input id={`${ids}-name`} label="Team name" value={name} onChange={setName} placeholder="e.g. Trust and safety"
-        aria-required="true" disabled={running} />
+        required disabled={running} />
       <Button type="submit" variant="primary" disabled={running} loading={running} loadingText="Adding…"
         leftIcon={<Users size={14} aria-hidden="true" />}>
         Add team

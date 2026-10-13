@@ -44,7 +44,7 @@ describe('TeamsSection with the real panels and server-shaped staff', () => {
     render(<TeamsSection />)
     expect(state.calls.at(-1)).toEqual({ canSeeStaff: false })
     expect(screen.queryByRole('form', { name: 'Create a team' })).toBeNull()
-    expect(screen.queryByLabelText('Team name')).toBeNull()
+    expect(screen.queryByLabelText(/^Team name/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Add team' })).toBeNull()
     expect(screen.getAllByText('Staff accounts and roles can only be managed by a super admin.')).toHaveLength(1)
     expect(screen.queryByRole('alert')).toBeNull()

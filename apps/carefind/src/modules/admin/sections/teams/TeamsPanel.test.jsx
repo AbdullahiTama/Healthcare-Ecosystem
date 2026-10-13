@@ -23,7 +23,7 @@ const staff = {
 }
 
 const renderPanel = (props = {}) => render(<TeamsPanel teams={teams} staff={staff} canCreate onRetry={vi.fn()} {...props} />)
-const teamBox = () => screen.getByLabelText('Team name')
+const teamBox = () => screen.getByLabelText(/^Team name/)
 const addButton = () => screen.getByRole('button', { name: /^(add team|adding…)$/i })
 const type = (el, value) => fireEvent.change(el, { target: { value } })
 const team = (name) => screen.getByRole('region', { name: `Team ${name}` })
@@ -201,6 +201,51 @@ describe('TeamsPanel when the server does not return team_id', () => {
   it('an empty staff list is still "No members yet"', () => {
     renderPanel({ staff: { status: 'ok', data: [] } })
     expect(within(team('Trust')).getByText('No members yet')).toBeInTheDocument()
+  })
+})
+
+describe('TeamsPanel create team form guards', () => {
+  it('uses native required on the name field, not aria-required', () => {
+    renderPanel()
+    expect(teamBox()).toBeRequired()
+    expect(teamBox()).not.toHaveAttribute('aria-required')
+  })
+
+  it('makes one call for a double submit while the first is running', async () => {
+    let resolve
+    actions.createTeam.mockReturnValue(new Promise(r => { resolve = r }))
+    renderPanel()
+    type(teamBox(), 'Pharmacy')
+    const form = screen.getByRole('form', { name: 'Create a team' })
+    fireEvent.submit(form)
+    fireEvent.submit(form)
+    expect(actions.createTeam).toHaveBeenCalledTimes(1)
+    await act(async () => { resolve({ ok: true }) })
+    // The guard is released afterwards.
+    type(teamBox(), 'Again')
+    await act(async () => { fireEvent.submit(form) })
+    expect(actions.createTeam).toHaveBeenCalledTimes(2)
+  })
+
+  it('a later success clears the error from an earlier failure', async () => {
+    actions.createTeam.mockResolvedValueOnce({ ok: false, error: 'Name taken' }).mockResolvedValueOnce({ ok: true })
+    renderPanel()
+    type(teamBox(), 'Pharmacy')
+    await act(async () => { fireEvent.click(addButton()) })
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    await act(async () => { fireEvent.click(addButton()) })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(teamBox()).toHaveValue('')
+  })
+
+  it('releases the guard when the hook throws', async () => {
+    actions.createTeam.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce({ ok: true })
+    renderPanel()
+    type(teamBox(), 'Pharmacy')
+    await act(async () => { fireEvent.click(addButton()) })
+    expect(screen.getByRole('alert')).toHaveTextContent('boom')
+    await act(async () => { fireEvent.click(addButton()) })
+    expect(actions.createTeam).toHaveBeenCalledTimes(2)
   })
 })
 

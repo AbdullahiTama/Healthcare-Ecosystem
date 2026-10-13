@@ -85,6 +85,8 @@ export function useStaffActions() {
       ['create_team', 'admin_team', clean, {}], 'Team created')
   }, [perform])
 
+  // `roleId` is sent as given: the hook trusts the caller to pass the id of the
+  // role row that matches `role` (the same gap as assignRole's roleName).
   const createStaff = useCallback(({ name, email, password, role, roleId, teamId }) => {
     const cleanName = (name || '').trim()
     const cleanEmail = (email || '').trim().toLowerCase()
