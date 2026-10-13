@@ -14,6 +14,7 @@ import { useLiveActions, slideContent } from './useLiveActions'
 const run = async (fn) => { let out; await act(async () => { out = await fn() }); return out }
 const client = new QueryClient()
 const setup = () => renderHook(() => useLiveActions(), { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> })
+const deferred = () => { let resolve, reject; const p = new Promise((res, rej) => { resolve = res; reject = rej }); return { p, resolve, reject } }
 const controlKey = (id) => ({ queryKey: ['admin', 'live', 'control', id] })
 const trailer = { name: 't.mp4', type: 'video/webm' }
 const image = { name: 'p.png' }
@@ -269,8 +270,6 @@ describe('busy', () => {
 })
 
 describe('in-flight guard', () => {
-  const deferred = () => { let resolve, reject; const p = new Promise((res, rej) => { resolve = res; reject = rej }); return { p, resolve, reject } }
-
   it('a second endShow on the same show is refused without a server call', async () => {
     const d = deferred()
     callAdminAuth.mockImplementation(() => d.p)
@@ -345,8 +344,6 @@ describe('in-flight guard', () => {
 })
 
 describe('the guard is held until the refresh has landed', () => {
-  const deferred = () => { let resolve, reject; const p = new Promise((res, rej) => { resolve = res; reject = rej }); return { p, resolve, reject } }
-
   it('a second endShow during the refresh is refused, and the guard is released afterwards', async () => {
     const refresh = deferred()
     admin.invalidateAdmin.mockImplementation(() => refresh.p)

@@ -122,7 +122,6 @@ describe('useLiveControl', () => {
     repo.getLiveControl.mockImplementation(() => new Promise(r => { release = () => r(dataFor('a')) }))
     const { result } = renderHook(() => useLiveControl('a'), { wrapper: makeWrapper() })
     expect(result.current.isSuccess).toBe(false)
-    expect(result.current.isSuccess).toBe(false)
     await waitFor(() => expect(repo.getLiveControl).toHaveBeenCalledTimes(1))
     await act(async () => { lastConfigs().items.onAny({ eventType: 'INSERT' }); lastConfigs().comments.pollFn() })
     expect(repo.getLiveControl).toHaveBeenCalledTimes(1)
