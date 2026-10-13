@@ -107,6 +107,11 @@ describe('useTaskActions.createTask', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(1500); await p })
     expect(result.current.busy).toBe(false)
   })
+  it('a non-string specialty does not throw', async () => {
+    const { result } = setup()
+    expect(await run(() => result.current.createTask({ ...good, specialty: 42 }))).toEqual({ ok: true })
+    expect(callAdminAuth.mock.calls[0][1].specialty).toBe('42')
+  })
   it('refuses a repeat while running', async () => {
     const d = deferred()
     callAdminAuth.mockReturnValue(d.p)

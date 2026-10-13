@@ -45,7 +45,7 @@ export function useTaskActions() {
     try {
       try {
         await callAdminAuth('create_task', {
-          title: cleanTitle, description: cleanDescription, compensation: cleanPay, specialty: specialty?.trim() || null,
+          title: cleanTitle, description: cleanDescription, compensation: cleanPay, specialty: String(specialty ?? '').trim() || null,
         })
       } catch (err) {
         return { ok: false, error: err?.message || String(err) }

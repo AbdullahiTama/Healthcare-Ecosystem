@@ -208,6 +208,42 @@ describe('in-flight guard', () => {
     expect(result.current.isBusy('toggleStaff', 's1')).toBe(false)
     expect(result.current.busy).toBeNull()
   })
+  it('different targets run together; the same target is refused', async () => {
+    const d = deferred()
+    callAdminAuth.mockImplementation((a, payload) => (a === 'toggle_staff' && payload.staffId === 's1' ? d.p : Promise.resolve({})))
+    const { result } = setup()
+    let first
+    act(() => { first = result.current.toggleStaff({ id: 's1', isActive: false }) })
+    await run(() => result.current.toggleStaff({ id: 's2', isActive: false }))
+    expect(serverCalls().map(c => c[1].staffId)).toEqual(['s1', 's2'])
+    expect(await run(() => result.current.toggleStaff({ id: 's1', isActive: true }))).toEqual({ ok: false, error: 'Already running' })
+    expect(serverCalls()).toHaveLength(2)
+    await act(async () => { d.resolve({}); await first })
+  })
+  it('one staff create or role create at a time, whatever the email or name', async () => {
+    const d = deferred()
+    callAdminAuth.mockImplementation((a) => (a === 'create_staff' || a === 'create_admin_role' ? d.p : Promise.resolve({})))
+    const { result } = setup()
+    const staff = { name: 'A', email: 'a@x.test', password: 'longenough1', role: 'support', teamId: null }
+    let first, second
+    act(() => { first = result.current.createStaff(staff) })
+    expect(result.current.busy).toBe('createStaff')
+    expect(await run(() => result.current.createStaff({ ...staff, email: 'b@x.test' }))).toEqual({ ok: false, error: 'Already running' })
+    act(() => { second = result.current.createRole({ name: 'One', tabs: {} }) })
+    expect(await run(() => result.current.createRole({ name: 'Two', tabs: {} }))).toEqual({ ok: false, error: 'Already running' })
+    await act(async () => { d.resolve({}); await first; await second })
+    expect(serverCalls().map(c => c[0])).toEqual(['create_staff', 'create_admin_role'])
+  })
+  it('a slow audit does not delay the refresh', async () => {
+    callAdminAuth.mockImplementation((a) => (a === 'log_audit_action' ? new Promise(() => {}) : Promise.resolve({})))
+    vi.useFakeTimers()
+    const { result } = setup()
+    let p
+    act(() => { p = result.current.deleteRole({ roleId: 'r1' }) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(admin.invalidateAdmin).toHaveBeenCalledTimes(1)
+    await act(async () => { await vi.advanceTimersByTimeAsync(10500); await p })
+  })
   it('releases the key after the 10 s cap when the refresh hangs', async () => {
     vi.useFakeTimers()
     admin.invalidateAdmin.mockReturnValue(new Promise(() => {}))

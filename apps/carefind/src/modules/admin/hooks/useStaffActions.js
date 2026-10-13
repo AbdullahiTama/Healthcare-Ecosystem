@@ -20,7 +20,9 @@ import { ALL_TABS } from '../navigation'
 // key is already running resolves { ok: false, error: 'Already running' } with
 // no server call, so a double click cannot create twice. The key is held until
 // the refresh has landed, capped at 10 s so a hung query cannot disable the
-// controls for good. `isBusy(action, target)` drives the UI; `busy` is the
+// controls for good. createStaff and createRole use an empty target: one at a
+// time, whatever the email or name, so the UI should read `busy === 'createStaff'`
+// (or 'createRole') to disable its form. `isBusy(action, target)` drives the UI; `busy` is the
 // action name of the oldest running key, or null.
 
 const REFRESH_CAP_MS = 10000
@@ -61,8 +63,11 @@ export function useStaffActions() {
       }
       await capped((async () => {
         const [auditAction, targetType, targetId, metadata] = audit
-        await bestEffort(`auditing ${auditAction}`, () => callAdminAuth('log_audit_action', { auditAction, targetType, targetId, metadata }))
-        await bestEffort(`refreshing after ${name}`, invalidateAdmin)
+        // Together, so a slow audit cannot eat the refresh's share of the cap.
+        await Promise.all([
+          bestEffort(`auditing ${auditAction}`, () => callAdminAuth('log_audit_action', { auditAction, targetType, targetId, metadata })),
+          bestEffort(`refreshing after ${name}`, invalidateAdmin),
+        ])
       })(), REFRESH_CAP_MS)
       bestEffort(`toasting ${name}`, () => showToast(success, { type: 'success' }))
       return { ok: true }
@@ -88,7 +93,7 @@ export function useStaffActions() {
     if (!role || norm(role) === 'super_admin') return Promise.resolve({ ok: false, error: 'Pick a role for this account' })
     const team = teamId || null
     // The audit entry never carries the password or the name.
-    return perform('createStaff', cleanEmail, 'create_staff', {
+    return perform('createStaff', null, 'create_staff', {
       newEmail: cleanEmail, newPassword: password, newName: cleanName, newRole: role, teamId: team,
       ...(roleId ? { roleId } : {}),
     }, ['create_staff', 'admin_user', cleanEmail, { role, teamId: team, customRole: !!roleId }], 'Staff account created')
@@ -111,7 +116,7 @@ export function useStaffActions() {
     if (!clean) return Promise.resolve({ ok: false, error: 'Enter a role name' })
     if (norm(clean) === 'super_admin') return Promise.resolve({ ok: false, error: 'That role name is reserved' })
     const carefindTabs = withOverview(tabs)
-    return perform('createRole', clean, 'create_admin_role', { name: clean, description: description || '', carefindTabs },
+    return perform('createRole', null, 'create_admin_role', { name: clean, description: description || '', carefindTabs },
       ['create_role', 'admin_role', clean, { tabs: enabledTabs(carefindTabs) }], 'Role created')
   }, [perform])
 
