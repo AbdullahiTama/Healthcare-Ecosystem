@@ -230,3 +230,8 @@ button.adm-alert:hover { background: var(--adm-line-soft); }
 .adm-team-member { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 6px; background: var(--adm-line-soft); min-width: 0; }
 .adm-team-member-name { display: flex; flex-direction: column; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
 .adm-staff-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.adm-staff-create, .adm-role-create { display: flex; flex-direction: column; gap: 12px; padding: 16px; min-width: 0; }
+.adm-staff-form { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.adm-password-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+.adm-password-row > :first-child { flex: 1 1 200px; min-width: 0; }
+.adm-password-row > button { margin-top: 20px; }

@@ -4,6 +4,7 @@ import { Button, DataTable, Empty, Select, StatusBadge } from '@care-ecosystem/d
 import ReviewDrawer from '../../ui/ReviewDrawer.jsx'
 import { timeAgo } from '../../ui'
 import SourceNotice, { isOk } from './SourceNotice.jsx'
+import { norm, SYSTEM_ROLES } from './roleNames.js'
 import { useStaffActions } from '../../hooks/useStaffActions'
 import { useAdmin } from '../../provider/AdminProvider.jsx'
 import '../../ui/admin.css'
@@ -17,8 +18,6 @@ import '../../ui/admin.css'
 // that promotion, so it is only kept out of the choices here and in
 // useStaffActions.assignRole.
 
-const norm = (s) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, '_')
-const SYSTEM_ROLES = ['moderator', 'verification_officer', 'business_manager', 'support_agent', 'analytics_manager']
 const roleLabel = (role) => (typeof role === 'string' && role ? role.replace(/_/g, ' ') : '—')
 const nameOf = (s) => s.full_name || s.email || 'Unnamed'
 const signedIn = (d) => (!d || Number.isNaN(new Date(d).getTime()) ? '—' : timeAgo(d))
