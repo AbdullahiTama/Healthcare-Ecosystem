@@ -34,7 +34,7 @@ export function useLiveControl(showId, enabled = true) {
     activeRef.current = active
   })
   const refetchStable = useCallback(() => {
-    if (activeRef.current) refetchRef.current()
+    if (activeRef.current) refetchRef.current({ cancelRefetch: false })
   }, [])
 
   // An empty channelName keeps the channel and its poll unmounted.

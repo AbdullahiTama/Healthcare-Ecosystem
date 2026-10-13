@@ -117,6 +117,19 @@ describe('useLiveControl', () => {
     await waitFor(() => expect(repo.getLiveControl).toHaveBeenCalledTimes(2))
   })
 
+  it('a channel or poll refresh does not cancel a load already in progress', async () => {
+    let release
+    repo.getLiveControl.mockImplementation(() => new Promise(r => { release = () => r(dataFor('a')) }))
+    const { result } = renderHook(() => useLiveControl('a'), { wrapper: makeWrapper() })
+    expect(result.current.isSuccess).toBe(false)
+    expect(result.current.isSuccess).toBe(false)
+    await waitFor(() => expect(repo.getLiveControl).toHaveBeenCalledTimes(1))
+    await act(async () => { lastConfigs().items.onAny({ eventType: 'INSERT' }); lastConfigs().comments.pollFn() })
+    expect(repo.getLiveControl).toHaveBeenCalledTimes(1)
+    await act(async () => { release() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+  })
+
   it('without a show id: no repository call, inert channels, handlers do not refetch', async () => {
     const { result } = renderHook(() => useLiveControl(null), { wrapper: makeWrapper() })
     expect(result.current.fetchStatus).toBe('idle')

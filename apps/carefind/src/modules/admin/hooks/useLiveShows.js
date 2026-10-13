@@ -44,7 +44,7 @@ export function useLiveShows(enabled = true) {
   const enabledRef = useRef(enabled)
   useEffect(() => { enabledRef.current = enabled })
   const refetchStable = useCallback(() => {
-    if (enabledRef.current) refetchRef.current()
+    if (enabledRef.current) refetchRef.current({ cancelRefetch: false })
   }, [])
 
   useRealtimeChannel({

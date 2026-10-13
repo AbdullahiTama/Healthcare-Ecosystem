@@ -77,6 +77,18 @@ describe('useLiveShows', () => {
     await act(async () => { lastConfig().onAny({ eventType: 'UPDATE' }) })
     await waitFor(() => expect(repo.getActiveShows).toHaveBeenCalledTimes(2))
   })
+  it('a channel or poll refresh does not cancel a load already in progress', async () => {
+    let release
+    repo.getActiveShows.mockImplementation(() => new Promise(r => { release = () => r([{ id: 'a1' }]) }))
+    const { result } = renderHook(() => useLiveShows(), { wrapper: makeWrapper() })
+    expect(result.current.isSuccess).toBe(false)
+    await waitFor(() => expect(repo.getActiveShows).toHaveBeenCalledTimes(1))
+    await act(async () => { lastConfig().onAny({ eventType: 'UPDATE' }); lastConfig().pollFn() })
+    expect(repo.getActiveShows).toHaveBeenCalledTimes(1)
+    await act(async () => { release() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+  })
+
   it('makes no repository calls while disabled, and the handlers do not refetch', async () => {
     const { result } = renderHook(() => useLiveShows(false), { wrapper: makeWrapper() })
     expect(result.current.fetchStatus).toBe('idle')
