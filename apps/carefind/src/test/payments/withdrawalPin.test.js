@@ -47,7 +47,7 @@ describe('withdrawal-pin handler', () => {
     const issued = () => mockSupabase.rpc.mock.calls.filter(([fn]) => fn === 'issue_otp')
 
     beforeEach(() => {
-      mockSupabase.rpc.mockImplementation(async (fn) => (fn === 'issue_otp' ? { data: 'ok', error: null } : { data: null, error: null }))
+      mockSupabase.rpc.mockImplementation(async (fn) => (fn === 'issue_otp' ? { data: 'ok', error: null } : fn === 'create_withdrawal_draft' ? { data: { ok: true, draft_id: 'd-1' }, error: null } : { data: null, error: null }))
     })
 
     it('issues a PIN-set code by default', async () => {
@@ -59,7 +59,7 @@ describe('withdrawal-pin handler', () => {
 
     it('issues a withdrawal code when asked, and nothing for any other purpose', async () => {
       mockVerifyUser.mockResolvedValue({ ...confirmedUser, email: 'u@example.com' })
-      let res = await handler(makeReq('/api/withdrawal-pin/otp', { purpose: 'withdrawal' }), makeRes())
+      let res = await handler(makeReq('/api/withdrawal-pin/otp', { purpose: 'withdrawal', amount: 10 }), makeRes())
       expect(res.statusCode).toBe(200)
       expect(issued()[0][1]).toMatchObject({ p_purpose: 'withdrawal' })
       mockSupabase.rpc.mockClear()
