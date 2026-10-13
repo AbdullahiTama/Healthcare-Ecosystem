@@ -1,18 +1,12 @@
 import { useEffect, useState } from 'react'
-import { commerceRepository } from '../repositories/commerceRepository'
 import { callAdminAuth } from '../adminApi'
 import { useAdmin } from '../provider/AdminProvider.jsx'
 import { ALL_TABS } from '../navigation'
-import { useAdminData, useAdminSearchLogs, useAdminShopData, useAdminRoles } from '../../../hooks/queries'
+import { useAdminData, useAdminShopData, useAdminRoles } from '../../../hooks/queries'
 import ShopTab from '../tabs/ShopTab.jsx'
-import DrugsTab from '../tabs/DrugsTab.jsx'
 import TasksTab from '../tabs/TasksTab.jsx'
 import TeamsTab from '../tabs/TeamsTab.jsx'
-import SearchesTab from '../tabs/SearchesTab.jsx'
-import NotificationsTab from '../tabs/NotificationsTab.jsx'
 import EmailTemplatesTab from '../tabs/EmailTemplatesTab.jsx'
-import AuditLog from '../components/AuditLog.jsx'
-import ErrorsTab from '../tabs/ErrorsTab.jsx'
 
 // The screens that have not been redesigned yet. They still receive the state
 // and handlers they were written against; each redesign phase moves a tab's
@@ -22,12 +16,6 @@ import ErrorsTab from '../tabs/ErrorsTab.jsx'
 export default function LegacyTabHost({ tab, setTab }) {
   const { adminUser, permissions: adminPermissions, showToast, askConfirm, invalidateAdmin } = useAdmin()
 
-  const [drugSearch, setDrugSearch] = useState('')
-  const [drugReviews, setDrugReviews] = useState([])
-  const [drugName, setDrugName] = useState('')
-  const [drugRatingFilter, setDrugRatingFilter] = useState('all')
-  const [drugDateFrom, setDrugDateFrom] = useState('')
-  const [drugDateTo, setDrugDateTo] = useState('')
   const [taskTitle, setTaskTitle] = useState('')
   const [taskDesc, setTaskDesc] = useState('')
   const [taskComp, setTaskComp] = useState('')
@@ -51,11 +39,10 @@ export default function LegacyTabHost({ tab, setTab }) {
   const [savingRole, setSavingRole] = useState(false)
 
   const { data: adminData } = useAdminData(!!adminUser)
-  const { data: searchLogs = [] } = useAdminSearchLogs(!!adminUser)
   const { data: shopData } = useAdminShopData(!!adminUser)
   const { data: adminRoles = [] } = useAdminRoles(!!adminUser)
 
-  const { tasks = [], teams = [], staff = [], notifications = [], notifCount = 0, roleNotifCount = 0, stats = {} } = adminData || {}
+  const { tasks = [], teams = [], staff = [] } = adminData || {}
   const ecomApps = shopData?.apps || []
   const ecomProductsAdmin = shopData?.products || []
   const shopOrdersAdmin = shopData?.orders || []
@@ -71,15 +58,6 @@ export default function LegacyTabHost({ tab, setTab }) {
       await callAdminAuth('moderate_ecommerce_product', {  id, ...patch })
       showToast('Product updated', { type: 'success' }); invalidateAdmin()
     } catch (e) { showToast(e.message, { type: 'error' }) }
-  }
-
-  async function searchDrugs() {
-    if (!drugSearch.trim()) return
-    const products = await commerceRepository.searchProducts(drugSearch)
-    if (!products?.length) { setDrugReviews([]); return }
-    setDrugName(products[0].name)
-    const reviews = await commerceRepository.getProductReviews(products.map(p => p.id))
-    setDrugReviews(reviews || [])
   }
 
   async function createTask() {
@@ -123,14 +101,9 @@ export default function LegacyTabHost({ tab, setTab }) {
 
   return (
     <div>
-      {tab === 'audit_log' && <AuditLog />}
-      {tab === 'errors' && <ErrorsTab showToast={showToast} />}
-      {tab === 'drugs' && <DrugsTab drugSearch={drugSearch} setDrugSearch={setDrugSearch} drugReviews={drugReviews} drugName={drugName} setDrugName={setDrugName} drugRatingFilter={drugRatingFilter} setDrugRatingFilter={setDrugRatingFilter} drugDateFrom={drugDateFrom} setDrugDateFrom={setDrugDateFrom} drugDateTo={drugDateTo} setDrugDateTo={setDrugDateTo} searchDrugs={searchDrugs} />}
       {tab === 'tasks' && <TasksTab tasks={tasks} taskTitle={taskTitle} setTaskTitle={setTaskTitle} taskDesc={taskDesc} setTaskDesc={setTaskDesc} taskComp={taskComp} setTaskComp={setTaskComp} taskSpec={taskSpec} setTaskSpec={setTaskSpec} savingTask={savingTask} createTask={createTask} />}
       {tab === 'teams' && <TeamsTab teams={teams} staff={staff} teamName={teamName} setTeamName={setTeamName} createTeam={createTeam} staffName={staffName} setStaffName={setStaffName} staffEmail={staffEmail} setStaffEmail={setStaffEmail} staffPass={staffPass} setStaffPass={setStaffPass} staffRole={staffRole} setStaffRole={setStaffRole} staffTeam={staffTeam} setStaffTeam={setStaffTeam} savingStaff={savingStaff} staffMsg={staffMsg} setStaffMsg={setStaffMsg} createStaff={createStaff} adminUser={adminUser} adminRoles={adminRoles} newRoleName={newRoleName} setNewRoleName={setNewRoleName} newRoleDesc={newRoleDesc} setNewRoleDesc={setNewRoleDesc} newRoleTabs={newRoleTabs} setNewRoleTabs={setNewRoleTabs} editingRoleId={editingRoleId} setEditingRoleId={setEditingRoleId} editingRoleTabs={editingRoleTabs} setEditingRoleTabs={setEditingRoleTabs} savingRole={savingRole} loadAdminRoles={invalidateAdmin} showToast={showToast} ALL_TABS={ALL_TABS} />}
-      {tab === 'searches' && <SearchesTab searchLogs={searchLogs} />}
       {tab === 'shop' && <ShopTab showToast={showToast} />}
-      {tab === 'notifications' && <NotificationsTab notifications={notifications} setTab={setTab} />}
       {tab === 'email_templates' && <EmailTemplatesTab showToast={showToast} />}
     </div>
   )

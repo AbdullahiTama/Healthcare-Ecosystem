@@ -13,7 +13,7 @@ const SEARCH_DELAY_MS = 300
 // Retry and never an empty message.
 export default function DirectoryTable({
   title, noun, plural, query, columns, search, onSearch, searchPlaceholder, filters,
-  filtersActive, onClear, page, onPage, renderDrawer, toolbar, rowLabel,
+  filtersActive, onClear, page, onPage, renderDrawer, toolbar, rowLabel, emptyNote,
 }) {
   // `plural` is only needed when `${noun}s` is not the plural (business, businesses).
   const nouns = plural || `${noun}s`
@@ -68,8 +68,12 @@ export default function DirectoryTable({
     : isPlaceholderData ? 'Updating…'
       : data?.total != null ? `${data.total} ${data.total === 1 ? noun : nouns}` : `${rows.length} shown`
 
+  // `emptyNote` lets a screen replace the standard empty message when it knows
+  // better (e.g. rows were loaded but a client-side filter hid them all).
   const empty = isPlaceholderData
     ? <p className="adm-note">Updating…</p>
+    : emptyNote
+    ? <p className="adm-note">{emptyNote}</p>
     : page > 0
     ? (
       <div>
