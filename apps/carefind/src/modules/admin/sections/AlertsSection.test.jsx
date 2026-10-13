@@ -143,6 +143,7 @@ describe('AlertsSection', () => {
     render(<AlertsSection onOpenTab={() => {}} />)
     const btn = within(screen.getByRole('alert')).getByRole('button')
     expect(btn).toBeDisabled()
-    expect(btn).toHaveTextContent('Checking…')
+    expect(btn).toHaveTextContent('Checkingâ€¦')
+    expect(btn.textContent).not.toContain(String.fromCharCode(0xfffd))
   })
 })

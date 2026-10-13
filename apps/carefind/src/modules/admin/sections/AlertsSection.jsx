@@ -65,7 +65,7 @@ export default function AlertsSection({ onOpenTab }) {
     body = (
       <div role="alert" className="adm-notice">
         Couldn't check alerts.{' '}
-        <Button variant="ghost" size="sm" onClick={() => refetch()} loading={isFetching} loadingText="Checking…">Retry</Button>
+        <Button variant="ghost" size="sm" onClick={() => refetch()} loading={isFetching} loadingText="Checkingâ€¦">Retry</Button>
       </div>
     )
   } else if (loading || !data) {
@@ -76,13 +76,13 @@ export default function AlertsSection({ onOpenTab }) {
         {stale && (
           <div role="status" className="adm-live-warn">
             <span>Couldn't refresh, showing the last loaded data.</span>
-            <Button variant="ghost" size="sm" aria-label="Retry refreshing alerts" onClick={() => refetch()} loading={isFetching} loadingText="Checking…">Retry</Button>
+            <Button variant="ghost" size="sm" aria-label="Retry refreshing alerts" onClick={() => refetch()} loading={isFetching} loadingText="Checkingâ€¦">Retry</Button>
           </div>
         )}
         {failed.length > 0 && (
           <div role="alert" className="adm-notice adm-panel">
             {`Couldn't check: ${failed.join(', ')}. Items of these kinds may be waiting. `}
-            <Button variant="ghost" size="sm" onClick={() => refetch()} loading={isFetching} loadingText="Checking…">Retry</Button>
+            <Button variant="ghost" size="sm" onClick={() => refetch()} loading={isFetching} loadingText="Checkingâ€¦">Retry</Button>
           </div>
         )}
         {alerts.length === 0 && (
