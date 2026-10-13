@@ -10,7 +10,7 @@ import { todayDate } from '../../lib/utils'
 import { authClient } from '../../lib/authClient'
 import { theme } from '../../styles/theme'
 import WithdrawalPinField from '../wallet/WithdrawalPinField'
-import WithdrawalOtpField from '../wallet/WithdrawalOtpField'
+import WithdrawalOtpField, { clearWithdrawalOtpMeta } from '../wallet/WithdrawalOtpField'
 import { startBusinessWithdrawal, withdrawalErrorMessage } from '../wallet/withdrawalApi'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Avatar, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
@@ -281,6 +281,13 @@ export default function Appointments({ brand, role, perms }) {
   }
 
   const naira = (kobo) => `₦${((kobo || 0) / 100).toLocaleString()}`
+  // The OTP draft is owned in kobo (the unit the submit sends). Until the typed
+  // amount parses to a positive integer there is nothing to draft, so the field
+  // falls back to its legacy `{purpose:'withdrawal'}` request.
+  const otpAmountKobo = (() => {
+    const k = Math.round(parseFloat(withdrawForm.amount) * 100)
+    return Number.isFinite(k) && k > 0 ? k : undefined
+  })()
 
   // ADR-005 payout: owner withdraws the available balance to their bank. The
   // held→available gate is enforced server-side (RPC); the transfer fires
@@ -312,9 +319,12 @@ export default function Appointments({ brand, role, perms }) {
         if (r.data.needsPin) setNeedsPin(true)
         showToast(withdrawalErrorMessage(r.data), { type: 'error' })
         setWithdrawPin(''); setWithdrawOtp('')
+        // A dead code stays dead: the server voided the draft, so drop the resume countdown too.
+        if (r.data.code === 'otp_superseded' || r.data.code === 'draft_mismatch') clearWithdrawalOtpMeta()
         setWithdrawing(false); return
       }
       setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false); setShowWithdraw(false); setAccountResolved(false)
+      clearWithdrawalOtpMeta()
       // Refresh the wallet balance.
       sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => { if (Array.isArray(w) && w[0]) setWallet(w[0]) }).catch(() => {})
       showToast('Withdrawal started — it will arrive shortly.', { type: 'success' })
@@ -603,7 +613,10 @@ export default function Appointments({ brand, role, perms }) {
             )}
           </div>
           <WithdrawalPinField pin={withdrawPin} onPinChange={setWithdrawPin} needsPin={needsPin} disabled={withdrawing} />
-          <WithdrawalOtpField value={withdrawOtp} onChange={setWithdrawOtp} disabled={withdrawing} />
+          <WithdrawalOtpField value={withdrawOtp} onChange={setWithdrawOtp} disabled={withdrawing}
+            amount={otpAmountKobo}
+            bankCode={withdrawForm.bankCode || undefined}
+            accountNumber={withdrawForm.accountNumber || undefined} />
         </div>
       </Modal>
 

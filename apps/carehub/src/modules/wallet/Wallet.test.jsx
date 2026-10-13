@@ -152,6 +152,57 @@ describe('Wallet top-up flow', () => {
   })
 })
 
+describe('Wallet withdraw: a dead OTP is cleared on otp_superseded', () => {
+  const typeEl = async (el, value) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+    await act(async () => { setter.call(el, value); el.dispatchEvent(new Event('input', { bubbles: true })) })
+  }
+  const waitForEl = async (sel) => {
+    for (let i = 0; i < 40 && !host.querySelector(sel); i++) {
+      await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    }
+    return host.querySelector(sel)
+  }
+
+  it('clears the typed code, surfaces the server text, and drops the resume countdown', async () => {
+    fetchMock.mockImplementation(async (url) => {
+      if (String(url).includes('/api/banks')) return reply(200, [{ code: '058', name: 'GTBank' }])
+      if (String(url).includes('/api/payout-accounts/list')) return reply(200, { accounts: [], required: false, kycEnabled: false })
+      if (String(url).includes('/api/withdrawal-pin/draft')) return reply(200, { draft: null })
+      if (String(url).includes('/api/withdrawal-pin/otp')) return reply(200, { ok: true, expiresInSeconds: 300 })
+      if (String(url).includes('/api/resolve-account')) return reply(200, { accountName: 'TEST USER' })
+      if (String(url).includes('/api/initiate-business-withdrawal')) return reply(400, { code: 'otp_superseded', error: 'A newer code was issued — please use the latest email.' })
+      return reply(404, {})
+    })
+    await mount()
+    sessionStorage.clear()
+    await click('Withdraw')
+    await waitForEl('input[role="combobox"]')
+
+    await typeEl(host.querySelector('input[placeholder="e.g. 5000"]'), '5000')
+
+    await typeEl(host.querySelector('input[role="combobox"]'), 'GTB')
+    const option = [...host.querySelectorAll('[role="option"]')].find((o) => o.textContent.includes('GTBank'))
+    expect(option).toBeTruthy()
+    await act(async () => { option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })) })
+
+    await type('account-number', '0123456789')
+    await act(async () => { await new Promise((r) => setTimeout(r, 900)) }) // debounced bank resolve
+
+    await type('withdrawal-pin', '1234')
+    await click('Email me a 6-digit code')
+    await type('otp-withdrawal', '123456')
+
+    const submit = [...host.querySelectorAll('button')].filter((b) => b.textContent.trim() === 'Withdraw').at(-1)
+    expect(submit.disabled).toBe(false)
+    await act(async () => { submit.click() })
+    await act(async () => {})
+
+    expect(host.querySelector('#otp-withdrawal').value).toBe('')
+    expect(host.textContent).toContain('A newer code was issued')
+    expect(sessionStorage.getItem('ch-withdrawal-otp-meta')).toBeNull()
+  })
+})
 describe('Wallet top-up: the processing fee is shown before checkout (the server decides the charge)', () => {
   const withRate = (rate) => async (url) => {
     if (String(url).includes('/api/banks')) return reply(200, [])

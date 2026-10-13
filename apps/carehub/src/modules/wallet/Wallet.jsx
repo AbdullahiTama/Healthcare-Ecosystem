@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Wallet as WalletIcon, Banknote, ArrowUpCircle, ArrowDownCircle, Clock, CheckCircle, AlertTriangle, Download, PlusCircle } from 'lucide-react'
 import { walletRepository } from './repositories'
 import WithdrawalPinField from './WithdrawalPinField'
-import WithdrawalOtpField from './WithdrawalOtpField'
+import WithdrawalOtpField, { clearWithdrawalOtpMeta } from './WithdrawalOtpField'
 import PayoutAccountsPanel from './PayoutAccountsPanel.jsx'
 import BankPicker from './BankPicker.jsx'
 import { createPayoutManager, rankBanks } from '@care-ecosystem/shared-payout-ui'
@@ -172,6 +172,13 @@ export default function Wallet({ brand, role }) {
   }
 
   const naira = (kobo) => `₦${((kobo || 0) / 100).toLocaleString()}`
+  // The OTP draft is owned in kobo (the unit the submit sends). Until the typed
+  // amount parses to a positive integer there is nothing to draft, so the field
+  // falls back to its legacy `{purpose:'withdrawal'}` request.
+  const otpAmountKobo = (() => {
+    const k = Math.round(parseFloat(withdrawForm.amount) * 100)
+    return Number.isFinite(k) && k > 0 ? k : undefined
+  })()
 
   async function handleWithdraw() {
     if (!withdrawForm.amount || (typedMode && (!withdrawForm.bankName || !withdrawForm.bankCode || !withdrawForm.accountNumber || !withdrawForm.accountName))) {
@@ -196,9 +203,12 @@ export default function Wallet({ brand, role }) {
         if (r.data.code === 'payout_account_required') payouts.load()
         showToast(withdrawalErrorMessage(r.data), { type: 'error' })
         setWithdrawPin(''); setWithdrawOtp('')
+        // A dead code stays dead: the server voided the draft, so drop the resume countdown too.
+        if (r.data.code === 'otp_superseded' || r.data.code === 'draft_mismatch') clearWithdrawalOtpMeta()
         setWithdrawing(false); return
       }
       setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false); setShowWithdraw(false); setAccountResolved(false)
+      clearWithdrawalOtpMeta()
       load()
       showToast('Withdrawal started — will arrive shortly.', { type: 'success' })
     } catch (e) { showToast('Network error.', { type: 'error' }) }
@@ -398,7 +408,10 @@ export default function Wallet({ brand, role }) {
                 </>
               )}
               <WithdrawalPinField pin={withdrawPin} onPinChange={setWithdrawPin} needsPin={needsPin} disabled={withdrawing} />
-              <WithdrawalOtpField value={withdrawOtp} onChange={setWithdrawOtp} disabled={withdrawing} />
+              <WithdrawalOtpField value={withdrawOtp} onChange={setWithdrawOtp} disabled={withdrawing}
+                amount={otpAmountKobo} payoutAccountId={typedMode ? undefined : savedAccount?.id}
+                bankCode={typedMode ? (withdrawForm.bankCode || undefined) : undefined}
+                accountNumber={typedMode ? (withdrawForm.accountNumber || undefined) : undefined} />
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
                 <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
                 <TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !/^\d{6}$/.test(withdrawOtp) || !(typedMode ? (typedAllowed && (accountResolved || withdrawForm.accountName)) : savedAccount) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !/^\d{6}$/.test(withdrawOtp) || !(typedMode ? (typedAllowed && (accountResolved || withdrawForm.accountName)) : savedAccount) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>

@@ -12,7 +12,7 @@ import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Inp, Toast, useToast, CardSkeleton } from '../../components/ui/index.jsx'
 import WithdrawalPinModal from './WithdrawalPinModal.jsx'
-import WithdrawalOtpField from './WithdrawalOtpField.jsx'
+import WithdrawalOtpField, { clearWithdrawalOtpMeta } from './WithdrawalOtpField.jsx'
 import PayoutAccountsPanel from './PayoutAccountsPanel.jsx'
 import BankPicker from './BankPicker.jsx'
 import { createPayoutManager, rankBanks } from '@care-ecosystem/shared-payout-ui'
@@ -244,6 +244,12 @@ function Wallet() {
         const msg = data.error === 'insufficient' ? "You don't have enough CareCoins for that amount."
           : data.error === 'Payment provider balance low' ? 'Payment provider balance low. Try again later.'
           : data.error || 'Could not process withdrawal.'
+        // A dead code stays dead: the server voided the draft, so the typed
+        // value can never succeed — clear it and drop the resume countdown.
+        if (data.code === 'otp_superseded' || data.code === 'draft_mismatch') {
+          setWdOtp('')
+          clearWithdrawalOtpMeta()
+        }
         if (data.code === 'payout_account_required') {
           payouts.load()
           showToast(msg, { type: 'error' })
@@ -256,6 +262,7 @@ function Wallet() {
       }
 
       setWdAmount(''); setWdBankCode(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName(''); setWdPin(''); setWdOtp(''); setWdAccountResolved(false)
+      clearWithdrawalOtpMeta()
       qc.invalidateQueries({ queryKey: keys.walletData(user.id) })
       qc.invalidateQueries({ queryKey: keys.walletBalance(user.id) })
       qc.invalidateQueries({ queryKey: keys.transactions(user.id) })
@@ -551,7 +558,11 @@ function Wallet() {
                   autoComplete="current-password"
                   required
                 />
-                <WithdrawalOtpField value={wdOtp} onChange={setWdOtp} disabled={wdSubmitting} />
+                <WithdrawalOtpField value={wdOtp} onChange={setWdOtp} disabled={wdSubmitting}
+                  amount={wdAmount === '' ? undefined : wdAmount}
+                  payoutAccountId={typedMode ? undefined : savedAccount?.id}
+                  bankCode={typedMode ? (wdBankCode || undefined) : undefined}
+                  accountNumber={typedMode ? (wdAccountNumber || undefined) : undefined} />
                 <button
                   type="submit"
                   disabled={wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !(typedMode ? (typedAllowed && wdBankCode && (wdAccountResolved || wdAccountName)) : savedAccount) || !wdPin || !/^\d{6}$/.test(wdOtp)}
