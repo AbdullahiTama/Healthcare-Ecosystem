@@ -30,18 +30,18 @@ function ShowList({ source, noun, emptyText, icon, retry, render }) {
   if (source.status === 'loading') {
     return <p role="status" className="adm-note adm-live-inset">Loading {noun}…</p>
   }
-  if (source.data.length === 0) {
-    return <Empty icon={icon} message={emptyText} cause="none" />
-  }
+  const warning = source.stale && (
+    <div role="alert" className="adm-live-warn adm-live-inset-warn">
+      <span>Couldn't refresh {noun}</span>
+      <Button variant="ghost" size="sm" onClick={retry} aria-label={`Retry refreshing ${noun}`}>Retry</Button>
+    </div>
+  )
   return (
     <>
-      {source.stale && (
-        <div role="alert" className="adm-live-warn adm-live-inset-warn">
-          <span>Couldn't refresh {noun}</span>
-          <Button variant="ghost" size="sm" onClick={retry} aria-label={`Retry refreshing ${noun}`}>Retry</Button>
-        </div>
-      )}
-      <div className="adm-live-list adm-live-inset">{source.data.map(render)}</div>
+      {warning}
+      {source.data.length === 0
+        ? <Empty icon={icon} message={emptyText} cause="none" />
+        : <div className="adm-live-list adm-live-inset">{source.data.map(render)}</div>}
     </>
   )
 }
@@ -53,7 +53,7 @@ export default function GoLiveSection() {
   const scheduled = sourceOf(query, 'scheduled')
   // null when the live list could not be read, so the confirmation says so
   // instead of implying nothing else is live.
-  const liveCount = active.status === 'ok' ? active.data.length : null
+  const liveCount = active.status === 'ok' && !active.stale ? active.data.length : null
 
   return (
     <div className="adm-page">
@@ -66,7 +66,7 @@ export default function GoLiveSection() {
 
       <section className="adm-panel" aria-labelledby="golive-active-h">
         <div className="adm-phead">
-          <h2 id="golive-active-h">Currently live{active.status === 'ok' ? ` (${liveCount})` : ''}</h2>
+          <h2 id="golive-active-h">Currently live{active.status === 'ok' ? ` (${active.data.length})` : ''}</h2>
         </div>
         <ShowList source={active} noun="live shows" emptyText="No live shows right now"
           icon={<Radio size={40} strokeWidth={1.5} />} retry={retry}

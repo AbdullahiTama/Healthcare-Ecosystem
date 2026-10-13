@@ -102,7 +102,7 @@ describe('GoLiveSection', () => {
     expect(screen.getAllByTestId('live-card')).toHaveLength(1)
     expect(screen.queryByText('No live shows right now')).toBeNull()
     expect(screen.getByRole('heading', { name: 'Currently live (1)' })).toBeInTheDocument()
-    expect(shows.panelProps.at(-1)).toEqual({ liveCount: 1 })
+    expect(shows.panelProps.at(-1)).toEqual({ liveCount: null })
     fireEvent.click(within(region).getByRole('button', { name: 'Retry refreshing live shows' }))
     expect(shows.result.refetch).toHaveBeenCalledTimes(1)
   })
@@ -114,6 +114,24 @@ describe('GoLiveSection', () => {
     expect(within(region).getByRole('alert')).toHaveTextContent("Couldn't refresh scheduled shows")
     expect(screen.getAllByTestId('scheduled-card')).toHaveLength(1)
     expect(screen.queryByText('No scheduled shows')).toBeNull()
+    fireEvent.click(within(region).getByRole('button', { name: 'Retry refreshing scheduled shows' }))
+    expect(shows.result.refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('a stale empty live list still warns with Retry beside the empty text', () => {
+    shows.result = result({ status: 'ok', data: [], stale: true }, ok([]))
+    render(<GoLiveSection />)
+    const region = screen.getByRole('region', { name: /Currently live/ })
+    expect(within(region).getByRole('alert')).toHaveTextContent("Couldn't refresh live shows")
+    fireEvent.click(within(region).getByRole('button', { name: 'Retry refreshing live shows' }))
+    expect(shows.result.refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('a stale empty scheduled list still warns with Retry beside the empty text', () => {
+    shows.result = result(ok([]), { status: 'ok', data: [], stale: true })
+    render(<GoLiveSection />)
+    const region = screen.getByRole('region', { name: 'Scheduled shows' })
+    expect(within(region).getByRole('alert')).toHaveTextContent("Couldn't refresh scheduled shows")
     fireEvent.click(within(region).getByRole('button', { name: 'Retry refreshing scheduled shows' }))
     expect(shows.result.refetch).toHaveBeenCalledTimes(1)
   })
