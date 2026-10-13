@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Eye, EyeOff, UserPlus } from 'lucide-react'
 import { Button, Input, Select } from '@care-ecosystem/design-system/components/ui'
 import SourceNotice, { isOk } from './SourceNotice.jsx'
-import { norm, spaced, SYSTEM_ROLES, SYSTEM_ROLE_LABELS } from './roleNames.js'
+import { assignableCustomRoles, spaced, SYSTEM_ROLES, SYSTEM_ROLE_LABELS } from './roleNames.js'
 import { useStaffActions } from '../../hooks/useStaffActions'
 import { useAdmin } from '../../provider/AdminProvider.jsx'
 import '../../ui/admin.css'
@@ -21,11 +21,7 @@ const MIN_PASSWORD = 8
 
 // The five system roles are always offered (as the legacy form did); custom
 // roles come from the roles source. A failed roles read leaves only the five.
-function customRoles(roles) {
-  if (!isOk(roles)) return []
-  return roles.data.filter(r => r && r.id != null && typeof r.name === 'string'
-    && !r.is_system && !SYSTEM_ROLES.includes(norm(r.name)) && norm(r.name) !== 'super_admin')
-}
+const customRoles = (roles) => (isOk(roles) ? assignableCustomRoles(roles.data) : [])
 
 export default function CreateStaffPanel({ teams, roles, onRetry }) {
   const { busy, createStaff } = useStaffActions()

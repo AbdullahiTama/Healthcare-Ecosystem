@@ -99,8 +99,7 @@ function CreateRoleForm() {
 
 // The inline editor for one custom role. Only what changed is sent: the
 // description alone leaves permissions untouched; permissions go as the full map.
-function RoleEditor({ role, onClose }) {
-  const { isBusy, updateRole } = useStaffActions()
+function RoleEditor({ role, onClose, isBusy, updateRole }) {
   const { showToast } = useAdmin()
   const ids = useId()
   const mounted = useMounted()
@@ -154,7 +153,7 @@ function RoleEditor({ role, onClose }) {
   )
 }
 
-function RoleRow({ role, editing, onEdit, onCancel, onDelete }) {
+function RoleRow({ role, editing, deleting, onEdit, onCancel, onDelete, isBusy, updateRole }) {
   const system = isSystemRole(role)
   const label = spaced(role.name)
   return (
@@ -170,18 +169,20 @@ function RoleRow({ role, editing, onEdit, onCancel, onDelete }) {
         <div className="adm-role-actions">
           <Button size="sm" variant="secondary" aria-label={`Edit ${label}`} leftIcon={<Pencil size={14} aria-hidden="true" />}
             onClick={onEdit}>Edit</Button>
-          <Button size="sm" variant="danger" aria-label={`Delete ${label}`} leftIcon={<Trash2 size={14} aria-hidden="true" />}
+          <Button size="sm" variant="danger" aria-label={`Delete ${label}`} disabled={deleting} leftIcon={<Trash2 size={14} aria-hidden="true" />}
             onClick={onDelete}>Delete</Button>
         </div>
       )}
-      {!system && editing && <RoleEditor role={role} onClose={onCancel} />}
+      {!system && editing && <RoleEditor role={role} onClose={onCancel} isBusy={isBusy} updateRole={updateRole} />}
     </li>
   )
 }
 
 export default function RolesPanel({ roles, onRetry }) {
   const { adminUser, askConfirm, showToast } = useAdmin()
-  const { deleteRole } = useStaffActions()
+  // One hook for the whole panel: its in-flight guard is per instance, so every
+  // editor shares it and a second save of the same role cannot start.
+  const { isBusy, updateRole, deleteRole } = useStaffActions()
   const [editingId, setEditingId] = useState(null)
 
   if (norm(adminUser?.role) !== 'super_admin') {
@@ -211,7 +212,8 @@ export default function RolesPanel({ roles, onRetry }) {
         <>
           <ul className="adm-role-list" aria-label="Role list">
             {list.map(r => (
-              <RoleRow key={r.id} role={r} editing={editingId === r.id}
+              <RoleRow key={r.id} role={r} editing={editingId === r.id} deleting={isBusy('deleteRole', r.id)}
+                isBusy={isBusy} updateRole={updateRole}
                 onEdit={() => setEditingId(r.id)} onCancel={() => setEditingId(null)} onDelete={() => confirmDelete(r)} />
             ))}
           </ul>

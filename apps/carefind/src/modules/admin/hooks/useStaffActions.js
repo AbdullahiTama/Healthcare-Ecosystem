@@ -4,6 +4,7 @@ import { useAdmin } from '../provider/AdminProvider.jsx'
 import { bestEffort } from '../lib/bestEffort'
 import { capped } from '../lib/capped'
 import { ALL_TABS } from '../navigation'
+import { norm } from '../lib/normName'
 
 // Team, staff and role actions for the Teams screen. Each resolves { ok } or
 // { ok: false, error } so the form can show a failure where the admin is
@@ -30,7 +31,6 @@ const REFRESH_CAP_MS = 10000
 const MIN_PASSWORD = 8
 // The server's rule for role names (create_admin_role): trimmed, lower-cased,
 // spaces to underscores. super_admin must never be created or assigned from here.
-const norm = (s) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, '_')
 // navigation's isAllowed treats any key that is not false as allowed, so the
 // saved map must be complete: every assignable section is explicitly true or
 // false (true only when passed as exactly true), plus overview. Unknown keys

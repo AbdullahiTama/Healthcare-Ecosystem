@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within, act } from '@testing-library/react'
 
-const actions = vi.hoisted(() => ({ busy: null, createRole: vi.fn(), updateRole: vi.fn(), deleteRole: vi.fn() }))
+const actions = vi.hoisted(() => ({ busy: null, busyKeys: new Set(), createRole: vi.fn(), updateRole: vi.fn(), deleteRole: vi.fn() }))
 const admin = vi.hoisted(() => ({ adminUser: { role: 'super_admin' }, showToast: vi.fn(), askConfirm: vi.fn() }))
 
 vi.mock('../../hooks/useStaffActions', () => ({
   useStaffActions: () => ({
     busy: actions.busy,
-    isBusy: () => false,
+    isBusy: (a, t) => actions.busyKeys.has(`${a}:${t ?? ''}`),
     createRole: actions.createRole,
     updateRole: actions.updateRole,
     deleteRole: actions.deleteRole,
@@ -35,6 +35,7 @@ const createBtn = () => within(createForm()).getByRole('button', { name: /^(crea
 
 beforeEach(() => {
   actions.busy = null
+  actions.busyKeys.clear()
   actions.createRole.mockReset().mockResolvedValue({ ok: true })
   actions.updateRole.mockReset().mockResolvedValue({ ok: true })
   actions.deleteRole.mockReset().mockResolvedValue({ ok: true })
@@ -290,5 +291,41 @@ describe('RolesPanel effective access', () => {
     const box = within(form).getByRole('checkbox', { name: 'Users' })
     fireEvent.click(box); fireEvent.click(box)
     expect(within(form).getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+})
+
+describe('RolesPanel in-flight guard', () => {
+  const two = { status: 'ok', data: [...rolesSrc.data, { id: 'r4', name: 'night_lead', is_system: false, description: 'Nights', carefind_tabs: { overview: true } }] }
+
+  it('disables Delete while that role is being deleted', () => {
+    actions.busyKeys.add('deleteRole:r3')
+    renderPanel()
+    expect(screen.getByRole('button', { name: 'Delete content lead' })).toBeDisabled()
+  })
+
+  it('disables Save while that role is being updated', () => {
+    actions.busyKeys.add('updateRole:r3')
+    renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit content lead' }))
+    const form = screen.getByRole('form', { name: 'Edit content lead' })
+    type(within(form).getByLabelText('Description'), 'New text')
+    expect(within(form).getByRole('button', { name: /^(save|saving…)$/i })).toBeDisabled()
+  })
+
+  it('cannot start a second update by switching editors and coming back mid-save', async () => {
+    actions.updateRole.mockImplementation(() => { actions.busyKeys.add('updateRole:r3'); return new Promise(() => {}) })
+    renderPanel({ roles: two })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit content lead' }))
+    let form = screen.getByRole('form', { name: 'Edit content lead' })
+    type(within(form).getByLabelText('Description'), 'New text')
+    await act(async () => { fireEvent.click(within(form).getByRole('button', { name: /^(save|saving…)$/i })) })
+    expect(actions.updateRole).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit night lead' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit content lead' }))
+    form = screen.getByRole('form', { name: 'Edit content lead' })
+    type(within(form).getByLabelText('Description'), 'Another')
+    expect(within(form).getByRole('button', { name: /^(save|saving…)$/i })).toBeDisabled()
+    fireEvent.submit(form)
+    expect(actions.updateRole).toHaveBeenCalledTimes(1)
   })
 })

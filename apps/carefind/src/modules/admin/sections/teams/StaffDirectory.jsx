@@ -4,7 +4,7 @@ import { Button, DataTable, Empty, Select, StatusBadge } from '@care-ecosystem/d
 import ReviewDrawer from '../../ui/ReviewDrawer.jsx'
 import { timeAgo } from '../../ui'
 import SourceNotice, { isOk } from './SourceNotice.jsx'
-import { norm, SYSTEM_ROLES } from './roleNames.js'
+import { norm, spaced, SYSTEM_ROLES, assignableCustomRoles } from './roleNames.js'
 import { useStaffActions } from '../../hooks/useStaffActions'
 import { useAdmin } from '../../provider/AdminProvider.jsx'
 import '../../ui/admin.css'
@@ -18,7 +18,6 @@ import '../../ui/admin.css'
 // that promotion, so it is only kept out of the choices here and in
 // useStaffActions.assignRole.
 
-const roleLabel = (role) => (typeof role === 'string' && role ? role.replace(/_/g, ' ') : '—')
 const nameOf = (s) => s.full_name || s.email || 'Unnamed'
 const signedIn = (d) => (!d || Number.isNaN(new Date(d).getTime()) ? '—' : timeAgo(d))
 const statusOf = (s) => (s.is_active ? 'active' : 'suspended')
@@ -32,8 +31,7 @@ function assignableRoles(roles) {
   if (!isOk(roles)) return []
   const rows = roles.data.filter(r => r && r.id != null && typeof r.name === 'string' && norm(r.name) !== 'super_admin')
   const system = SYSTEM_ROLES.map(name => rows.find(r => norm(r.name) === name)).filter(Boolean)
-  const custom = rows.filter(r => !r.is_system && !SYSTEM_ROLES.includes(norm(r.name)))
-  return [...system, ...custom]
+  return [...system, ...assignableCustomRoles(rows)]
 }
 
 // While mounted it marks its member as the one on screen; unmounting (drawer
@@ -56,7 +54,7 @@ function StaffBody({ member, teamName, isOwn, viewerKnown, roles, onRetry, shown
     if (!chosen || working) return
     askConfirm({
       title: `Change ${nameOf(member)}'s role?`,
-      consequence: `They will have ${roleLabel(chosen.name)}'s access from their next request.`,
+      consequence: `They will have ${spaced(chosen.name)}'s access from their next request.`,
       confirmLabel: 'Change role',
       action: async () => finish(id, 'change the role', await assignRole({ staffId: id, roleId: chosen.id, roleName: chosen.name })),
     })
@@ -74,7 +72,7 @@ function StaffBody({ member, teamName, isOwn, viewerKnown, roles, onRetry, shown
       <>
         {roles.stale && <SourceNotice source={roles} noun="roles" onRetry={onRetry} />}
         <Select label="Change role" value={roleId} onChange={setRoleId} placeholder="Choose a role" disabled={working}
-          options={options.map(r => ({ value: String(r.id), label: roleLabel(r.name) }))} />
+          options={options.map(r => ({ value: String(r.id), label: spaced(r.name) }))} />
         <Button variant="secondary" disabled={!chosen || sameRole || working} loading={assigning} loadingText="Changing…"
           onClick={confirmChange}>
           Change role
@@ -88,7 +86,7 @@ function StaffBody({ member, teamName, isOwn, viewerKnown, roles, onRetry, shown
       <dl className="adm-drawer-grid">
         <dt>Name</dt><dd>{member.full_name || '—'}</dd>
         <dt>Email</dt><dd>{member.email || '—'}</dd>
-        <dt>Role</dt><dd>{roleLabel(member.role)}</dd>
+        <dt>Role</dt><dd>{spaced(member.role)}</dd>
         <dt>Team</dt><dd>{teamName}</dd>
         <dt>Last sign-in</dt><dd>{signedIn(member.last_login)}</dd>
       </dl>
@@ -140,7 +138,7 @@ export default function StaffDirectory({ staff, roles, teams, currentAdminId, on
   const columns = [
     { key: 'full_name', label: 'Name', render: s => nameOf(s) },
     { key: 'email', label: 'Email', render: s => s.email || '—' },
-    { key: 'role', label: 'Role', render: s => roleLabel(s.role) },
+    { key: 'role', label: 'Role', render: s => spaced(s.role) },
     { key: 'team_id', label: 'Team', render: s => teamOf(s) },
     { key: 'is_active', label: 'Status', render: s => <StatusBadge status={statusOf(s)} /> },
     { key: 'last_login', label: 'Last sign-in', render: s => signedIn(s.last_login) },
