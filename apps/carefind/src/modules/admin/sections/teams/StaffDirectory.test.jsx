@@ -380,3 +380,29 @@ describe('StaffDirectory one action at a time per member', () => {
     expect(within(dialog).getByRole('combobox', { name: 'Change role' })).toBeEnabled()
   })
 })
+
+describe('StaffDirectory fails closed when the signed-in admin is unknown', () => {
+  it.each([[null], [undefined]])('with currentAdminId %s no row offers Deactivate or Change role', (id) => {
+    renderDir({ currentAdminId: id })
+    for (const name of ['Ada Obi', 'Bola Eze', 'Chi Ude']) {
+      const dialog = openMember(name)
+      expect(within(dialog).queryByRole('button', { name: /Deactivate|Reactivate|Change role/ })).not.toBeInTheDocument()
+      expect(within(dialog).queryByRole('combobox')).not.toBeInTheDocument()
+      expect(within(dialog).getByText('Account actions are unavailable until your session loads.')).toBeInTheDocument()
+      expect(within(dialog).queryByText("You can't change your own account here.")).not.toBeInTheDocument()
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+    }
+  })
+
+  it('a genuine own row says it is your account, and other rows keep actions', () => {
+    renderDir({ currentAdminId: 's1' })
+    const own = openMember('Ada Obi')
+    expect(within(own).getByText("You can't change your own account here.")).toBeInTheDocument()
+    expect(within(own).queryByText(/until your session loads/)).not.toBeInTheDocument()
+    expect(within(own).queryByRole('button', { name: /Deactivate|Change role/ })).not.toBeInTheDocument()
+    fireEvent.click(within(own).getByRole('button', { name: 'Close' }))
+    const other = openMember('Bola Eze')
+    expect(within(other).getByRole('button', { name: 'Reactivate' })).toBeInTheDocument()
+    expect(within(other).queryByText(/until your session loads|own account/)).not.toBeInTheDocument()
+  })
+})

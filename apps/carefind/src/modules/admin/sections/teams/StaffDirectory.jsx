@@ -40,7 +40,7 @@ function assignableRoles(roles) {
 // While mounted it marks its member as the one on screen; unmounting (drawer
 // closed or another member opened) clears the mark, so a late result knows its
 // drawer is gone.
-function StaffBody({ member, teamName, isOwn, roles, onRetry, shownId, finish, assignRole, assigning, working }) {
+function StaffBody({ member, teamName, isOwn, viewerKnown, roles, onRetry, shownId, finish, assignRole, assigning, working }) {
   const { askConfirm } = useAdmin()
   const { id } = member
   useEffect(() => {
@@ -64,7 +64,9 @@ function StaffBody({ member, teamName, isOwn, roles, onRetry, shownId, finish, a
   }
 
   let roleControl
-  if (isOwn) {
+  if (!viewerKnown) {
+    roleControl = <p className="adm-note">Account actions are unavailable until your session loads.</p>
+  } else if (isOwn) {
     roleControl = <p className="adm-note">You can't change your own account here.</p>
   } else if (!isOk(roles)) {
     roleControl = <SourceNotice source={roles} noun="roles" onRetry={onRetry} />
@@ -152,10 +154,14 @@ export default function StaffDirectory({ staff, roles, teams, currentAdminId, on
   const toggling = !!current && isBusy('toggleStaff', current.id)
   const assigning = !!current && isBusy('assignRole', current.id)
   const working = toggling || assigning
-  const isOwn = !!current && currentAdminId != null && current.id === currentAdminId
+  // Fails closed: while the signed-in admin is unknown, no row can be told apart
+  // from their own, so no row offers an action.
+  const viewerKnown = currentAdminId != null
+  const isOwn = !!current && viewerKnown && current.id === currentAdminId
+  const locked = !!current && (!viewerKnown || isOwn)
   const activate = !!current && !current.is_active
 
-  const footer = current && !isOwn ? (
+  const footer = current && !locked ? (
     <Button variant={activate ? 'primary' : 'danger'} fullWidth disabled={working} loading={toggling}
       loadingText={activate ? 'Reactivating…' : 'Deactivating…'}
       leftIcon={activate ? <UserCheck size={14} aria-hidden="true" /> : <UserX size={14} aria-hidden="true" />}
@@ -186,7 +192,7 @@ export default function StaffDirectory({ staff, roles, teams, currentAdminId, on
       <ReviewDrawer show={!!current} title={current ? nameOf(current) : ''} status={current ? statusOf(current) : undefined}
         onClose={close} error={error} footer={footer} preventClose={confirming}>
         {current && (
-          <StaffBody key={current.id} member={current} teamName={teamOf(current)} isOwn={isOwn} roles={roles}
+          <StaffBody key={current.id} member={current} teamName={teamOf(current)} isOwn={isOwn} viewerKnown={viewerKnown} roles={roles}
             onRetry={onRetry} shownId={shownId} finish={finish}
             assignRole={assignRole} assigning={assigning} working={working} />
         )}
