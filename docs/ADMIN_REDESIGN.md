@@ -13,8 +13,8 @@ Code: `apps/carefind/src/modules/admin/`.
 | 3 | Finance: Revenue, Withdrawals, Orders, Money checks | built (PR #25) (Revenue, Orders, Withdrawals, Money checks) |
 | 4a | Content: Posts, Stories, News, Promotions | built (PR #26) (Posts, Stories, News, Promotions) |
 | 4b | Live: Go live | built (PR #27) (Go live) |
-| 5a | Insight: Alerts, Audit log, Searches, Drug intel, Errors | built on `feat/carefind-admin-phase5a` (Alerts, Audit log, Searches, Drug intel, Errors) |
-| 5b | System: Teams, staff and roles, Tasks | not started |
+| 5a | Insight: Alerts, Audit log, Searches, Drug intel, Errors | built (PR #28) (Alerts, Audit log, Searches, Drug intel, Errors) |
+| 5b | System: Teams, staff and roles, Tasks | built on `feat/carefind-admin-phase5b` (Teams & Staff, Sponsored Tasks) |
 | 5c | System: Shop, Email templates; delete `legacy/` and the dead hooks | not started |
 
 ## How the code is organised
@@ -96,6 +96,35 @@ Left in place on purpose:
   Shop, so the block goes with 5b/5c. `lib/buildAlerts.js` is now the Alerts screen's builder.
 - `LegacyTabHost`'s `setTab` prop is unused now (only the deleted Notifications tab used it);
   `AdminPanel` still passes it. Drop it in 5b or 5c.
+
+Phase 5b moved Teams and Tasks out of the host (commits cbf8b31 through 9f4e1af on
+`feat/carefind-admin-phase5b`). New code:
+
+```
+hooks/useTeamsData.js      teams, admin roles and staff, each settled on its own to ok / error
+                           (stale keeps the last data); staff is { status: 'restricted' } without a call
+                           for a non-super admin
+hooks/useStaffActions.js   create/deactivate/reactivate/change-role staff, create team, create/update/delete
+                           role: audit entries, one refresh, per-key in-flight guard
+hooks/useTasksData.js      useTasksData (the list) and useTaskActions (createTask with validation)
+lib/capped.js              the shared refresh-wait cap (10 s); also used by useLiveActions now
+lib/normName.js            the server's role-name rule (lower-case, whitespace to underscore; the client also trims)
+ui/PermissionMatrix.jsx    the section checkbox grid shared by create-role and edit-role
+sections/TeamsSection.jsx, sections/TasksSection.jsx
+sections/teams/            TeamsPanel, StaffDirectory, CreateStaffPanel, RolesPanel, SourceNotice, roleNames
+```
+
+`LegacyTabHost` now holds only Shop and Email templates (5c). Deleted: `tabs/TeamsTab.jsx` and
+`tabs/TasksTab.jsx`. Removed from the host: the task, team, staff and role state, `createTask`,
+`createStaff`, `createTeam`, and the `useAdminData` and `useAdminRoles` calls. Left in place on purpose:
+
+- `useAdminRoles` in `hooks/queries.js` has no consumers: dead code until 5c.
+- `useAdminData` still fetches tasks, teams and staff; `AdminShell` and `ModerationSection` still read it.
+- Already-unused leftovers in `LegacyTabHost` (not caused by 5b): `useEffect`, `adminPermissions`,
+  `askConfirm`, the `setTab` prop (`AdminPanel` still passes it), `dateFrom`/`dateTo`, the `ecom*`
+  variables, `updateEcomApp` and `moderateProduct`. Its header comment still describes the host as
+  holding screens with their state and handlers, which is now only true of Shop and Email templates
+  (they receive just `showToast`).
 
 Session checks are unchanged: `AdminProvider` calls `getSession` and the server's
 `verify` action, and renders nothing without a verified admin. `permissions` only
@@ -523,6 +552,85 @@ Phase 5a (insight tabs; commits bfb0343 through 51d2f8e on `feat/carefind-admin-
     ever changed, this alert and the Withdrawals screen would not follow it. Reported only; whether
     the live row still holds 20000 was not checked.
 
+Phase 5b (system tabs; commits cbf8b31 through 9f4e1af on `feat/carefind-admin-phase5b`):
+
+80. The Teams tab created custom-role staff with the role name only; `role_id` stayed NULL. Whether access
+    follows the name or the id is decided by `get_admin_permissions`, which is not in the repository's
+    SQL as the handler calls it (see finding 88), so the effect on custom-role staff is unverified. The
+    screen now sends `roleId` for custom roles.
+81. `toggle_staff` and `assign_admin_role` existed with no UI, so a staff member could not be deactivated
+    or moved to another role from the console. **Wired**, each behind a confirmation. Verified in the
+    code: `requireAdmin` runs at the top of the handler and rejects an inactive admin (403) on every
+    request, so a deactivated admin is refused on their next call; `toggle_staff` itself only updates
+    `is_active` and does not revoke the Supabase session; `delete_admin_role` deletes only the role row
+    (it refuses system roles and does not touch `admin_users`).
+82. `list_staff` is super-admin only but its failure was turned into `[]`, so a non-super admin with the
+    Teams permission saw "No members yet" for every team. **Fixed**: an explicit restricted state, no
+    `list_staff` call is made for a non-super admin, and "No members yet" is said only when staff really
+    loaded.
+83. `create_staff` accepts any `newRole` string including `super_admin`, and `update_admin_role` has no
+    `is_system` check, so a super admin can edit a system role's permissions. The UI offers neither; the
+    server still allows both (documented, not changed).
+84. Staff, team and role changes wrote no audit entries. **Added** (best effort, never the password or the
+    person's name).
+85. The password for a new staff account is chosen by the super admin and sent in the request body; there
+    is no invite or forced-reset flow, and the server enforces no password policy. A client minimum of 8
+    characters was added; the policy gap is documented.
+86. Task submissions have a list action (feeding Alerts) but no approve/reject action or screen, and no
+    task edit or close action exists. Tasks can only be created and listed; the screen says "Task
+    submissions can't be reviewed from the console yet." Needs a backend decision.
+87. `assign_admin_role` sets `admin_users.role` to the role row's NAME, so assigning the system
+    `super_admin` role would promote a staff member to super admin. The console never offers it and
+    `assignRole` refuses it; the server enforces neither.
+88. Permission maps. The console's `isAllowed` treats any section key that is not `false` as allowed, and
+    the legacy create/update role wrote only the checked keys, so a role created in the legacy screen has
+    its unchecked sections allowed in the console UI. The new screens send a complete explicit true/false
+    map (plus `overview: true`) and show and edit each role's EFFECTIVE access. UNVERIFIED: whether the
+    server applies the same missing-means-allowed rule, and what `verify` / `get_admin_permissions`
+    return. The repo SQL's `get_admin_permissions` reads `admin_role_permissions.permissions`, while the
+    handlers write `admin_roles.carefind_tabs`, and no SQL in the repo defines that column. The owner
+    must check the live `admin_roles.carefind_tabs` of existing custom roles and decide: treat missing as
+    denied, or backfill explicit false.
+89. `create_admin_role` normalises names with `toLowerCase().replace(/\s+/g, '_')`, so a role typed
+    "Super Admin" becomes `super_admin`. Only a unique constraint or a seeded system row would block it,
+    and whether the live system row is seeded was not checked. The client now refuses any name that
+    normalises to `super_admin`.
+90. As finding 83, the `create_staff` action accepts `super_admin` as `newRole`. The client refuses it in
+    both `createStaff` and `assignRole` (and never offers it), but the server does not.
+
+Phase 5b behaviour changes from legacy:
+
+- Teams & Staff reads teams, roles and staff as independently settled sources: a failed read is an error
+  with Retry, never an empty list; a failed refresh keeps the data with "Couldn't refresh" and Retry. A
+  non-super admin sees the teams list and one note, and nothing else.
+- Staff can be deactivated, reactivated and moved to another role, each behind a confirmation. The own
+  row has neither action, and the protections fail closed when the signed-in admin's id is unknown. One
+  action hook serves the whole staff drawer, so deactivate and change role cannot run at the same time.
+- Every action has a per-key in-flight guard (a repeat while one runs makes no second call); the guard is
+  released after the refresh, capped at 10 s so a hung query cannot disable the controls for good.
+- Audit entries are written for staff, team and role changes. The create-staff password lives only in the
+  form's state, is cleared after every attempt, and appears in no audit entry, toast or log.
+- Create staff: password minimum 8 on the client (the server has none); a failure keeps the other fields.
+  `roleId` is sent for custom roles.
+- The roles panel shows and edits each role's effective access with the shared permission grid; system
+  roles are read-only; deleting a role needs a confirmation whose wording makes no claim about staff on
+  it; a description-only edit sends no permissions.
+- Sponsored Tasks: the compensation must be a positive whole number (legacy sent the raw field);
+  validation is in both the screen and the hook; a failure keeps the form; a result that arrives after
+  the screen has gone is toasted. The list is a real read (failed, empty and stale are different states).
+
+Phase 5b known limits (not fixed):
+
+- Task submissions cannot be reviewed and tasks cannot be edited or closed (finding 86).
+- `list_teams` and `list_admin_roles` check only the token, not the role (finding 1), so any signed-in
+  admin can read them.
+- The in-flight tests mock the hook, so a regression to per-editor hook instances (which would defeat
+  the shared guard) would not be caught by the component tests.
+- There is no password reset or invite flow (finding 85).
+- Heading outline: Sponsored Tasks is h1 then h2s. Teams & Staff is h1, then h3 per team with no h2
+  above them (TeamsPanel), h2 for Staff and Roles, and h3 for the create forms: usable, but the teams
+  list has no h2 of its own.
+
 Phase 5a behaviour changes from legacy:
 
 - Audit log: action, target type and dates are sent to the server; the actor filter is client-side
@@ -630,3 +738,12 @@ lint reports 0 errors. The full vitest suite has NOT been run for 5a. Responsive
 Behaviour against production data has NOT been exercised: the audit paging and its 200-row cap, the
 server filters, the seven alert sources and the drug search are read from the code and tested with
 mocked transports, not run against the live backend.
+
+Phase 5b: unit and component tests cover `useTeamsData`, `useStaffActions`, `useTasksData` and
+`useTaskActions`, `capped`, `normName`, `PermissionMatrix`, `TeamsPanel`, `StaffDirectory`,
+`CreateStaffPanel`, `RolesPanel`, `SourceNotice`, `TeamsSection`, `TasksSection` and the panel routing
+test for the two tabs. At 9f4e1af the admin suite (82 files, 1119 tests) passed, the build succeeds and
+lint reports 0 errors. The full vitest suite has NOT been run for 5b. Responsive layout at 375, 390, 768,
+1024, 1440 and 1920 has NOT been measured in a browser (no admin session was available). Behaviour against
+the live admin has NOT been exercised: the staff and role actions, the confirmations and the audit entries
+are tested with mocked transports. Custom-role access resolution (finding 88) has NOT been verified.
