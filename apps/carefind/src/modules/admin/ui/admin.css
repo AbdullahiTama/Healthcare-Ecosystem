@@ -235,3 +235,10 @@ button.adm-alert:hover { background: var(--adm-line-soft); }
 .adm-password-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
 .adm-password-row > :first-child { flex: 1 1 200px; min-width: 0; }
 .adm-password-row > button { margin-top: 20px; }
+.adm-role-list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.adm-role-item { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--adm-line); border-radius: 10px; background: var(--adm-panel); min-width: 0; }
+.adm-role-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.adm-role-name { font-size: 14px; color: var(--adm-ink); overflow-wrap: anywhere; }
+.adm-role-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--adm-ink-soft); background: var(--adm-line-soft); }
+.adm-role-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.adm-role-item .adm-note { overflow-wrap: anywhere; }
