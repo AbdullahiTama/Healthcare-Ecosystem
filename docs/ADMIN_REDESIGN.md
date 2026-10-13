@@ -484,8 +484,10 @@ Phase 5a (insight tabs; commits bfb0343 through 51d2f8e on `feat/carefind-admin-
     Building the backend is separate work that needs approval.
 74. The audit log, searches and alerts turned a failed read into an empty list ("No audit log
     entries", "No searches yet"), and Alerts could say "All clear" while a source could not be
-    checked (it was built from `useAdminData`, finding 3). **Fixed** (bfb0343, 5fb2410, 29265f3):
-    each failure is an error with Retry, and Alerts reads seven sources independently.
+    checked (it was built from `useAdminData`, finding 3). **Fixed** (bfb0343, 5fb2410, 29265f3)
+    for failures the client can see: each such failure is an error with Retry, and Alerts reads seven
+    sources independently. Failures the server swallows are not visible to the client; see the known
+    limits below, which is why Alerts no longer says "All clear".
 75. The audit log loaded the newest rows and filtered them in the browser although
     `list_audit_logs` filters `action`, `target_type` and dates on the server, and the search
     analytics tally only the newest 300 searches while presented as overall. **Fixed** (bfb0343,
@@ -510,8 +512,9 @@ Phase 5a (insight tabs; commits bfb0343 through 51d2f8e on `feat/carefind-admin-
 78. The legacy audit and error tabs sent `localStorage.admin_token` in the payload (a dead field,
     see finding 10). Dropped; the new hooks send no `token`.
 79. The withdrawal alert converts `amount * 200` to naira with a hard-coded rate in the client
-    (`lib/buildAlerts.js`; the same maths is in `hooks/queries.js` and
-    `dashboardRepository.getNotifications`, finding 12). **Kept exactly as legacy** (financial
+    (`lib/buildAlerts.js`; the same maths is in `hooks/queries.js`,
+    `dashboardRepository.getNotifications` (finding 12) and `repositories/index.js:202`, the
+    `Withdrawal: ₦${(w.amount * 200)…}` row). **Kept exactly as legacy** (financial
     maths not changed). The rate is duplicated rather than sourced: the client repeats `200` in
     several places (`financeFormat.nairaFromCoins`, `NAIRA_PER_COIN` in `subscriptions.js` and
     `consultations.js`, `COIN_VALUE_NAIRA` in `Wallet.jsx`), while the server reads `coin_value_kobo`
@@ -523,7 +526,7 @@ Phase 5a (insight tabs; commits bfb0343 through 51d2f8e on `feat/carefind-admin-
 Phase 5a behaviour changes from legacy:
 
 - Audit log: action, target type and dates are sent to the server; the actor filter is client-side
-  over the loaded page, labelled "Filters the rows loaded", and when it hides every row of a loaded
+  over the loaded page, labelled "Actor filter applies to the rows loaded.", and when it hides every row of a loaded
   page the table says "No entries on this page match this actor..." (a new optional `emptyNote` prop
   on the shared `DirectoryTable`; default behaviour unchanged, a10687b). A server filter change returns
   to page 1. Paging and the 200-row cap: finding 75. The CSV is one flat record per row (b95e115).
@@ -531,8 +534,10 @@ Phase 5a behaviour changes from legacy:
   gaps and recent searches keep the legacy calculation (12, 15 and 40 rows).
 - Alerts keeps the legacy derivation (titles, severities, tab and role keys) but builds it from
   independently settled sources. If any could not be read it says "Couldn't check: <labels>" with
-  Retry and never "All clear"; it can still list alerts from the sources that loaded, and with none
-  pending says "Nothing pending in the sources that loaded". A card for a tab the role cannot open
+  Retry and never "All clear"; it can still list alerts from the sources that loaded. With none pending
+  it says "Nothing pending in the sources checked" (or "...in the sources that loaded" when some
+  failed; nothing at all when every source failed), with the hint "Some reads can't report their own
+  failures; this reflects what the server returned." A card for a tab the role cannot open
   renders without a link and says "Not available to your role" (UI courtesy only; the server decides).
 - A failed refresh of already loaded Searches or Alerts data keeps the data and shows "Couldn't
   refresh, showing the last loaded data" with Retry (1303ce1). A first failure is a plain error.
@@ -554,6 +559,17 @@ Phase 5a known limits (not fixed):
 - The audit action filter list is the legacy one (approve, reject, delete, suspend, resolve and the
   three bulk verbs); a recorded verb outside it is visible only under "All actions". The actor shown
   is `admin_users.full_name`, or "Admin" when the server could not resolve it.
+- Alerts cannot detect failures that five server actions swallow in
+  `apps/carefind/api/_handlers/admin-auth.js`: `list_reports`, `list_withdrawal_requests`,
+  `list_task_submissions`, `list_business_claims` and `list_news` ignore their query error and return
+  `200 {data: []}`. Withdrawals and task submissions are new findings here (reports, claims and news
+  are findings 27 and 59 for other screens). A failed read of these shows as nothing pending, so the
+  screen only claims what the server returned. Server windows: reports are the newest 30 across all
+  statuses, task submissions 20, news 60, and consultations the newest 20 with status `paid`
+  (`dashboardRepository.getProfessionalConsultations`); withdrawals and claims have no limit. An old
+  pending item outside a window is not alerted.
+- The audit log's failed-load text is `DirectoryTable`'s generic "Couldn't load this list.", a
+  deliberate deviation from the spec's "Couldn't load the audit log".
 - Alerts' `notifications` derivation also still lives in `useAdminData` until 5b/5c; the dead
   `useAdminSearchLogs` and the unused `setTab` prop are listed under How the code is organised.
 
