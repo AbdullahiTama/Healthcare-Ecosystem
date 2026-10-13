@@ -161,6 +161,22 @@ describe('other actions', () => {
     expect(auditCalls()[0][1]).toMatchObject({ auditAction: 'update_role', targetType: 'admin_role', targetId: 'r1' })
     expect(admin.showToast).toHaveBeenCalledWith('Role updated', { type: 'success' })
   })
+  it('a description-only edit sends no carefindTabs', async () => {
+    const { result } = setup()
+    expect(await run(() => result.current.updateRole({ roleId: 'r1', description: 'd' }))).toEqual({ ok: true })
+    expect(serverCalls()).toEqual([['update_admin_role', { roleId: 'r1', description: 'd' }]])
+    expect(auditCalls()[0][1].metadata).toEqual({})
+  })
+  it('a tabs-only edit sends the complete map and no description', async () => {
+    const { result } = setup()
+    await run(() => result.current.updateRole({ roleId: 'r1', tabs: { users: true } }))
+    expect(serverCalls()).toEqual([['update_admin_role', { roleId: 'r1', carefindTabs: fullMap({ users: true }) }]])
+  })
+  it('updateRole with nothing to change makes no call', async () => {
+    const { result } = setup()
+    expect(await run(() => result.current.updateRole({ roleId: 'r1' }))).toEqual({ ok: false, error: 'Nothing to change' })
+    expect(callAdminAuth).not.toHaveBeenCalled()
+  })
   it('deleteRole sends only roleId', async () => {
     const { result } = setup()
     await run(() => result.current.deleteRole({ roleId: 'r1' }))

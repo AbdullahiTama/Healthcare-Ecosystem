@@ -120,11 +120,16 @@ export function useStaffActions() {
       ['create_role', 'admin_role', clean, { tabs: enabledTabs(carefindTabs) }], 'Role created')
   }, [perform])
 
+  // Permissions are sent only when `tabs` is passed, and then as the complete
+  // map ({} means everything off except overview). A caller that wants to change
+  // permissions must pass the full existing map; a description-only edit leaves
+  // permissions untouched.
   const updateRole = useCallback(({ roleId, description, tabs }) => {
-    const carefindTabs = withOverview(tabs)
+    if (tabs === undefined && description === undefined) return Promise.resolve({ ok: false, error: 'Nothing to change' })
+    const carefindTabs = tabs === undefined ? undefined : withOverview(tabs)
     return perform('updateRole', roleId, 'update_admin_role',
-      { roleId, carefindTabs, ...(description !== undefined ? { description } : {}) },
-      ['update_role', 'admin_role', roleId, { tabs: enabledTabs(carefindTabs) }], 'Role updated')
+      { roleId, ...(carefindTabs ? { carefindTabs } : {}), ...(description !== undefined ? { description } : {}) },
+      ['update_role', 'admin_role', roleId, carefindTabs ? { tabs: enabledTabs(carefindTabs) } : {}], 'Role updated')
   }, [perform])
 
   const deleteRole = useCallback(({ roleId }) => perform('deleteRole', roleId, 'delete_admin_role', { roleId },
