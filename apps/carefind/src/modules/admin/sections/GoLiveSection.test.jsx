@@ -135,4 +135,10 @@ describe('GoLiveSection', () => {
     fireEvent.click(within(region).getByRole('button', { name: 'Retry refreshing scheduled shows' }))
     expect(shows.result.refetch).toHaveBeenCalledTimes(1)
   })
+
+  it('passes an unknown liveCount while the live list is stale, even when it is empty', () => {
+    shows.result = result({ status: 'ok', data: [], stale: true }, ok([]))
+    render(<GoLiveSection />)
+    expect(shows.panelProps.at(-1)).toEqual({ liveCount: null })
+  })
 })
