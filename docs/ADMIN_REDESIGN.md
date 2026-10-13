@@ -366,7 +366,7 @@ Phase 4a follow-ups and final-review corrections (fix commits 22e511b, 8359054, 
 - The Stories and Promotions sections do not validate the chosen file's type or size (the input
   only hints `accept="image/*"`); the bucket policy is the boundary (finding 60).
 
-Phase 4b (Go live; commits 3336ff8 through 7e8d30b on `feat/carefind-admin-phase4b`):
+Phase 4b (Go live; commits 3336ff8 through b0dcc00 on `feat/carefind-admin-phase4b`):
 
 65. `useAdminLiveShows` defaulted a failed read to `[]`, so a failed read looked like "no live
     shows" and the admin could not see or end a live show. **Fixed** in `useLiveShows` (899842f,
@@ -433,6 +433,13 @@ Phase 4b behaviour changes from legacy:
   failure is still a plain error, a later success drops `stale`, and a stale live list still
   counts toward the live total. Realtime and poll refreshes pass `cancelRefetch: false`, so they
   no longer cancel a load in progress.
+- A stale list that is empty still shows the "Couldn't refresh" warning with Retry above the
+  empty text, so "No live shows right now" is never shown alone after a failed refresh. While
+  the live list is stale the section passes `liveCount` as `null` (the last-known number is not
+  trusted), so the confirmation says it could not check.
+- The wait for the list refresh is capped at 10 s (`Promise.race` with a timer cleared when the
+  refresh settles first): after the cap the guard key is released and the action's result is
+  unchanged.
 - The Go live confirmation names the number of other live shows; when the live list could not be
   read (failed or still loading) the section passes `liveCount` as `null` and the confirmation
   says "Couldn't check how many shows are already live." instead of implying none. The started
@@ -485,7 +492,7 @@ exercised against real buckets (the storage client is mocked). The server handle
 Phase 4b: unit and component tests cover `uploadMedia` (contentType), `useLiveShows`,
 `useLiveControl`, `useLiveActions`, `useGuestSearch`, `LiveShowCard`, `ScheduledShowCard`,
 `StartShowPanel`, `GoLiveSection` and the panel routing test. At 7e8d30b the admin suite
-(56 files, 737 tests) passed; after the final review fixes it is 57 files, 752 tests, with the build and lint (0 errors) re-run, the build succeeds and lint reports 0 errors. Responsive layout at
+(56 files, 737 tests) passed. After the final-review and re-review fixes (b0dcc00) the admin suite is 57 files, 757 tests, the build succeeds and lint reports 0 errors. Responsive layout at
 375, 390, 768, 1024, 1440 and 1920 has NOT been measured in a browser (no admin session was
 available). Realtime and live-show behaviour has NOT been exercised against a real show (the
 realtime hook is mocked in the tests), and uploads were never run against the real `live-media`
