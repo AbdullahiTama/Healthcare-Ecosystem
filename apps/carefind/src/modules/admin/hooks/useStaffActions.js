@@ -29,6 +29,9 @@ const capped = (promise, ms) => {
 }
 
 const MIN_PASSWORD = 8
+// The server's rule for role names (create_admin_role): trimmed, lower-cased,
+// spaces to underscores. super_admin must never be created or assigned from here.
+const norm = (s) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, '_')
 const withOverview = (tabs) => ({ ...tabs, overview: true })
 const enabledTabs = (tabs) => Object.keys(tabs).filter(k => tabs[k]).sort()
 
@@ -77,7 +80,7 @@ export function useStaffActions() {
     if (!cleanName) return Promise.resolve({ ok: false, error: 'Enter a name' })
     if (!cleanEmail) return Promise.resolve({ ok: false, error: 'Enter an email address' })
     if ((password || '').length < MIN_PASSWORD) return Promise.resolve({ ok: false, error: `Password must be at least ${MIN_PASSWORD} characters` })
-    if (!role || role === 'super_admin') return Promise.resolve({ ok: false, error: 'Pick a role for this account' })
+    if (!role || norm(role) === 'super_admin') return Promise.resolve({ ok: false, error: 'Pick a role for this account' })
     const team = teamId || null
     // The audit entry never carries the password or the name.
     return perform('createStaff', cleanEmail, 'create_staff', {
@@ -89,12 +92,19 @@ export function useStaffActions() {
   const toggleStaff = useCallback(({ id, isActive }) => perform('toggleStaff', id, 'toggle_staff', { staffId: id, isActive },
     ['toggle_staff', 'admin_user', id, { isActive }], isActive ? 'Staff member reactivated' : 'Staff member deactivated'), [perform])
 
-  const assignRole = useCallback(({ staffId, roleId }) => perform('assignRole', staffId, 'assign_admin_role', { staffId, roleId },
-    ['assign_role', 'admin_user', staffId, { roleId }], 'Role changed'), [perform])
+  // assign_admin_role sets the staff member's role to the role's name, so
+  // assigning the system super_admin role would promote them.
+  const assignRole = useCallback(({ staffId, roleId, roleName }) => {
+    if (!norm(roleName)) return Promise.resolve({ ok: false, error: 'Pick a role' })
+    if (norm(roleName) === 'super_admin') return Promise.resolve({ ok: false, error: "The console can't promote someone to super admin" })
+    return perform('assignRole', staffId, 'assign_admin_role', { staffId, roleId },
+      ['assign_role', 'admin_user', staffId, { roleId }], 'Role changed')
+  }, [perform])
 
   const createRole = useCallback(({ name, description, tabs }) => {
     const clean = (name || '').trim()
     if (!clean) return Promise.resolve({ ok: false, error: 'Enter a role name' })
+    if (norm(clean) === 'super_admin') return Promise.resolve({ ok: false, error: 'That role name is reserved' })
     const carefindTabs = withOverview(tabs)
     return perform('createRole', clean, 'create_admin_role', { name: clean, description: description || '', carefindTabs },
       ['create_role', 'admin_role', clean, { tabs: enabledTabs(carefindTabs) }], 'Role created')

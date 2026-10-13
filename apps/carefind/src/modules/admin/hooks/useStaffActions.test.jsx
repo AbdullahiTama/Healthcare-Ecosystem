@@ -89,6 +89,30 @@ describe('createStaff', () => {
   })
 })
 
+describe('super_admin is never created or assigned', () => {
+  const staff = { name: 'A', email: 'a@x.test', password: 'longenough1', teamId: null }
+  it.each(['Super_Admin', ' super_admin ', 'Super Admin', 'super_admin'])('createStaff refuses role %j', async (role) => {
+    const { result } = setup()
+    expect((await run(() => result.current.createStaff({ ...staff, role })) ).ok).toBe(false)
+    expect(callAdminAuth).not.toHaveBeenCalled()
+  })
+  it.each(['Super_Admin', ' super_admin ', 'Super Admin', 'super_admin'])('createRole refuses name %j', async (name) => {
+    const { result } = setup()
+    expect(await run(() => result.current.createRole({ name, tabs: {} }))).toEqual({ ok: false, error: 'That role name is reserved' })
+    expect(callAdminAuth).not.toHaveBeenCalled()
+  })
+  it.each(['Super Admin', 'super_admin', ' SUPER_ADMIN '])('assignRole refuses roleName %j', async (roleName) => {
+    const { result } = setup()
+    expect(await run(() => result.current.assignRole({ staffId: 's1', roleId: 'r1', roleName }))).toEqual({ ok: false, error: "The console can't promote someone to super admin" })
+    expect(callAdminAuth).not.toHaveBeenCalled()
+  })
+  it.each([undefined, '', '  '])('assignRole refuses a missing role name %j', async (roleName) => {
+    const { result } = setup()
+    expect((await run(() => result.current.assignRole({ staffId: 's1', roleId: 'r1', roleName }))).ok).toBe(false)
+    expect(callAdminAuth).not.toHaveBeenCalled()
+  })
+})
+
 describe('other actions', () => {
   it('toggleStaff deactivate and reactivate', async () => {
     const { result } = setup()
@@ -101,7 +125,7 @@ describe('other actions', () => {
   })
   it('assignRole', async () => {
     const { result } = setup()
-    await run(() => result.current.assignRole({ staffId: 's1', roleId: 'r1' }))
+    await run(() => result.current.assignRole({ staffId: 's1', roleId: 'r1', roleName: 'Support' }))
     expect(serverCalls()).toEqual([['assign_admin_role', { staffId: 's1', roleId: 'r1' }]])
     expect(auditCalls()[0][1]).toEqual({ auditAction: 'assign_role', targetType: 'admin_user', targetId: 's1', metadata: { roleId: 'r1' } })
     expect(admin.showToast).toHaveBeenCalledWith('Role changed', { type: 'success' })
