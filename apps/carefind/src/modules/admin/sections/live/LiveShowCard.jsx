@@ -163,7 +163,7 @@ export default function LiveShowCard({ show }) {
 
   const hide = async (comment) => {
     setHideError('')
-    const res = await hideComment(comment.id)
+    const res = await hideComment(comment.id, { showId: show.id })
     if (!goneAfter("Couldn't hide the comment", res) && !res.ok) {
       setHideError(`Couldn't hide the comment: ${res.error}`)
     }

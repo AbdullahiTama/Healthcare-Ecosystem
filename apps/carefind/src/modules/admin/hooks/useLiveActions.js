@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { callAdminAuth } from '../adminApi'
 import { useAdmin } from '../provider/AdminProvider.jsx'
 import { bestEffort } from '../lib/bestEffort'
@@ -7,6 +8,9 @@ import { uploadToBucket } from '../lib/uploadMedia'
 // The live show handlers that used to live in LegacyTabHost, calling the same
 // server actions with the same payloads. Each resolves { ok } or
 // { ok: false, error } so the card can show a failure where the admin is looking.
+//
+// Posting and hiding refresh only that show's control room; everything else
+// refreshes all admin data.
 //
 // Differences from the legacy handlers: failures are returned, not toasted; a
 // failed trailer or image upload stops the action and is returned (legacy
@@ -29,6 +33,7 @@ export const slideContent = (url, num, total) => `${url}|||${num}|||${total}`
 
 export function useLiveActions() {
   const { showToast, invalidateAdmin } = useAdmin()
+  const queryClient = useQueryClient()
   const running = useRef(new Set())
   const [busyKeys, setBusyKeys] = useState([])
   const isBusy = useCallback((action, targetId) => busyKeys.includes(`${action}:${targetId ?? ''}`), [busyKeys])
@@ -38,7 +43,7 @@ export function useLiveActions() {
   // whether the control room changed. The refresh and toast run after it and
   // cannot throw out of here: once the server has committed, the admin must
   // never be told the action failed.
-  const perform = useCallback(async (name, targetId, work, success) => {
+  const perform = useCallback(async (name, targetId, work, success, controlShowId) => {
     const key = `${name}:${targetId ?? ''}`
     if (running.current.has(key)) return { ok: false, error: 'Already running' }
     running.current.add(key)
@@ -52,20 +57,28 @@ export function useLiveActions() {
     // The key is held until the refresh has landed: while the card is still
     // shown, a second click must not re-send the server action.
     try {
-      if (outcome.changed) await bestEffort(`refreshing after ${name}`, invalidateAdmin)
+      // Posting and hiding only change one show's control room; the rest
+      // refresh everything (a show started, scheduled, ended or cancelled
+      // changes the lists too).
+      if (outcome.changed) {
+        const refresh = controlShowId
+          ? () => queryClient.invalidateQueries({ queryKey: ['admin', 'live', 'control', controlShowId] })
+          : invalidateAdmin
+        await bestEffort(`refreshing after ${name}`, refresh)
+      }
     } finally {
       running.current.delete(key)
       setBusyKeys([...running.current])
     }
     if (outcome.result.ok && success) bestEffort(`toasting ${name}`, () => showToast(success, { type: 'success' }))
     return outcome.result
-  }, [showToast, invalidateAdmin])
+  }, [showToast, invalidateAdmin, queryClient])
 
   // A single server call.
-  const simple = useCallback((name, targetId, action, payload, success) => perform(name, targetId, async () => {
+  const simple = useCallback((name, targetId, action, payload, success, controlShowId) => perform(name, targetId, async () => {
     await callAdminAuth(action, payload)
     return { result: { ok: true }, changed: true }
-  }, success), [perform])
+  }, success, controlShowId), [perform])
 
   const startShow = useCallback(({ title, guestIds }) => {
     if (!(title || '').trim()) return Promise.resolve({ ok: false, error: 'Add a show title' })
@@ -114,11 +127,12 @@ export function useLiveActions() {
           : { result: { ok: false, error: err?.message || String(err) }, changed: false }
       }
       return { result: { ok: true }, changed: true }
-    })
+    }, undefined, showId)
   }, [perform])
 
-  const postMedia = useCallback(({ showId, kind, content }) => simple('postMedia', `${showId}:${content}`, 'post_live_item', { showId, kind, content }), [simple])
-  const hideComment = useCallback((id) => simple('hideComment', id, 'hide_live_comment', { id }), [simple])
+  const postMedia = useCallback(({ showId, kind, content }) => simple('postMedia', `${showId}:${content}`, 'post_live_item', { showId, kind, content }, undefined, showId), [simple])
+  // The optional { showId } narrows the refresh to that show's control room.
+  const hideComment = useCallback((id, { showId } = {}) => simple('hideComment', id, 'hide_live_comment', { id }, undefined, showId), [simple])
 
   return { busy, busyKeys, isBusy, startShow, scheduleShow, startScheduled, cancelScheduled, endShow, postItem, postMedia, hideComment }
 }

@@ -602,7 +602,7 @@ describe('LiveShowCard comments', () => {
   it('Hide calls hideComment with the comment id', async () => {
     render(<LiveShowCard show={show} />)
     await click(screen.getByRole('button', { name: 'Hide comment by Ada Obi' }))
-    expect(actions.hideComment).toHaveBeenCalledWith('c1')
+    expect(actions.hideComment).toHaveBeenCalledWith('c1', { showId: 'show-1' })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 

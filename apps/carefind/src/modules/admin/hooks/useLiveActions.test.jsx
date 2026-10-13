@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 const callAdminAuth = vi.hoisted(() => vi.fn())
 const uploadToBucket = vi.hoisted(() => vi.fn())
@@ -11,11 +12,14 @@ vi.mock('../provider/AdminProvider.jsx', () => ({ useAdmin: () => admin }))
 import { useLiveActions, slideContent } from './useLiveActions'
 
 const run = async (fn) => { let out; await act(async () => { out = await fn() }); return out }
-const setup = () => renderHook(() => useLiveActions())
+const client = new QueryClient()
+const setup = () => renderHook(() => useLiveActions(), { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> })
+const controlKey = (id) => ({ queryKey: ['admin', 'live', 'control', id] })
 const trailer = { name: 't.mp4', type: 'video/webm' }
 const image = { name: 'p.png' }
 
 beforeEach(() => {
+  vi.spyOn(client, 'invalidateQueries').mockReset().mockResolvedValue(undefined)
   callAdminAuth.mockReset().mockResolvedValue({})
   uploadToBucket.mockReset().mockResolvedValue({ ok: true, url: 'https://cdn/x' })
   Object.values(admin).forEach(f => { f.mockReset() })
@@ -102,6 +106,7 @@ describe('start / cancel / end', () => {
     expect(await run(() => result.current[method]('s1'))).toEqual({ ok: true })
     expect(callAdminAuth.mock.calls).toEqual([[action, { showId: 's1' }]])
     expect(admin.invalidateAdmin).toHaveBeenCalledTimes(1)
+    expect(client.invalidateQueries).not.toHaveBeenCalled()
     expect(admin.showToast).toHaveBeenCalledWith(toast, { type: 'success' })
   })
   it('a failure returns the error without toasting', async () => {
@@ -124,7 +129,8 @@ describe('postItem', () => {
     expect(await run(() => result.current.postItem({ showId: 's', text: ' hi ', imageFile: null }))).toEqual({ ok: true })
     expect(uploadToBucket).not.toHaveBeenCalled()
     expect(callAdminAuth.mock.calls).toEqual([['post_live_item', { showId: 's', kind: 'text', content: 'hi' }]])
-    expect(admin.invalidateAdmin).toHaveBeenCalledTimes(1)
+    expect(client.invalidateQueries.mock.calls).toEqual([[controlKey('s')]])
+    expect(admin.invalidateAdmin).not.toHaveBeenCalled()
     expect(admin.showToast).not.toHaveBeenCalled()
   })
   it('image then text, in that order, with no token', async () => {
@@ -135,7 +141,8 @@ describe('postItem', () => {
       ['post_live_item', { showId: 's', kind: 'image', content: 'https://cdn/x' }],
       ['post_live_item', { showId: 's', kind: 'text', content: 'cap' }],
     ])
-    expect(admin.invalidateAdmin).toHaveBeenCalledTimes(1)
+    expect(client.invalidateQueries.mock.calls).toEqual([[controlKey('s')]])
+    expect(admin.invalidateAdmin).not.toHaveBeenCalled()
   })
   it('image only posts just the image', async () => {
     const { result } = setup()
@@ -166,7 +173,8 @@ describe('postItem', () => {
     callAdminAuth.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('txt fail'))
     const { result } = setup()
     expect(await run(() => result.current.postItem({ showId: 's', text: 'cap', imageFile: image }))).toEqual({ ok: false, error: 'txt fail', partial: true })
-    expect(admin.invalidateAdmin).toHaveBeenCalledTimes(1)
+    expect(client.invalidateQueries.mock.calls).toEqual([[controlKey('s')]])
+    expect(admin.invalidateAdmin).not.toHaveBeenCalled()
     expect(admin.showToast).not.toHaveBeenCalled()
   })
   it('a text-only failure is not partial', async () => {
@@ -181,7 +189,8 @@ describe('postMedia', () => {
     const { result } = setup()
     expect(await run(() => result.current.postMedia({ showId: 's', kind, content: 'c' }))).toEqual({ ok: true })
     expect(callAdminAuth.mock.calls).toEqual([['post_live_item', { showId: 's', kind, content: 'c' }]])
-    expect(admin.invalidateAdmin).toHaveBeenCalledTimes(1)
+    expect(client.invalidateQueries.mock.calls).toEqual([[controlKey('s')]])
+    expect(admin.invalidateAdmin).not.toHaveBeenCalled()
     expect(admin.showToast).not.toHaveBeenCalled()
   })
   it('a failure returns the error', async () => {
@@ -192,18 +201,26 @@ describe('postMedia', () => {
 })
 
 describe('hideComment', () => {
-  it('sends { id } and refreshes once', async () => {
+  it('sends { id } and refreshes only the show control room when given { showId }', async () => {
+    const { result } = setup()
+    expect(await run(() => result.current.hideComment('c1', { showId: 's' }))).toEqual({ ok: true })
+    expect(callAdminAuth.mock.calls).toEqual([['hide_live_comment', { id: 'c1' }]])
+    expect(client.invalidateQueries.mock.calls).toEqual([[controlKey('s')]])
+    expect(admin.invalidateAdmin).not.toHaveBeenCalled()
+    expect(admin.showToast).not.toHaveBeenCalled()
+  })
+  it('falls back to refreshing all admin data without a show id', async () => {
     const { result } = setup()
     expect(await run(() => result.current.hideComment('c1'))).toEqual({ ok: true })
-    expect(callAdminAuth.mock.calls).toEqual([['hide_live_comment', { id: 'c1' }]])
     expect(admin.invalidateAdmin).toHaveBeenCalledTimes(1)
-    expect(admin.showToast).not.toHaveBeenCalled()
+    expect(client.invalidateQueries).not.toHaveBeenCalled()
   })
 })
 
 describe('after the server succeeded', () => {
   it('a throwing refresh still resolves { ok: true }', async () => {
     admin.invalidateAdmin.mockImplementation(() => { throw new Error('refresh broke') })
+    client.invalidateQueries.mockImplementation(() => { throw new Error('refresh broke') })
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { result } = setup()
     expect(await run(() => result.current.postMedia({ showId: 's', kind: 'voice', content: 'c' }))).toEqual({ ok: true })
