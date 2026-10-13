@@ -14,8 +14,11 @@ export const isOk = (source) => source?.status === 'ok' && Array.isArray(source.
 // list_staff selects no team_id, so rows from the real server carry no team_id
 // key at all. A loaded, non-empty staff list where no row has the key means the
 // server did not say who is on which team: that is "unavailable", not "no team"
-// (a row that has the key, even null, means the server does say).
-export const hasTeamIds = (staff) => !isOk(staff) || staff.data.length === 0 || staff.data.some(s => s && 'team_id' in s)
+// (a row that has the key, even null, means the server does say). An empty list
+// has no row to inspect, and the server never reports membership, so it is also
+// "unavailable" (the viewer is a staff row themselves: empty means a swallowed
+// database error, finding 92).
+export const hasTeamIds = (staff) => !isOk(staff) || staff.data.some(s => s && 'team_id' in s)
 
 export default function SourceNotice({ source, noun, onRetry }) {
   if (!source || source.status === 'loading') {

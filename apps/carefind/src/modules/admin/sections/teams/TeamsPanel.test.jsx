@@ -198,9 +198,10 @@ describe('TeamsPanel when the server does not return team_id', () => {
     expect(screen.queryByText("Team membership isn't available yet")).not.toBeInTheDocument()
   })
 
-  it('an empty staff list is still "No members yet"', () => {
+  it('an empty staff list does not claim a team has no members', () => {
     renderPanel({ staff: { status: 'ok', data: [] } })
-    expect(within(team('Trust')).getByText('No members yet')).toBeInTheDocument()
+    expect(within(team('Trust')).getByText("Team membership isn't available yet")).toBeInTheDocument()
+    expect(within(team('Trust')).queryByText('No members yet')).not.toBeInTheDocument()
   })
 })
 
@@ -258,7 +259,7 @@ describe('TeamsPanel create form is for super admins', () => {
   it.each([false, undefined])('hides the create form when canCreate is %s', (canCreate) => {
     renderPanel({ canCreate })
     expect(screen.queryByRole('form', { name: 'Create a team' })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Team name')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/^Team name/)).not.toBeInTheDocument()
     expect(within(team('Trust')).getByText('Ada Obi')).toBeInTheDocument()
   })
 })
