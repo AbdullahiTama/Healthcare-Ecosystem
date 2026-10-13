@@ -103,7 +103,9 @@ export function useStaffActions() {
     ['toggle_staff', 'admin_user', id, { isActive }], isActive ? 'Staff member reactivated' : 'Staff member deactivated'), [perform])
 
   // assign_admin_role sets the staff member's role to the role's name, so
-  // assigning the system super_admin role would promote them.
+  // assigning the system super_admin role would promote them. The server does
+  // not enforce this refusal (finding 87): it is only this client check, so the
+  // caller must pass the real name of the role being assigned.
   const assignRole = useCallback(({ staffId, roleId, roleName }) => {
     if (!norm(roleName)) return Promise.resolve({ ok: false, error: 'Pick a role' })
     if (norm(roleName) === 'super_admin') return Promise.resolve({ ok: false, error: "The console can't promote someone to super admin" })
