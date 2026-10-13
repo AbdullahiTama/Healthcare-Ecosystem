@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { callAdminAuth } from '../adminApi'
 import { useAdmin } from '../provider/AdminProvider.jsx'
 import { bestEffort } from '../lib/bestEffort'
+import { capped } from '../lib/capped'
 import { ALL_TABS } from '../navigation'
 
 // Team, staff and role actions for the Teams screen. Each resolves { ok } or
@@ -23,11 +24,6 @@ import { ALL_TABS } from '../navigation'
 // action name of the oldest running key, or null.
 
 const REFRESH_CAP_MS = 10000
-const capped = (promise, ms) => {
-  let timer
-  const cap = new Promise(resolve => { timer = setTimeout(resolve, ms) })
-  return Promise.race([promise, cap]).finally(() => clearTimeout(timer))
-}
 
 const MIN_PASSWORD = 8
 // The server's rule for role names (create_admin_role): trimmed, lower-cased,

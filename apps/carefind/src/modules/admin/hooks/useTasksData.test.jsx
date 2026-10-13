@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
@@ -25,6 +25,8 @@ beforeEach(() => {
   admin.invalidateAdmin.mockReset()
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
+
+afterEach(() => { vi.useRealTimers() })
 
 describe('useTasksData', () => {
   it('returns the task list', async () => {
@@ -93,6 +95,17 @@ describe('useTaskActions.createTask', () => {
     admin.invalidateAdmin.mockRejectedValue(new Error('refresh'))
     const { result } = setup()
     expect(await run(() => result.current.createTask(good))).toEqual({ ok: true })
+  })
+  it('a hung refresh cannot keep Create disabled past 10 s', async () => {
+    vi.useFakeTimers()
+    admin.invalidateAdmin.mockReturnValue(new Promise(() => {}))
+    const { result } = setup()
+    let p
+    act(() => { p = result.current.createTask(good) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(9000) })
+    expect(result.current.busy).toBe(true)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500); await p })
+    expect(result.current.busy).toBe(false)
   })
   it('refuses a repeat while running', async () => {
     const d = deferred()

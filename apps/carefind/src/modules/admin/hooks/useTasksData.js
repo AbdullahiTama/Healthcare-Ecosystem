@@ -4,6 +4,7 @@ import { callAdminAuth } from '../adminApi'
 import { dashboardRepository } from '../repositories'
 import { useAdmin } from '../provider/AdminProvider.jsx'
 import { bestEffort } from '../lib/bestEffort'
+import { capped } from '../lib/capped'
 
 // The task list. A failed read, or a result that is not a list, is an error and
 // never an empty list. Key starts with 'admin', so invalidateAdmin() refreshes it.
@@ -19,6 +20,7 @@ export function useTasksData(enabled = true) {
   })
 }
 
+const REFRESH_CAP_MS = 10000
 const WHOLE_NUMBER = /^\d+$/
 
 // Creates a task. Resolves { ok } or { ok: false, error }. Input is validated
@@ -48,7 +50,7 @@ export function useTaskActions() {
       } catch (err) {
         return { ok: false, error: err?.message || String(err) }
       }
-      await bestEffort('refreshing after createTask', invalidateAdmin)
+      await capped(bestEffort('refreshing after createTask', invalidateAdmin), REFRESH_CAP_MS)
       bestEffort('toasting createTask', () => showToast('Task created', { type: 'success' }))
       return { ok: true }
     } finally {
