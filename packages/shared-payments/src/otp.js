@@ -162,6 +162,7 @@ const VERIFY_FAILURES = {
   expired: { status: 400, code: 'otp_expired', error: 'That code has expired. Request a new one.' },
   locked: { status: 429, code: 'otp_locked', error: 'Too many wrong codes. Request a new one.' },
   none: { status: 400, code: 'otp_missing', error: 'Request a verification code first.' },
+  superseded: { status: 400, code: 'otp_superseded', error: 'A newer code was issued — please use the latest email.' },
 }
 
 /** Verify and consume the code (single use). -> { ok: true } | { ok: false, status, code, error } */
@@ -184,6 +185,10 @@ export async function checkOtp({ supabase, userId, purpose, code, logger = defau
     return { ok: false, status: 500, code: 'otp_unavailable', error: 'Could not verify the code' }
   }
   if (result === 'ok') return { ok: true }
+  if (result === 'superseded') {
+    logger.warn('otp.superseded_typed', { purpose, user: ref })
+    return { ok: false, ...VERIFY_FAILURES.superseded }
+  }
   // Only the outcome is logged: a wrong guess is the signal worth alerting on, the guess itself must never be kept.
   logger.warn('otp.verify_rejected', { purpose, user: ref, result: String(result) })
   return { ok: false, ...(VERIFY_FAILURES[result] || { status: 500, code: 'otp_unavailable', error: 'Could not verify the code' }) }
