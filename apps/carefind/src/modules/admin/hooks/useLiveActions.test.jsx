@@ -37,7 +37,7 @@ describe('startShow', () => {
     expect(await run(() => result.current.startShow({ title: '  Hi  ', guestIds: ['a'] }))).toEqual({ ok: true })
     expect(callAdminAuth.mock.calls).toEqual([['start_live_show', { title: 'Hi', guestIds: ['a'] }]])
     expect(admin.invalidateAdmin).toHaveBeenCalledTimes(1)
-    expect(admin.showToast).toHaveBeenCalledWith('Live show started! Open the Control Room to begin posting.', { type: 'success' })
+    expect(admin.showToast).toHaveBeenCalledWith('Live show started. Its control room is under Currently live.', { type: 'success' })
   })
   it('blank title makes no call', async () => {
     const { result } = setup()

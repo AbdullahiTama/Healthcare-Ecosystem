@@ -83,7 +83,7 @@ export function useLiveActions() {
   const startShow = useCallback(({ title, guestIds }) => {
     if (!(title || '').trim()) return Promise.resolve({ ok: false, error: 'Add a show title' })
     return simple('startShow', null, 'start_live_show', { title: title.trim(), guestIds },
-      'Live show started! Open the Control Room to begin posting.')
+      'Live show started. Its control room is under Currently live.')
   }, [simple])
 
   const scheduleShow = useCallback(({ title, scheduledAt, trailerFile, guestIds }) => {
