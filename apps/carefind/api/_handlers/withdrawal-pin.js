@@ -72,6 +72,10 @@ export default async function handler(req, res) {
         if (reissue !== true) {
           return res.status(409).json({ error: 'A code is already on its way — check your email.', code: 'draft_active' })
         }
+        // Reissue issues the new code FIRST: a 60 s-cooldown 429 returns untouched and the live draft survives.
+        // Only once the code is sent is the prior draft voided and the new one owned.
+        const reissued = await issueOtpFromRequest({ supabase, user, req, mailer: await getSecurityMailer() })
+        if (reissued.status !== 200) return res.status(reissued.status).json(reissued.body)
         try {
           await voidWithdrawalDraft(supabase, { userId: user.id, reason: 'reissue' })
         } catch (err) {
@@ -81,11 +85,13 @@ export default async function handler(req, res) {
         try {
           draft = await createWithdrawalDraft(supabase, { userId: user.id, app: 'carefind', amount: coins, unit: 'coins', destination })
         } catch (err) {
-          return draftUnavailable()
+          console.info(JSON.stringify({ event: 'draft.reissue_failed', purpose: 'withdrawal', reason: 'create_failed' }))
+          return res.status(500).json({ error: 'Could not create a verification code' })
         }
         if (draft.ok === false && draft.outcome === 'draft_active') {
           return res.status(409).json({ error: 'A code is already on its way — check your email.', code: 'draft_active' })
         }
+        return res.status(reissued.status).json(reissued.body)
       }
       const withdrawalCode = await issueOtpFromRequest({ supabase, user, req, mailer: await getSecurityMailer() })
       if (withdrawalCode.status !== 200) {
@@ -105,7 +111,10 @@ export default async function handler(req, res) {
 
   if (action === 'draft') {
     const draft = await getWithdrawalDraft(supabase, { userId: user.id })
-    return res.status(200).json({ draft })
+    if (!draft) return res.status(200).json({ draft })
+    // The fingerprint is server-side HMAC material for the submit gate — never send it to the client.
+    const { destination_fp: _fp, ...safe } = draft
+    return res.status(200).json({ draft: safe })
   }
 
   if (action === 'set') {

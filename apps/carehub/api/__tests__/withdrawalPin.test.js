@@ -128,7 +128,7 @@ describe('/api/withdrawal-pin', () => {
   })
 
   it('otp can also be asked for a withdrawal code, but never for another purpose', async () => {
-    let r = await call('otp', { purpose: 'withdrawal', amount: 500000 })
+    let r = await call('otp', { purpose: 'withdrawal', amount: 500000, bankCode: '058', accountNumber: '0123456789' })
     expect(r.statusCode).toBe(200)
     expect(h.mailer.sendOtp).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'withdrawal' }))
     expect(rpcs('issue_otp')[0][1]).toMatchObject({ p_purpose: 'withdrawal' })

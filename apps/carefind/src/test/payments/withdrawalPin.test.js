@@ -59,7 +59,7 @@ describe('withdrawal-pin handler', () => {
 
     it('issues a withdrawal code when asked, and nothing for any other purpose', async () => {
       mockVerifyUser.mockResolvedValue({ ...confirmedUser, email: 'u@example.com' })
-      let res = await handler(makeReq('/api/withdrawal-pin/otp', { purpose: 'withdrawal', amount: 10 }), makeRes())
+      let res = await handler(makeReq('/api/withdrawal-pin/otp', { purpose: 'withdrawal', amount: 10, bankCode: '058', accountNumber: '0123456789' }), makeRes())
       expect(res.statusCode).toBe(200)
       expect(issued()[0][1]).toMatchObject({ p_purpose: 'withdrawal' })
       mockSupabase.rpc.mockClear()

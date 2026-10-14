@@ -2,9 +2,15 @@
 // defeats the PIN as a stolen-session control. Setting or replacing now needs a fresh emailed code (and, when
 // replacing, the current PIN unless the user chose "forgot PIN").
 const h = vi.hoisted(() => {
-  const s = { rpcCalls: [], user: null, stored: null, otp: 'ok', issued: 'ok', verified: true, createFirst: null }
+  const s = { rpcCalls: [], user: null, stored: null, otp: 'ok', issued: 'ok', verified: true, createFirst: null, draftRow: null }
+  const draftChain = () => {
+    const b = {}
+    b.maybeSingle = async () => ({ data: s.draftRow, error: null })
+    for (const m of ['select', 'eq', 'is', 'gt', 'order', 'limit']) b[m] = () => b
+    return b
+  }
   s.client = {
-    from: () => ({ delete: () => ({ lt: () => Promise.resolve({}) }) }),
+    from: (table) => (table === 'withdrawal_drafts' ? draftChain() : { delete: () => ({ lt: () => Promise.resolve({}) }) }),
     rpc: async (name, args) => {
       s.rpcCalls.push([name, args])
       if (name === 'get_withdrawal_pin') return { data: s.stored ? [s.stored] : [] }
@@ -41,7 +47,7 @@ function call(action, body = {}, method = 'POST') {
 
 beforeEach(() => {
   h.rpcCalls.length = 0
-  h.stored = null; h.otp = 'ok'; h.issued = 'ok'; h.verified = true; h.createFirst = null
+  h.stored = null; h.otp = 'ok'; h.issued = 'ok'; h.verified = true; h.createFirst = null; h.draftRow = null
   h.user = { id: 'user-1', email: 'u@x.com', email_confirmed_at: '2026-01-01T00:00:00Z' }
   h.mailer.sendOtp = vi.fn(async () => ({ ok: true }))
   h.mailer.sendPinChanged = vi.fn(async () => ({ ok: true }))
@@ -150,12 +156,29 @@ describe('/api/withdrawal-pin (CareFind)', () => {
     expect(rpcs('issue_otp')).toHaveLength(1)
   })
 
+  it('reissue inside the cooldown voids nothing and returns the cooldown untouched', async () => {
+    h.createFirst = { ok: false, outcome: 'draft_active' }
+    h.issued = 'cooldown'
+    const r = await call('otp', { purpose: 'withdrawal', amount: 10, bankCode: '058', accountNumber: '0123456789', reissue: true })
+    expect(r.statusCode).toBe(429)
+    expect(rpcs('void_withdrawal_draft')).toHaveLength(0)
+    expect(rpcs('create_withdrawal_draft')).toHaveLength(1)
+  })
+
   it('a failed send voids the draft it just created (no phantom lock)', async () => {
     h.mailer.sendOtp = vi.fn(async () => ({ ok: false, error: 'smtp down' }))
     const r = await call('otp', { purpose: 'withdrawal', amount: 10, bankCode: '058', accountNumber: '0123456789' })
     expect(r.statusCode).toBe(502)
     expect(rpcs('void_withdrawal_draft')).toHaveLength(1)
     expect(rpcs('void_withdrawal_draft')[0][1]).toMatchObject({ p_user_id: 'user-1', p_reason: 'issue_failed' })
+  })
+
+  it('the draft action never exposes the destination fingerprint', async () => {
+    h.draftRow = { id: 'd-1', app: 'carefind', amount: 10, unit: 'coins', destination_fp: 'saved:acc-1', destination_mask: '••••cc-1' }
+    const r = await call('draft')
+    expect(r.statusCode).toBe(200)
+    expect(r.body.draft).toMatchObject({ id: 'd-1', amount: 10 })
+    expect('destination_fp' in (r.body.draft || {})).toBe(false)
   })
 
   it('a misconfigured draft secret fails closed without issuing', async () => {

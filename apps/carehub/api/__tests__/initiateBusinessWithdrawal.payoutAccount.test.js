@@ -2,14 +2,14 @@
 // withdrawal goes; the browser's bank details are ignored. financial_config.payout_account_required = 1 refuses a
 // typed-in destination.
 const h = vi.hoisted(() => {
-  const s = { initiateTransfer: vi.fn(), createTransferRecipient: vi.fn(), checkBalance: vi.fn(), resolveAccount: vi.fn(), rpcCalls: [], tables: {}, routes: {}, auth: null }
+  const s = { initiateTransfer: vi.fn(), createTransferRecipient: vi.fn(), checkBalance: vi.fn(), resolveAccount: vi.fn(), rpcCalls: [], tables: {}, routes: {}, auth: null, draft: null }
   const builderFor = (table) => {
     let rows = s.tables[table] || []
     const b = {
       select: () => b, or: () => b, is: () => b, gt: () => b, order: () => b, limit: () => b,
       in: (col, vals) => { rows = rows.filter((r) => vals.includes(r[col])); return b },
       eq: (col, val) => { rows = rows.filter((r) => r[col] === val); return b },
-      maybeSingle: async () => (table === 'withdrawal_drafts' ? { data: { id: 'd-1', amount: 500000 } } : { data: rows[0] ?? null }),
+      maybeSingle: async () => (table === 'withdrawal_drafts' ? { data: (s.draft || s.savedDraft)() } : { data: rows[0] ?? null }),
       then: (resolve) => resolve({ data: rows, error: null }),
     }
     return b
@@ -28,9 +28,14 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
   createTransferRecipient: h.createTransferRecipient, initiateTransfer: h.initiateTransfer, checkBalance: h.checkBalance, resolveAccount: h.resolveAccount,
 }))
 
-import { hashPin } from '@care-ecosystem/shared-payments'
+import { hashPin, destinationFingerprint } from '@care-ecosystem/shared-payments'
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from '../_handlers/initiate-business-withdrawal.js'
+
+// The draft gate binds amount AND destination: the mocked live draft must match the test's effective destination.
+// Most tests use the saved account (fp `saved:pa-1`); typed-destination tests switch to `h.typedDraft`.
+h.savedDraft = () => ({ id: 'd-1', amount: 500000, destination_fp: 'saved:pa-1' })
+h.typedDraft = () => ({ id: 'd-1', amount: 500000, destination_fp: destinationFingerprint({ userId: 'user-1', savedId: undefined, bankCode: '058', accountNumber: '0123456789' }) })
 
 const REF = 'ch_wd_0123456789abcdef0123456789abcdef'
 const SALT = '00112233445566778899aabbccddeeff'
@@ -40,6 +45,7 @@ const calls = (n) => h.rpcCalls.filter(([name]) => name === n)
 
 beforeEach(() => {
   h.rpcCalls.length = 0
+  h.draft = null // back to the saved-account draft; typed tests opt into h.typedDraft
   h.tables = { businesses: [{ id: 'biz-1' }], payout_accounts: [SAVED], financial_config: [{ key: 'payout_account_required', value: 0 }] }
   h.auth = { business: { id: 'biz-1', name: 'Grace Pharmacy' }, user: { id: 'user-1', email: 'b@example.com', email_confirmed_at: '2026-01-01' } }
   h.routes.get_withdrawal_pin = { data: [{ pin_hash: hashPin('1234', SALT), pin_salt: SALT, locked_until: null }] }
@@ -102,6 +108,7 @@ describe('initiate-business-withdrawal with a saved payout account', () => {
 describe('payout_account_required (CareHub)', () => {
   const typed = { ...base, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'GRACE PHARMACY LIMITED' }
   it('off: a typed destination still works', async () => {
+    h.draft = h.typedDraft
     const r = res(); await handler({ method: 'POST', body: typed }, r)
     expect(r.statusCode).toBe(200)
   })
@@ -148,23 +155,27 @@ describe('Phase 4 (CareHub): cooling-off cap and alerts', () => {
   })
 
   it('a typed-in destination never paid before is capped like a new account (H02: the saved-account-only bypass is closed)', async () => {
+    h.draft = h.typedDraft
     await handler({ method: 'POST', body: { ...base, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'GRACE PHARMACY LIMITED' } }, res())
     expect(sent().p_daily_cap_kobo).toBe(2_000_000)
   })
 
   it('the cap is held under the engine ceiling for a typed-in destination too', async () => {
+    h.draft = h.typedDraft
     h.tables.financial_config.push({ key: 'business_withdrawal_daily_cap_kobo', value: 1_000_000 })
     await handler({ method: 'POST', body: { ...base, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'GRACE PHARMACY LIMITED' } }, res())
     expect(sent().p_daily_cap_kobo).toBe(1_000_000)
   })
 
   it('a destination this business has already been paid at (completed withdrawal) is known: no extra cap', async () => {
+    h.draft = h.typedDraft
     h.tables.business_withdrawal_requests = [{ business_id: 'biz-1', bank_code: '058', account_number: '0123456789', status: 'completed' }]
     await handler({ method: 'POST', body: { ...base, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'GRACE PHARMACY LIMITED' } }, res())
     expect(sent()).not.toHaveProperty('p_daily_cap_kobo')
   })
 
   it('history of ANOTHER business does not make the destination known', async () => {
+    h.draft = h.typedDraft
     h.tables.business_withdrawal_requests = [{ business_id: 'biz-9', bank_code: '058', account_number: '0123456789', status: 'completed' }]
     await handler({ method: 'POST', body: { ...base, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'GRACE PHARMACY LIMITED' } }, res())
     expect(sent().p_daily_cap_kobo).toBe(2_000_000)
@@ -181,6 +192,7 @@ describe('Phase 4 (CareHub): cooling-off cap and alerts', () => {
   })
 
   it('a bank that cannot confirm names is accepted with the typed name but is always treated as new', async () => {
+    h.draft = h.typedDraft
     h.tables.business_withdrawal_requests = [{ business_id: 'biz-1', bank_code: '058', account_number: '0123456789', status: 'completed' }]
     h.resolveAccount.mockRejectedValue(Object.assign(new Error('x'), { paystackMessage: 'bank does not support resolving' }))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

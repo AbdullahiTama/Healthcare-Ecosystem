@@ -7,7 +7,7 @@ const h = vi.hoisted(() => {
   const builderFor = (table) => {
     const b = {
       select: () => b, eq: () => b, or: () => b, in: () => b, is: () => b, gt: () => b, order: () => b, limit: () => b,
-      maybeSingle: async () => (table === 'withdrawal_drafts' ? { data: { id: 'd-1', amount: 500000 } } : (table === 'businesses' ? { data: s.owned ? { id: 'biz-1' } : null } : { data: null })),
+      maybeSingle: async () => (table === 'withdrawal_drafts' ? { data: { id: 'd-1', amount: 500000, destination_fp: destinationFingerprint({ userId: 'user-1', savedId: undefined, bankCode: '058', accountNumber: '0123456789' }) } } : (table === 'businesses' ? { data: s.owned ? { id: 'biz-1' } : null } : { data: null })),
     }
     return b
   }
@@ -28,7 +28,7 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
   resolveAccount: h.resolveAccount,
 }))
 
-import { hashPin } from '@care-ecosystem/shared-payments'
+import { hashPin, destinationFingerprint } from '@care-ecosystem/shared-payments'
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from '../_handlers/initiate-business-withdrawal.js'
 

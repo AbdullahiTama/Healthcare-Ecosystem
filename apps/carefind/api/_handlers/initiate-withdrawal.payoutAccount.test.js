@@ -2,14 +2,14 @@
 // and anything the browser sends for the destination is ignored. With financial_config.payout_account_required = 1
 // a typed-in destination is refused outright.
 const h = vi.hoisted(() => {
-  const s = { rpcCalls: [], tables: {}, routes: {}, resolved: { accountName: 'ADA CHINYERE OBI' } }
+  const s = { rpcCalls: [], tables: {}, routes: {}, resolved: { accountName: 'ADA CHINYERE OBI' }, draft: null }
   const builderFor = (table) => {
     let rows = s.tables[table] || []
     const b = {
       select: () => b, order: () => b, limit: () => b, is: () => b, gt: () => b, update: () => b,
       eq: (col, val) => { rows = rows.filter((r) => r[col] === val); return b },
       in: (col, vals) => { rows = rows.filter((r) => vals.includes(r[col])); return b },
-      maybeSingle: async () => (table === 'withdrawal_drafts' ? { data: { id: 'd-1', amount: 10 } } : { data: rows[0] ?? null }),
+      maybeSingle: async () => (table === 'withdrawal_drafts' ? { data: (s.draft || s.savedDraft)() } : { data: rows[0] ?? null }),
       then: (resolve) => resolve({ error: null, data: rows }),
     }
     return b
@@ -37,7 +37,12 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
 
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from './initiate-withdrawal.js'
-import { hashPin, randomPinSalt } from '@care-ecosystem/shared-payments'
+import { hashPin, randomPinSalt, destinationFingerprint } from '@care-ecosystem/shared-payments'
+
+// The draft gate binds amount AND destination: the mocked live draft must match the test's effective destination.
+// Most tests use the saved account (fp `saved:pa-1`); typed-destination tests switch to `h.typedDraft`.
+h.savedDraft = () => ({ id: 'd-1', amount: 10, destination_fp: 'saved:pa-1' })
+h.typedDraft = () => ({ id: 'd-1', amount: 10, destination_fp: destinationFingerprint({ userId: 'user-12345678', savedId: undefined, bankCode: '058', accountNumber: '0123456789' }) })
 
 // The shared PIN gate (checkWithdrawalPin) compares against a real scrypt hash, so the stored row must be a real one.
 const SALT = randomPinSalt()
@@ -54,6 +59,7 @@ beforeEach(() => {
   h.rpcCalls.length = 0
   h.trustCap = undefined
   h.resolveError = undefined
+  h.draft = null // back to the saved-account draft; typed tests opt into h.typedDraft
   clearFinancialConfigCache() // the 60 s cache would hide a changed financial_config table between tests
   h.tables = { payout_accounts: [SAVED], financial_config: [{ key: 'payout_account_required', value: 0 }, { key: 'coin_value_kobo', value: 20000 }], kyc_verifications: [{ user_id: 'user-12345678', tier: 2 }] }
   h.resolved = { accountName: 'ADA CHINYERE OBI' }
@@ -115,6 +121,7 @@ describe('payout_account_required', () => {
   const typed = { amount: 10, pin: '1234', otp: '123456', bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'ADA CHINYERE OBI' }
 
   it('off: a typed destination still works (today\'s behaviour)', async () => {
+    h.draft = h.typedDraft
     const r = res()
     await handler({ method: 'POST', body: typed }, r)
     expect(r.statusCode).toBe(200)
@@ -197,6 +204,7 @@ describe('Phase 4 (identity verification switched ON): a verified identity lifts
   })
 
   it('typed-in (legacy) destinations are not lifted: the trust cap applies unchanged', async () => {
+    h.draft = h.typedDraft
     await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'ADA CHINYERE OBI' } }, res())
     expect(capSent()).toBe(50)
   })
@@ -280,6 +288,7 @@ describe('H02: no request shape avoids the new-destination and PIN-change caps',
     h.trustCap = 1000 // a veteran, so the cooling-off cap is the binding number when it applies
     h.tables.withdrawal_requests = []
     h.tables.withdrawal_pins = []
+    h.draft = h.typedDraft // this block sends typed destinations unless a test says otherwise
   })
 
   it('a typed-in destination never paid before is capped at N20,000 (100 coins)', async () => {
@@ -337,6 +346,7 @@ describe('H02: no request shape avoids the new-destination and PIN-change caps',
   })
 
   it('a saved account past its window with no history is known; a young one is capped', async () => {
+    h.draft = h.savedDraft
     const old = res()
     await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', payoutAccountId: 'pa-1' } }, old)
     expect(capOf()).toBe(1000) // identity verification is off (default): no tier lift, the veteran trust cap stands; the account is settled so nothing lowers it
@@ -396,6 +406,7 @@ describe('H06: identity verification switched OFF (the default)', () => {
   })
 
   it('a typed-in destination works the same way (KYC is not part of it)', async () => {
+    h.draft = h.typedDraft
     h.tables.kyc_verifications = []
     const r = res()
     await handler({ method: 'POST', body: { amount: 10, pin: '1234', otp: '123456', bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'ADA CHINYERE OBI' } }, r)

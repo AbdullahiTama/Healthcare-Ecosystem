@@ -2,8 +2,21 @@
 // issued for a server-owned amount + destination; reissue voids first; a failed
 // send leaves no phantom draft; a missing destination or secret fails closed.
 const h = vi.hoisted(() => {
-  const s = { rpcCalls: [], auth: null, issued: 'ok', createFirst: null }
+  const s = { rpcCalls: [], auth: null, issued: 'ok', createFirst: null, draftRow: null }
+  const draftChain = () => {
+    const b = {}
+    b.maybeSingle = async () => ({ data: s.draftRow, error: null })
+    for (const m of ['select', 'eq', 'is', 'gt', 'order', 'limit']) b[m] = () => b
+    return b
+  }
   s.client = {
+    from: (table) => {
+      if (table === 'withdrawal_drafts') return draftChain()
+      const b = {}
+      b.maybeSingle = async () => ({ data: null })
+      for (const m of ['select', 'eq', 'or', 'in', 'is', 'gt', 'order', 'limit']) b[m] = () => b
+      return b
+    },
     rpc: async (name, args) => {
       s.rpcCalls.push([name, args])
       if (name === 'issue_otp') return { data: s.issued }
@@ -35,7 +48,7 @@ function call(action, body = {}, method = 'POST') {
 
 beforeEach(() => {
   h.rpcCalls.length = 0
-  h.issued = 'ok'; h.createFirst = null
+  h.issued = 'ok'; h.createFirst = null; h.draftRow = null
   h.auth = { business: { id: 'biz-1' }, user: { id: 'user-1', email: 'u@x.com', email_confirmed_at: '2026-01-01T00:00:00Z' } }
   h.mailer.sendOtp = vi.fn(async () => ({ ok: true }))
 })
@@ -81,12 +94,29 @@ describe('/api/withdrawal-pin otp draft lifecycle (CareHub)', () => {
     expect(rpcs('issue_otp')).toHaveLength(1)
   })
 
+  it('reissue inside the cooldown voids nothing and returns the cooldown untouched', async () => {
+    h.createFirst = { ok: false, outcome: 'draft_active' }
+    h.issued = 'cooldown'
+    const r = await call('otp', { purpose: 'withdrawal', amount: 500000, bankCode: '058', accountNumber: '0123456789', reissue: true })
+    expect(r.statusCode).toBe(429)
+    expect(rpcs('void_withdrawal_draft')).toHaveLength(0)
+    expect(rpcs('create_withdrawal_draft')).toHaveLength(1)
+  })
+
   it('a failed send voids the draft it just created (no phantom lock)', async () => {
     h.mailer.sendOtp = vi.fn(async () => ({ ok: false, error: 'smtp down' }))
     const r = await call('otp', { purpose: 'withdrawal', amount: 500000, bankCode: '058', accountNumber: '0123456789' })
     expect(r.statusCode).toBe(502)
     expect(rpcs('void_withdrawal_draft')).toHaveLength(1)
     expect(rpcs('void_withdrawal_draft')[0][1]).toMatchObject({ p_user_id: 'user-1', p_reason: 'issue_failed' })
+  })
+
+  it('the draft action never exposes the destination fingerprint', async () => {
+    h.draftRow = { id: 'd-1', app: 'carehub', amount: 500000, unit: 'kobo', destination_fp: 'saved:acc-1', destination_mask: '••••cc-1' }
+    const r = await call('draft')
+    expect(r.statusCode).toBe(200)
+    expect(r.body.draft).toMatchObject({ id: 'd-1', amount: 500000 })
+    expect('destination_fp' in (r.body.draft || {})).toBe(false)
   })
 
   it('a misconfigured draft secret fails closed without issuing', async () => {

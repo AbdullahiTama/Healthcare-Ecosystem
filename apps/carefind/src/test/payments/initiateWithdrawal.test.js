@@ -20,6 +20,7 @@ vi.mock('../../../api/_lib/paystackTransfer.js', () => mockPaystack)
 
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from '../../../api/_handlers/initiate-withdrawal.js'
+import { destinationFingerprint } from '@care-ecosystem/shared-payments'
 
 let pinRow = []
 let verifyResult = true
@@ -76,7 +77,7 @@ describe('initiate-withdrawal PIN gate', () => {
         : table === 'withdrawal_requests'
           ? Promise.resolve({ data: [{ id: 'wr-1', paystack_reference: null, paystack_transfer_code: null, created_at: new Date().toISOString() }], error: null })
           : table === 'withdrawal_drafts'
-            ? Promise.resolve({ data: { id: 'd-1', amount: 10 }, error: null })
+            ? Promise.resolve({ data: { id: 'd-1', amount: 10, destination_fp: destinationFingerprint({ userId: 'user-1', savedId: undefined, bankCode: '001', accountNumber: '0123456789' }) }, error: null })
             : Promise.resolve({ data: null, error: null })
       const chain = Object.assign(result, {
         select: () => chain,

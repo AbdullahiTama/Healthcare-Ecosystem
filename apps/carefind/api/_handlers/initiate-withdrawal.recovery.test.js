@@ -11,7 +11,7 @@ const h = vi.hoisted(() => {
     rpcCalls: [],
   }
   const builderFor = (table) => {
-    const b = { select: () => b, eq: () => b, in: () => b, is: () => b, gt: () => b, order: () => b, limit: () => b, update: () => b, maybeSingle: async () => (table === 'withdrawal_drafts' ? { data: { id: 'd-1', amount: 10 } } : { data: null }), then: (resolve) => resolve({ error: null }) }
+    const b = { select: () => b, eq: () => b, in: () => b, is: () => b, gt: () => b, order: () => b, limit: () => b, update: () => b, maybeSingle: async () => (table === 'withdrawal_drafts' ? { data: { id: 'd-1', amount: 10, destination_fp: destinationFingerprint({ userId: 'user-12345678', savedId: undefined, bankCode: '058', accountNumber: '0123456789' }) } } : { data: null }), then: (resolve) => resolve({ error: null }) }
     return b
   }
   s.routes = {}
@@ -38,7 +38,7 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
 
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from './initiate-withdrawal.js'
-import { hashPin, randomPinSalt } from '@care-ecosystem/shared-payments'
+import { hashPin, randomPinSalt, destinationFingerprint } from '@care-ecosystem/shared-payments'
 
 // The shared PIN gate (checkWithdrawalPin) compares against a real scrypt hash, so the stored row must be a real one.
 const SALT = randomPinSalt()
