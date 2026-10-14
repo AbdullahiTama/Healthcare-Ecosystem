@@ -1,4 +1,4 @@
-import { issueOtpFromRequest, setWithdrawalPin, withdrawalPinStatus, createWithdrawalDraft, getWithdrawalDraft } from '@care-ecosystem/shared-payments'
+import { issueOtpFromRequest, setWithdrawalPin, withdrawalPinStatus, createWithdrawalDraft, getWithdrawalDraft, voidWithdrawalDraft } from '@care-ecosystem/shared-payments'
 import { supabase } from '../_lib/supabase.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { getSecurityMailer } from '../_lib/securityMailer.js'
@@ -40,16 +40,55 @@ export default async function handler(req, res) {
     if (((req.body || {}).purpose || 'pin_set') === 'withdrawal') {
       // The code is issued for THIS request: the server owns the amount and
       // destination in a draft first, so a resumed form cannot be repurposed
-      // (Phase 1). A code already on its way is not re-issued.
-      const { amount, payoutAccountId, bankCode, accountNumber } = req.body || {}
+      // (Phase 1). A code already on its way is not re-issued unless the owner
+      // explicitly asks again (reissue:true voids the prior draft first; the
+      // issue_otp 60 s cooldown still applies to the new code).
+      const { amount, payoutAccountId, bankCode, accountNumber, reissue } = req.body || {}
       const amountKobo = Number(amount)
       if (!Number.isInteger(amountKobo) || amountKobo <= 0) {
         return res.status(400).json({ error: 'Enter an amount first.', code: 'draft_amount' })
       }
-      const draft = await createWithdrawalDraft(supabase, { userId: user.id, app: 'carehub', amount: amountKobo, unit: 'kobo', destination: { savedId: payoutAccountId, bankCode, accountNumber } })
-      if (draft.ok === false && draft.outcome === 'draft_active') {
-        return res.status(409).json({ error: 'A code is already on its way — check your email.', code: 'draft_active' })
+      if (!payoutAccountId && (!bankCode || !/^\d{10}$/.test(String(accountNumber || '')))) {
+        return res.status(400).json({ error: 'Choose a payout destination first.', code: 'draft_destination' })
       }
+      const destination = { savedId: payoutAccountId, bankCode, accountNumber }
+      const draftUnavailable = () => res.status(503).json({ error: 'Withdrawals are temporarily unavailable. Try again shortly.', code: 'draft_unavailable' })
+      let draft
+      try {
+        draft = await createWithdrawalDraft(supabase, { userId: user.id, app: 'carehub', amount: amountKobo, unit: 'kobo', destination })
+      } catch (err) {
+        return draftUnavailable()
+      }
+      if (draft.ok === false && draft.outcome === 'draft_active') {
+        if (reissue !== true) {
+          return res.status(409).json({ error: 'A code is already on its way — check your email.', code: 'draft_active' })
+        }
+        try {
+          await voidWithdrawalDraft(supabase, { userId: user.id, reason: 'reissue' })
+        } catch (err) {
+          return draftUnavailable()
+        }
+        console.info(JSON.stringify({ event: 'draft.voided', purpose: 'withdrawal', reason: 'reissue' }))
+        try {
+          draft = await createWithdrawalDraft(supabase, { userId: user.id, app: 'carehub', amount: amountKobo, unit: 'kobo', destination })
+        } catch (err) {
+          return draftUnavailable()
+        }
+        if (draft.ok === false && draft.outcome === 'draft_active') {
+          return res.status(409).json({ error: 'A code is already on its way — check your email.', code: 'draft_active' })
+        }
+      }
+      const r = await issueOtpFromRequest({ supabase, user, req, mailer: await getSecurityMailer() })
+      if (r.status !== 200) {
+        // No phantom lock: a draft created for a code that never went out is voided (best-effort).
+        try {
+          await voidWithdrawalDraft(supabase, { userId: user.id, reason: 'issue_failed' })
+          console.info(JSON.stringify({ event: 'draft.voided', purpose: 'withdrawal', reason: 'issue_failed' }))
+        } catch (err) {
+          // Best-effort: the draft expires in 10 min anyway; the send failure below is the response.
+        }
+      }
+      return res.status(r.status).json(r.body)
     }
     const r = await issueOtpFromRequest({ supabase, user, req, mailer: await getSecurityMailer() })
     return res.status(r.status).json(r.body)

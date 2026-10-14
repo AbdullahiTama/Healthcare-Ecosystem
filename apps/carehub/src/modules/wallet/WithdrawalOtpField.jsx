@@ -48,6 +48,29 @@ export default function WithdrawalOtpField({ value, onChange, disabled = false, 
   const [now, setNow] = useState(() => Date.now())
   const requestedRef = useRef(false)
 
+  // The server only owns a draft (and issues a code) when the request names an
+  // amount AND a destination. Until both props arrive the field shows a hint
+  // instead of the request button.
+  const hasDestination = Boolean(payoutAccountId) || (Boolean(bankCode) && Boolean(accountNumber))
+  const canRequest = amount !== undefined && hasDestination
+  const requestKey = JSON.stringify([amount ?? null, payoutAccountId ?? null, bankCode ?? null, accountNumber ?? null])
+  const prevRequestKeyRef = useRef(null)
+
+  // Any amount/destination edit after a code was requested resets to un-sent:
+  // the stale code belongs to the old draft, so a fresh request is required
+  // (the server gate enforces this regardless).
+  useEffect(() => {
+    if (prevRequestKeyRef.current !== null && prevRequestKeyRef.current !== requestKey && sent) {
+      setSent(false)
+      setOtpIssuedAt(null)
+      setDraftExpiresAt(null)
+      setError('')
+      clearWithdrawalOtpMeta()
+      onChange('')
+    }
+    prevRequestKeyRef.current = requestKey
+  }, [requestKey])
+
   // Resume on mount: paint the stored countdown instantly so a reload does not
   // flash the send button, then confirm against the live server draft. PIN/OTP
   // inputs always start empty — a code is never refilled.
@@ -64,7 +87,9 @@ export default function WithdrawalOtpField({ value, onChange, disabled = false, 
         const { data: { session } } = await authClient.auth.getSession()
         if (cancelled || !session) return
         const res = await fetch('/api/withdrawal-pin/draft', {
-          headers: { Authorization: `Bearer ${session.access_token}` },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: '{}',
         })
         const data = await res.json().catch(() => ({}))
         if (cancelled || requestedRef.current) return
@@ -105,23 +130,24 @@ export default function WithdrawalOtpField({ value, onChange, disabled = false, 
     return () => clearInterval(t)
   }, [sent])
 
-  async function requestCode() {
+  async function requestCode(reissue = false) {
     requestedRef.current = true
     setError('')
     setSending(true)
     try {
       const { data: { session } } = await authClient.auth.getSession()
       if (!session) { setError('Please log in again.'); return }
-      // Without an amount the server cannot own a draft, so the body stays
-      // exactly `{purpose:'withdrawal'}` as before (backward compatible).
+      // The server owns the amount + destination in a draft first. An explicit
+      // re-press after the cooldown voids the prior code (reissue:true).
       const body = amount === undefined
-        ? { purpose: 'withdrawal' }
+        ? { purpose: 'withdrawal', ...(reissue ? { reissue: true } : {}) }
         : {
             purpose: 'withdrawal',
             amount,
             ...(payoutAccountId !== undefined ? { payoutAccountId } : {}),
             ...(bankCode !== undefined ? { bankCode } : {}),
             ...(accountNumber !== undefined ? { accountNumber } : {}),
+            ...(reissue ? { reissue: true } : {}),
           }
       const res = await fetch('/api/withdrawal-pin/otp', {
         method: 'POST',
@@ -171,10 +197,14 @@ export default function WithdrawalOtpField({ value, onChange, disabled = false, 
   if (!sent) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        <button type="button" onClick={requestCode} disabled={sending || disabled}
-          style={{ padding: '10px 12px', borderRadius: 8, border: `1px dashed ${border}`, background: 'none', color: tealDeep, fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
-          {sending ? 'Sending...' : 'Email me a 6-digit code'}
-        </button>
+        {canRequest ? (
+          <button type="button" onClick={() => requestCode()} disabled={sending || disabled}
+            style={{ padding: '10px 12px', borderRadius: 8, border: `1px dashed ${border}`, background: 'none', color: tealDeep, fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {sending ? 'Sending...' : 'Email me a 6-digit code'}
+          </button>
+        ) : (
+          <span style={{ fontSize: '12px', color: gray500 }}>Choose an amount and destination first.</span>
+        )}
         <span style={{ fontSize: '11px', color: gray500 }}>We&apos;ll email you a code to confirm it&apos;s you (up to 3 an hour).</span>
         {error && <span role="alert" style={{ fontSize: '12px', color: danger, fontWeight: 700 }}>{error}</span>}
       </div>
@@ -208,7 +238,7 @@ export default function WithdrawalOtpField({ value, onChange, disabled = false, 
         </button>
       ) : (
         <>
-          <button type="button" onClick={requestCode} disabled={sending || disabled}
+          <button type="button" onClick={() => requestCode(true)} disabled={sending || disabled}
             style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', fontSize: '12px', fontWeight: 700, color: tealDeep, cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit' }}>
             {sending ? 'Sending...' : 'Send a new code'}
           </button>

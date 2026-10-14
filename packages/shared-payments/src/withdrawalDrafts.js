@@ -3,7 +3,16 @@
 // form without storing any secret. No money moves here; no PIN/OTP/raw account
 // numbers are ever stored (typed destinations are an HMAC fingerprint).
 import crypto from 'node:crypto'
-function draftSecret() { return process.env.OTP_HMAC_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY }
+function draftSecret() {
+  const dedicated = process.env.OTP_HMAC_SECRET
+  if (dedicated) return dedicated
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('OTP_HMAC_SECRET must be set in production (the service-role key is not accepted as a draft hashing key)')
+  }
+  const fallback = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!fallback) throw new Error('OTP_HMAC_SECRET (or SUPABASE_SERVICE_ROLE_KEY outside production) must be set')
+  return fallback
+}
 export function destinationFingerprint({ userId, savedId, bankCode, accountNumber }) {
   if (savedId) return `saved:${savedId}`
   return 'typed:' + crypto.createHmac('sha256', draftSecret()).update(`draft:${userId}:${bankCode}:${accountNumber}`).digest('hex')
@@ -15,7 +24,11 @@ export async function createWithdrawalDraft(supabase, { userId, app, amount, uni
   return { ...data, fingerprint: fp }
 }
 export async function getWithdrawalDraft(supabase, { userId }) {
-  const { data, error } = await supabase.from('withdrawal_drafts').select('id,app,amount,unit,destination_mask,draft_expires_at,otp_issued_at').eq('user_id', userId).is('voided_at', null).gt('draft_expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const { data, error } = await supabase.from('withdrawal_drafts').select('id,app,amount,unit,destination_fp,destination_mask,draft_expires_at,otp_issued_at').eq('user_id', userId).is('voided_at', null).gt('draft_expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle()
   if (error) throw new Error(`draft read failed: ${error.message}`)
   return data || null
+}
+export async function voidWithdrawalDraft(supabase, { userId, reason }) {
+  const { error } = await supabase.rpc('void_withdrawal_draft', { p_user_id: userId, p_reason: reason })
+  if (error) throw new Error(`draft void failed: ${error.message}`)
 }

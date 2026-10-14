@@ -1,4 +1,4 @@
-import { checkOtp, OTP_PURPOSES, checkWithdrawalPin, verifyBankAccount, settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForDestination, sendSecurityAlert, limitMessage, getWithdrawalDraft } from '@care-ecosystem/shared-payments'
+import { checkOtp, OTP_PURPOSES, checkWithdrawalPin, verifyBankAccount, settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForDestination, sendSecurityAlert, limitMessage, getWithdrawalDraft, destinationFingerprint, voidWithdrawalDraft } from '@care-ecosystem/shared-payments'
 import { getSecurityMailer } from '../_lib/securityMailer.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { supabase } from '../_lib/supabase.js'
@@ -63,9 +63,17 @@ export default async function handler(req, res) {
 
   // The submit must match the request the code was issued for: a resumed or
   // repurposed form forces a fresh code instead of burning this one (Phase 1).
+  // Amount AND destination are compared: a code issued for one payout account
+  // must not authorize another. A mismatch keeps the draft (no void).
   {
     const draft = await getWithdrawalDraft(supabase, { userId: user.id }).catch(() => null)
-    if (!draft || Number(draft.amount) !== amountKobo) {
+    let fingerprint = null
+    try {
+      fingerprint = destinationFingerprint({ userId: user.id, savedId: payoutAccountId, bankCode, accountNumber })
+    } catch (err) {
+      return res.status(503).json({ error: 'Withdrawals are temporarily unavailable. Try again shortly.', code: 'draft_unavailable' })
+    }
+    if (!draft || Number(draft.amount) !== amountKobo || draft.destination_fp !== fingerprint) {
       return res.status(400).json({ error: 'Your withdrawal details changed — request a fresh code.', code: 'draft_mismatch' })
     }
   }
@@ -75,6 +83,9 @@ export default async function handler(req, res) {
   // controls the owner's email. Single use (verify_otp consumes it); 5 wrong tries burn it.
   const otpCheck = await checkOtp({ supabase, userId: user.id, purpose: OTP_PURPOSES.WITHDRAWAL, code: otp })
   if (!otpCheck.ok) return res.status(otpCheck.status).json({ error: otpCheck.error, code: otpCheck.code })
+  // The code is consumed: void its draft so the next withdrawal starts clean (best-effort — a void failure must not
+  // fail the withdrawal; the draft expires in 10 min anyway).
+  await voidWithdrawalDraft(supabase, { userId: user.id, reason: 'consumed' }).catch(() => null)
 
   const account = await verifyBankAccount(resolveAccount, { bankCode, accountNumber, accountName })
   if (!account.ok) return res.status(account.status).json({ error: account.error })

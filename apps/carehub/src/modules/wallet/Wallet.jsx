@@ -174,7 +174,7 @@ export default function Wallet({ brand, role }) {
   const naira = (kobo) => `₦${((kobo || 0) / 100).toLocaleString()}`
   // The OTP draft is owned in kobo (the unit the submit sends). Until the typed
   // amount parses to a positive integer there is nothing to draft, so the field
-  // falls back to its legacy `{purpose:'withdrawal'}` request.
+  // shows its "choose an amount and destination" hint instead of the button.
   const otpAmountKobo = (() => {
     const k = Math.round(parseFloat(withdrawForm.amount) * 100)
     return Number.isFinite(k) && k > 0 ? k : undefined

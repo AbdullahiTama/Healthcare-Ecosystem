@@ -23,37 +23,41 @@ beforeEach(() => {
 })
 
 describe('WithdrawalOtpField', () => {
-  it('starts with only a send button; the code is not requested until the user asks', async () => {
+  it('shows a hint until the amount + destination arrive; the mount only resumes a draft (POST)', async () => {
     render(<WithdrawalOtpField value="" onChange={() => {}} />)
-    expect(screen.getByRole('button', { name: /email me a 6-digit code/i })).toBeInTheDocument()
+    expect(screen.getByText(/choose an amount and destination first/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /email me a 6-digit code/i })).toBeNull()
     expect(screen.queryByLabelText(/email verification code/i)).toBeNull()
-    // The mount only resumes a draft (GET); the code request (POST otp) waits for the user.
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/withdrawal-pin/draft', expect.anything()))
+    // The mount only resumes a draft (POST); the code request (POST otp) waits for the user.
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/withdrawal-pin/draft', expect.objectContaining({ method: 'POST' })))
+    const [, draftInit] = fetch.mock.calls.find(([u]) => String(u).includes('/withdrawal-pin/draft'))
+    expect(draftInit.headers.Authorization).toBe('Bearer tok-test')
+    expect(JSON.parse(draftInit.body)).toEqual({})
     expect(otpCalls()).toHaveLength(0)
   })
 
   it('requests a withdrawal code with the session token, then reveals the input', async () => {
-    render(<WithdrawalOtpField value="" onChange={() => {}} />)
+    render(<WithdrawalOtpField value="" onChange={() => {}} amount={10} bankCode="058" accountNumber="0123456789" />)
     fireEvent.click(screen.getByRole('button', { name: /email me a 6-digit code/i }))
     await waitFor(() => expect(screen.getByLabelText(/email verification code/i)).toBeInTheDocument())
     const [url, init] = otpCalls()[0]
     expect(url).toBe('/api/withdrawal-pin/otp')
     expect(init.headers.Authorization).toBe('Bearer tok-test')
-    expect(JSON.parse(init.body)).toEqual({ purpose: 'withdrawal' })
+    expect(JSON.parse(init.body)).toEqual({ purpose: 'withdrawal', amount: 10, bankCode: '058', accountNumber: '0123456789' })
     expect(screen.getByRole('status')).toHaveTextContent(/code sent/i)
   })
 
-  it('sends amount + destination with the code request so the server owns the draft', async () => {
-    render(<WithdrawalOtpField value="" onChange={() => {}} amount={10} bankCode="058" accountNumber="0123456789" />)
+  it('sends a saved payout account instead of typed bank fields when one is chosen', async () => {
+    render(<WithdrawalOtpField value="" onChange={() => {}} amount={10} payoutAccountId="acc-1" />)
     fireEvent.click(screen.getByRole('button', { name: /email me a 6-digit code/i }))
     await waitFor(() => expect(screen.getByLabelText(/email verification code/i)).toBeInTheDocument())
     const [, init] = otpCalls()[0]
-    expect(JSON.parse(init.body)).toEqual({ purpose: 'withdrawal', amount: 10, bankCode: '058', accountNumber: '0123456789' })
+    expect(JSON.parse(init.body)).toEqual({ purpose: 'withdrawal', amount: 10, payoutAccountId: 'acc-1' })
   })
 
   it('keeps only digits (max 6) and hands them to the parent', async () => {
     const seen = []
-    render(<WithdrawalOtpField value="" onChange={(v) => seen.push(v)} />)
+    render(<WithdrawalOtpField value="" onChange={(v) => seen.push(v)} amount={10} bankCode="058" accountNumber="0123456789" />)
     fireEvent.click(screen.getByRole('button', { name: /email me a 6-digit code/i }))
     const input = await screen.findByLabelText(/email verification code/i)
     fireEvent.change(input, { target: { value: '12ab34567' } })
@@ -62,7 +66,7 @@ describe('WithdrawalOtpField', () => {
 
   it('pasting `123 456` lands whole as `123456` (strip-then-truncate)', async () => {
     const seen = []
-    render(<WithdrawalOtpField value="" onChange={(v) => seen.push(v)} />)
+    render(<WithdrawalOtpField value="" onChange={(v) => seen.push(v)} amount={10} bankCode="058" accountNumber="0123456789" />)
     fireEvent.click(screen.getByRole('button', { name: /email me a 6-digit code/i }))
     const input = await screen.findByLabelText(/email verification code/i)
     fireEvent.paste(input, { clipboardData: { getData: () => '123 456' } })
@@ -70,7 +74,7 @@ describe('WithdrawalOtpField', () => {
   })
 
   it('shows `Resend available in Ns` while inside the 60 s cooldown', async () => {
-    render(<WithdrawalOtpField value="" onChange={() => {}} />)
+    render(<WithdrawalOtpField value="" onChange={() => {}} amount={10} bankCode="058" accountNumber="0123456789" />)
     fireEvent.click(screen.getByRole('button', { name: /email me a 6-digit code/i }))
     await screen.findByLabelText(/email verification code/i)
     expect(screen.getByRole('button', { name: /resend available in \d+s/i })).toBeDisabled()
@@ -82,7 +86,7 @@ describe('WithdrawalOtpField', () => {
       if (String(url).includes('/withdrawal-pin/otp')) return reply(409, { error: 'A code is already on its way — check your email.', code: 'draft_active' })
       return reply(404, {})
     })
-    render(<WithdrawalOtpField value="" onChange={() => {}} />)
+    render(<WithdrawalOtpField value="" onChange={() => {}} amount={10} bankCode="058" accountNumber="0123456789" />)
     fireEvent.click(screen.getByRole('button', { name: /email me a 6-digit code/i }))
     await waitFor(() => expect(screen.getByLabelText(/email verification code/i)).toBeInTheDocument())
     expect(screen.getByRole('alert')).toHaveTextContent(/already on its way/)
@@ -112,7 +116,7 @@ describe('WithdrawalOtpField', () => {
       if (String(url).includes('/withdrawal-pin/draft')) return reply(200, { draft: null })
       return reply(429, { error: 'Too many codes requested. Try again later.' })
     })
-    render(<WithdrawalOtpField value="" onChange={() => {}} />)
+    render(<WithdrawalOtpField value="" onChange={() => {}} amount={10} bankCode="058" accountNumber="0123456789" />)
     fireEvent.click(screen.getByRole('button', { name: /email me a 6-digit code/i }))
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/too many codes/i))
     expect(screen.queryByLabelText(/email verification code/i)).toBeNull()
@@ -123,11 +127,41 @@ describe('WithdrawalOtpField', () => {
       if (String(url).includes('/withdrawal-pin/draft')) return reply(200, { draft: null })
       throw new Error('offline')
     })
-    render(<WithdrawalOtpField value="" onChange={() => {}} />)
+    render(<WithdrawalOtpField value="" onChange={() => {}} amount={10} bankCode="058" accountNumber="0123456789" />)
     const btn = screen.getByRole('button', { name: /email me a 6-digit code/i })
     fireEvent.click(btn)
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/network error/i))
     expect(btn).toBeEnabled()
+  })
+
+  it('"Send a new code" re-presses with reissue:true so the server voids the prior code', async () => {
+    const issued = Date.now() - 61_000
+    const expires = Date.now() + 9 * 60_000
+    sessionStorage.setItem('cf-withdrawal-otp-meta', JSON.stringify({ draftId: 'd-1', otpIssuedAt: issued, draftExpiresAt: expires }))
+    fetch.mockImplementation(async (url) => {
+      if (String(url).includes('/withdrawal-pin/draft')) {
+        return reply(200, { draft: { id: 'd-1', app: 'carefind', amount: 10, unit: 'coins', destination_mask: '••••6789', draft_expires_at: new Date(expires).toISOString(), otp_issued_at: new Date(issued).toISOString() } })
+      }
+      if (String(url).includes('/withdrawal-pin/otp')) return reply(200, { ok: true, expiresInSeconds: 300 })
+      return reply(404, {})
+    })
+    render(<WithdrawalOtpField value="" onChange={() => {}} amount={10} bankCode="058" accountNumber="0123456789" />)
+    fireEvent.click(await screen.findByRole('button', { name: /send a new code/i }))
+    await waitFor(() => expect(otpCalls()).toHaveLength(1))
+    const [, init] = otpCalls()[0]
+    expect(JSON.parse(init.body)).toMatchObject({ purpose: 'withdrawal', amount: 10, reissue: true })
+  })
+
+  it('editing the amount after a code was sent resets to un-sent (fresh request required)', async () => {
+    const seen = []
+    const props = { value: '', onChange: (v) => seen.push(v), amount: 10, bankCode: '058', accountNumber: '0123456789' }
+    const { rerender } = render(<WithdrawalOtpField {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: /email me a 6-digit code/i }))
+    await screen.findByLabelText(/email verification code/i)
+    rerender(<WithdrawalOtpField {...props} amount={20} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /email me a 6-digit code/i })).toBeInTheDocument())
+    expect(screen.queryByLabelText(/email verification code/i)).toBeNull()
+    expect(seen.at(-1)).toBe('')
   })
 
 })

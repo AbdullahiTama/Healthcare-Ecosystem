@@ -10,14 +10,15 @@ const h = vi.hoisted(() => {
     checkBalance: vi.fn(),
     paystackFetch: vi.fn(),
     rpcCalls: [],
+    draftRow: null,
   }
-  const builderFor = () => {
-    const b = { select: () => b, eq: () => b, in: () => b, is: () => b, gt: () => b, order: () => b, limit: () => b, update: () => b, maybeSingle: async () => ({ data: null }), then: (resolve) => resolve({ error: null }) }
+  const builderFor = (table) => {
+    const b = { select: () => b, eq: () => b, in: () => b, is: () => b, gt: () => b, order: () => b, limit: () => b, update: () => b, maybeSingle: async () => ({ data: table === 'withdrawal_drafts' ? s.draftRow : null }), then: (resolve) => resolve({ error: null }) }
     return b
   }
   s.routes = {}
   s.client = {
-    from: () => builderFor(),
+    from: (table) => builderFor(table),
     rpc: async (name, args) => { s.rpcCalls.push([name, args]); const r = s.routes[name]; return typeof r === 'function' ? r(args) : r || { data: null } },
   }
   return s
@@ -38,7 +39,7 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
 
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from './initiate-withdrawal.js'
-import { hashPin, randomPinSalt } from '@care-ecosystem/shared-payments'
+import { hashPin, randomPinSalt, destinationFingerprint } from '@care-ecosystem/shared-payments'
 
 // The shared PIN gate (checkWithdrawalPin) compares against a real scrypt hash, so the stored row must be a real one.
 const SALT = randomPinSalt()
@@ -50,10 +51,17 @@ const calls = (name) => h.rpcCalls.filter(([n]) => n === name)
 
 beforeEach(() => {
   h.rpcCalls.length = 0
+  h.draftRow = null
   h.routes.get_withdrawal_trust = { data: { trust_level: 'new' } }
   h.routes.get_withdrawal_pin = { data: [pinRow()] }
   h.routes.verify_withdrawal_pin = { data: true }
   h.routes.verify_otp = { data: 'ok' }
+})
+
+const liveDraft = (overrides = {}) => ({
+  id: 'd-1', amount: 10,
+  destination_fp: destinationFingerprint({ userId: 'u-1', savedId: undefined, bankCode: '058', accountNumber: '0123456789' }),
+  ...overrides,
 })
 
 describe('initiate-withdrawal draft gate (Phase 1)', () => {
@@ -63,5 +71,24 @@ describe('initiate-withdrawal draft gate (Phase 1)', () => {
     expect(r.statusCode).toBe(400)
     expect(r.body).toMatchObject({ code: 'draft_mismatch' })
     expect(calls('verify_otp')).toHaveLength(0)
+  })
+
+  it('refuses a submit for another destination at the same amount, without burning the code or the draft', async () => {
+    h.draftRow = liveDraft({ destination_fp: destinationFingerprint({ userId: 'u-1', savedId: undefined, bankCode: '058', accountNumber: '0999999999' }) })
+    const r = res()
+    await handler(req, r)
+    expect(r.statusCode).toBe(400)
+    expect(r.body).toMatchObject({ code: 'draft_mismatch' })
+    expect(calls('verify_otp')).toHaveLength(0)
+    expect(calls('void_withdrawal_draft')).toHaveLength(0)
+  })
+
+  it('a matching amount + destination passes the gate, then voids the consumed draft', async () => {
+    h.draftRow = liveDraft()
+    const r = res()
+    await handler(req, r)
+    expect(calls('verify_otp')).toHaveLength(1)
+    expect(calls('void_withdrawal_draft')).toHaveLength(1)
+    expect(calls('void_withdrawal_draft')[0][1]).toMatchObject({ p_user_id: 'u-1', p_reason: 'consumed' })
   })
 })
