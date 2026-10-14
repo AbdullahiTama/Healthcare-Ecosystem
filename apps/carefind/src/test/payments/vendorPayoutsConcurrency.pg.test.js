@@ -31,6 +31,7 @@ const SQL = [
   M('carefind_20261016_reconciliation_scale'),
   M('carefind_20261017_engine_timeouts_and_hot_paths'),
   M('carefind_20261019_red_team_fixes'),
+  M('carefind_20261105_release_on_delivery'),
 ]
 
 const SUBTOTAL = 2_000_000, COMMISSION = 400_000, TOTAL = 2_050_000, VENDOR = 1_600_000
@@ -85,9 +86,11 @@ describe.skipIf(!hasRealPostgres)('vendor payouts under real concurrency', () =>
   it('12 overlapping release sweeps of one delivered order: released once, one ledger row', async () => {
     const vendor = uid()
     const o = await deliveredOrder(vendor)
+    // the delivery trigger released it in the very transaction that delivered it
+    expect((await q('select status from shop_vendor_credits where order_id = $1', [o.id]))[0].status).toBe('released')
     const results = await together(12, async (c) => (await c.query('select release_shop_vendor_credits(200) r')).rows[0].r.released)
     expect(results.every((r) => r.status === 'fulfilled')).toBe(true)
-    expect(results.reduce((s, r) => s + r.value, 0)).toBe(1)
+    expect(results.reduce((s, r) => s + r.value, 0)).toBe(0)   // none of the 12 may release it a second time
     expect(await wallet(vendor)).toEqual({ held: 0, avail: VENDOR })
     expect((await q("select count(*)::int c from business_wallet_transactions where reference = $1", [`shoprl_${o.id}`]))[0].c).toBe(1)
   })

@@ -61,6 +61,7 @@ beforeAll(async () => {
   await db.exec(M('carefind_20261017_engine_timeouts_and_hot_paths'))
   await db.exec(M('carefind_20261019_red_team_fixes'))   // reorders _settle_shop_order and re-times the engines: every test below runs on the final code
   await db.exec(M('carefind_20261018_shop_return_service_caller'))   // the endpoint calls with the service-role key and names the customer
+  await db.exec(M('carefind_20261105_release_on_delivery'))          // release on delivery: the payout hold is gone, the 7-day return window is not
 }, 180_000)
 
 const one = async (sql, p = []) => (await db.query(sql, p)).rows[0]
@@ -142,32 +143,37 @@ describe('a paid order credits the vendor', () => {
   })
 })
 
-describe('release after delivery and the return window', () => {
-  it('does not release before the window, an undelivered order, or an order with an open return', async () => {
-    const early = await paidOrder(); await deliver(early.id, 2)
-    const undelivered = await paidOrder()
-    const returning = await paidOrder(); await deliver(returning.id, 30)
-    await db.query(`insert into shop_order_returns (order_id, customer_id, vendor_business_id, reason, refund_amount_kobo) values ($1,$2,$3,'damaged',$4)`, [returning.id, returning.customer, returning.vendor, TOTAL])
-    await release()
-    for (const o of [early, undelivered, returning]) expect(await credit(o.id)).toMatchObject({ status: 'held' })
-    expect(await wallet(early.vendor)).toEqual({ held: VENDOR, avail: 0 })
+describe('release on delivery', () => {
+  it('releases the instant the order is delivered, with one ledger row; a later sweep does nothing', async () => {
+    const o = await paidOrder(); await deliver(o.id, 0)
+    expect(await credit(o.id)).toMatchObject({ status: 'released', released_kobo: VENDOR, release_shortfall_kobo: 0 })
+    expect(await wallet(o.vendor)).toEqual({ held: 0, avail: VENDOR })
+    expect(await ledger(o.vendor, 'shop_release')).toEqual([{ amount: VENDOR, reference: `shoprl_${o.id}` }])
+    const r = await release()
+    expect(r.released).toBe(0)
+    expect(await wallet(o.vendor)).toEqual({ held: 0, avail: VENDOR })
   })
 
-  it('releases held -> available once, with one ledger row; a second sweep does nothing', async () => {
-    const o = await paidOrder(); await deliver(o.id, 8)
-    const r1 = await release()
-    expect(r1.released).toBeGreaterThanOrEqual(1)
-    expect(await wallet(o.vendor)).toEqual({ held: 0, avail: VENDOR })
-    expect(await credit(o.id)).toMatchObject({ status: 'released', released_kobo: VENDOR, release_shortfall_kobo: 0 })
-    expect(await ledger(o.vendor, 'shop_release')).toEqual([{ amount: VENDOR, reference: `shoprl_${o.id}` }])
-    const r2 = await release()
-    expect(r2.released).toBe(0)
-    expect(await wallet(o.vendor)).toEqual({ held: 0, avail: VENDOR })
+  it('an undelivered order stays held', async () => {
+    const o = await paidOrder()
+    await release()
+    expect(await credit(o.id)).toMatchObject({ status: 'held' })
+    expect(await wallet(o.vendor)).toEqual({ held: VENDOR, avail: 0 })
+  })
+
+  it('an order with an open return is not released, neither at delivery nor by the sweep', async () => {
+    const o = await paidOrder()
+    await db.query(`insert into shop_order_returns (order_id, customer_id, vendor_business_id, reason, refund_amount_kobo) values ($1,$2,$3,'damaged',$4)`, [o.id, o.customer, o.vendor, TOTAL])
+    await deliver(o.id, 30)
+    await release()
+    expect(await credit(o.id)).toMatchObject({ status: 'held' })
+    expect(await wallet(o.vendor)).toEqual({ held: VENDOR, avail: 0 })
   })
 
   it('does not release while a refund is live', async () => {
-    const o = await paidOrder(); await deliver(o.id, 30)
+    const o = await paidOrder()
     await requestRefund('shop_return', o.id, { amount: TOTAL / 2 })
+    await deliver(o.id, 30)
     await release()
     expect((await credit(o.id)).status).toBe('held')
   })
@@ -178,13 +184,31 @@ describe('release after delivery and the return window', () => {
     }
   })
 
+  it('releases through the PRODUCTION path: the vendor marks the order delivered themselves', async () => {
+    const email = 'vendor-delivers@example.com'
+    const vendor = await business({ email })
+    const o = await paidOrder({ vendor })
+    await asRole('authenticated', () => db.query(`select update_shop_order_status($1,'delivered',$2,null)`, [o.id, o.customer]), { sub: uid(), email })
+    expect(await orderRow(o.id)).toMatchObject({ status: 'delivered' })
+    expect(await credit(o.id)).toMatchObject({ status: 'released', released_kobo: VENDOR, release_shortfall_kobo: 0 })
+    expect(await wallet(vendor)).toEqual({ held: 0, avail: VENDOR })
+    expect(await ledger(vendor, 'shop_release')).toEqual([{ amount: VENDOR, reference: `shoprl_${o.id}` }])
+  })
+
+  it('the delivery trigger function cannot be driven by an API role', async () => {
+    for (const role of ['anon', 'authenticated']) {
+      // PostgreSQL refuses any direct call to a trigger function, so there is no way in by name
+      await expect(asRole(role, () => db.query('select release_vendor_credit_on_delivery()')))
+        .rejects.toThrow(/trigger functions can only be called as triggers|permission denied/)
+    }
+  })
+
   it('releases only what the wallet still holds when other debits already took from held, and records the shortfall', async () => {
-    const o = await paidOrder(); await deliver(o.id, 30)
+    const o = await paidOrder()
     await db.query('update business_wallets set held_balance = 1000 where business_id = $1', [o.vendor])
-    const r = await release()
-    expect(r.partial).toBe(1)
-    expect(await wallet(o.vendor)).toEqual({ held: 0, avail: 1000 })
+    await deliver(o.id, 30)
     expect(await credit(o.id)).toMatchObject({ status: 'released', released_kobo: 1000, release_shortfall_kobo: VENDOR - 1000 })
+    expect(await wallet(o.vendor)).toEqual({ held: 0, avail: 1000 })
     expect((await all("select kind from reconcile_shop_vendor_credits() where order_id = $1", [o.id])).map((x) => x.kind)).toContain('release_shortfall')
   })
 })
@@ -236,7 +260,7 @@ describe('refunds take the vendor share back', () => {
     expect(await wallet(o.vendor)).toEqual({ held: 0, avail: 0 })
     expect((await settleRefund('failed', r.id)).result).toBe('failed')
     expect(await wallet(o.vendor)).toEqual(before)
-    expect(await credit(o.id)).toMatchObject({ status: 'held', reversed_kobo: 0 })
+    expect(await credit(o.id)).toMatchObject({ status: 'released', reversed_kobo: 0 })   // it was released at delivery, so it restores as released
     expect(await orderRow(o.id)).toEqual({ status: 'delivered', payment_status: 'paid' })
     expect((await ledger(o.vendor, 'refund_restore')).length).toBe(1)
     // the order can be refunded again after a failure
@@ -254,15 +278,15 @@ describe('refunds take the vendor share back', () => {
     expect(await wallet(o.vendor)).toEqual({ held: 0, avail: VENDOR })
   })
 
-  it('a partial refund recovers a pro rata share; the rest of the sale stands and is released later', async () => {
+  it('a partial refund recovers a pro rata share from AVAILABLE (the share was released on delivery); the rest of the sale stands', async () => {
     const o = await paidOrder(); await deliver(o.id, 30)
     await db.query("update shop_orders set status = 'refund_requested' where id = $1", [o.id])
     const half = TOTAL / 2
     const r = await requestRefund('shop_return', o.id, { amount: half })
     const due = Math.round(VENDOR * half / TOTAL)
     expect(r.amount_kobo).toBe(half)
-    expect(await wallet(o.vendor)).toEqual({ held: VENDOR - due, avail: 0 })
-    expect(await credit(o.id)).toMatchObject({ status: 'held', reversed_kobo: due })
+    expect(await wallet(o.vendor)).toEqual({ held: 0, avail: VENDOR - due })
+    expect(await credit(o.id)).toMatchObject({ status: 'released', reversed_kobo: due })
     expect((await settleRefund('processed', r.id)).result).toBe('completed')
     expect(await orderRow(o.id)).toEqual({ status: 'delivered', payment_status: 'paid' })
     await release()
@@ -359,11 +383,12 @@ describe('cancel_shop_order and process_shop_return', () => {
     const o = await paidOrder({ vendor }); await deliver(o.id, 1)
     await db.query("update shop_orders set status = 'refund_requested' where id = $1", [o.id])
     const ret = (await db.query(`insert into shop_order_returns (order_id, customer_id, vendor_business_id, reason, refund_amount_kobo) values ($1,$2,$3,'changed mind',$4) returning id`, [o.id, o.customer, vendor, TOTAL])).rows[0]
+    const before = await wallet(vendor)
     const out = await asRole('authenticated', () => one("select process_shop_return($1,'reject','no') r", [ret.id]), { sub: uid(), email })
     expect(out.r).toBe('rejected')
     expect(await orderRow(o.id)).toEqual({ status: 'delivered', payment_status: 'paid' })
     expect(await one('select count(*)::int c from refunds where entity_id = $1', [o.id])).toEqual({ c: 0 })
-    expect(await wallet(vendor)).toEqual({ held: VENDOR, avail: 0 })
+    expect(await wallet(vendor)).toEqual(before)      // rejecting a return moves no money, whatever the release state
   })
 
   it('a return whose refund cannot start is not approved (the whole approval rolls back)', async () => {
@@ -458,14 +483,13 @@ describe('request_shop_return hardening', () => {
     expect((await request(ok, null)).r).toBeTruthy()
   })
 
-  it('the customer can return exactly as long as the vendor money is held', async () => {
+  it('money is released on delivery while the return window still runs 7 days', async () => {
     const o = await paidOrder(); await deliver(o.id, 6)
     await release()
-    expect((await credit(o.id)).status).toBe('held')           // still inside the window: not released
+    expect((await credit(o.id)).status).toBe('released')      // no hold: released the moment it was delivered
+    expect((await request(o, null)).r).toBeTruthy()           // ...and still returnable 6 days in
     const old = await paidOrder(); await deliver(old.id, 8)
-    await release()
-    expect((await credit(old.id)).status).toBe('released')     // outside the window: released, and no longer returnable
-    await expect(request(old, null)).rejects.toThrow(/expired/)
+    await expect(request(old, null)).rejects.toThrow(/expired/)   // the customer's 7-day window is unchanged
   })
 })
 
