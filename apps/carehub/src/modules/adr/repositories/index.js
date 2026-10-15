@@ -1,5 +1,6 @@
 import { sbFetch, sbUpload } from '../../../services/supabase'
 import { ADR_MODULE_TYPES } from '../types'
+import { buildIdempotencyKey } from '../routing'
 
 // ── ADR report repository ────────────────────────────────────────────────────
 // Owns the adr_reports aggregate: the report row plus its four child tables
@@ -207,6 +208,43 @@ export function createAdrReportRepository({ request = sbFetch, upload = sbUpload
       return request(`adr_report_evidence_photos?photo_id=eq.${photoId}&report_id=eq.${reportId}`, {
         method: 'DELETE',
         prefer: 'return=minimal',
+      })
+    },
+
+    // ── Product-owner routing (Phase 1, Unified PV) ─────────────────────
+    // Per-product responsible-company selections. Reads are scoped by the
+    // routes RLS (submitter chain OR verified responsible org); writes go
+    // through the idempotent create_adr_product_route RPC, which re-checks
+    // report access, product membership and business eligibility server-side.
+    async getProductRoutes(reportId) {
+      return request(`adr_product_company_routes?report_id=eq.${reportId}&order=created_at.asc&select=*`)
+    },
+
+    async createProductRoute({ reportId, productId, kind, businessId = null, candidateName = null, idempotencyKey = null }) {
+      const key =
+        idempotencyKey ||
+        buildIdempotencyKey({ reportId, productId, kind, businessId, candidateName })
+      const rows = await request('rpc/create_adr_product_route', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_report_id: reportId,
+          p_product_id: productId,
+          p_selection_kind: kind,
+          p_responsible_business_id: businessId,
+          p_candidate_name: candidateName,
+          p_idempotency_key: key,
+        }),
+      })
+      return Array.isArray(rows) ? rows[0] : rows
+    },
+
+    // Type-ahead for "Company responsible for this medicine/product in your
+    // country (if known)". Eligible businesses + approved aliases only; the
+    // RPC returns non-confidential columns and never grants access.
+    async searchEligibleCompanies(query, limit = 20) {
+      return request('rpc/search_eligible_product_companies', {
+        method: 'POST',
+        body: JSON.stringify({ p_query: query ?? null, p_limit: limit ?? 20 }),
       })
     },
 
