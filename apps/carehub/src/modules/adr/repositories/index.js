@@ -248,6 +248,69 @@ export function createAdrReportRepository({ request = sbFetch, upload = sbUpload
       })
     },
 
+    // ── PV Tracker (Phase 4) ──────────────────────────────────────────
+    // Responsible-company reads go through the masked adr_pv_case_view —
+    // never the base report row (reporter identity/contact stay masked).
+    // Workflow mutates only route columns via RPC; case rows are read-only.
+    async getRoutedRoutes(businessId) {
+      return request(
+        `adr_product_company_routes?responsible_business_id=eq.${businessId}&status=in.(verified,routed)&order=created_at.desc&select=*`
+      )
+    },
+
+    async getPvCase(reportId) {
+      const [view, products, meds, reactions, photos, routes, assessments, followups, events] = await Promise.all([
+        request(`adr_pv_case_view?report_id=eq.${reportId}&select=*`),
+        this.getProducts(reportId),
+        this.getConcomitantMeds(reportId),
+        this.getReactions(reportId),
+        this.getEvidencePhotos(reportId),
+        this.getProductRoutes(reportId),
+        request(`adr_route_assessments?report_id=eq.${reportId}&order=created_at.asc&select=*`),
+        request(`adr_followup_requests?report_id=eq.${reportId}&order=created_at.asc&select=*`),
+        this.getReportEvents(reportId),
+      ])
+      const kase = Array.isArray(view) ? view[0] : view
+      if (!kase) return null
+      return {
+        ...kase,
+        adr_products: products,
+        adr_concomitant_meds: meds,
+        adr_reactions: reactions,
+        adr_evidence_photos: photos,
+        routes,
+        assessments,
+        followups,
+        events,
+      }
+    },
+
+    async updateRouteWorkflow(routeId, status, note = null) {
+      const rows = await request('rpc/update_adr_route_workflow', {
+        method: 'POST',
+        body: JSON.stringify({ p_route_id: routeId, p_status: status, p_note: note }),
+      })
+      return Array.isArray(rows) ? rows[0] : rows
+    },
+
+    async requestRouteFollowup(routeId, message, idempotencyKey = null) {
+      const rows = await request('rpc/request_adr_followup', {
+        method: 'POST',
+        body: JSON.stringify({ p_route_id: routeId, p_message: message, p_idempotency_key: idempotencyKey }),
+      })
+      return Array.isArray(rows) ? rows[0] : rows
+    },
+
+    // Author identity is stamped server-side (trigger); the client sends only
+    // the content, never the author.
+    async addRouteAssessment({ routeId, reportId, assessment, actionTaken = null }) {
+      return request('adr_route_assessments', {
+        method: 'POST',
+        body: JSON.stringify({ route_id: routeId, report_id: reportId, assessment, action_taken: actionTaken }),
+        prefer: 'return=representation',
+      })
+    },
+
     // ── Follow-up ─────────────────────────────────────────────────────────────
     async createFollowUp({ businessId, moduleType, followUpOfReportId, createdByUserId, followUpVersionNumber }) {
       return request('adr_reports', {
