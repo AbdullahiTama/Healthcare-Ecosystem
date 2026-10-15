@@ -85,6 +85,15 @@ function tag(name, content) {
 
 // ── E2B XML (industry) ─────────────────────────────────────────────────────────
 
+// ICH E2B(R3)-flavoured elements for regulatory preparation ONLY. This output
+// is not validated against the ICH XSD and there is no submission gateway
+// behind it: downloading it is preparation, never a filing with NAFDAC or
+// any other authority. Confirm the supported E2B version and the actual
+// submission workflow with the PV/regulatory lead before representing any
+// file as a valid submission.
+export const E2B_FORMAT_NOTE =
+  'ICH E2B(R3)-flavoured XML for regulatory preparation only — not schema-validated and not a submission to NAFDAC or any authority.'
+
 /**
  * Builds an ICH E2B-flavoured XML message for an ICSR. Never throws on missing
  * data — optional elements are simply omitted, matching the E2B "send only what
@@ -150,6 +159,7 @@ export function buildE2bXml({ report, products = [], reactions = [] }) {
 
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<!-- E2B(R3) preparation file: ${E2B_FORMAT_NOTE} -->\n` +
     `<ichicsr>\n` +
     `  <ichicsrmessageheader>\n` +
     tag('messagetype', 'ICSR') +
@@ -228,7 +238,13 @@ function fmtExportDate(value) {
  * is involved). Module-aware: includes the industry / skincare / hospital
  * detail sections that apply to the report's module type.
  */
-export function buildPdfHtml({ report, products = [], meds = [], reactions = [], reactionExpected = null }) {
+/**
+ * Case body fragment shared by the single-case document and the bulk export.
+ * Sections only (no doctype/head); the callers add their own title/meta/cover.
+ * Reporter identity rows are included verbatim — callers must only pass rows
+ * the reader may see (masked view data for companies, own rows for Hub).
+ */
+export function caseBodyHtml({ report, products = [], meds = [], reactions = [], reactionExpected = null }) {
   if (!report) return ''
 
   const moduleType = report.module_type || ADR_MODULE_TYPES.COMMUNITY_PHARMACY
@@ -281,20 +297,8 @@ export function buildPdfHtml({ report, products = [], meds = [], reactions = [],
     ? `<div class="section"><h2>Clinical details</h2><table>${row('Ward/department', report.ward_department)}${row('Attending physician', report.attending_physician)}${row('Lab investigation notes', report.lab_investigation_notes)}${row('Comorbidities', report.comorbidities)}${row('ICU admission', report.icu_admission ? 'Yes' : 'No')}${row('Treatment given', report.treatment_given_for_reaction)}${row('Lab attachment', report.lab_attachment_url)}${row('Discharge summary', report.discharge_summary_attachment_url)}</table></div>`
     : ''
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${ADR_FORM.formatReportNumber(report.report_number)}</title>
-    <style>
-      body { font-family: Georgia, serif; color: #182722; margin: 40px; line-height: 1.5; }
-      h1 { font-size: 20px; margin: 0 0 4px; } .meta { color: #8B978F; font-size: 12px; margin-bottom: 24px; }
-      h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #0E6F5A; margin: 28px 0 8px; border-bottom: 1px solid #ECEAE0; padding-bottom: 4px; }
-      table { width: 100%; border-collapse: collapse; font-size: 13px; }
-      th { text-align: left; width: 210px; color: #5B6B63; font-weight: 600; vertical-align: top; padding: 3px 0; }
-      td { vertical-align: top; padding: 3px 0; }
-      .section { page-break-inside: avoid; }
-    </style></head><body>
-    <h1>${ADR_FORM.formatReportNumber(report.report_number)}</h1>
-    <div class="meta">${ADR_FORM.getModuleTitle(moduleType)} · Status: ${ADR_FORM.getStatusLabel(report.status)} · Source: ${sourceBadge(report.report_source).label} · Generated ${new Date().toLocaleString('en-NG')}</div>
-
-    <div class="section"><h2>Reporter</h2><table>
+  return (
+    `<div class="section"><h2>Reporter</h2><table>
       ${row('Name', report.reporter_name)}${row('Qualification', report.reporter_qualification && QUALIFICATION_LABELS[report.reporter_qualification])}
       ${row('Facility', report.reporter_facility_name)}${row('Phone', report.reporter_phone)}${row('Email', report.reporter_email)}
       ${row('License', report.reporter_license_number)}</table></div>
@@ -315,8 +319,146 @@ export function buildPdfHtml({ report, products = [], meds = [], reactions = [],
 
     ${industryHtml}${skincareHtml}${hospitalHtml}
 
-    <div class="section"><h2>Deadline</h2><table>${row('Submission deadline', fmtExportDate(report.submission_deadline))}</table></div>
+    <div class="section"><h2>Deadline</h2><table>${row('Submission deadline', fmtExportDate(report.submission_deadline))}</table></div>`
+  )
+}
+
+/**
+ * Builds a self-contained HTML document formatted for NAFDAC submission. The
+ * browser's Print -> Save as PDF is the delivery mechanism (no server renderer
+ * is involved). Module-aware: includes the industry / skincare / hospital
+ * detail sections that apply to the report's module type.
+ */
+export function buildPdfHtml({ report, products = [], meds = [], reactions = [], reactionExpected = null }) {
+  if (!report) return ''
+  const moduleType = report.module_type || ADR_MODULE_TYPES.COMMUNITY_PHARMACY
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${ADR_FORM.formatReportNumber(report.report_number)}</title>
+    <style>
+      body { font-family: Georgia, serif; color: #182722; margin: 40px; line-height: 1.5; }
+      h1 { font-size: 20px; margin: 0 0 4px; } .meta { color: #8B978F; font-size: 12px; margin-bottom: 24px; }
+      h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #0E6F5A; margin: 28px 0 8px; border-bottom: 1px solid #ECEAE0; padding-bottom: 4px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th { text-align: left; width: 210px; color: #5B6B63; font-weight: 600; vertical-align: top; padding: 3px 0; }
+      td { vertical-align: top; padding: 3px 0; }
+      .section { page-break-inside: avoid; }
+    </style></head><body>
+    <h1>${ADR_FORM.formatReportNumber(report.report_number)}</h1>
+    <div class="meta">${ADR_FORM.getModuleTitle(moduleType)} · Status: ${ADR_FORM.getStatusLabel(report.status)} · Source: ${sourceBadge(report.report_source).label} · Generated ${new Date().toLocaleString('en-NG')}</div>
+
+    ${caseBodyHtml({ report, products, meds, reactions, reactionExpected })}
     </body></html>`
+}
+
+// ── Bulk + analytics + CSV exports (Phase 7) ────────────────────────────────
+
+// Hard cap for the combined print document: large sets export as CSV while
+// the PDF states exactly what was included and what was left out.
+export const BULK_PDF_CAP = 200
+
+function csvCell(value) {
+  if (value === undefined || value === null) return ''
+  const s = String(value)
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+function csvLine(cells) {
+  return cells.map(csvCell).join(',')
+}
+
+// One row per reaction (case columns repeated). Tracker mode (the default)
+// excludes reporter identity/contact and the patient identifier — companies
+// never hold that data, so it must never appear in their files. Hub mode
+// includes the reporter context the Hub already prints on its own documents.
+export function buildAdrCsv(rows, { includeReporter = false } = {}) {
+  const header = [
+    'report_number', 'report_source', 'status',
+    ...(includeReporter ? ['reporter_name', 'reporter_phone'] : []),
+    'product_brand', 'product_generic', 'batch_lot',
+    'reaction', 'severity', 'outcome', 'serious',
+    'patient_age', 'patient_gender',
+  ]
+  const lines = [csvLine(header)]
+  rows.forEach(r => {
+    lines.push(csvLine([
+      r.report_number || r.report_id || '',
+      r.report_source || 'unknown',
+      r.status || '',
+      ...(includeReporter ? [r.reporter_name || '', r.reporter_phone || ''] : []),
+      r.product_brand_name || '',
+      r.product_generic_name || '',
+      r.batch_lot_number || '',
+      r.reaction_description || '',
+      r.severity || '',
+      r.outcome || '',
+      r.serious ? 'yes' : 'no',
+      r.patient_age ?? '',
+      r.patient_gender || '',
+    ]))
+  })
+  return lines
+}
+
+// Combined print document: cover summary (org, timestamp, selected/total
+// counts, filters, truncation note) plus one sourced case section each.
+// `cases` are { report, products, meds, reactions, reactionExpected } bundles
+// the caller assembled from data it may read — builders never fetch.
+export function buildBulkPdfHtml({ cases, filtersLabel = 'All', orgName = '', cap = BULK_PDF_CAP, generatedAt = new Date() } = {}) {
+  const list = Array.isArray(cases) ? cases : []
+  const shown = list.slice(0, Math.max(cap, 0))
+  const truncated = list.length - shown.length
+  const cover =
+    `<h1>ADR case export — ${orgName || 'CareHub'}</h1>` +
+    `<div class="meta">Generated ${generatedAt.toLocaleString('en-NG')} · ` +
+    `${shown.length} of ${list.length} cases selected · Filters: ${filtersLabel}</div>` +
+    (list.length === 0
+      ? `<div class="section"><p>No cases matched the selected filters. Nothing was exported.</p></div>`
+      : '') +
+    (truncated > 0
+      ? `<div class="section"><p><strong>Note:</strong> this document is truncated to the first ${shown.length} cases ` +
+        `(${truncated} further case${truncated === 1 ? ' is' : 's are'} available — export as CSV for the full set).</p></div>`
+      : '')
+  const body = shown.map(({ report, products = [], meds = [], reactions = [], reactionExpected = null }) => (
+    `<h1>${ADR_FORM.formatReportNumber(report.report_number)}</h1>` +
+    `<div class="meta">Source: ${sourceBadge(report.report_source).label} · Status: ${ADR_FORM.getStatusLabel(report.status)}</div>` +
+    caseBodyHtml({ report, products, meds, reactions, reactionExpected })
+  )).join('<hr>')
+  return (
+    `<!doctype html><html><head><meta charset="utf-8"><title>ADR case export</title>` +
+    `<style>body { font-family: Georgia, serif; color: #182722; margin: 40px; line-height: 1.5; }` +
+    `h1 { font-size: 20px; margin: 24px 0 4px; } .meta { color: #8B978F; font-size: 12px; margin-bottom: 16px; }` +
+    `h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #0E6F5A; margin: 20px 0 8px; border-bottom: 1px solid #ECEAE0; padding-bottom: 4px; }` +
+    `table { width: 100%; border-collapse: collapse; font-size: 13px; }` +
+    `th { text-align: left; width: 210px; color: #5B6B63; font-weight: 600; vertical-align: top; padding: 3px 0; }` +
+    `td { vertical-align: top; padding: 3px 0; } .section { page-break-inside: avoid; }</style></head><body>` +
+    cover + body + `</body></html>`
+  )
+}
+
+// Printable analytics report mirroring the Tracker figures (tables, not chart
+// images): disclaimer, period, filters, denominators and suppression states.
+export function buildAnalyticsHtml({ figures, filtersLabel = 'All', periodLabel = '', orgName = '', generatedAt = new Date() } = {}) {
+  const f = figures || {}
+  const outcomes = f.outcomes || {}
+  const terms = f.terms || []
+  const trow = (label, value) => `<tr><th>${label}</th><td>${value}</td></tr>`
+  return (
+    `<!doctype html><html><head><meta charset="utf-8"><title>PV analytics report</title>` +
+    `<style>body { font-family: Georgia, serif; color: #182722; margin: 40px; line-height: 1.5; }` +
+    `h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #0E6F5A; margin: 20px 0 8px; border-bottom: 1px solid #ECEAE0; padding-bottom: 4px; }` +
+    `.meta { color: #8B978F; font-size: 12px; margin-bottom: 16px; }` +
+    `table { width: 100%; border-collapse: collapse; font-size: 13px; }` +
+    `th { text-align: left; color: #5B6B63; font-weight: 600; padding: 3px 0; }` +
+    `td { padding: 3px 0; }</style></head><body>` +
+    `<h1>PV analytics report — ${orgName || 'CareHub'}</h1>` +
+    `<div class="meta">Generated ${generatedAt.toLocaleString('en-NG')} · ${periodLabel} · Filters: ${filtersLabel} · n = ${f.total ?? 0} authorized cases</div>` +
+    `<p>These figures describe <strong>reports of suspected reactions</strong>. They do not establish that any product caused any outcome. ` +
+    `Small groups are suppressed for privacy; unknown values are never imputed.</p>` +
+    `<h2>Serious reports</h2><table>${trow('Serious', f.serious ?? 0)}${trow('Denominator (cases)', f.total ?? 0)}</table>` +
+    `<h2>Outcomes</h2><table>${Object.entries(outcomes).map(([o, c]) => trow(o, c)).join('')}</table>` +
+    `<h2>Most reported reactions</h2><table>${terms.map(t => trow(t.label, t.suppressed ? 'suppressed for privacy' : t.count)).join('') || trow('Terms', 'No data')}</table>` +
+    `</body></html>`
+  )
 }
 
 // ── DOM wrappers (used by the form page; kept tiny so builders stay pure) ────

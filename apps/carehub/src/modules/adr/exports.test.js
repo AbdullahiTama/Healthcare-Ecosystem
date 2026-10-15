@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { buildE2bXml, buildPdfHtml, exportFilename } from './exports.js'
+import {
+  buildE2bXml, buildPdfHtml, exportFilename,
+  buildAdrCsv, buildBulkPdfHtml, buildAnalyticsHtml, E2B_FORMAT_NOTE,
+} from './exports.js'
 
 const baseReport = {
   report_id: 'r1',
@@ -165,6 +168,78 @@ describe('exportFilename', () => {
     expect(exportFilename({ report_number: 'ADR-2026-000001' }, 'xml')).toBe('ADR-2026-000001.xml')
     expect(exportFilename({ report_id: 'r/1' }, 'xml')).toBe('r-1.xml')
     expect(exportFilename({}, 'xml')).toBe('adr-report.xml')
+  })
+})
+
+describe('phase7 export builders', () => {
+  const csvRow = {
+    report_number: 'ADR-1',
+    report_source: 'public',
+    status: 'submitted',
+    reporter_name: 'Ada',
+    reporter_phone: '0801',
+    patient_identifier: 'AB',
+    patient_age: 34,
+    patient_gender: 'female',
+    product_brand_name: 'Ampiclox',
+    product_generic_name: '',
+    batch_lot_number: '',
+    reaction_description: 'Rash',
+    severity: 'severe',
+    outcome: 'recovering',
+    serious: false,
+  }
+
+  it('buildAdrCsv escapes cells and masks reporter data in tracker mode', () => {
+    const tricky = { ...csvRow, product_brand_name: 'Amp, "Complex"', reaction_description: 'Line one\nLine two' }
+    const rows = buildAdrCsv([tricky], { includeReporter: false })
+    expect(rows[0]).toContain('report_number')
+    expect(rows[1]).not.toContain('Ada')
+    expect(rows[1]).not.toContain('0801')
+    expect(rows[1]).not.toContain('AB')
+    expect(rows[1]).toContain('"Amp, ""Complex"""')
+  })
+
+  it('buildAdrCsv includes reporter context in hub mode', () => {
+    const rows = buildAdrCsv([csvRow], { includeReporter: true })
+    expect(rows[1]).toContain('Ada')
+  })
+
+  it('buildBulkPdfHtml covers counts, filters, timestamp and truncation', () => {
+    const full = Array.from({ length: 5 }, (_, i) => ({
+      report: { report_number: `ADR-${i}`, report_source: 'public', status: 'submitted', module_type: 'community_pharmacy' },
+      products: [],
+      meds: [],
+      reactions: [],
+    }))
+    const doc = buildBulkPdfHtml({ cases: full, filtersLabel: 'All sources', orgName: 'Acme', cap: 3 })
+    expect(doc).toContain('Acme')
+    expect(doc).toMatch(/5 cases selected|of 5/i)
+    expect(doc).toContain('All sources')
+    expect(doc).toMatch(/truncat/i)
+  })
+
+  it('buildBulkPdfHtml states empty explicitly instead of crashing', () => {
+    expect(buildBulkPdfHtml({ cases: [], filtersLabel: 'All', orgName: 'Acme', cap: 200 })).toMatch(/no cases/i)
+  })
+
+  it('buildAnalyticsHtml carries disclaimer, period, filters and denominators', () => {
+    const doc = buildAnalyticsHtml({
+      figures: { total: 7, serious: 2, outcomes: { recovering: 7 }, terms: [{ label: 'rash', count: 7, suppressed: false }] },
+      filtersLabel: 'All',
+      periodLabel: 'Last 6 months',
+      orgName: 'Acme',
+    })
+    expect(doc).toMatch(/suspected/i)
+    expect(doc).toContain('Last 6 months')
+    expect(doc).toContain('Acme')
+    expect(doc).toMatch(/n = 7/)
+  })
+
+  it('marks the E2B output as preparation-only with its format note', () => {
+    expect(E2B_FORMAT_NOTE).toMatch(/preparation|not.*submission/i)
+    const xml = buildE2bXml({ report: { ...baseReport }, products: [], reactions: [] })
+    expect(xml).toContain('E2B')
   })
 })
 
