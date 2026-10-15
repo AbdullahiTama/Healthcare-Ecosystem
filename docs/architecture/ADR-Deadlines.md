@@ -22,7 +22,7 @@ Deadlines are versioned data with honest labels; no scheduler was wired
   the ReportsHub "24-hour NAFDAC/PCN window" claim is removed (unverified).
 - `PvTracker` analytics/report filters extended (outcome, dates, reporter type).
 
-## Status: REVIEW ONLY — not applied anywhere
+## Status: APPLIED live 2026-10-15 (`adr_deadline_rules`; table-driven calculator proven live: 72h and 90d branches)
 
 ## Display contract (all deadline surfaces)
 

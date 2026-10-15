@@ -24,7 +24,7 @@ form, validation, or existing-visibility changes.
 - `repositories/index.js` — three appended methods (`getProductRoutes`,
   `createProductRoute`, `searchEligibleCompanies`); no existing method touched.
 
-## Status: REVIEW ONLY — not applied anywhere
+## Status: APPLIED live 2026-10-15 (`adr_routing_foundation`, verified post-apply; view-column fix committed pre-apply)
 
 The migration has not been applied to any database (local or production).
 Application requires PV/regulatory + privacy sign-off per master prompt §14.

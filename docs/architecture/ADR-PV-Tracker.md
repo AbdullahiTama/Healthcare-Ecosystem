@@ -29,7 +29,7 @@ records. No Hub list/form/export was modified.
   (6, renderToString with theme/ui stubs — design-system absent from disk);
   `permissions.test.js` enterprise count 17→18 + pv-tracker presence.
 
-## Status: REVIEW ONLY — not applied anywhere
+## Status: APPLIED live 2026-10-15 (`adr_pv_tracker`, verified post-apply incl. masked-view ownership and trigger presence)
 
 No Phase 1–4 migration applied to any database.
 

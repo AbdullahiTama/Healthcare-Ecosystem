@@ -28,7 +28,7 @@ prompt requires. Nothing about submission flows, validation, or access changed.
   "Source not recorded". Historical rows are re-classified only on reliable
   evidence through the audited RPC.
 
-## Status: REVIEW ONLY — not applied anywhere
+## Status: APPLIED live 2026-10-15 (`adr_source_governance`, trigger + RPC verified post-apply)
 
 ## Test evidence
 

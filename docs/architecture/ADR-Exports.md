@@ -46,7 +46,7 @@ represented as a filing.
   (see `docs/architecture/Linting.md`); CSV opens in Excel and covers the
   analysis need until a safe writer is approved.
 
-## Status: no migration in this phase; Phases 1–6 migrations still REVIEW ONLY
+## Status: no migration in this phase; Phases 1–8 migrations APPLIED live 2026-10-15 and verified (see phase notes)
 
 ## Test evidence
 

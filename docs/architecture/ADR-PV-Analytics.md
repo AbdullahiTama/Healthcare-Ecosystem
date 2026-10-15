@@ -21,7 +21,7 @@ authorized routed cases. The Hub analytics tab is untouched.
   reporter type), analytics consumes the same filtered set as cards+list.
 - `PvCaseDetail.jsx`: one `note` access event per case view (silent on failure).
 
-## Status: REVIEW ONLY — not applied anywhere
+## Status: APPLIED live 2026-10-15 (`adr_analytics_access`, branch verified in live function body)
 
 ## Rulings
 

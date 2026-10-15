@@ -29,7 +29,7 @@ No form, workflow, or existing-visibility changes.
   (without it the NOT NULL column rejects every public draft); server-label map
   gains 'All six seriousness fields'.
 
-## Status: REVIEW ONLY — not applied anywhere
+## Status: APPLIED live 2026-10-15 (`adr_icsr_hardening` + `adr_verify_event_restore` correction; live gate returns structured errors, verified on real data)
 
 No migration in Phases 1–3 has been applied to any database.
 

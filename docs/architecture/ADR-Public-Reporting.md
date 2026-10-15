@@ -28,7 +28,7 @@ backend. Nothing in the Hub module was touched (no form/validation/export change
   `main.jsx` lazy route behind RequireAuth. Zero `posts` writes from the module
   (grep-verified; only a comment and a test name mention the word).
 
-## Status: REVIEW ONLY — not applied anywhere
+## Status: APPLIED live 2026-10-15 (`adr_public_access` + `adr_public_access_reactions_read_fix` correction, verified post-apply)
 
 Neither migration (Phase 1 nor Phase 2) has been applied to any database.
 First apply must be a reviewed staging migration with RLS probe tests
@@ -58,7 +58,7 @@ priv-sec hardening pass, E2B workflow confirmation.
 
 ## Test evidence
 
-- `validation.test.js`: 18 tests PASS. `repository.test.js`: 7 tests PASS
+- `validation.test.js`: 17 tests PASS. `repository.test.js`: 7 tests PASS
   (fake-client mapping + RPC shapes + never-posts assertion).
 - `SafetyReport.test.jsx` (9 tests: welcome/entry/gating/autosave-quiet/Review/
   CompanyPicker): UNKNOWN locally — this machine cannot complete jsdom suites
