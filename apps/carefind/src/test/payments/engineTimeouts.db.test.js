@@ -100,3 +100,59 @@ describe('what the hot-path migration kept', () => {
     expect((await one("select has_function_privilege('authenticated', 'public.reconcile_shop_vendor_credits()', 'execute') ok")).ok).toBe(false)
   })
 })
+
+// The regression this file could not see, because the chain above stops at 2026-10-19 — the last migration that called
+// _apply_engine_timeouts(). Three later migrations redefined engine functions (20261020 part4/part6 redefined
+// settle_payment_intent and create_withdrawal; 20261031 redefined settle_withdrawal and settle_business_withdrawal), and
+// CREATE OR REPLACE FUNCTION REPLACES proconfig, so those four went back to unbounded lock waits. Production was verified
+// on 2026-10-15 with proconfig = [search_path] only on exactly those four.
+describe('engine timeouts survive a redefinition (carefind_20261112_engine_timeouts_reapply)', () => {
+  const REDEFINE = `
+    create or replace function public.create_withdrawal(p_user_id uuid, p_coins integer, p_bank_name text, p_bank_code text, p_account_number text, p_account_name text, p_daily_cap_coins integer default null)
+    returns jsonb language plpgsql set search_path = public, pg_temp as $$ begin return '{}'::jsonb; end; $$;
+  `
+  const cfgOf = async (name) => (await one("select coalesce(proconfig, '{}') c from pg_proc where proname = $1 and pronamespace = 'public'::regnamespace", [name])).c
+
+  it('documents the hazard: CREATE OR REPLACE on an engine entry point drops its timeouts', async () => {
+    expect(await cfgOf('create_withdrawal')).toContain('lock_timeout=10s')
+    await db.exec(REDEFINE)
+    // The whole bug in one line: the replacement kept search_path but lost every timeout.
+    expect(await cfgOf('create_withdrawal')).not.toContain('lock_timeout')
+  })
+
+  it('the re-apply migration restores every entry point', async () => {
+    await db.exec(M('carefind_20261112_engine_timeouts_reapply'))
+    const rows = await all("select proname, coalesce(proconfig, '{}') cfg from pg_proc where pronamespace = 'public'::regnamespace and proname = any ($1)", [ENTRY_POINTS])
+    const seen = new Set(rows.map((r) => r.proname))
+    for (const name of ['create_withdrawal', 'settle_payment_intent', 'settle_withdrawal', 'settle_business_withdrawal']) {
+      expect(seen.has(name), `${name} must exist after the re-apply`).toBe(true)
+    }
+    for (const r of rows) {
+      expect(r.cfg, r.proname).toContain('lock_timeout=10s')
+      expect(r.cfg.some((c) => c.startsWith('statement_timeout=')), `${r.proname} statement_timeout`).toBe(true)
+    }
+  })
+
+  it('the re-apply assertion covers EVERY name the applier knows, so the next redefinition fails at apply time', async () => {
+    // The 2026-10-17 assertion checked 6 of 22 names, which is how four lost functions slipped through. Compare the two
+    // lists statically: a name the applier sets must also be in the assertion.
+    const applier = M('carefind_20261017_engine_timeouts_and_hot_paths')
+    const applierNames = [...applier.match(/for r in[\s\S]*?proname in \(([\s\S]*?)\)\s*\n\s*loop/)[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1])
+    const assertNames = [...M('carefind_20261112_engine_timeouts_reapply').matchAll(/'([a-z_]+)'/g)].map((m) => m[1])
+    expect(applierNames.length).toBeGreaterThanOrEqual(20)
+    for (const name of applierNames) {
+      expect(assertNames, `${name} must appear in the re-apply assertion`).toContain(name)
+    }
+  })
+
+  it('the transfer buffer is seeded as a threshold, and no commercial constant depends on it', async () => {
+    await db.exec(M('carefind_20261112_paystack_transfer_buffer'))
+    const row = await one("select value, unit from financial_config where key = 'paystack_transfer_buffer_kobo'")
+    expect(Number(row.value)).toBeGreaterThanOrEqual(0)
+    expect(row.unit).toBe('kobo')
+    // The commercial constants are untouched by this migration.
+    const constants = await all("select key, value from financial_config where key in ('coin_value_kobo','withdrawal_fee_rate') order by key")
+    expect(constants.find((c) => c.key === 'coin_value_kobo').value).toBe('20000')
+    expect(Number(constants.find((c) => c.key === 'withdrawal_fee_rate').value)).toBe(0.2)
+  })
+})

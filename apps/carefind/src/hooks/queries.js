@@ -49,6 +49,7 @@ export const keys = {
   adminSearchLogs: ['admin', 'searchLogs'],
   adminLiveShows: ['admin', 'liveShows'],
   adminShopData: ['admin', 'shopData'],
+  adminOrders: ['admin', 'orders'],
   adminRoles: ['admin', 'roles'],
 }
 
@@ -1063,18 +1064,56 @@ export function useAdminLiveShows(enabled = true) {
   })
 }
 
+/**
+ * CareFind shop orders for the admin console, read from `shop_orders` — the one canonical order table.
+ *
+ * This deliberately does NOT swallow errors. The previous admin hooks used `.catch(() => ({ data: [] }))`, which made
+ * a broken query indistinguishable from "no orders yet"; an operator looking for a paid order that had disappeared was
+ * shown a clean empty table. Here a failure reaches `error` and the screen says so.
+ *
+ * Filtering, searching and paging are done by the server: the admin has 50+ live orders and more arriving, and a
+ * client-side filter over a truncated page silently hides rows.
+ */
+export function useAdminOrders({ enabled = true, ...filters } = {}) {
+  const { search = '', status = '', paymentStatus = '', vendorId = '', dateFrom = '', dateTo = '', page = 1, pageSize = 25 } = filters
+  return useQuery({
+    queryKey: [...keys.adminOrders, { search, status, paymentStatus, vendorId, dateFrom, dateTo, page, pageSize }],
+    queryFn: async () => {
+      const { callAdminAuth } = await import('../modules/admin/adminApi')
+      const res = await callAdminAuth('list_shop_orders_filtered', {
+        token: adminToken(),
+        search: search || undefined,
+        status: status || undefined,
+        paymentStatus: paymentStatus || undefined,
+        vendorId: vendorId || undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+        limit: pageSize,
+        offset: (Math.max(1, page) - 1) * pageSize,
+      })
+      return { orders: res.data || [], count: res.count || 0 }
+    },
+    enabled: enabled && Boolean(adminToken()),
+    // Filters are typed into; refetching on every keystroke would hammer the API.
+    placeholderData: (prev) => prev,
+    staleTime: 15_000,
+  })
+}
+
 export function useAdminShopData(enabled = true) {
   return useQuery({
     queryKey: keys.adminShopData,
     queryFn: async () => {
       const { callAdminAuth } = await import('../modules/admin/adminApi')
       const token = adminToken()
-      const [appsRes, prodsRes, ordersRes] = await Promise.all([
+      // Orders are NOT fetched here. This hook's orders result was assigned to a variable nothing read, so every admin
+      // page load paid for an extra query that landed nowhere. The Orders tab reads them itself via useAdminOrders,
+      // which is filterable, searchable and pageable.
+      const [appsRes, prodsRes] = await Promise.all([
         callAdminAuth('list_ecommerce_applications', { token }).catch(() => ({ data: [] })),
         callAdminAuth('list_ecommerce_products_admin', { token }).catch(() => ({ data: [] })),
-        callAdminAuth('list_shop_orders_admin', { token }).catch(() => ({ data: [] })),
       ])
-      return { apps: appsRes.data || [], products: prodsRes.data || [], orders: ordersRes.data || [] }
+      return { apps: appsRes.data || [], products: prodsRes.data || [] }
     },
     enabled,
     staleTime: 60_000,

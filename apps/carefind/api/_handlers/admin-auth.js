@@ -6,6 +6,15 @@ import { decideAdminApprove, decideAdminReject } from '../_lib/withdrawalAdmin.j
 import { settleWithdrawal } from '@care-ecosystem/shared-payments'
 import { applyWithdrawalResult } from '../_lib/withdrawalEffects.js'
 
+// A search term is interpolated into a PostgREST `.or(...)` filter string, whose grammar treats `,` `(` `)` and `.`
+// as structure. A raw term could therefore append an OR branch (or a whole extra condition) and read past the
+// intended filter. Keep only characters that can appear in a reference or a person's name; drop the rest.
+function sanitiseOrderSearch(search) {
+  const raw = String(search == null ? '' : search).trim()
+  if (!raw) return ''
+  return raw.replace(/[^A-Za-z0-9 _.\-+#@]/g, '').replace(/[%]/g, '').trim().slice(0, 80)
+}
+
 export default async function handler(req, res) {
   try {
     return await handleRequest(req, res)
@@ -666,7 +675,10 @@ async function handleRequest(req, res) {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
     const payload = await verifyToken(token)
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
-    const { data } = await supabase.from('transactions').select('*').order('created_at', { ascending: false }).limit(50)
+    const { data, error } = await supabase.from('transactions').select('*').order('created_at', { ascending: false }).limit(50)
+    // A database error used to be dropped on the floor and answered with 200 + [], which the UI renders as an empty
+    // list. An operator cannot tell "no orders yet" from "the query is broken", so say which it is.
+    if (error) return res.status(400).json({ error: error.message })
     return res.status(200).json({ data: data || [] })
   }
 
@@ -825,7 +837,8 @@ async function handleRequest(req, res) {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
     const payload = await verifyToken(token)
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
-    const { data } = await supabase.from('shop_orders').select('*, shop_order_items(*)').order('created_at', { ascending: false }).limit(50)
+    const { data, error } = await supabase.from('shop_orders').select('*, shop_order_items(*)').order('created_at', { ascending: false }).limit(50)
+    if (error) return res.status(400).json({ error: error.message })
     return res.status(200).json({ data: data || [] })
   }
   if (action === 'admin_update_shop_order_status') {
@@ -891,7 +904,7 @@ async function handleRequest(req, res) {
     if (!orderId) return res.status(400).json({ error: 'orderId required' })
     const { data: order, error } = await supabase
       .from('shop_orders')
-      .select('*, shop_order_items(*), shop_order_status_history(*), shop_payments(*), shop_pickup_stations(*), businesses!shop_orders_vendor_business_id_fkey(id, name, business_type, city, state, whatsapp, address), profiles!shop_orders_customer_id_fkey(id, full_name, display_name, email)')
+      .select('*, shop_order_items(*), shop_order_status_history(*), shop_payments(*), shop_pickup_stations(*), businesses!shop_orders_vendor_business_id_fkey(id, name, business_type, city, state, whatsapp, address)')
       .eq('id', orderId)
       .maybeSingle()
     if (error) return res.status(400).json({ error: error.message })
@@ -908,24 +921,69 @@ async function handleRequest(req, res) {
     const { data: senders } = senderIds.length ? await supabase.from('profiles').select('id, full_name, display_name').in('id', senderIds) : { data: [] }
     const senderById = new Map((senders || []).map(p => [p.id, p]))
     const messages = (rawMessages || []).map(m => { const p = senderById.get(m.sender_id); return { ...m, sender_name: p?.full_name || p?.display_name || null } })
-    return res.status(200).json({ data: { ...order, tracking_events: tracking || [], notifications: notifications || [], messages: messages || [] } })
+    // customer_id points at auth.users, so the profile is fetched separately (an embedded `profiles!...` select here
+    // fails outright and would take the whole detail view with it).
+    let customer = null
+    if (order.customer_id) {
+      try {
+        const { data: profileRow } = await supabase.from('profiles').select('id, full_name, display_name, email').eq('id', order.customer_id).maybeSingle()
+        customer = profileRow || null
+      } catch {
+        // the order still renders with the name stored on the order itself
+      }
+    }
+    return res.status(200).json({ data: { ...order, customer, tracking_events: tracking || [], notifications: notifications || [], messages: messages || [] } })
   }
 
   if (action === 'list_shop_orders_filtered') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
     const payload = await verifyToken(token)
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
-    const { status, vendorId, customerId, dateFrom, dateTo, search, limit: lim } = req.body
-    let query = supabase.from('shop_orders').select('*, shop_order_items(*), businesses!shop_orders_vendor_business_id_fkey(id, name, business_type, city), profiles!shop_orders_customer_id_fkey(id, full_name, display_name)', { count: 'exact' }).order('created_at', { ascending: false }).limit(lim || 100)
+    const { status, paymentStatus, vendorId, customerId, dateFrom, dateTo, search, limit: lim, offset = 0 } = req.body
+    const pageSize = Math.min(200, Math.max(1, Number(lim) || 25))
+    const pageOffset = Math.max(0, Number(offset) || 0)
+    // `shop_orders.customer_id` is a FOREIGN KEY to auth.users, NOT to profiles — there is no relationship PostgREST
+    // can use to embed `profiles` here. Naming one anyway makes the whole query fail with "Could not find a
+    // relationship between 'shop_orders' and 'profiles'", which blanks the entire order list. (The same trap is
+    // documented at get_shop_order_detail for shop_order_messages.sender_id.) The order already stores the customer's
+    // name, and profiles are resolved separately below for the rows where it is missing.
+    let query = supabase.from('shop_orders').select('*, shop_order_items(*), businesses!shop_orders_vendor_business_id_fkey(id, name, business_type, city)', { count: 'exact' }).order('created_at', { ascending: false }).order('id', { ascending: false }).range(pageOffset, pageOffset + pageSize - 1)
     if (status) query = query.eq('status', status)
+    if (paymentStatus) query = query.eq('payment_status', paymentStatus)
     if (vendorId) query = query.eq('vendor_business_id', vendorId)
     if (customerId) query = query.eq('customer_id', customerId)
     if (dateFrom) query = query.gte('created_at', dateFrom)
     if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59')
-    if (search) query = query.or(`order_ref.ilike.%${search}%,customer_name.ilike.%${search}%`)
+    // Search covers order number, receipt/payment reference, customer name AND vendor name, which is what an operator
+    // actually has when a customer calls. The vendor name lives on the embedded `businesses` row, so it needs its own
+    // `businesses!inner(...)` clause to be filterable.
+    const term = sanitiseOrderSearch(search)
+    if (term) {
+      query = query.or(
+        `order_ref.ilike.%${term}%,payment_reference.ilike.%${term}%,paystack_reference.ilike.%${term}%,customer_name.ilike.%${term}%,businesses.name.ilike.%${term}%`
+      )
+    }
     const { data, count, error } = await query
     if (error) return res.status(400).json({ error: error.message })
-    return res.status(200).json({ data: data || [], count: count || 0 })
+    const rows = data || []
+    // Fill in the customer's name only for the rows that lack one, by looking profiles up separately. A failure here is
+    // cosmetic and must never cost the operator the order list.
+    const missing = [...new Set(rows.filter((o) => !o.customer_name).map((o) => o.customer_id).filter(Boolean))]
+    if (missing.length) {
+      try {
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name, display_name').in('id', missing)
+        const byId = new Map((profiles || []).map((p) => [p.id, p]))
+        for (const o of rows) {
+          if (!o.customer_name && o.customer_id) {
+            const p = byId.get(o.customer_id)
+            o.customer_name = p?.full_name || p?.display_name || null
+          }
+        }
+      } catch {
+        // leave the stored name as-is
+      }
+    }
+    return res.status(200).json({ data: rows, count: count || 0, limit: pageSize, offset: pageOffset })
   }
 
   if (action === 'get_admin_shop_overview') {
