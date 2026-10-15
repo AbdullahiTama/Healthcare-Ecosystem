@@ -73,18 +73,18 @@ BEGIN
   -- (Inlined per gate via the block below; labels match the live RPC strings.)
 
   IF coalesce(v_report.reporter_qualification, '') = '' THEN
-    v_m := v_m || 'Reporter qualification';
+    v_m := array_append(v_m, 'Reporter qualification';
     v_f := v_f || jsonb_build_object('id', 'reporter_qualification', 'label', 'Reporter qualification');
   END IF;
 
   IF coalesce(v_report.reporter_name, '') = ''
      AND v_report.reporter_anonymous_confirmed_by_facility IS NOT TRUE THEN
-    v_m := v_m || 'Reporter name';
+    v_m := array_append(v_m, 'Reporter name';
     v_f := v_f || jsonb_build_object('id', 'reporter_name', 'label', 'Reporter name');
   END IF;
 
   IF v_report.reporter_consent_followup IS NULL THEN
-    v_m := v_m || 'Reporter consent for follow-up';
+    v_m := array_append(v_m, 'Reporter consent for follow-up';
     v_f := v_f || jsonb_build_object('id', 'reporter_consent_followup', 'label', 'Reporter consent for follow-up');
   END IF;
 
@@ -104,31 +104,31 @@ BEGIN
       v_biz_contact := false;
     END IF;
     IF NOT v_biz_contact THEN
-      v_m := v_m || 'Reporter phone or email';
+      v_m := array_append(v_m, 'Reporter phone or email';
       v_f := v_f || jsonb_build_object('id', 'reporter_contact', 'label', 'Reporter phone or email');
     END IF;
   END IF;
 
   IF coalesce(v_report.patient_identifier, '') = '' THEN
-    v_m := v_m || 'Patient identifier';
+    v_m := array_append(v_m, 'Patient identifier';
     v_f := v_f || jsonb_build_object('id', 'patient_identifier', 'label', 'Patient identifier');
   END IF;
 
   IF v_report.patient_age IS NULL AND v_report.patient_dob IS NULL
      AND coalesce(v_report.patient_age_group, '') = '' THEN
-    v_m := v_m || 'Patient age or DOB or age group';
+    v_m := array_append(v_m, 'Patient age or DOB or age group';
     v_f := v_f || jsonb_build_object('id', 'patient_age', 'label', 'Patient age or DOB or age group');
   END IF;
 
   IF coalesce(v_report.patient_gender, '') = '' THEN
-    v_m := v_m || 'Patient gender';
+    v_m := array_append(v_m, 'Patient gender';
     v_f := v_f || jsonb_build_object('id', 'patient_gender', 'label', 'Patient gender');
   END IF;
 
   SELECT EXISTS(SELECT 1 FROM adr_report_products WHERE report_id = p_report_id)
     INTO v_has_products;
   IF NOT v_has_products THEN
-    v_m := v_m || 'At least one suspect product';
+    v_m := array_append(v_m, 'At least one suspect product';
     v_f := v_f || jsonb_build_object('id', 'products_section', 'label', 'At least one suspect product');
   ELSE
     SELECT EXISTS(SELECT 1 FROM adr_report_products
@@ -136,7 +136,7 @@ BEGIN
                      AND coalesce(product_brand_name, '') <> '')
       INTO v_has_brand;
     IF NOT v_has_brand THEN
-      v_m := v_m || 'Product brand name';
+      v_m := array_append(v_m, 'Product brand name';
       v_f := v_f || jsonb_build_object('id', 'products_section', 'label', 'Product brand name');
     END IF;
   END IF;
@@ -144,7 +144,7 @@ BEGIN
   SELECT EXISTS(SELECT 1 FROM adr_report_reactions WHERE report_id = p_report_id)
     INTO v_has_reactions;
   IF NOT v_has_reactions THEN
-    v_m := v_m || 'At least one adverse reaction';
+    v_m := array_append(v_m, 'At least one adverse reaction';
     v_f := v_f || jsonb_build_object('id', 'reactions_section', 'label', 'At least one adverse reaction');
   ELSE
     SELECT EXISTS(SELECT 1 FROM adr_report_reactions
@@ -152,7 +152,7 @@ BEGIN
                      AND coalesce(reaction_description, '') <> '')
       INTO v_has_desc;
     IF NOT v_has_desc THEN
-      v_m := v_m || 'Reaction description';
+      v_m := array_append(v_m, 'Reaction description';
       v_f := v_f || jsonb_build_object('id', 'reaction_description', 'label', 'Reaction description');
     END IF;
 
@@ -160,7 +160,7 @@ BEGIN
                    WHERE report_id = p_report_id AND severity IS NOT NULL)
       INTO v_has_severity;
     IF NOT v_has_severity THEN
-      v_m := v_m || 'Severity';
+      v_m := array_append(v_m, 'Severity';
       v_f := v_f || jsonb_build_object('id', 'severity', 'label', 'Severity');
     END IF;
 
@@ -168,7 +168,7 @@ BEGIN
                    WHERE report_id = p_report_id AND outcome IS NOT NULL)
       INTO v_has_outcome;
     IF NOT v_has_outcome THEN
-      v_m := v_m || 'Outcome';
+      v_m := array_append(v_m, 'Outcome';
       v_f := v_f || jsonb_build_object('id', 'outcome', 'label', 'Outcome');
     END IF;
 
@@ -181,33 +181,33 @@ BEGIN
              OR seriousness_other_medically_important IS NULL)
     ) INTO v_seriousness_ok;
     IF NOT v_seriousness_ok THEN
-      v_m := v_m || 'All six seriousness fields';
+      v_m := array_append(v_m, 'All six seriousness fields';
       v_f := v_f || jsonb_build_object('id', 'seriousness_fields', 'label', 'All six seriousness fields');
     END IF;
   END IF;
 
   IF v_report.module_type = 'industry' THEN
     IF coalesce(v_report.batch_lot_number, '') = '' THEN
-      v_m := v_m || 'Batch/lot number';
+      v_m := array_append(v_m, 'Batch/lot number';
       v_f := v_f || jsonb_build_object('id', 'regulatory_batch_lot_number', 'label', 'Batch/lot number');
     END IF;
     IF coalesce(v_report.causality_assessment, '') = '' THEN
-      v_m := v_m || 'Causality assessment';
+      v_m := array_append(v_m, 'Causality assessment';
       v_f := v_f || jsonb_build_object('id', 'regulatory_causality_assessment', 'label', 'Causality assessment');
     END IF;
     IF coalesce(v_report.case_narrative_summary, '') = '' THEN
-      v_m := v_m || 'Case narrative summary';
+      v_m := array_append(v_m, 'Case narrative summary';
       v_f := v_f || jsonb_build_object('id', 'case_narrative_summary', 'label', 'Case narrative summary');
     END IF;
   END IF;
 
   IF v_report.module_type = 'hospital' THEN
     IF coalesce(v_report.ward_department, '') = '' THEN
-      v_m := v_m || 'Ward/department';
+      v_m := array_append(v_m, 'Ward/department';
       v_f := v_f || jsonb_build_object('id', 'ward_department', 'label', 'Ward/department');
     END IF;
     IF coalesce(v_report.attending_physician, '') = '' THEN
-      v_m := v_m || 'Attending physician';
+      v_m := array_append(v_m, 'Attending physician';
       v_f := v_f || jsonb_build_object('id', 'attending_physician', 'label', 'Attending physician');
     END IF;
   END IF;
@@ -216,23 +216,23 @@ BEGIN
   -- marks mandatory. No other module is checked for these columns.
   IF v_report.module_type = 'skincare' THEN
     IF coalesce(v_report.application_site, '') = '' THEN
-      v_m := v_m || 'Application site';
+      v_m := array_append(v_m, 'Application site';
       v_f := v_f || jsonb_build_object('id', 'skincare_application_site', 'label', 'Application site');
     END IF;
     IF coalesce(v_report.cosmetic_reaction_type, '') = '' THEN
-      v_m := v_m || 'Cosmetic reaction type';
+      v_m := array_append(v_m, 'Cosmetic reaction type';
       v_f := v_f || jsonb_build_object('id', 'skincare_cosmetic_reaction_type', 'label', 'Cosmetic reaction type');
     END IF;
     IF v_report.onset_timing IS NULL THEN
-      v_m := v_m || 'Onset timing';
+      v_m := array_append(v_m, 'Onset timing';
       v_f := v_f || jsonb_build_object('id', 'skincare_onset_timing', 'label', 'Onset timing');
     END IF;
     IF v_report.discontinued_use IS NULL THEN
-      v_m := v_m || 'Discontinued use';
+      v_m := array_append(v_m, 'Discontinued use';
       v_f := v_f || jsonb_build_object('id', 'skincare_discontinued_use', 'label', 'Discontinued use');
     END IF;
     IF coalesce(v_report.resolution_status, '') = '' THEN
-      v_m := v_m || 'Resolution status';
+      v_m := array_append(v_m, 'Resolution status';
       v_f := v_f || jsonb_build_object('id', 'skincare_resolution_status', 'label', 'Resolution status');
     END IF;
   END IF;
@@ -334,7 +334,7 @@ BEGIN
   IF coalesce(trim(both from v_report.reporter_name), '') = ''
      AND NOT (v_report.reporter_anonymous_confirmed_by_facility IS TRUE
               AND coalesce(trim(both from v_report.reporter_facility_name), '') <> '') THEN
-    v_public_missing := v_public_missing || 'Reporter name';
+    v_public_missing := array_append(v_public_missing, 'Reporter name';
     v_public_fields := v_public_fields || jsonb_build_object('id', 'reporter_name', 'label', 'Reporter name');
   END IF;
 
@@ -344,7 +344,7 @@ BEGIN
     WHERE report_id = p_report_id AND seriousness_unknown IS NULL
   ) INTO v_ternary_ok;
   IF NOT v_ternary_ok THEN
-    v_public_missing := v_public_missing || 'Seriousness answers';
+    v_public_missing := array_append(v_public_missing, 'Seriousness answers';
     v_public_fields := v_public_fields || jsonb_build_object('id', 'seriousness_fields', 'label', 'Seriousness answers');
   END IF;
 
