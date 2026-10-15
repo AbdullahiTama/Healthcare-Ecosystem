@@ -86,6 +86,7 @@ const AgentApproval = lazy(() => import('./modules/agents-hub/AgentApproval.jsx'
 const AgentEarnings = lazy(() => import('./modules/agents-hub/AgentEarnings.jsx'))
 const AgentTransfer = lazy(() => import('./modules/agents-hub/AgentTransfer.jsx'))
 const AgentLogin = lazy(() => import('./pages/AgentLogin.jsx'))
+const SafetyReportPage = lazy(() => import('./modules/safety-report/SafetyReportPage.jsx'))
 
 // Business Directory & Discovery
 const BusinessDirectoryPage = lazy(() => import('./modules/business-directory/BusinessDirectoryPage'))
@@ -129,6 +130,7 @@ const RoutesWithKey = () => {
       <Route path="/track/:token" element={<SuspenseWrapper><PublicTracking /></SuspenseWrapper>} />
 
       {/* Requires a logged-in consumer session */}
+      <Route path="/report-side-effect" element={<SuspenseWrapper><RequireAuth><SafetyReportPage /></RequireAuth></SuspenseWrapper>} />
       <Route path="/onboarding" element={<SuspenseWrapper><RequireAuth><Onboarding /></RequireAuth></SuspenseWrapper>} />
       <Route path="/profile" element={<SuspenseWrapper><RequireAuth><Profile /></RequireAuth></SuspenseWrapper>} />
       <Route path="/saved" element={<SuspenseWrapper><RequireAuth><SavedPosts /></RequireAuth></SuspenseWrapper>} />

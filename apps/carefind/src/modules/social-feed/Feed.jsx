@@ -4,7 +4,7 @@ import {
   Award, BadgeCheck, Bell, BookOpen, Bookmark, Building2, Camera, Check, ChevronRight,
   Clapperboard, Download, Eye, FileText, Film, Gift, Hand, Heart, HelpCircle, Image as ImageIcon,
   Lock, MapPin, MessageCircle, MessageSquare, Mic, Moon, Newspaper, Pen, Pencil, Pill as PillIcon,
-  Plus, Radio, Repeat2, Search as SearchIcon, Share2, ShoppingCart, Sparkles, Sprout, Star,
+  Plus, Radio, Repeat2, Search as SearchIcon, Share2, ShieldAlert, ShoppingCart, Sparkles, Sprout, Star,
   Stethoscope, Trash2, Trees, Unlock, Waves, X, Flag,
 } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
@@ -928,6 +928,7 @@ function Feed() {
     { key: 'video',    Icon: Clapperboard,  label: 'Video',         run: () => startPost('video') },
     { key: 'visual',   Icon: Mic,           label: 'Voice card',    run: () => startPost('visual') },
     { key: 'article',  Icon: FileText,      label: 'Article',       run: () => startPost('article') },
+    { key: 'safety',   Icon: ShieldAlert,   label: 'Safety Report', run: () => navigate('/report-side-effect') },
     { key: 'story',    Icon: BookOpen,      label: 'Story',         run: () => storiesRef.current?.openComposer() },
     { key: 'series',   Icon: Film,          label: 'Series',        run: () => navigate('/playlist/create'), pro: true },
     { key: 'product',  Icon: ShoppingCart,  label: 'Sell a product', run: () => navigate('/profile'), pro: true },
