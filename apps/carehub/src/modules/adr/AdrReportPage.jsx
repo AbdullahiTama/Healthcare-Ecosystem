@@ -6,7 +6,7 @@ import { adrReportRepository } from './repositories'
 import { sourceBadge } from './pvWorkflow'
 import { adrValidation, normalizeChildRow } from './validation'
 import { ADR_FORM } from './formEngine'
-import { buildPdfHtml, buildE2bXml, openPrintView, downloadTextFile, exportFilename } from './exports'
+import { buildPdfHtml, buildE2bXml, openPrintView, downloadTextFile, exportFilename, buildAdrCsv, csvRowsFromCases, E2B_FORMAT_NOTE } from './exports'
 import { draftBackup, buildDraftSnapshot, isStale } from './draftBackup'
 import { ADR_MODULE_TYPES, REPORT_STATUS, REACTION_SEVERITY_LABELS, REACTION_OUTCOME_LABELS, ACTION_TAKEN_LABELS, DECHALLENGE_LABELS, RECHALLENGE_LABELS, CAUSALITY_LABELS, EVIDENCE_PHOTO_TYPE_LABELS, QUALIFICATION_LABELS, PATIENT_GENDER_LABELS, PATIENT_AGE_GROUP_LABELS } from './types'
 import { theme } from '../../styles/theme'
@@ -269,6 +269,8 @@ export default function AdrReportPage({ reportId }) {
 
   // Industry reports export as an E2B ICSR XML file; the other module types
   // export as a printable NAFDAC document (browser Print -> Save as PDF).
+  // The E2B file is regulatory preparation only (see E2B_FORMAT_NOTE) —
+  // never a validated submission.
   function handleExport() {
     if (!report) return
     const aggregate = { report, products, meds, reactions, reactionExpected }
@@ -292,6 +294,15 @@ export default function AdrReportPage({ reportId }) {
 
     const html = buildPdfHtml(aggregate)
     if (html) openPrintView(html)
+  }
+
+  function handleExportCsv() {
+    if (!report) return
+    const rows = csvRowsFromCases([{ ...report, adr_products: products, adr_reactions: reactions }])
+    const csv = buildAdrCsv(rows, { includeReporter: true }).join('\n')
+    downloadTextFile(exportFilename(report, 'csv'), csv, 'text/csv')
+    adrReportRepository.logEvent(report.report_id, 'exported', { format: 'csv' }).catch(() => {})
+    showToast('CSV downloaded', { type: 'success' })
   }
 
   // ── Child-row persistence ───────────────────────────────────────────────────
@@ -399,7 +410,8 @@ export default function AdrReportPage({ reportId }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button variant="secondary" size="md" onClick={handleSaveDraft} disabled={isLocked} loading={saving} loadingText="Saving…">Save Draft</Button>
           <Button variant="primary" size="md" onClick={handleSubmit} disabled={isLocked} loading={submitting} loadingText="Submitting…"><CheckCircle size={14} /> {terminology.submitButton}</Button>
-          <Button variant="ghost" size="md" onClick={handleExport}><Download size={14} /> {isIndustry ? 'Export E2B XML' : terminology.exportButton}</Button>
+          <Button variant="ghost" size="md" onClick={handleExport} title={isIndustry ? E2B_FORMAT_NOTE : undefined}><Download size={14} /> {isIndustry ? 'Export E2B XML (prep. only)' : terminology.exportButton}</Button>
+          <Button variant="ghost" size="md" onClick={handleExportCsv}><Download size={14} /> Export CSV</Button>
           <Button variant="ghost" size="md" onClick={handleFollowUp}><RefreshCw size={14} /> Follow-up</Button>
           <Button variant="danger" size="md" onClick={() => setShowArchiveConfirm(true)} disabled={archiving} loading={archiving} loadingText="Archiving…"><Trash2 size={14} /> Archive</Button>
         </div>

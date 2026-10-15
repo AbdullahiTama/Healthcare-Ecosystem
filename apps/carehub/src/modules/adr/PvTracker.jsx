@@ -4,10 +4,12 @@ import { Factory } from 'lucide-react'
 import { adrReportRepository } from './repositories'
 import { adrValidation } from './validation'
 import { getDeadlineStatus } from './services'
-import { bucketTrackerCounts, sourceBadge, companyStatusLabel, allowedCompanyTransitions } from './pvWorkflow'
+import { bucketTrackerCounts, sourceBadge, companyStatusLabel, allowedCompanyTransitions, logBulkExport } from './pvWorkflow'
+import { buildAdrCsv, buildBulkPdfHtml, buildAnalyticsHtml, csvRowsFromCases, downloadTextFile, openPrintView, BULK_PDF_CAP } from './exports'
+import { outcomeCounts, topReactionTerms, suppressCounts } from './analytics'
 import PvAnalytics from './PvAnalytics'
 import { theme } from '../../styles/theme'
-import { Card, Loading, Empty, ErrorState, Button } from '../../components/ui'
+import { Card, Loading, Empty, ErrorState, Button, useToast } from '../../components/ui'
 
 const { tealDeep, gray500, border } = theme
 
@@ -125,6 +127,22 @@ export function WorkflowActions({ route, onTransition, busy }) {
   )
 }
 
+// Export bar: CSV + bulk PDF + analytics report for the currently filtered
+// set. Builders receive masked view data only (includeReporter:false); every
+// export is audit-logged per included report.
+export function TrackerExportBar({ count, busy, onCsv, onBulk, onAnalytics }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+      <Button variant="secondary" size="md" disabled={busy || count === 0} onClick={onCsv}>Export filtered CSV</Button>
+      <Button variant="secondary" size="md" disabled={busy || count === 0} onClick={onBulk}>Export combined PDF</Button>
+      <Button variant="secondary" size="md" disabled={busy || count === 0} onClick={onAnalytics}>Download analytics report</Button>
+      <span style={{ fontSize: 12, color: theme.textLight }}>
+        {count === 0 ? 'Nothing to export.' : `Exports cover the ${count} filtered cases. Combined PDF caps at ${BULK_PDF_CAP} cases with an explicit note.`}
+      </span>
+    </div>
+  )
+}
+
 export function filterTrackerCases(cases, f) {
   const q = (f.query || '').trim().toLowerCase()
   return cases.filter((k) => {
@@ -148,6 +166,7 @@ export function filterTrackerCases(cases, f) {
 
 export default function PvTracker({ brand }) {
   const navigate = useNavigate()
+  const { show: showToast } = useToast()
   const [cases, setCases] = useState(null)
   const [error, setError] = useState(null)
   const [filters, setFilters] = useState({ query: '', source: '', seriousness: '', companyStatus: '', outcome: '', reporterType: '', from: '', to: '' })
@@ -185,6 +204,58 @@ export default function PvTracker({ brand }) {
   }
 
   const visible = useMemo(() => filterTrackerCases(cases || [], filters), [cases, filters])
+  const [exporting, setExporting] = useState(false)
+
+  const logExport = (ids, format) =>
+    logBulkExport((id, type, meta) => adrReportRepository.logEvent(id, type, meta), ids, { format, via: 'pv-tracker', filters: activeFilterLabel })
+
+  async function handleExportCsv() {
+    if (visible.length === 0) return
+    setExporting(true)
+    try {
+      const csv = buildAdrCsv(csvRowsFromCases(visible), { includeReporter: false }).join('\n')
+      downloadTextFile(`pv-tracker-${Date.now()}.csv`, csv, 'text/csv')
+      const { failed } = await logExport(visible.map((c) => c.report_id), 'csv')
+      showToast(failed > 0 ? `CSV downloaded, but ${failed} audit events failed to record.` : 'CSV downloaded and audit-logged.', { type: failed > 0 ? 'warning' : 'success' })
+    } catch (e) {
+      showToast('CSV export failed: ' + (e?.message || 'unknown error'), { type: 'error' })
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleExportBulk() {
+    if (visible.length === 0) return
+    setExporting(true)
+    try {
+      const bundles = visible.map((c) => ({
+        report: c, products: c.adr_products || [], meds: c.adr_concomitant_meds || [],
+        reactions: c.adr_reactions || [], reactionExpected: c.reaction_expected ?? null,
+      }))
+      const shown = bundles.slice(0, BULK_PDF_CAP)
+      openPrintView(buildBulkPdfHtml({ cases: bundles, filtersLabel: activeFilterLabel, orgName: brand?.name || '', cap: BULK_PDF_CAP }))
+      const { failed } = await logExport(shown.map((b) => b.report.report_id), 'bulk-pdf')
+      showToast(failed > 0 ? `PDF opened, but ${failed} audit events failed to record.` : 'Combined PDF opened and audit-logged.', { type: failed > 0 ? 'warning' : 'success' })
+    } catch (e) {
+      showToast('PDF export failed: ' + (e?.message || 'unknown error'), { type: 'error' })
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  function handleExportAnalytics() {
+    if (visible.length === 0) return
+    const mapped = visible.map((c) => ({ ...c, reactions: c.adr_reactions || [], products: c.adr_products || [] }))
+    const serious = mapped.filter((c) => c.is_serious).length
+    const figures = {
+      total: mapped.length,
+      serious,
+      outcomes: outcomeCounts(mapped),
+      terms: suppressCounts(topReactionTerms(mapped, 10)),
+    }
+    openPrintView(buildAnalyticsHtml({ figures, filtersLabel: activeFilterLabel, periodLabel: 'Last 6 months', orgName: brand?.name || '' }))
+    logExport(visible.map((c) => c.report_id), 'analytics').catch(() => {})
+  }
 
   const activeFilterLabel = useMemo(() => {
     const parts = []
@@ -219,6 +290,13 @@ export default function PvTracker({ brand }) {
         </div>
       </div>
 
+      <TrackerExportBar
+        count={visible.length}
+        busy={exporting}
+        onCsv={handleExportCsv}
+        onBulk={handleExportBulk}
+        onAnalytics={handleExportAnalytics}
+      />
       <TrackerSummary cases={visible} />
 
       <Card style={{ padding: '10px 12px', marginBottom: 12 }}>

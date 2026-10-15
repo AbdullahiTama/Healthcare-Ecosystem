@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import { TrackerSummary, TrackerList, CaseHeader, WorkflowActions } from './PvTracker.jsx'
+import { TrackerSummary, TrackerList, CaseHeader, WorkflowActions, TrackerExportBar } from './PvTracker.jsx'
+import { CaseExportBar } from './PvCaseDetail.jsx'
 
 vi.mock('./repositories', () => ({
   adrReportRepository: {},
@@ -102,5 +103,33 @@ describe('WorkflowActions', () => {
       <WorkflowActions route={{ route_id: 'rt1', company_status: 'acknowledged' }} onTransition={() => {}} busy={false} />
     )
     expect(html).not.toMatch(/name="product_brand_name"|name="reporter_name"|name="reaction_description"/)
+  })
+})
+
+describe('TrackerExportBar', () => {
+  const bar = (over = {}) => render(
+    <TrackerExportBar count={3} busy={false} onCsv={() => {}} onBulk={() => {}} onAnalytics={() => {}} {...over} />
+  )
+
+  it('offers CSV, combined PDF and analytics downloads with the cap note', () => {
+    const html = bar()
+    expect(html).toMatch(/filtered CSV/i)
+    expect(html).toMatch(/combined PDF/i)
+    expect(html).toMatch(/analytics report/i)
+    expect(html).toMatch(/200/)
+  })
+
+  it('disables exports when nothing is filtered', () => {
+    const html = bar({ count: 0 })
+    expect(html).toMatch(/Nothing to export/)
+  })
+})
+
+describe('CaseExportBar', () => {
+  it('labels the E2B download preparation-only', () => {
+    const html = render(<CaseExportBar onCsv={() => {}} onPrint={() => {}} onE2b={() => {}} />)
+    expect(html).toMatch(/prep\. only/i)
+    expect(html).toMatch(/Export CSV/i)
+    expect(html).toMatch(/NAFDAC print view/i)
   })
 })

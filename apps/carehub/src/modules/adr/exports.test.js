@@ -2,7 +2,24 @@ import { describe, it, expect } from 'vitest'
 import {
   buildE2bXml, buildPdfHtml, exportFilename,
   buildAdrCsv, buildBulkPdfHtml, buildAnalyticsHtml, E2B_FORMAT_NOTE,
+  csvRowsFromCases,
 } from './exports.js'
+import { logBulkExport } from './pvWorkflow.js'
+
+describe('logBulkExport', () => {
+  it('logs one audited event per report and reports partial failures', async () => {
+    const calls = []
+    const logEvent = async (id, type, meta) => {
+      calls.push({ id, type, meta })
+      if (id === 'bad') throw new Error('denied')
+      return { event_id: id }
+    }
+    const result = await logBulkExport(logEvent, ['a', 'bad', 'c'], { format: 'csv', filters: 'All' })
+    expect(result).toEqual({ total: 3, failed: 1 })
+    expect(calls[0].meta.batch).toBe(calls[2].meta.batch)
+    expect(calls[0].type).toBe('exported')
+  })
+})
 
 const baseReport = {
   report_id: 'r1',
@@ -240,6 +257,30 @@ describe('phase7 export builders', () => {
     expect(E2B_FORMAT_NOTE).toMatch(/preparation|not.*submission/i)
     const xml = buildE2bXml({ report: { ...baseReport }, products: [], reactions: [] })
     expect(xml).toContain('E2B')
+  })
+
+  it('csvRowsFromCases flattens one row per reaction with case columns repeated', () => {
+    const rows = csvRowsFromCases([
+      {
+        report_number: 'ADR-1', report_source: 'public', status: 'submitted',
+        patient_age: 34, patient_gender: 'female',
+        adr_products: [{ product_brand_name: 'Ampiclox', batch_lot_number: 'L1' }],
+        adr_reactions: [
+          { reaction_description: 'Rash', severity: 'severe', outcome: 'recovering', seriousness_death: false, seriousness_life_threatening: false, seriousness_hospitalization: false, seriousness_disability: false, seriousness_congenital_anomaly: false, seriousness_other_medically_important: false },
+          { reaction_description: 'Fever', severity: 'mild', outcome: 'recovered', seriousness_death: false, seriousness_life_threatening: false, seriousness_hospitalization: false, seriousness_disability: false, seriousness_congenital_anomaly: false, seriousness_other_medically_important: true },
+        ],
+      },
+    ])
+    expect(rows).toHaveLength(2)
+    expect(rows[0].product_brand_name).toBe('Ampiclox')
+    expect(rows[0].serious).toBe(false)
+    expect(rows[1].serious).toBe(true)
+  })
+
+  it('csvRowsFromCases keeps reaction-less cases as a single blank-reaction row', () => {
+    const rows = csvRowsFromCases([{ report_number: 'ADR-9', status: 'draft', adr_products: [], adr_reactions: [] }])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].reaction_description).toBe('')
   })
 })
 

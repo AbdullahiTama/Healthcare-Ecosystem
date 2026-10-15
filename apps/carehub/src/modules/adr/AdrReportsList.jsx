@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Plus } from 'lucide-react'
 import { adrReportRepository, getModuleTypeFromBusinessType } from './repositories'
 import { ADR_FORM } from './formEngine'
-import { sourceBadge } from './pvWorkflow'
+import { buildAdrCsv, buildBulkPdfHtml, csvRowsFromCases, downloadTextFile, openPrintView, BULK_PDF_CAP } from './exports'
+import { sourceBadge, logBulkExport } from './pvWorkflow'
 import AdrReportsAnalytics from './AdrReportsAnalytics'
 import { theme } from '../../styles/theme'
 import { useAuth } from '../../providers/AuthProvider'
@@ -24,6 +25,7 @@ export default function AdrReportsList({ brand, embedded = false }) {
   const [reports, setReports] = useState(null)
   const [error, setError] = useState(null)
   const [creating, setCreating] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => { load() }, [brand?.id])
 
@@ -37,6 +39,61 @@ export default function AdrReportsList({ brand, embedded = false }) {
       const detail = e?.message || 'Unknown error'
       console.error('ADR load error:', detail, e)
       setError(detail)
+    }
+  }
+
+  async function loadBundles() {
+    const list = reports || []
+    const shown = list.slice(0, BULK_PDF_CAP)
+    const bundles = await Promise.all(shown.map(async (r) => {
+      const full = await adrReportRepository.getReportWithDetails(r.report_id)
+      return {
+        report: full || r,
+        products: (full && full.adr_products) || [],
+        meds: (full && full.adr_concomitant_meds) || [],
+        reactions: (full && full.adr_reactions) || [],
+        reactionExpected: (full && full.reaction_expected) ?? null,
+      }
+    }))
+    return { bundles, total: list.length }
+  }
+
+  async function handleExportCsv() {
+    if (!reports || reports.length === 0 || exporting) return
+    setExporting(true)
+    try {
+      const { bundles, total } = await loadBundles()
+      const csv = buildAdrCsv(csvRowsFromCases(bundles.map((b) => ({ ...b.report, adr_products: b.products, adr_reactions: b.reactions }))), { includeReporter: true }).join('\n')
+      downloadTextFile(`adr-reports-${Date.now()}.csv`, csv, 'text/csv')
+      const { failed } = await logBulkExport(
+        (id, type, meta) => adrReportRepository.logEvent(id, type, meta),
+        bundles.map((b) => b.report.report_id),
+        { format: 'csv', via: 'hub-list', total }
+      )
+      showToast(failed > 0 ? `CSV downloaded, but ${failed} audit events failed.` : 'CSV downloaded and audit-logged.', { type: failed > 0 ? 'warning' : 'success' })
+    } catch (e) {
+      showToast('CSV export failed: ' + (e?.message || 'unknown error'), { type: 'error' })
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleExportBulk() {
+    if (!reports || reports.length === 0 || exporting) return
+    setExporting(true)
+    try {
+      const { bundles, total } = await loadBundles()
+      openPrintView(buildBulkPdfHtml({ cases: bundles, filtersLabel: 'All own reports', orgName: brand?.name || '', cap: BULK_PDF_CAP }))
+      const { failed } = await logBulkExport(
+        (id, type, meta) => adrReportRepository.logEvent(id, type, meta),
+        bundles.map((b) => b.report.report_id),
+        { format: 'bulk-pdf', via: 'hub-list', total }
+      )
+      showToast(failed > 0 ? `PDF opened, but ${failed} audit events failed.` : `Combined PDF opened (${bundles.length} of ${total}) and audit-logged.`, { type: failed > 0 ? 'warning' : 'success' })
+    } catch (e) {
+      showToast('PDF export failed: ' + (e?.message || 'unknown error'), { type: 'error' })
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -79,9 +136,13 @@ export default function AdrReportsList({ brand, embedded = false }) {
             </div>
           </div>
         )}
-        <Button variant="primary" size="md" onClick={handleNewReport} disabled={creating}>
-          <Plus size={15} /> New ADR Report
-        </Button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Button variant="secondary" size="md" disabled={exporting || !reports || reports.length === 0} onClick={handleExportCsv}>Export CSV</Button>
+          <Button variant="secondary" size="md" disabled={exporting || !reports || reports.length === 0} onClick={handleExportBulk}>Export combined PDF</Button>
+          <Button variant="primary" size="md" onClick={handleNewReport} disabled={creating}>
+            <Plus size={15} /> New ADR Report
+          </Button>
+        </div>
       </div>
 
       <div role="tablist" aria-label="ADR report views" style={{ display: 'flex', gap: 4, marginBottom: theme.space[8], borderBottom: `1px solid ${border}` }}>

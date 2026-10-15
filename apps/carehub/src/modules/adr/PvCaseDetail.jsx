@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { adrReportRepository } from './repositories'
 import { adrValidation } from './validation'
 import { getDeadlineStatus } from './services'
-import { buildE2bXml, buildPdfHtml, openPrintView, downloadTextFile, exportFilename } from './exports'
+import { buildE2bXml, buildPdfHtml, openPrintView, downloadTextFile, exportFilename, buildAdrCsv, csvRowsFromCases, E2B_FORMAT_NOTE } from './exports'
 import { companyStatusLabel } from './pvWorkflow'
 import { CaseHeader, WorkflowActions } from './PvTracker.jsx'
 import { theme } from '../../styles/theme'
@@ -11,6 +11,18 @@ import { Card, Loading, ErrorState, Button, useToast } from '../../components/ui
 function fmtDate(d) {
   if (!d) return '—'
   return new Date(d).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+// Per-case exports on masked view data only (includeReporter:false always —
+// companies never hold reporter identity, so it must never enter their files).
+export function CaseExportBar({ onCsv, onPrint, onE2b }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <Button variant="secondary" size="md" onClick={onCsv}>Export CSV</Button>
+      <Button variant="secondary" size="md" onClick={onPrint}>NAFDAC print view</Button>
+      <Button variant="secondary" size="md" onClick={onE2b} title={E2B_FORMAT_NOTE}>E2B XML (prep. only)</Button>
+    </div>
+  )
 }
 
 function Section({ title, children }) {
@@ -122,6 +134,12 @@ export default function PvCaseDetail({ brand, reportId }) {
   function exportNafdac() {
     openPrintView(buildPdfHtml({ report: kase, products: kase.adr_products, meds: kase.adr_concomitant_meds, reactions: kase.adr_reactions, reactionExpected: kase.reaction_expected }))
     adrReportRepository.logEvent(reportId, 'exported', { format: 'nafdac-print', via: 'pv-tracker' }).catch(() => {})
+  }
+
+  function exportCsv() {
+    const rows = csvRowsFromCases([{ ...kase, adr_products: kase.adr_products || [], adr_reactions: kase.adr_reactions || [] }])
+    downloadTextFile(exportFilename(kase, 'csv'), buildAdrCsv(rows, { includeReporter: false }).join('\n'), 'text/csv')
+    adrReportRepository.logEvent(reportId, 'exported', { format: 'csv', via: 'pv-tracker' }).catch(() => {})
   }
 
   function exportE2b() {
@@ -257,11 +275,8 @@ export default function PvCaseDetail({ brand, reportId }) {
       </Section>
 
       <Section title="Export (masked case data)">
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Button variant="secondary" size="md" onClick={exportNafdac}>NAFDAC print view</Button>
-          <Button variant="secondary" size="md" onClick={exportE2b}>E2B XML download</Button>
-        </div>
-        <p style={{ fontSize: 12.5, color: theme.textLight }}>Exports contain only data your role may access and are audit-logged.</p>
+        <CaseExportBar onCsv={exportCsv} onPrint={exportNafdac} onE2b={exportE2b} />
+        <p style={{ fontSize: 12.5, color: theme.textLight }}>Exports contain only data your role may access and are audit-logged. The E2B file is preparation only — not a regulatory submission.</p>
       </Section>
     </div>
   )

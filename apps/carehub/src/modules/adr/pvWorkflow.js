@@ -38,6 +38,17 @@ export function allowedCompanyTransitions(from) {
   return [...(TRANSITIONS[from] || [])]
 }
 
+// Bulk-export audit: one `exported` event per included report sharing a batch
+// id, so a filtered export is countable per case. Partial delivery failures
+// are reported explicitly ({ total, failed }) instead of failing silently.
+export async function logBulkExport(logEvent, reportIds, meta = {}) {
+  const batch = `bulk-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const results = await Promise.allSettled(
+    (reportIds || []).map(id => logEvent(id, 'exported', { ...meta, bulk: batch }))
+  )
+  return { total: reportIds ? reportIds.length : 0, failed: results.filter(r => r.status === 'rejected').length }
+}
+
 const SOURCE_BADGES = {
   public: { label: 'Public report', tone: 'info' },
   health_facility: { label: 'Health-facility report', tone: 'success' },

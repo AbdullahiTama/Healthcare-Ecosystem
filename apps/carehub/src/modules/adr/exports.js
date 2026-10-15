@@ -366,6 +366,42 @@ function csvLine(cells) {
   return cells.map(csvCell).join(',')
 }
 
+// Flattens loaded case aggregates into one CSV input row per reaction (case
+// columns repeated; reaction-less cases yield a single blank-reaction row).
+// Seriousness is derived from the six flags, mirroring the server bool_or.
+export function csvRowsFromCases(cases) {
+  const rows = []
+  const list = cases || []
+  list.forEach(kase => {
+    const products = kase.adr_products && kase.adr_products.length > 0 ? kase.adr_products : [{}]
+    const reactions = kase.adr_reactions && kase.adr_reactions.length > 0 ? kase.adr_reactions : [{}]
+    products.forEach(p => {
+      reactions.forEach(r => {
+        rows.push({
+          report_number: kase.report_number || kase.report_id || '',
+          report_source: kase.report_source || 'unknown',
+          status: kase.status || kase.report_status || '',
+          reporter_name: kase.reporter_name || '',
+          reporter_phone: kase.reporter_phone || '',
+          product_brand_name: p.product_brand_name || '',
+          product_generic_name: p.product_generic_name || '',
+          batch_lot_number: p.batch_lot_number || '',
+          reaction_description: r.reaction_description || '',
+          severity: r.severity || '',
+          outcome: r.outcome || '',
+          serious: Boolean(
+            r.seriousness_death || r.seriousness_life_threatening || r.seriousness_hospitalization ||
+            r.seriousness_disability || r.seriousness_congenital_anomaly || r.seriousness_other_medically_important
+          ),
+          patient_age: kase.patient_age ?? '',
+          patient_gender: kase.patient_gender || '',
+        })
+      })
+    })
+  })
+  return rows
+}
+
 // One row per reaction (case columns repeated). Tracker mode (the default)
 // excludes reporter identity/contact and the patient identifier — companies
 // never hold that data, so it must never appear in their files. Hub mode
