@@ -42,6 +42,11 @@ jobs:
         working-directory: apps/carehub
         run: npm run lint
 
+      # An undefined identifier is a RUNTIME crash, not a build failure. See the note in carefind-ci.yml.
+      - name: No undefined identifiers
+        working-directory: apps/carehub
+        run: npm run lint:undef
+
       - name: Security audit
         working-directory: apps/carehub
         run: npm audit --audit-level=high

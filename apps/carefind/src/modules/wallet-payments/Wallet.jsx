@@ -378,14 +378,14 @@ function Wallet() {
         <h1 style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>
           <WalletIcon size={21} aria-hidden="true" /> My wallet
         </h1>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 20px 0' }}>CareCoins: 1 coin = ₦{COIN_VALUE_NAIRA}</p>
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 20px 0' }}>CareCoins: 1 coin = ₦{coinValue}</p>
         <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 20, padding: 20, textAlign: 'center' }}>
           <p style={{ margin: '0 0 4px 0', fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>BALANCE</p>
           <p style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 42, fontWeight: 900 }}>
             <Coins size={30} aria-hidden="true" /> {wallet?.balance || 0}
           </p>
           <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
-            ≈ ₦{((wallet?.balance || 0) * COIN_VALUE_NAIRA).toLocaleString()}
+            ≈ ₦{((wallet?.balance || 0) * coinValue).toLocaleString()}
           </p>
         </div>
       </div>

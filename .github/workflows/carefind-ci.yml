@@ -51,6 +51,13 @@ jobs:
         working-directory: apps/carefind
         run: npm run lint
 
+      # An undefined identifier is a RUNTIME crash, not a build failure: the bundler will happily ship a reference to
+      # a name that does not exist and only throw when that line renders. That is how `COIN_VALUE_NAIRA` reached
+      # production and took the whole wallet screen down. This gate is the one that would have caught it.
+      - name: No undefined identifiers
+        working-directory: apps/carefind
+        run: npm run lint:undef
+
       - name: Security audit
         working-directory: apps/carefind
         run: npm audit --audit-level=high
