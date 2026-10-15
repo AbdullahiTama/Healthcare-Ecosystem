@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
-import { createTransferRecipient, initiateTransfer, checkBalance, resolveAccount } from '../_lib/paystackTransfer.js'
+import { createTransferRecipient, initiateTransfer, checkBalance, resolveAccount, isProviderBalanceShortfall, withdrawalFailureMessage } from '../_lib/paystackTransfer.js'
 import { getRequiredAuth, isInstantEligible, getDailyCap } from '../_lib/trustLevels.js'
 import { reconcileWithdrawal } from '../_lib/withdrawalRecovery.js'
 import { settleWithdrawal, checkOtp, checkWithdrawalPin, verifyBankAccount, sendSecurityAlert, OTP_PURPOSES, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForDestination, applyLimits, limitMessage, getWithdrawalDraft, destinationFingerprint, voidWithdrawalDraft } from '@care-ecosystem/shared-payments'
@@ -12,6 +12,21 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
+
+// Headroom held back from the Paystack balance pre-check so a transfer Paystack would charge a fee
+// on is not attempted with exactly the payout amount. A THRESHOLD, not a commercial rate.
+// Falls back to the value this migration seeds (NGN 200) when the row is absent, so a deployment
+// that has not yet applied the migration behaves predictably rather than failing the withdrawal.
+const DEFAULT_TRANSFER_BUFFER_KOBO = 20000
+
+async function getTransferBufferKobo(client) {
+  try {
+    const value = await getFinancialConfig(client, 'paystack_transfer_buffer_kobo')
+    return Number.isFinite(value) && value >= 0 ? value : DEFAULT_TRANSFER_BUFFER_KOBO
+  } catch {
+    return DEFAULT_TRANSFER_BUFFER_KOBO
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -63,7 +78,7 @@ export default async function handler(req, res) {
   // The submit must match the request the code was issued for: a resumed or
   // repurposed form forces a fresh code instead of burning this one (Phase 1).
   // Amount AND destination are compared: a code issued for one payout account
-  // must not authorize another. A mismatch keeps the draft (no void).
+  // must not authorize another.
   {
     const draft = await getWithdrawalDraft(supabase, { userId: user.id }).catch(() => null)
     let fingerprint = null
@@ -73,6 +88,10 @@ export default async function handler(req, res) {
       return res.status(503).json({ error: 'Withdrawals are temporarily unavailable. Try again shortly.', code: 'draft_unavailable' })
     }
     if (!draft || Number(draft.amount) !== coins || draft.destination_fp !== fingerprint) {
+      // Void the stale draft so the user's next request is NOT answered with `draft_active`
+      // for ten minutes. Voiding is idempotent (it only stamps voided_at) and moves no
+      // money, so a void failure here is safe to ignore — the draft expires on its own.
+      await voidWithdrawalDraft(supabase, { userId: user.id, reason: 'submit_mismatch' }).catch(() => null)
       return res.status(400).json({ error: 'Your withdrawal details changed — request a fresh code.', code: 'draft_mismatch' })
     }
   }
@@ -199,19 +218,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Check Paystack's balance before sending (we know the exact amount only now).
+    // Check Paystack's balance before sending. The headroom matters: Paystack charges its own fee on a
+    // balance-funded transfer OUT of that same balance, so an exact-equality check passed and the transfer was
+    // then refused with "Your balance is not enough to fulfil this request." The buffer is a threshold in
+    // financial_config, not a commercial rate — it changes no price, fee or amount a customer receives.
     try {
       const available = await checkBalance()
-      if (available < Number(payoutKobo)) {
-        console.error('[initiate-withdrawal] Paystack balance insufficient', { available, payoutKobo, userId: user.id })
+      const bufferKobo = await getTransferBufferKobo(supabase)
+      if (available < Number(payoutKobo) + bufferKobo) {
+        console.error('[initiate-withdrawal] Paystack balance insufficient', { available, payoutKobo, bufferKobo })
         await releaseUnsent('provider_balance_low')
         res.setHeader('Retry-After', '60')
-        return res.status(503).json({ error: 'Payment provider balance low - try again later', refunded: true })
+        return res.status(503).json({ error: 'Payment provider balance low - try again later', code: 'provider_balance_low', refunded: true })
       }
     } catch (err) {
-      console.error('[initiate-withdrawal] Paystack balance check failed', err)
+      console.error('[initiate-withdrawal] Paystack balance check failed', { reference: String(err && err.message).slice(0, 120) })
       const refunded = await releaseUnsent('provider_balance_check_failed')
-      return res.status(502).json({ error: 'Could not check payment provider balance', refunded })
+      return res.status(502).json({ error: 'Could not check payment provider balance', code: 'provider_balance_check_failed', refunded })
     }
 
     const recipientCode = await createTransferRecipient({ bankCode, accountNumber, accountName: verifiedAccountName, userId: user.id })
@@ -281,7 +304,8 @@ export default async function handler(req, res) {
     if (!transferAttempted) {
       const refunded = await releaseUnsent('recipient_failed')
       return res.status(502).json({
-        error: refunded ? `${err.message || 'Payment provider error'}. Your CareCoins have been returned to your wallet.` : `${err.message || 'Payment provider error'}. We are checking this withdrawal; your balance will be corrected automatically if it did not go through.`,
+        error: withdrawalFailureMessage({ providerMessage: err.message, refunded, platformShortfall: isProviderBalanceShortfall(err.message) }),
+        code: isProviderBalanceShortfall(err.message) ? 'provider_balance_low' : 'recipient_failed',
         refunded,
       })
     }
@@ -294,15 +318,22 @@ export default async function handler(req, res) {
       const row = { id: requestId, status: 'processing', paystack_reference: reference, paystack_transfer_code: null, created_at: now, updated_at: now }
       // Only a DEFINITE Paystack refusal (the request was understood and declined) is confirmed-not-sent; a timeout is not.
       const recovery = await reconcileWithdrawal(supabase, row, err.paystackRejected ? { graceMs: 0, confirmedNotSent: true } : {})
+      const platformShortfall = isProviderBalanceShortfall(err.message)
       if (recovery.outcome === 'refunded') {
-        return res.status(502).json({ error: `${err.message || 'Payment provider error'}. Your CareCoins have been returned to your wallet.`, refunded: true })
+        return res.status(502).json({
+          error: withdrawalFailureMessage({ providerMessage: err.message, refunded: true, platformShortfall }),
+          code: platformShortfall ? 'provider_balance_low' : 'transfer_refused',
+          refunded: true,
+        })
       }
-      console.error('[initiate-withdrawal] transfer failed; left for reconciliation', { reference, detail: recovery.detail })
+      console.error('[initiate-withdrawal] transfer failed; left for reconciliation', { reference, detail: recovery.detail, providerRefused: Boolean(err.paystackRejected) })
     } catch (recoveryErr) {
       console.error('[initiate-withdrawal] recovery after failed transfer errored', { reference, message: recoveryErr.message })
     }
     return res.status(502).json({
-      error: `${err.message || 'Payment provider error'}. We are checking this withdrawal; your balance will be corrected automatically if it did not go through.`,
+      // Ambiguous: a timeout proves nothing, so the coins are NOT claimed back. The sweep reconciles by reference.
+      error: withdrawalFailureMessage({ providerMessage: err.message, refunded: false }),
+      code: 'transfer_pending',
       pending: true,
     })
   }

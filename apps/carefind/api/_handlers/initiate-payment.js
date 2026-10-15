@@ -3,6 +3,7 @@ import { createPaymentIntent, markIntentPending, markIntentFailed, newReference,
 import { verifyUser } from '../_lib/verifyUser.js'
 import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
 import { TOPUP_PACKAGES } from '../_lib/topupPackages.js'
+import { getFinancialConfig } from '../_lib/financialConfig.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -27,7 +28,20 @@ export default async function handler(req, res) {
   const { packageId, callback_url, quote } = req.body || {}
 
   if (quote === true) {
-    return res.status(200).json({ fee_rate: await getTopupFeeRate(supabase, { logger: paymentLogger }) })
+    // Creates nothing. Returns every commercial constant the wallet screen needs to quote a number BEFORE the user
+    // commits, so what the screen promises comes from the same financial_config rows the database prices with. The
+    // withdrawal pair used to be hardcoded in the client (200/0.2), which silently desynchronised the estimate from
+    // the payout whenever an operator changed either value. Non-money-critical: the server still decides the real amount.
+    const [fee_rate, withdrawal_fee_rate, coin_value_kobo] = await Promise.all([
+      getTopupFeeRate(supabase, { logger: paymentLogger }),
+      getFinancialConfig(supabase, 'withdrawal_fee_rate').catch(() => null),
+      getFinancialConfig(supabase, 'coin_value_kobo').catch(() => null),
+    ])
+    return res.status(200).json({
+      fee_rate,
+      ...(withdrawal_fee_rate != null ? { withdrawal_fee_rate } : {}),
+      ...(coin_value_kobo != null ? { coin_value_kobo } : {}),
+    })
   }
 
   // Looked up server-side, never trusted from the client: a client-supplied amount/coins pair here

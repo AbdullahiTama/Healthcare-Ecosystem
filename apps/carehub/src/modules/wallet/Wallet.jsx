@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Wallet as WalletIcon, Banknote, ArrowUpCircle, ArrowDownCircle, Clock, CheckCircle, AlertTriangle, Download, PlusCircle } from 'lucide-react'
 import { walletRepository } from './repositories'
@@ -45,6 +45,8 @@ export default function Wallet({ brand, role }) {
   const payoutState = useSyncExternalStore(payouts.subscribe, payouts.getState)
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [useTyped, setUseTyped] = useState(false)
+  // Saved payout account a resumed server draft belongs to; applied once the account list has loaded it.
+  const [resumeAccountId, setResumeAccountId] = useState('')
   const [accountResolving, setAccountResolving] = useState(false)
   const [accountResolved, setAccountResolved] = useState(false)
   const resolveTimer = useRef(null)
@@ -110,6 +112,30 @@ export default function Wallet({ brand, role }) {
   const savedAccount = payoutState.accounts.find((a) => a.id === selectedAccountId) || null
   const typedAllowed = !payoutState.required
   const typedMode = !savedAccount || useTyped
+
+  // A withdrawal draft the server still holds, whose amount/destination this form must be rebuilt to. Set by
+  // WithdrawalOtpField when it resumes a code after a reload or a return from the mail app. The PIN and the OTP are never
+  // restored - the owner always retypes those.
+  const applyResumedDraft = useCallback((draft) => {
+    if (!draft) return
+    // This screen types NAIRA; the draft is stored in KOBO (carehub/.../withdrawal-pin.js, unit:'kobo').
+    if (Number.isFinite(Number(draft.amount))) setWithdrawForm(prev => ({ ...prev, amount: String(Number(draft.amount) / 100) }))
+    if (draft.destinationKind === 'saved' && draft.savedAccountId) {
+      setResumeAccountId(draft.savedAccountId)
+      setUseTyped(false)
+    }
+  }, [])
+
+  // Apply a resumed draft's saved destination once the account list actually contains it. Setting selectedAccountId
+  // directly would be undone by the "keep a valid account selected" effect above, which clears the id while the list loads.
+  useEffect(() => {
+    if (!resumeAccountId) return
+    if (payoutState.accounts.some((a) => a.id === resumeAccountId)) {
+      setSelectedAccountId(resumeAccountId)
+      setUseTyped(false)
+      setResumeAccountId('')
+    }
+  }, [resumeAccountId, payoutState.accounts])
 
   // Resolve account name when bank code and 10-digit account number are both set.
   // Debounced to avoid firing on every keystroke.
@@ -408,7 +434,7 @@ export default function Wallet({ brand, role }) {
                 </>
               )}
               <WithdrawalPinField pin={withdrawPin} onPinChange={setWithdrawPin} needsPin={needsPin} disabled={withdrawing} />
-              <WithdrawalOtpField value={withdrawOtp} onChange={setWithdrawOtp} disabled={withdrawing}
+              <WithdrawalOtpField value={withdrawOtp} onChange={setWithdrawOtp} disabled={withdrawing} onResume={applyResumedDraft}
                 amount={otpAmountKobo} payoutAccountId={typedMode ? undefined : savedAccount?.id}
                 bankCode={typedMode ? (withdrawForm.bankCode || undefined) : undefined}
                 accountNumber={typedMode ? (withdrawForm.accountNumber || undefined) : undefined} />

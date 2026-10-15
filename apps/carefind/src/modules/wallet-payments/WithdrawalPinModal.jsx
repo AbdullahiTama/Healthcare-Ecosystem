@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { createPinSetup } from '@care-ecosystem/shared-payout-ui'
+import { createPinSetup, cleanOtp } from '@care-ecosystem/shared-payout-ui'
 import { supabase } from '../../config/supabaseClient.js'
 import { theme } from '../../styles/theme.js'
 import { Inp, Modal, TealBtn, GhostBtn } from '../../components/ui/index.jsx'
@@ -73,7 +73,7 @@ export default function WithdrawalPinModal({ show, onClose, onDone, isMobile }) 
                 {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend code'}
               </button>
             </p>
-            <Inp label="6-digit code" inputMode="numeric" maxLength={6} autoComplete="one-time-code" value={otp} onChange={(v) => setOtp(v.replace(/\D/g, ''))} placeholder="123456" required />
+            <Inp id="pin-setup-code" name="one-time-code" label="6-digit code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" enterKeyHint="done" autoCorrect="off" autoCapitalize="off" spellCheck={false} value={otp} onChange={(v) => setOtp(cleanOtp(v))} onPaste={(e) => { e.preventDefault(); const pasted = cleanOtp(e.clipboardData?.getData('text') ?? ''); if (pasted) setOtp(pasted) }} placeholder="123456" required />
             {!forgot && <Inp label="Current PIN (skip if you’ve never set one)" {...digits} value={currentPin} onChange={setCurrentPin} autoComplete="current-password" />}
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: theme.textMid, minHeight: 32 }}>
               <input type="checkbox" checked={forgot} onChange={(e) => setForgot(e.target.checked)} />

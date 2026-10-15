@@ -27,13 +27,22 @@ const mailer = vi.hoisted(() => ({ sendPinLocked: vi.fn(async () => ({ ok: true 
 vi.mock('../_lib/securityMailer.js', () => ({ getSecurityMailer: async () => mailer }))
 vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
 vi.mock('../_lib/trustLevels.js', () => ({ getRequiredAuth: () => ['pin'], isInstantEligible: () => false, getDailyCap: () => h.trustCap ?? 50 }))
-vi.mock('../_lib/paystackTransfer.js', () => ({
+vi.mock('../_lib/paystackTransfer.js', async (importOriginal) => {
+  // The network-facing pieces are stubbed; the failure-message builder stays REAL so these tests exercise the
+  // wording a customer would actually see.
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    createTransferRecipient: h.createTransferRecipient,
+    initiateTransfer: h.initiateTransfer,
+    checkBalance: h.checkBalance,
   createTransferRecipient: vi.fn(async () => 'RCP_1'),
   initiateTransfer: vi.fn(async () => ({ transferCode: 'TRF_1' })),
   checkBalance: vi.fn(async () => 10_000_000_00),
   normalizeAccountName: (n) => String(n).trim().toLowerCase(),
   resolveAccount: async () => { if (h.resolveError) throw h.resolveError; return h.resolved },
-}))
+  }
+})
 
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from './initiate-withdrawal.js'

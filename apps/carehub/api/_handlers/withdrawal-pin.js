@@ -1,4 +1,4 @@
-import { issueOtpFromRequest, setWithdrawalPin, withdrawalPinStatus, createWithdrawalDraft, getWithdrawalDraft, voidWithdrawalDraft } from '@care-ecosystem/shared-payments'
+import { issueOtpFromRequest, setWithdrawalPin, withdrawalPinStatus, createWithdrawalDraft, getWithdrawalDraft, voidWithdrawalDraft, describeWithdrawalDraft } from '@care-ecosystem/shared-payments'
 import { supabase } from '../_lib/supabase.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { getSecurityMailer } from '../_lib/securityMailer.js'
@@ -10,6 +10,35 @@ function subPath(req) {
   const segments = pathname.split('/').filter(Boolean)
   if (segments[0] === 'api') segments.shift()
   return segments[1] || ''
+}
+
+// A 409 has to tell the client WHEN the code already on its way was sent and WHEN that code dies. Without those two
+// numbers the client had no issue time, so its resend cooldown rendered as 0 and "Send a new code" was live
+// immediately — and one tap voided the code already sitting in the owner's inbox. Mirrors the CareFind handler.
+async function draftActiveResponse(userId) {
+  const base = { error: 'A code is already on its way — check your email.', code: 'draft_active' }
+  try {
+    const draft = describeWithdrawalDraft(await getWithdrawalDraft(supabase, { userId }))
+    if (!draft) return { status: 409, body: base }
+    const issuedAt = Date.parse(draft.otp_issued_at)
+    const expiresAt = Date.parse(draft.otpExpiresAt)
+    return {
+      status: 409,
+      body: {
+        ...base,
+        draftId: draft.id ?? null,
+        otpIssuedAt: Number.isFinite(issuedAt) ? issuedAt : null,
+        expiresInSeconds: Number.isFinite(expiresAt) ? Math.max(1, Math.round((expiresAt - Date.now()) / 1000)) : null,
+        amount: draft.amount,
+        unit: draft.unit,
+        destinationKind: draft.destinationKind,
+        savedAccountId: draft.savedAccountId,
+        destinationMask: draft.destination_mask,
+      },
+    }
+  } catch {
+    return { status: 409, body: base }
+  }
 }
 
 // POST /api/withdrawal-pin/status  - { hasPin }
@@ -61,7 +90,8 @@ export default async function handler(req, res) {
       }
       if (draft.ok === false && draft.outcome === 'draft_active') {
         if (reissue !== true) {
-          return res.status(409).json({ error: 'A code is already on its way — check your email.', code: 'draft_active' })
+          const busy = await draftActiveResponse(user.id)
+          return res.status(busy.status).json(busy.body)
         }
         // Reissue issues the new code FIRST: a 60 s-cooldown 429 returns untouched and the live draft survives.
         // Only once the code is sent is the prior draft voided and the new one owned.
@@ -80,7 +110,8 @@ export default async function handler(req, res) {
           return res.status(500).json({ error: 'Could not create a verification code' })
         }
         if (draft.ok === false && draft.outcome === 'draft_active') {
-          return res.status(409).json({ error: 'A code is already on its way — check your email.', code: 'draft_active' })
+          const busy = await draftActiveResponse(user.id)
+          return res.status(busy.status).json(busy.body)
         }
         return res.status(reissued.status).json(reissued.body)
       }
@@ -101,11 +132,11 @@ export default async function handler(req, res) {
   }
 
   if (action === 'draft') {
-    const draft = await getWithdrawalDraft(supabase, { userId: user.id })
-    if (!draft) return res.status(200).json({ draft })
-    // The fingerprint is server-side HMAC material for the submit gate — never send it to the client.
-    const { destination_fp: _fp, ...safe } = draft
-    return res.status(200).json({ draft: safe })
+    // Resume after a reload or a return from the mail app. The amount and the destination are returned so the form can be
+    // rebuilt WITHOUT retyping, which is what stops a returning owner from invalidating the code they just read.
+    const draft = describeWithdrawalDraft(await getWithdrawalDraft(supabase, { userId: user.id }))
+    if (!draft) return res.status(200).json({ draft: null })
+    return res.status(200).json({ draft })
   }
 
   if (action === 'set') {

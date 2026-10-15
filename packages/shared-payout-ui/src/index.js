@@ -4,3 +4,4 @@ export {
   fetchBanks, resolveAccountName, sendPinOtp, setWithdrawalPin } from './client.js'
 export { createAccountResolver, createPinSetup, createPayoutManager } from './stores.js'
 export { stripDataUrl, checkSelfieFile, prepareSelfie, formatKobo } from './selfie.js'
+export { OTP_LENGTH, cleanOtp, isCompleteOtp, readClipboardOtp } from './otpInput.js'

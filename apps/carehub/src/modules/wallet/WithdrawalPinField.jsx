@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { cleanOtp } from '@care-ecosystem/shared-payout-ui'
 import { authClient } from '../../lib/authClient'
 import { theme } from '../../styles/theme'
 import { Inp, GhostBtn, TealBtn } from '../../components/ui'
@@ -120,7 +121,7 @@ export default function WithdrawalPinField({ pin, onPinChange, needsPin = false,
                 Code sent to <b>{sentTo || 'your email'}</b> (valid 5 minutes).{' '}
                 <button type="button" onClick={sendCode} disabled={sending} style={{ background: 'none', border: 'none', padding: 0, fontSize: '12px', fontWeight: 700, color: theme.tealDeep, cursor: 'pointer', textDecoration: 'underline' }}>Resend</button>
               </div>
-              <Inp id="pin-code" label="6-digit code" value={otp} onChange={(v) => setOtp(digits(v))} inputMode="numeric" autoComplete="one-time-code" maxLength={6} />
+              <Inp id="pin-code" name="one-time-code" label="6-digit code" value={otp} onChange={(v) => setOtp(cleanOtp(v))} onPaste={(e) => { e.preventDefault(); const pasted = cleanOtp(e.clipboardData?.getData('text') ?? ''); if (pasted) setOtp(pasted) }} inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" enterKeyHint="done" autoCorrect="off" autoCapitalize="off" spellCheck={false} placeholder="123456" />
               {hasPin && !forgot && <Inp label="Current PIN" type="password" value={current} onChange={(v) => setCurrent(digits(v))} inputMode="numeric" autoComplete="off" maxLength={6} />}
               {hasPin && (
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: gray500 }}>

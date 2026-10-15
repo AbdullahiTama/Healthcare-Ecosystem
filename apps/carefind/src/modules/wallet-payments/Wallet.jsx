@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useState, useRef, useSyncExternalStore } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient.js'
 import { walletRepository } from './repositories/index.js'
@@ -18,16 +18,25 @@ import BankPicker from './BankPicker.jsx'
 import { createPayoutManager, rankBanks } from '@care-ecosystem/shared-payout-ui'
 import { useWalletData, useTransactions, useBanks, keys } from '../../hooks/queries.js'
 
-const WITHDRAWAL_FEE_RATE = 0.2
+// Display-only fallbacks. The AUTHORITATIVE coin value and withdrawal fee live in financial_config and are fetched
+// from the server (`/api/initiate-payment { quote: true }`); these are only what the screen shows in the moment before
+// that reply lands, and if it never does. The server always decides the amount actually paid.
+const FALLBACK_WITHDRAWAL_FEE_RATE = 0.2
 
 const WITHDRAWAL_ERRORS = {
   not_logged_in: 'Please log in again.',
   below_minimum: 'Minimum withdrawal is 5 CareCoins.',
   missing_bank_details: 'Please fill in all bank details.',
   insufficient: "You don't have enough CareCoins for that amount.",
+  // The PLATFORM could not fund the payout. Said as such, so a user never reads a provider-side shortfall as their own
+  // wallet being short. Not a claim that their coins are gone: the server refunds and says so separately.
+  provider_balance_low: 'We are temporarily unable to send payouts, so this withdrawal did not go through. Your CareCoins are safe — please try again shortly.',
+  provider_balance_check_failed: 'We could not reach the payment provider to send this withdrawal. Your CareCoins are safe — please try again shortly.',
+  transfer_refused: 'The payment provider declined this payout. Your CareCoins have been returned — please try again shortly.',
+  transfer_pending: 'We are still checking this withdrawal. If it did not go through, your balance is corrected automatically.',
 }
 
-const COIN_VALUE_NAIRA = 200
+const FALLBACK_COIN_VALUE_NAIRA = 200
 const TOPUP_PACKAGES = [
   { coins: 1, naira: 200, label: 'Starter' },
   { coins: 5, naira: 950, label: 'Popular', savings: 50 },
@@ -69,9 +78,29 @@ function Wallet() {
   const [wdSubmitting, setWdSubmitting] = useState(false)
   // The processing fee rate on top-ups, as the server reports it (null until known; the server still decides the charge).
   const [topupFeeRate, setTopupFeeRate] = useState(null)
+  // The withdrawal estimate's inputs, as the server reports them (null until known; the server still decides the payout).
+  const [withdrawalFeeRate, setWithdrawalFeeRate] = useState(null)
+  const [coinValueNaira, setCoinValueNaira] = useState(null)
+  // Resolved once here so the payout estimate below is a pure function of the amount, and so it can never drift from
+  // the constants the server actually priced with.
+  const feeRate = withdrawalFeeRate ?? FALLBACK_WITHDRAWAL_FEE_RATE
+  const coinValue = coinValueNaira ?? FALLBACK_COIN_VALUE_NAIRA
   const [wdAccountResolving, setWdAccountResolving] = useState(false)
   const [wdAccountResolved, setWdAccountResolved] = useState(false)
   const [pinModalOpen, setPinModalOpen] = useState(false)
+  // A withdrawal draft the server still holds, whose amount/destination this form must be
+  // rebuilt to. Set by WithdrawalOtpField when it resumes a code after a reload or a return
+  // from the mail app. The PIN and the OTP are never restored - the user always retypes those.
+  const [resumeAccountId, setResumeAccountId] = useState('')
+
+  const applyResumedDraft = useCallback((draft) => {
+    if (!draft) return
+    if (draft.amount !== undefined && draft.amount !== null) setWdAmount(String(draft.amount))
+    if (draft.destinationKind === 'saved' && draft.savedAccountId) {
+      setResumeAccountId(draft.savedAccountId)
+      setUseTyped(false)
+    }
+  }, [])
 
   // Handle return from Paystack redirect. The wallet is credited server-side
   // in /api/verify-payment, which asks Paystack to confirm the charge before
@@ -128,6 +157,18 @@ function Wallet() {
   const typedMode = !savedAccount || useTyped
   const typedAllowed = !payoutState.required
 
+  // Apply a resumed draft's saved destination once the account list actually contains it. Setting
+  // selectedAccountId directly would be undone by the "keep a valid account selected" effect above,
+  // which clears the id while the list is still loading.
+  useEffect(() => {
+    if (!resumeAccountId) return
+    if (payoutState.accounts.some((a) => a.id === resumeAccountId)) {
+      setSelectedAccountId(resumeAccountId)
+      setUseTyped(false)
+      setResumeAccountId('')
+    }
+  }, [resumeAccountId, payoutState.accounts])
+
   // Resolve account name when bank code and 10-digit account number are both set.
   const resolveTimer = useRef(null)
   useEffect(() => {
@@ -183,7 +224,17 @@ function Wallet() {
           body: JSON.stringify({ quote: true }),
         })
         const data = await response.json().catch(() => ({}))
-        if (!cancelled && typeof data.fee_rate === 'number' && data.fee_rate >= 0 && data.fee_rate <= 1) setTopupFeeRate(data.fee_rate)
+        if (cancelled) return
+        if (typeof data.fee_rate === 'number' && data.fee_rate >= 0 && data.fee_rate <= 1) setTopupFeeRate(data.fee_rate)
+        // The withdrawal estimate must come from the same commercial constants the server prices with. Hardcoding
+        // them here meant an ops change to financial_config silently desynchronised what the user was promised from
+        // what they were paid.
+        if (typeof data.withdrawal_fee_rate === 'number' && data.withdrawal_fee_rate >= 0 && data.withdrawal_fee_rate < 1) {
+          setWithdrawalFeeRate(data.withdrawal_fee_rate)
+        }
+        if (typeof data.coin_value_kobo === 'number' && Number.isFinite(data.coin_value_kobo) && data.coin_value_kobo > 0) {
+          setCoinValueNaira(data.coin_value_kobo / 100)
+        }
       } catch {
         // the fee line simply stays generic; the checkout page shows the exact total
       }
@@ -241,9 +292,10 @@ function Wallet() {
       setWdSubmitting(false)
 
       if (!response.ok) {
-        const msg = data.error === 'insufficient' ? "You don't have enough CareCoins for that amount."
-          : data.error === 'Payment provider balance low' ? 'Payment provider balance low. Try again later.'
-          : data.error || 'Could not process withdrawal.'
+        // The server's own sentence is authoritative and already says whether the shortfall was the CUSTOMER's or the
+        // PLATFORM's. WITHDRAWAL_ERRORS only replaces the machine-readable codes with something a person can act on.
+        const msg = WITHDRAWAL_ERRORS[data.code]
+          || (data.error === 'insufficient' ? WITHDRAWAL_ERRORS.insufficient : data.error || 'Could not process withdrawal.')
         // A dead code stays dead: the server voided the draft, so the typed
         // value can never succeed — clear it and drop the resume countdown.
         if (data.code === 'otp_superseded' || data.code === 'draft_mismatch') {
@@ -496,7 +548,7 @@ function Wallet() {
                 )}
                 {Number(wdAmount) >= 5 && Number(wdAmount) <= (wallet?.balance || 0) && (
                   <p style={{ margin: '-4px 0 0 0', fontSize: 12, color: theme.textLight }}>
-                    You'll receive ≈ ₦{Math.floor(Number(wdAmount) * COIN_VALUE_NAIRA * (1 - WITHDRAWAL_FEE_RATE)).toLocaleString()} after the 20% platform fee
+                    You'll receive ≈ ₦{Math.floor(wdAmount * coinValue * (1 - feeRate)).toLocaleString()} after the {Math.round(feeRate * 100)}% platform fee
                   </p>
                 )}
                 {savedAccount && (
@@ -558,7 +610,7 @@ function Wallet() {
                   autoComplete="current-password"
                   required
                 />
-                <WithdrawalOtpField value={wdOtp} onChange={setWdOtp} disabled={wdSubmitting}
+                <WithdrawalOtpField value={wdOtp} onChange={setWdOtp} disabled={wdSubmitting} onResume={applyResumedDraft}
                   amount={wdAmount === '' ? undefined : wdAmount}
                   payoutAccountId={typedMode ? undefined : savedAccount?.id}
                   bankCode={typedMode ? (wdBankCode || undefined) : undefined}

@@ -40,10 +40,15 @@ const fieldBase = {
   transition: `border-color ${theme.motion.fast} ${theme.motion.easeOut}, box-shadow ${theme.motion.fast} ${theme.motion.easeOut}`,
 }
 
-function describedBy(id, error, helperText) {
-  if (error) return `${id}-error`
-  if (helperText) return `${id}-help`
-  return undefined
+// `aria-describedby` is MERGED, never replaced. The primitive owns the ids for its own error and
+// helper text, but a caller frequently points at something else too (a live countdown, an
+// instruction, a second field). Replacing the attribute silently dropped every caller's reference.
+function describedBy(id, error, helperText, provided) {
+  const ids = []
+  if (provided) ids.push(provided)
+  if (error) ids.push(`${id}-error`)
+  else if (helperText) ids.push(`${id}-help`)
+  return ids.length ? ids.join(' ') : undefined
 }
 
 // ── INPUT ─────────────────────────────────────────────────────────────────────
@@ -51,11 +56,12 @@ function describedBy(id, error, helperText) {
 // cream fields inside a white card); defaults to white, gray50 when readOnly.
 export function Input({ label, value, onChange, onBlur, type = 'text', placeholder = '', required, style = {}, readOnly, min, error, id, fill, helperText, ...rest }) {
   const inputId = id || label?.toLowerCase().replace(/\s+/g, '-')
+  const { 'aria-describedby': describedbyProp, ...inputRest } = rest
   return (
     <div style={style}>
       {label && <Label htmlFor={inputId} required={required}>{label}</Label>}
-      <input id={inputId} type={type} value={value || ''} onChange={e => onChange && onChange(e.target.value)} onBlur={onBlur} placeholder={placeholder} readOnly={readOnly} min={min} {...rest}
-        required={required} aria-invalid={!!error} aria-describedby={describedBy(inputId, error, helperText)}
+      <input id={inputId} type={type} value={value || ''} onChange={e => onChange && onChange(e.target.value)} onBlur={onBlur} placeholder={placeholder} readOnly={readOnly} min={min} {...inputRest}
+        required={required} aria-invalid={!!error} aria-describedby={describedBy(inputId, error, helperText, describedbyProp)}
         style={{ ...fieldBase, border: `1px solid ${error ? theme.danger : theme.gray200}`, background: readOnly ? theme.gray50 : (fill || 'white') }} />
       {error && <ErrorMessage id={`${inputId}-error`}>{error}</ErrorMessage>}
       {!error && helperText && <HelperText id={`${inputId}-help`}>{helperText}</HelperText>}

@@ -35,10 +35,19 @@ vi.mock('../_lib/verifyUser.js', () => ({ verifyUser: async () => ({ id: 'user-1
 vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
 vi.mock('../_lib/financialConfig.js', () => ({ getFinancialConfig: async () => 20000 }))
 vi.mock('../_lib/trustLevels.js', () => ({ getRequiredAuth: () => ['pin'], isInstantEligible: () => false, getDailyCap: () => 500 }))
-vi.mock('../_lib/paystackTransfer.js', () => ({
+vi.mock('../_lib/paystackTransfer.js', async (importOriginal) => {
+  // The network-facing pieces are stubbed; the failure-message builder stays REAL so these tests exercise the
+  // wording a customer would actually see.
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    createTransferRecipient: h.createTransferRecipient,
+    initiateTransfer: h.initiateTransfer,
+    checkBalance: h.checkBalance,
   createTransferRecipient: vi.fn(), initiateTransfer: vi.fn(), checkBalance: vi.fn(),
   normalizeAccountName: (n) => String(n), resolveAccount: vi.fn(async () => ({ accountName: 'Ada Obi' })),
-}))
+  }
+})
 vi.mock('../_lib/withdrawalRecovery.js', () => ({ reconcileWithdrawal: vi.fn() }))
 
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this

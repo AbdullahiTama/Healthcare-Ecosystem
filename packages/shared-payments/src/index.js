@@ -19,7 +19,7 @@ export {
 } from './withdrawals.js'
 export { PIN_LOCK_AFTER, isValidPin, randomPinSalt, hashPin, verifyPin, checkWithdrawalPin, setWithdrawalPin, withdrawalPinStatus } from './pin.js'
 export { OTP_TTL_SECONDS, OTP_PURPOSES, OTP_PURPOSE_VALUES, isOtpPurpose, generateOtp, isValidOtp, hashOtp, hashIp, clientIp, maskEmail, sendOtp, issueOtpFromRequest, checkOtp, purgeOtpChallenges } from './otp.js'
-export { destinationFingerprint, createWithdrawalDraft, getWithdrawalDraft, voidWithdrawalDraft } from './withdrawalDrafts.js'
+export { destinationFingerprint, createWithdrawalDraft, getWithdrawalDraft, voidWithdrawalDraft, draftOtpExpiresAt, describeWithdrawalDraft } from './withdrawalDrafts.js'
 export {
   REFUND_GRACE_MS, REFUND_EVENT_OUTCOMES, REFUND_ATTENTION_RESULTS,
   requestRefund, notifyRefundRequested, notifyRefundCompletedInline, settleRefund, executeCardRefund, settleRefundWebhook, sweepRefunds, refundUnappliedPayments, refundCancelledAppointments, runRefundSweeps,

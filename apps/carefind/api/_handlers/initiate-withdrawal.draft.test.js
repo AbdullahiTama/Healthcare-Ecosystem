@@ -29,13 +29,19 @@ vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), proc
 vi.mock('../_lib/financialConfig.js', () => ({ getFinancialConfig: async () => 20000 }))
 vi.mock('../_lib/trustLevels.js', () => ({ getRequiredAuth: () => ['pin'], isInstantEligible: () => false, getDailyCap: () => 50 }))
 vi.mock('../_lib/paystack.js', () => ({ paystackFetch: h.paystackFetch }))
-vi.mock('../_lib/paystackTransfer.js', () => ({
-  createTransferRecipient: h.createTransferRecipient,
-  initiateTransfer: h.initiateTransfer,
-  checkBalance: h.checkBalance,
+vi.mock('../_lib/paystackTransfer.js', async (importOriginal) => {
+  // The network-facing pieces are stubbed; the failure-message builder stays REAL so these tests exercise the
+  // wording a customer would actually see.
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    createTransferRecipient: h.createTransferRecipient,
+    initiateTransfer: h.initiateTransfer,
+    checkBalance: h.checkBalance,
   normalizeAccountName: (n) => String(n).trim().toLowerCase(),
   resolveAccount: async () => ({ accountName: 'Ada Obi' }),
-}))
+  }
+})
 
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from './initiate-withdrawal.js'
@@ -73,14 +79,37 @@ describe('initiate-withdrawal draft gate (Phase 1)', () => {
     expect(calls('verify_otp')).toHaveLength(0)
   })
 
-  it('refuses a submit for another destination at the same amount, without burning the code or the draft', async () => {
+  it('refuses a submit for another destination at the same amount, and voids the stale draft', async () => {
+    // Voiding is what stops the reported deadlock: keeping the draft meant the user's next request came back
+    // `409 draft_active` for ten minutes, during which the only way forward was a code they had not asked for.
+    // The code itself is still NOT burned - verify_otp is never reached - and no money moves.
     h.draftRow = liveDraft({ destination_fp: destinationFingerprint({ userId: 'u-1', savedId: undefined, bankCode: '058', accountNumber: '0999999999' }) })
     const r = res()
     await handler(req, r)
     expect(r.statusCode).toBe(400)
     expect(r.body).toMatchObject({ code: 'draft_mismatch' })
     expect(calls('verify_otp')).toHaveLength(0)
-    expect(calls('void_withdrawal_draft')).toHaveLength(0)
+    expect(calls('void_withdrawal_draft')).toHaveLength(1)
+    expect(calls('void_withdrawal_draft')[0][1]).toMatchObject({ p_user_id: 'u-1', p_reason: 'submit_mismatch' })
+    expect(calls('create_withdrawal')).toHaveLength(0)
+  })
+
+  it('voids a stale draft when the AMOUNT changed, for the same reason', async () => {
+    h.draftRow = liveDraft({ amount: 5 })
+    const r = res()
+    await handler(req, r)
+    expect(r.statusCode).toBe(400)
+    expect(r.body).toMatchObject({ code: 'draft_mismatch' })
+    expect(calls('void_withdrawal_draft')[0][1]).toMatchObject({ p_reason: 'submit_mismatch' })
+  })
+
+  it('still refuses before checkOtp when there is no draft at all, and leaves nothing to void', async () => {
+    h.draftRow = null
+    const r = res()
+    await handler(req, r)
+    expect(r.statusCode).toBe(400)
+    expect(r.body).toMatchObject({ code: 'draft_mismatch' })
+    expect(calls('verify_otp')).toHaveLength(0)
   })
 
   it('a matching amount + destination passes the gate, then voids the consumed draft', async () => {

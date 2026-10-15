@@ -64,7 +64,7 @@ export default async function handler(req, res) {
   // The submit must match the request the code was issued for: a resumed or
   // repurposed form forces a fresh code instead of burning this one (Phase 1).
   // Amount AND destination are compared: a code issued for one payout account
-  // must not authorize another. A mismatch keeps the draft (no void).
+  // must not authorize another.
   {
     const draft = await getWithdrawalDraft(supabase, { userId: user.id }).catch(() => null)
     let fingerprint = null
@@ -74,6 +74,9 @@ export default async function handler(req, res) {
       return res.status(503).json({ error: 'Withdrawals are temporarily unavailable. Try again shortly.', code: 'draft_unavailable' })
     }
     if (!draft || Number(draft.amount) !== amountKobo || draft.destination_fp !== fingerprint) {
+      // Void the stale draft so the owner's next request is NOT answered with `draft_active` for ten minutes. Idempotent
+      // (it only stamps voided_at) and moves no money, so a void failure is safe to ignore.
+      await voidWithdrawalDraft(supabase, { userId: user.id, reason: 'submit_mismatch' }).catch(() => null)
       return res.status(400).json({ error: 'Your withdrawal details changed — request a fresh code.', code: 'draft_mismatch' })
     }
   }

@@ -28,13 +28,19 @@ vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), proc
 vi.mock('../_lib/financialConfig.js', () => ({ getFinancialConfig: async () => 20000 }))
 vi.mock('../_lib/trustLevels.js', () => ({ getRequiredAuth: () => ['pin'], isInstantEligible: () => false, getDailyCap: () => 50 }))
 vi.mock('../_lib/paystack.js', () => ({ paystackFetch: h.paystackFetch }))
-vi.mock('../_lib/paystackTransfer.js', () => ({
-  createTransferRecipient: h.createTransferRecipient,
-  initiateTransfer: h.initiateTransfer,
-  checkBalance: h.checkBalance,
+vi.mock('../_lib/paystackTransfer.js', async (importOriginal) => {
+  // The network-facing pieces are stubbed; the failure-message builder stays REAL so these tests exercise the
+  // wording a customer would actually see.
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    createTransferRecipient: h.createTransferRecipient,
+    initiateTransfer: h.initiateTransfer,
+    checkBalance: h.checkBalance,
   normalizeAccountName: (n) => String(n).trim().toLowerCase(),
   resolveAccount: async () => ({ accountName: 'Ada Obi' }),
-}))
+  }
+})
 
 process.env.OTP_HMAC_SECRET = 'test-secret' // the withdrawal code check keys its hash with this
 import handler from './initiate-withdrawal.js'
@@ -168,6 +174,40 @@ describe('initiate-withdrawal: recovery after the coins are reserved', () => {
     expect(settles()[0]).toMatchObject({ p_outcome: 'failed', p_request_id: 'wd-1', p_reference: null })
     expect(r.statusCode).toBe(502)
     expect(r.body.refunded).toBe(true)
+  })
+
+  // The reported message, reproduced verbatim from a real Paystack refusal. It is about the PLATFORM's naira settlement
+  // balance; forwarding it told the customer their CareCoin wallet was short, which it was not.
+  it('never tells a customer their wallet was short when the PLATFORM could not fund the payout', async () => {
+    h.initiateTransfer.mockRejectedValue(Object.assign(new Error('Your balance is not enough to fulfil this request.'), { paystackRejected: true }))
+    h.paystackFetch.mockResolvedValue({ status: false, message: 'Transfer not found' })
+    const r = res()
+    await handler(req, r)
+    expect(r.statusCode).toBe(502)
+    expect(r.body.refunded).toBe(true)
+    expect(r.body.code).toBe('provider_balance_low')
+    expect(r.body.error).not.toContain('not enough to fulfil')
+    expect(r.body.error).toMatch(/temporarily unable to send payouts/i)
+  })
+
+  it('a non-balance refusal keeps the provider\'s own words, which are useful to the person withdrawing', async () => {
+    h.initiateTransfer.mockRejectedValue(Object.assign(new Error('Recipient is not enabled'), { paystackRejected: true }))
+    h.paystackFetch.mockResolvedValue({ status: false, message: 'Transfer not found' })
+    const r = res()
+    await handler(req, r)
+    expect(r.body.code).toBe('transfer_refused')
+    expect(r.body.error).toContain('Recipient is not enabled')
+  })
+
+  it('an ambiguous outcome never claims the coins came back', async () => {
+    // No paystackRejected flag: the transfer may exist. The sweep reconciles by reference.
+    h.initiateTransfer.mockRejectedValue(Object.assign(new Error('socket hang up'), {}))
+    h.paystackFetch.mockResolvedValue({ status: false, message: 'Transfer not found' })
+    const r = res()
+    await handler(req, r)
+    expect(r.body.code).toBe('transfer_pending')
+    expect(r.body.pending).toBe(true)
+    expect(r.body.error).not.toMatch(/returned to your wallet/i)
   })
 
   it('Paystack rejects as a duplicate reference but the transfer exists and succeeded: completed, NEVER refunded', async () => {

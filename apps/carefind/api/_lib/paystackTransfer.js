@@ -7,6 +7,45 @@
 import crypto from 'crypto'
 import { paystackFetch } from './paystack.js'
 
+/**
+ * Does this provider refusal mean the PLATFORM's NGN settlement balance is short?
+ *
+ * Paystack answers a transfer it cannot fund with, verbatim:
+ *   "Your balance is not enough to fulfil this request."
+ * That sentence is about the merchant/integration balance. Forwarded to a user it reads as "your
+ * wallet is short" — which is exactly how a platform-side shortfall was reported to customers as an
+ * insufficient CareCoin balance (production: 12 withdrawals refunded with
+ * failure_reason='reconcile:not_found', payout_kobo as low as 80000).
+ *
+ * Only the balance class is recognised. Any other refusal keeps the provider's own words, because
+ * a specific message ("Recipient is not enabled") is genuinely useful to the person withdrawing.
+ */
+export function isProviderBalanceShortfall(message) {
+  return /\binsufficient balance\b|\bbalance is not enough\b|\bnot enough to fulfil\b/i.test(String(message || ''))
+}
+
+/**
+ * The user-facing sentence for a failed withdrawal, in the terms of what actually happened:
+ * whose shortfall it was, and whether the coins are back or still being checked.
+ *
+ * @param {unknown} providerMessage the provider's own message, when there was one
+ * @param {boolean} refunded        true only when the coins were provably returned
+ */
+export function withdrawalFailureMessage({ providerMessage, refunded, platformShortfall = false }) {
+  if (platformShortfall) {
+    // Say whose shortfall it was, in plain words. The customer had enough - we did not. Whether the coins are back is
+    // stated separately and exactly, because it is the part that decides whether they may try again.
+    return refunded
+      ? 'We are temporarily unable to send payouts, so this withdrawal did not go through. Your CareCoins have been returned to your wallet.'
+      : 'We are temporarily unable to send payouts, so this withdrawal has not gone through. We are still checking it, and your balance will be corrected automatically if it did not.'
+  }
+  const back = refunded
+    ? 'Your CareCoins have been returned to your wallet.'
+    : 'We are still checking this withdrawal; your balance will be corrected automatically if it did not go through.'
+  const detail = String(providerMessage || '').trim()
+  return detail ? `${detail}. ${back}` : back
+}
+
 // Create a transfer recipient on Paystack. Returns the recipient_code.
 // Subsequent calls with the same account details return the existing code.
 export async function createTransferRecipient({ bankCode, accountNumber, accountName, userId }) {

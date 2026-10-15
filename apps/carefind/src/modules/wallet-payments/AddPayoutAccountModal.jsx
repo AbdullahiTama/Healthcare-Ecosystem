@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { createAccountResolver } from '@care-ecosystem/shared-payout-ui'
+import { createAccountResolver, cleanOtp } from '@care-ecosystem/shared-payout-ui'
 import { supabase } from '../../config/supabaseClient.js'
 import { theme } from '../../styles/theme.js'
 import { Inp, Modal, TealBtn, GhostBtn } from '../../components/ui/index.jsx'
@@ -70,7 +70,7 @@ export default function AddPayoutAccountModal({ show, onClose, manager, banks, b
                 {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend code'}
               </button>
             </p>
-            <Inp id="payout-otp" label="6-digit code" inputMode="numeric" maxLength={6} autoComplete="one-time-code" value={otp} onChange={(v) => setOtp(String(v).replace(/\D/g, '').slice(0, 6))} />
+            <Inp id="payout-otp" name="one-time-code" label="6-digit code" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" enterKeyHint="done" autoCorrect="off" autoCapitalize="off" spellCheck={false} value={otp} onChange={(v) => setOtp(cleanOtp(v))} onPaste={(e) => { e.preventDefault(); const pasted = cleanOtp(e.clipboardData?.getData('text') ?? ''); if (pasted) setOtp(pasted) }} placeholder="123456" required />
           </>
         )}
 
