@@ -201,7 +201,7 @@ REVOKE ALL ON public.adr_pv_case_view FROM PUBLIC, anon;
 GRANT SELECT ON public.adr_pv_case_view TO authenticated;
 
 COMMENT ON VIEW public.adr_pv_case_view IS
-  'PV Tracker case projection. Caller-dependent masking: reporter identity/contact visible only to the submitter chain and platform admin (interim; privacy-lead sign-off pending). SECURITY INVOKER so base RLS scopes rows.';
+  'PV Tracker case projection. Owner-executed (security_invoker off) with an explicit access predicate; caller-dependent masking shows reporter identity/contact only to the submitter chain and platform admin (interim; privacy-lead sign-off pending).';
 
 -- ----------------------------------------------------------------------------
 -- 4. Company workflow state on the route row
