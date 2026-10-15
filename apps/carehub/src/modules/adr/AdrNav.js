@@ -12,6 +12,7 @@ export const ADR_NAV_ITEMS = {
   ],
   [ 'industry' ]: [
     { id: 'adr-industry', label: 'Industry ADR', icon: Factory, section: 'intelligence' },
+    { id: 'pv-tracker', label: 'PV Tracker', icon: Factory, section: 'intelligence' },
   ],
   [ 'skincare' ]: [
     { id: 'adr-skincare', label: 'Adverse Cosmetic Event', icon: Sparkles, section: 'intelligence' },

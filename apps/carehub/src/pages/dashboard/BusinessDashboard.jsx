@@ -54,6 +54,8 @@ const Imaging = lazy(() => import('./hospital/Imaging'))
 const Consultation = lazy(() => import('../../modules/consultation/Consultation'))
 const Overview = lazy(() => import('../../modules/overview/Overview'))
 const AdrReportPage = lazy(() => import('../../modules/adr/AdrReportPage'))
+const PvTracker = lazy(() => import('../../modules/adr/PvTracker'))
+const PvCaseDetail = lazy(() => import('../../modules/adr/PvCaseDetail'))
 
 const PAGE_TITLES = {
   dashboard: 'Dashboard', pos: 'POS / Sales', inventory: 'Inventory', mastercatalog: 'Master Catalog',
@@ -234,6 +236,8 @@ export default function BusinessDashboard() {
                   pages keep their own URL below. */}
               <Route path='adr-reports' element={guard('adr-reports', <Navigate to='/dashboard/reports/adr' replace />)} />
               <Route path='adr-reports/:reportId/detail' element={bareGuard('adr-reports', <AdrReportPageRoute />)} />
+              <Route path='reports/pv-tracker' element={guard('pv-tracker', <><TopBar title='PV Tracker' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><PvTracker {...pageProps} /></div></>)} />
+              <Route path='reports/pv-tracker/:reportId' element={guard('pv-tracker', <><TopBar title='PV Case' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><PvCaseRoute {...pageProps} /></div></>)} />
               <Route path='settings' element={guard('settings', <><TopBar title='Settings' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Settings {...pageProps} /></div></>)} />
               <Route path='carefind' element={guard('carefind', <><TopBar title='CareFind Profile' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><CareFind {...pageProps} /></div></>)} />
               <Route path='locations' element={guard('locations', <><TopBar title='Locations' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Locations {...pageProps} /></div></>)} />
@@ -269,4 +273,9 @@ export default function BusinessDashboard() {
 function AdrReportPageRoute() {
   const { reportId } = useParams()
   return <AdrReportPage reportId={reportId} />
+}
+
+function PvCaseRoute({ brand }) {
+  const { reportId } = useParams()
+  return <PvCaseDetail brand={brand} reportId={reportId} />
 }

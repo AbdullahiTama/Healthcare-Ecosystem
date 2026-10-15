@@ -10,7 +10,7 @@ import {
 
 export const ROLES = {
   Owner: {
-    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','wallet','reports','adr-reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging','ecommerce'],
+    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','wallet','reports','adr-reports','pv-tracker','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging','ecommerce'],
     canEditPrice: true,
     canEditStock: true,
     canDelete: true,
@@ -23,7 +23,7 @@ export const ROLES = {
     label: 'Owner — Full Access',
   },
   Manager: {
-    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','adr-reports','carefind','messages','stock','orders','activity'],
+    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','adr-reports','pv-tracker','carefind','messages','stock','orders','activity'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -132,7 +132,7 @@ export const ROLES = {
 // (Manufacturer/Importer and Wholesale let companies type their own role names,
 // so "Regional Manager", "Business Development Manager" etc won't be in the list above).
 export const DEFAULT_STAFF_PERMS = {
-  nav: ['dashboard', 'warehouses', 'territories', 'messages', 'stock', 'orders', 'activity', 'reports', 'adr-reports', 'carefind'],
+  nav: ['dashboard', 'warehouses', 'territories', 'messages', 'stock', 'orders', 'activity', 'reports', 'adr-reports', 'pv-tracker', 'carefind'],
   canEditPrice: false,
   canEditStock: false,
   canDelete: false,
@@ -239,6 +239,7 @@ export const MODULES = {
   wallet: { label: 'Wallet', icon: Landmark, types: ALL_TYPES, section: 'finance' },
   reports: { label: 'Financial Reports', icon: BarChart2, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/financial' },
   'adr-reports': { label: 'Pharmacovigilance (ADR)', icon: AlertTriangle, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/adr' },
+  'pv-tracker': { label: 'PV Tracker', icon: Factory, types: ENTERPRISE_TYPES, section: 'intelligence', path: '/dashboard/reports/pv-tracker' },
   ecommerce: { label: 'E-commerce', icon: Store, types: ALL_TYPES, section: 'ecosystem' },
   settings: { label: 'Settings', icon: Settings, types: ALL_TYPES, section: 'admin' },
   reception: { label: 'Reception', icon: UserCheck, types: HOSPITAL_TYPES, section: 'clinical' },
@@ -282,7 +283,7 @@ export const SECTION_ORDER = ['overview', 'operations', 'patients', 'clinical', 
 const NAV_ORDER = {
    default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
     hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
-    enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'carefind', 'ecommerce', 'settings'],
+    enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
 }
 
 function familyOf(businessType) {
@@ -394,6 +395,9 @@ export function isModuleActive(id, pathname) {
   }
   if (id === 'adr-reports') {
     return pathname.startsWith('/dashboard/reports/adr') || pathname.startsWith('/dashboard/adr-reports')
+  }
+  if (id === 'pv-tracker') {
+    return pathname.startsWith('/dashboard/reports/pv-tracker')
   }
   return pathname.split('/').pop() === id
 }
