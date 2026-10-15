@@ -56,6 +56,7 @@ const validDraft = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  window.scrollTo = vi.fn()
   mockRepo.getMyProfile.mockResolvedValue({ display_name: 'Ada' })
   mockRepo.getMyDrafts.mockResolvedValue([])
   mockRepo.createDraft.mockResolvedValue({ report_id: 'r1', report_number: 'ADR-2026-000001' })
