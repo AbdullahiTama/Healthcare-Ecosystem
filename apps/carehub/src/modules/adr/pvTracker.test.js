@@ -79,4 +79,16 @@ describe('adrReportRepository PV Tracker methods', () => {
       },
     ])
   })
+
+  it('getActiveDeadlineRule reads the single active interval row', async () => {
+    const { calls, repo } = recordingRepo()
+    await repo.getActiveDeadlineRule()
+    expect(calls).toEqual([
+      {
+        path: 'adr_deadline_rules?is_active=eq.true&order=effective_from.desc&limit=1&select=*',
+        method: 'GET',
+        body: null,
+      },
+    ])
+  })
 })

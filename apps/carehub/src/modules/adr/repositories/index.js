@@ -321,6 +321,15 @@ export function createAdrReportRepository({ request = sbFetch, upload = sbUpload
       return Array.isArray(rows) ? rows[0] : rows
     },
 
+    // Admin-owned versioned deadline intervals (Phase 8). Reads are
+    // authenticated-wide; the row carries its own unverified/verified notes.
+    async getActiveDeadlineRule() {
+      const rows = await request(
+        'adr_deadline_rules?is_active=eq.true&order=effective_from.desc&limit=1&select=*'
+      )
+      return Array.isArray(rows) ? rows[0] || null : rows
+    },
+
     // ── Follow-up ─────────────────────────────────────────────────────────────
     async createFollowUp({ businessId, moduleType, followUpOfReportId, createdByUserId, followUpVersionNumber }) {
       return request('adr_reports', {

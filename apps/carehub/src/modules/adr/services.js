@@ -71,16 +71,34 @@ export const getAdrEvidencePhotos = (reportId) =>
 // ── Deadline calculation (pure) ───────────────────────────────────────────────
 // Section 6 rule table. `reactionExpected` is the report row's boolean
 // `reaction_expected`; `newSafetySignal` is the industry `new_safety_signal`.
-export function calculateDeadline(reportCreatedAt, isSerious, reactionExpected, newSafetySignal) {
+// Phase 8: the brief numbers below are UNVERIFIED vs current NAFDAC rules.
+// They survive only as DEFAULT_BRIEF_RULE (labeled) for draft projections;
+// submitted deadlines come from the versioned adr_deadline_rules table via
+// adr_compute_deadline, and calculateDeadlineWithRule lets callers compute
+// against any explicit rule set.
+export const DEFAULT_BRIEF_RULE = {
+  serious_unexpected_hours: 72,
+  serious_expected_days: 15,
+  non_serious_unexpected_days: 15,
+  non_serious_expected_days: 90,
+  safety_signal_days: 3,
+  __unverified: true,
+}
+
+export function calculateDeadlineWithRule(reportCreatedAt, isSerious, reactionExpected, newSafetySignal, rule) {
   const from = new Date(reportCreatedAt).getTime()
   const HOUR = 60 * 60 * 1000
   const DAY = 24 * HOUR
+  const r = rule || DEFAULT_BRIEF_RULE
 
-  if (newSafetySignal) return new Date(from + 3 * DAY) // industry safety signal: +3 days
-  if (isSerious && !reactionExpected) return new Date(from + 72 * HOUR) // serious + unexpected: 72h
-  if (isSerious && reactionExpected) return new Date(from + 15 * DAY) // serious + expected: 15 days
-  if (!isSerious && !reactionExpected) return new Date(from + 15 * DAY) // non-serious + unexpected: 15 days
-  return new Date(from + 90 * DAY) // non-serious + expected: 90 days
+  if (newSafetySignal) return new Date(from + r.safety_signal_days * DAY)
+  if (isSerious && !reactionExpected) return new Date(from + r.serious_unexpected_hours * HOUR)
+  if (isSerious && reactionExpected) return new Date(from + r.serious_expected_days * DAY)
+  if (!isSerious && !reactionExpected) return new Date(from + r.non_serious_unexpected_days * DAY)
+  return new Date(from + r.non_serious_expected_days * DAY)
+}
+export function calculateDeadline(reportCreatedAt, isSerious, reactionExpected, newSafetySignal) {
+  return calculateDeadlineWithRule(reportCreatedAt, isSerious, reactionExpected, newSafetySignal, DEFAULT_BRIEF_RULE)
 }
 
 // Read-computed status: on_track / due_soon / overdue.
