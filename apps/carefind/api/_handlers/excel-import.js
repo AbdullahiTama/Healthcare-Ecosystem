@@ -17,14 +17,43 @@ export default async function handler(req, res) {
   const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
   if (authErr || !user) return res.status(401).json({ error: 'Invalid session' })
 
+  // An import is a spreadsheet, not an upload. Without a ceiling the whole body is buffered with no bound, so a large
+  // or slow POST exhausts memory, and the known ReDoS advisories in xlsx@0.18.5 (GHSA-5pgg-2g8v-p4x9,
+  // GHSA-4r6h-8v6p-xvw6 - no fixed version exists on npm) get an unbounded input to chew on. 5 MB is far above any real
+  // business-directory spreadsheet; anything bigger is a mistake or an attack.
+  const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+
   const { data: rawBody, error: bodyErr } = await new Promise((resolve) => {
     const chunks = []
-    req.on('data', (chunk) => chunks.push(chunk))
-    req.on('end', () => resolve({ data: Buffer.concat(chunks), error: null }))
-    req.on('error', (err) => resolve({ data: null, error: err }))
+    let total = 0
+    let rejected = false
+
+    const bail = (data, error) => {
+      if (!rejected) { rejected = true; resolve({ data, error }) }
+    }
+
+    req.on('data', (chunk) => {
+      if (rejected) return
+      total += chunk.length
+      if (total > MAX_UPLOAD_BYTES) {
+        bail(null, new Error('payload_too_large'))
+        req.destroy()
+        return
+      }
+      chunks.push(chunk)
+    })
+    req.on('end', () => bail(Buffer.concat(chunks), null))
+    req.on('error', (err) => bail(null, err))
   })
 
-  if (bodyErr || !rawBody) return res.status(400).json({ error: 'Failed to read request body' })
+  if (bodyErr && bodyErr.message === 'payload_too_large') {
+    return res.status(413).json({
+      error: 'File too large',
+      detail: `Maximum upload size is ${MAX_UPLOAD_BYTES} bytes`,
+    })
+  }
+
+  if (bodyErr || !rawBody || rawBody.length === 0) return res.status(400).json({ error: 'Failed to read request body' })
 
   try {
     const workbook = XLSX.read(rawBody, { type: 'buffer' })
