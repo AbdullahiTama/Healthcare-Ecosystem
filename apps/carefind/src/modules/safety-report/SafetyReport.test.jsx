@@ -96,6 +96,17 @@ describe('SafetyReportPage welcome', () => {
     expect(screen.queryByText(/person affected/i)).toBeNull()
     expect(mockRepo.updateDraft).not.toHaveBeenCalled()
   })
+
+  it('autosaves once after a change, then stays quiet', async () => {
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: /start report/i }))
+    await screen.findByText('About you (the reporter)')
+    expect(mockRepo.updateDraft).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText(/your name/i), { target: { value: 'Ada' } })
+    await waitFor(() => expect(mockRepo.updateDraft).toHaveBeenCalledTimes(1), { timeout: 8000 })
+    await new Promise((r) => setTimeout(r, 2500))
+    expect(mockRepo.updateDraft).toHaveBeenCalledTimes(1)
+  }, 20000)
 })
 
 describe('ReviewStep', () => {

@@ -123,6 +123,10 @@ export function useSafetyDraft(repository, prefill) {
   const draftRef = useRef(draft)
   draftRef.current = draft
   const reportRef = useRef(null)
+  // Snapshot of the last successfully persisted draft. The autosave effect
+  // only schedules a save when the live draft differs from this — without
+  // the comparison, the saved->effect->save cycle would PATCH forever.
+  const lastPersisted = useRef(null)
 
   const setDraft = useCallback((updater) => {
     setDraftState((prev) => (typeof updater === 'function' ? updater(prev) : { ...prev, ...updater }))
@@ -136,14 +140,18 @@ export function useSafetyDraft(repository, prefill) {
   }, [repository])
 
   // Debounced autosave of the report row (reporter/patient/extra sections).
+  // Fires only when the draft differs from the last persisted snapshot.
   useEffect(() => {
     if (status !== 'ready' && status !== 'saved' && status !== 'error') return
     if (!reportRef.current) return
+    const snapshot = JSON.stringify(draftRef.current)
+    if (snapshot === lastPersisted.current) return
     clearTimeout(timer.current)
     timer.current = setTimeout(async () => {
       setStatus('saving')
       try {
         await persistRow(reportRef.current, draftRef.current)
+        lastPersisted.current = JSON.stringify(draftRef.current)
         setStatus('saved')
         setError(null)
       } catch (e) {
@@ -164,12 +172,15 @@ export function useSafetyDraft(repository, prefill) {
         reportRef.current = full.report_id
         setReportId(full.report_id)
         setReportNumber(full.report_number || null)
-        setDraftState(rowToDraft(full, full))
+        const resumed = rowToDraft(full, full)
+        lastPersisted.current = JSON.stringify(resumed)
+        setDraftState(resumed)
       } else {
         const row = await repository.createDraft(blankDraft(prefill))
         reportRef.current = row.report_id
         setReportId(row.report_id)
         setReportNumber(row.report_number || null)
+        lastPersisted.current = JSON.stringify(blankDraft(prefill))
         setDraftState(blankDraft(prefill))
       }
       setStatus('ready')
@@ -184,6 +195,7 @@ export function useSafetyDraft(repository, prefill) {
     setStatus('saving')
     try {
       await persistRow(reportRef.current, draftRef.current)
+      lastPersisted.current = JSON.stringify(draftRef.current)
       setStatus('saved')
       setError(null)
     } catch (e) {
