@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PUBLIC_COMPANY_LABEL, COMPANY_KINDS } from './constants.js'
-import { Field, TextInput, RadioRow, s } from './ui.jsx'
+import { Field, TextInput, s } from './ui.jsx'
 
 // ── CompanyPicker ──────────────────────────────────────────────────────────
 // One verified selection, explicit "I don't know", or manual unverified text.

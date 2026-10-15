@@ -54,7 +54,7 @@ export default function SafetyReportPage() {
   const [reference, setReference] = useState(null)
   const headingRef = useRef(null)
 
-  const { draft, setDraft, reportId, reportNumber, status, error, setError, lastSavedAt, start, saveNow } =
+  const { draft, setDraft, reportId, status, error, lastSavedAt, start, saveNow } =
     useSafetyDraft(repository, prefill)
   const serverIds = useRef({ products: [], reactions: [], meds: [] })
 
