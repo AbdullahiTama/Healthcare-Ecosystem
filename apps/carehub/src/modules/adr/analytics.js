@@ -127,7 +127,8 @@ function normalizeTerm(s) {
 export function topReactionTerms(cases, limit = 10) {
   const counts = {}
   cases.forEach(c => {
-    ;(c.reactions || []).forEach(r => {
+    const reactions = c.reactions || []
+    reactions.forEach(r => {
       const t = normalizeTerm(r.reaction_description)
       if (!t) return
       counts[t] = (counts[t] || 0) + 1
@@ -146,8 +147,9 @@ export function seriousnessBreakdown(cases) {
   )
   let anySerious = 0
   cases.forEach(c => {
+    const reactions = c.reactions || []
     let serious = false
-    ;(c.reactions || []).forEach(r => {
+    reactions.forEach(r => {
       SERIOUSNESS_CRITERIA.forEach(k => {
         if (r[k]) {
           criteria[k.replace(/^seriousness_/, '')] += 1
@@ -165,7 +167,8 @@ export function seriousnessBreakdown(cases) {
 export function outcomeCounts(cases) {
   const counts = Object.fromEntries(OUTCOME_VALUES.map(o => [o, 0]))
   cases.forEach(c => {
-    ;(c.reactions || []).forEach(r => {
+    const reactions = c.reactions || []
+    reactions.forEach(r => {
       const o = OUTCOME_VALUES.includes(r.outcome) ? r.outcome : 'unknown'
       counts[o] += 1
     })
@@ -192,7 +195,8 @@ export function byBatchLot(cases) {
   const counts = {}
   cases.forEach(c => {
     const lots = new Set()
-    ;(c.products || []).forEach(p => {
+    const products = c.products || []
+    products.forEach(p => {
       const b = (p.batch_lot_number || '').trim() || 'Not recorded'
       lots.add(b)
     })
