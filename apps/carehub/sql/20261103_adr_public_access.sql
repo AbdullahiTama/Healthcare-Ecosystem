@@ -723,7 +723,9 @@ CREATE POLICY "adr-private owner delete" ON storage.objects
   );
 
 -- ----------------------------------------------------------------------------
--- 12. Analytics - expose the validity stamp (additive; stays invoker)
+-- 12. Analytics - expose the validity stamp (appended at END: CREATE OR
+-- REPLACE VIEW matches columns positionally, so mid-list inserts fail with
+-- 42P16; stays invoker)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW public.adr_report_analytics
 WITH (security_invoker = true) AS
@@ -733,8 +735,6 @@ SELECT
   r.business_id,
   r.module_type,
   r.status,
-  r.report_source,
-  r.gate_validated_at,
   r.created_at,
   r.submission_deadline,
   r.reaction_expected,
@@ -742,7 +742,9 @@ SELECT
   COALESCE(bool_or(
     x.seriousness_death OR x.seriousness_life_threatening OR x.seriousness_hospitalization
     OR x.seriousness_disability OR x.seriousness_congenital_anomaly OR x.seriousness_other_medically_important
-  ), false) AS is_serious
+  ), false) AS is_serious,
+  r.report_source,
+  r.gate_validated_at
 FROM adr_reports r
 LEFT JOIN adr_report_reactions x ON x.report_id = r.report_id
 GROUP BY r.report_id;

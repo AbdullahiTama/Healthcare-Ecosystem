@@ -413,6 +413,10 @@ GRANT EXECUTE ON FUNCTION public.search_eligible_product_companies(text, integer
 -- ----------------------------------------------------------------------------
 -- 6. adr_report_analytics - add report_source (additive; stays invoker)
 -- ----------------------------------------------------------------------------
+-- NOTE: new view columns MUST be appended at the END. CREATE OR REPLACE
+-- VIEW matches columns positionally: inserting mid-list renames existing
+-- columns and fails (verified live: 42P16 on report_source). This applies to
+-- every later revision of this view too.
 CREATE OR REPLACE VIEW public.adr_report_analytics
 WITH (security_invoker = true) AS
 SELECT
@@ -421,7 +425,6 @@ SELECT
   r.business_id,
   r.module_type,
   r.status,
-  r.report_source,
   r.created_at,
   r.submission_deadline,
   r.reaction_expected,
@@ -429,7 +432,8 @@ SELECT
   COALESCE(bool_or(
     x.seriousness_death OR x.seriousness_life_threatening OR x.seriousness_hospitalization
     OR x.seriousness_disability OR x.seriousness_congenital_anomaly OR x.seriousness_other_medically_important
-  ), false) AS is_serious
+  ), false) AS is_serious,
+  r.report_source
 FROM adr_reports r
 LEFT JOIN adr_report_reactions x ON x.report_id = r.report_id
 GROUP BY r.report_id;
