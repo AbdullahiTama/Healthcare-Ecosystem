@@ -311,6 +311,16 @@ export function createAdrReportRepository({ request = sbFetch, upload = sbUpload
       })
     },
 
+    // Admin-only audited source correction (correct_adr_report_source RPC).
+    // Never inferred, never silent: requires a recorded reason server-side.
+    async correctReportSource(reportId, source, reason) {
+      const rows = await request('rpc/correct_adr_report_source', {
+        method: 'POST',
+        body: JSON.stringify({ p_report_id: reportId, p_source: source, p_reason: reason }),
+      })
+      return Array.isArray(rows) ? rows[0] : rows
+    },
+
     // ── Follow-up ─────────────────────────────────────────────────────────────
     async createFollowUp({ businessId, moduleType, followUpOfReportId, createdByUserId, followUpVersionNumber }) {
       return request('adr_reports', {

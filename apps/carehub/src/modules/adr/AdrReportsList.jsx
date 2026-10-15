@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Plus } from 'lucide-react'
 import { adrReportRepository, getModuleTypeFromBusinessType } from './repositories'
 import { ADR_FORM } from './formEngine'
+import { sourceBadge } from './pvWorkflow'
 import AdrReportsAnalytics from './AdrReportsAnalytics'
 import { theme } from '../../styles/theme'
 import { useAuth } from '../../providers/AuthProvider'
@@ -141,6 +142,7 @@ export default function AdrReportsList({ brand, embedded = false }) {
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Pill label={sourceBadge(r.report_source).label} type={sourceBadge(r.report_source).tone === 'info' ? 'blue' : sourceBadge(r.report_source).tone === 'success' ? 'green' : sourceBadge(r.report_source).tone === 'warning' ? 'amber' : 'gray'} />
                     <Pill label={ADR_FORM.getStatusLabel(r.status)} type={statusToken === 'info' ? 'blue' : statusToken === 'success' ? 'green' : statusToken === 'warning' ? 'amber' : 'gray'} />
                     <span style={{ fontSize: 12, color: gray400 }}>{fmtDate(r.created_at)}</span>
                   </div>

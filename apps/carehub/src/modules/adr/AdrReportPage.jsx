@@ -3,6 +3,7 @@ import { ArrowLeft, Plus, Trash2, Download, Camera, X, RefreshCw, CheckCircle, A
 import { useNavigate } from 'react-router-dom'
 import { Button, Card, Pill, Input, Select, Textarea, Toggle, useToast, Toast, Loading, Empty, ErrorState, ConfirmDialog } from '../../components/ui'
 import { adrReportRepository } from './repositories'
+import { sourceBadge } from './pvWorkflow'
 import { adrValidation, normalizeChildRow } from './validation'
 import { ADR_FORM } from './formEngine'
 import { buildPdfHtml, buildE2bXml, openPrintView, downloadTextFile, exportFilename } from './exports'
@@ -390,6 +391,7 @@ export default function AdrReportPage({ reportId }) {
               {ADR_FORM.formatReportNumber(report.report_number)} — {ADR_FORM.getModuleTitle(moduleType)}
             </h2>
             <Pill label={ADR_FORM.getStatusLabel(report.status)} type={statusToken === 'info' ? 'blue' : statusToken === 'success' ? 'green' : statusToken === 'warning' ? 'amber' : 'gray'} />
+            <Pill label={sourceBadge(report.report_source).label} type={sourceBadge(report.report_source).tone === 'info' ? 'blue' : sourceBadge(report.report_source).tone === 'success' ? 'green' : sourceBadge(report.report_source).tone === 'warning' ? 'amber' : 'gray'} />
           </div>
           <div style={{ fontSize: 12.5, color: theme.textLight, marginTop: 4 }}>{terminology.adrLabel} · Created {fmtDate(report.created_at)}</div>
         </div>

@@ -1,4 +1,5 @@
 import { ADR_FORM } from './formEngine'
+import { sourceBadge } from './pvWorkflow'
 import {
   ADR_MODULE_TYPES,
   ACTION_TAKEN_LABELS,
@@ -291,7 +292,7 @@ export function buildPdfHtml({ report, products = [], meds = [], reactions = [],
       .section { page-break-inside: avoid; }
     </style></head><body>
     <h1>${ADR_FORM.formatReportNumber(report.report_number)}</h1>
-    <div class="meta">${ADR_FORM.getModuleTitle(moduleType)} · Status: ${ADR_FORM.getStatusLabel(report.status)} · Generated ${new Date().toLocaleString('en-NG')}</div>
+    <div class="meta">${ADR_FORM.getModuleTitle(moduleType)} · Status: ${ADR_FORM.getStatusLabel(report.status)} · Source: ${sourceBadge(report.report_source).label} · Generated ${new Date().toLocaleString('en-NG')}</div>
 
     <div class="section"><h2>Reporter</h2><table>
       ${row('Name', report.reporter_name)}${row('Qualification', report.reporter_qualification && QUALIFICATION_LABELS[report.reporter_qualification])}

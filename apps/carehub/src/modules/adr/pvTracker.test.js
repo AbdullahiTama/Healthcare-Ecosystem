@@ -67,4 +67,16 @@ describe('adrReportRepository PV Tracker methods', () => {
     expect(calls[0].body.assessment).toBe('Likely related.')
     expect(calls[0].body).not.toHaveProperty('author_auth_user')
   })
+
+  it('correctReportSource posts the audited correction RPC', async () => {
+    const { calls, repo } = recordingRepo()
+    await repo.correctReportSource(REPORT, 'business_facility', 'Channel verified from sign-in logs')
+    expect(calls).toEqual([
+      {
+        path: 'rpc/correct_adr_report_source',
+        method: 'POST',
+        body: { p_report_id: REPORT, p_source: 'business_facility', p_reason: 'Channel verified from sign-in logs' },
+      },
+    ])
+  })
 })

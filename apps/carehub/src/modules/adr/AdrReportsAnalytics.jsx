@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { TrendingUp } from 'lucide-react'
 import { adrReportRepository } from './repositories'
 import { ADR_FORM } from './formEngine'
-import { bucketCounts, countBy, monthlyVolume, seriousCount } from './analytics'
+import { bucketCounts, countBy, countBySource, monthlyVolume, seriousCount } from './analytics'
+import { sourceBadge } from './pvWorkflow'
 import { theme } from '../../styles/theme'
 import { Card, Loading, ErrorState, Empty, Pill } from '../../components/ui'
 
@@ -51,6 +52,7 @@ export default function AdrReportsAnalytics({ brand }) {
 
   const byStatus = countBy(rows, 'status')
   const byModule = countBy(rows, 'module_type')
+  const bySource = countBySource(rows)
   const serious = seriousCount(rows)
   const nonSerious = rows.length - serious
   const buckets = bucketCounts(rows)
@@ -119,6 +121,19 @@ export default function AdrReportsAnalytics({ brand }) {
               <Pill label={String(count)} type="teal" />
             </div>
           ))}
+        </Card>
+
+        <Card style={{ padding: '18px 20px' }}>
+          <div style={{ fontWeight: 800, fontSize: 14, color: navy, marginBottom: 14 }}>By report source</div>
+          {Object.entries(bySource).sort((a, b) => b[1] - a[1]).map(([s, count]) => (
+            <div key={s} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${gray100}` }}>
+              <span style={{ fontSize: 13, color: gray600, fontWeight: 600 }}>{sourceBadge(s).label}</span>
+              <Pill label={String(count)} type="teal" />
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: gray400, marginTop: 6 }}>
+            Recorded submission channel only — never inferred. “Source not recorded” covers historical rows without channel evidence.
+          </div>
         </Card>
       </div>
 

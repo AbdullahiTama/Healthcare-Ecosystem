@@ -167,3 +167,13 @@ describe('exportFilename', () => {
     expect(exportFilename({}, 'xml')).toBe('adr-report.xml')
   })
 })
+
+describe('buildPdfHtml report source', () => {
+  it('prints the recorded report source on the NAFDAC document', () => {
+    const pub = buildPdfHtml({ report: { ...baseReport, report_source: 'public' }, products: [], meds: [], reactions: [] })
+    expect(pub).toContain('Public report')
+    const unknown = buildPdfHtml({ report: { ...baseReport, report_source: 'unknown' }, products: [], meds: [], reactions: [] })
+    expect(unknown).toMatch(/not recorded/i)
+  })
+})
+

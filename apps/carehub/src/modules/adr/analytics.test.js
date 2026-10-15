@@ -1,8 +1,33 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { deadlineBucket, bucketCounts, countBy, monthlyVolume, seriousCount } from './analytics.js'
+import { deadlineBucket, bucketCounts, countBy, countBySource, monthlyVolume, seriousCount } from './analytics.js'
 
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
+
+describe('countBySource', () => {
+  it('buckets the four recorded categories without guessing', () => {
+    const rows = [
+      { report_source: 'public' },
+      { report_source: 'business_facility' },
+      { report_source: 'business_facility' },
+      { report_source: 'unknown' },
+      {}, // missing channel lands in the not-recorded bucket, never inferred
+    ]
+    expect(countBySource(rows)).toEqual({
+      public: 1,
+      health_facility: 0,
+      business_facility: 2,
+      unknown: 2,
+    })
+  })
+
+  it('never invents a source from other fields', () => {
+    const rows = [{ reporter_qualification: 'physician', module_type: 'hospital' }]
+    const counts = countBySource(rows)
+    expect(counts.unknown).toBe(1)
+    expect(counts.public ?? 0).toBe(0)
+  })
+})
 
 describe('deadlineBucket', () => {
   const createdAt = '2026-01-01T00:00:00Z'

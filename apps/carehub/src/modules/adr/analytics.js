@@ -39,6 +39,22 @@ export function countBy(reports, key) {
   return counts
 }
 
+// Report-source breakdown over the four recorded channel categories. The
+// source is read from report_source only — never inferred from qualification,
+// module, product company or names. Missing values land in the explicit
+// not-recorded ('unknown') bucket; every category is always present (possibly
+// zero) so charts cannot silently drop a channel.
+const SOURCE_CATEGORIES = ['public', 'health_facility', 'business_facility', 'unknown']
+
+export function countBySource(reports) {
+  const counts = { public: 0, health_facility: 0, business_facility: 0, unknown: 0 }
+  reports.forEach(r => {
+    const s = r && r.report_source
+    counts[SOURCE_CATEGORIES.includes(s) ? s : 'unknown'] += 1
+  })
+  return counts
+}
+
 export function monthlyVolume(reports) {
   const months = {}
   const now = new Date()
