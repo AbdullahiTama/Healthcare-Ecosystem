@@ -69,6 +69,16 @@ function validateReportSubmit(report) {
     flag('reporter_consent_followup', 'Reporter consent for follow-up')
   }
 
+  // 3b. Usable contact route: reporter phone or email. The server additionally
+  // accepts the submitting facility's registered contact (which this client
+  // cannot see), so this prompt may be stricter than the server — by design,
+  // contact details are a §6 valid-ICSR requirement, never optional.
+  const hasPhone = report.reporter_phone && String(report.reporter_phone).trim().length > 0
+  const hasEmail = report.reporter_email && /^\S+@\S+\.\S+$/.test(String(report.reporter_email).trim())
+  if (!hasPhone && !hasEmail) {
+    flag('reporter_contact', 'Reporter phone or email')
+  }
+
   // 4. Patient identifier must be set
   if (!report.patient_identifier || report.patient_identifier.trim().length === 0) {
     flag('patient_identifier', 'Patient identifier')
@@ -172,6 +182,26 @@ function validateReportSubmit(report) {
     }
     if (!report.attending_physician || report.attending_physician.trim().length === 0) {
       flag('attending_physician', 'Attending physician')
+    }
+  }
+
+  // Skincare-specific validation (Phase 3 server parity: these are mandatory
+  // server-side for module_type='skincare', mirroring industry/hospital).
+  if (report.module_type === ADR_MODULE_TYPES.SKINCARE) {
+    if (!report.application_site || String(report.application_site).trim().length === 0) {
+      flag('skincare_application_site', 'Application site')
+    }
+    if (!report.cosmetic_reaction_type || String(report.cosmetic_reaction_type).trim().length === 0) {
+      flag('skincare_cosmetic_reaction_type', 'Cosmetic reaction type')
+    }
+    if (report.onset_timing === undefined || report.onset_timing === null || String(report.onset_timing).trim().length === 0) {
+      flag('skincare_onset_timing', 'Onset timing')
+    }
+    if (report.discontinued_use === undefined || report.discontinued_use === null) {
+      flag('skincare_discontinued_use', 'Discontinued use')
+    }
+    if (!report.resolution_status || String(report.resolution_status).trim().length === 0) {
+      flag('skincare_resolution_status', 'Resolution status')
     }
   }
 

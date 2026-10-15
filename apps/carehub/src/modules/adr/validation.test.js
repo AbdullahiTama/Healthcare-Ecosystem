@@ -25,6 +25,7 @@ const validReport = {
   reporter_name: 'A. Pharmacist',
   reporter_anonymous_confirmed_by_facility: false,
   reporter_consent_followup: true,
+  reporter_phone: '08012345678',
   patient_identifier: 'JS',
   patient_age: 45,
   patient_gender: 'female',
@@ -110,6 +111,40 @@ describe('adrValidation.validateForSubmit', () => {
     expect(incomplete.missing).toContain('All six seriousness fields')
   })
 
+  it('requires a usable reporter contact route (phone or email)', async () => {
+    const none = await adrValidation.validateForSubmit({ ...validReport, reporter_phone: '', reporter_email: '' })
+    expect(none.valid).toBe(false)
+    expect(none.missing).toContain('Reporter phone or email')
+
+    const byEmail = await adrValidation.validateForSubmit({ ...validReport, reporter_phone: '', reporter_email: 'a@example.com' })
+    expect(byEmail.valid).toBe(true)
+
+    const malformed = await adrValidation.validateForSubmit({ ...validReport, reporter_phone: '', reporter_email: 'not-an-email' })
+    expect(malformed.missing).toContain('Reporter phone or email')
+  })
+
+  it('enforces skincare mandatory fields for skincare reports only', async () => {
+    const skincare = { ...validReport, module_type: 'skincare' }
+    const missing = await adrValidation.validateForSubmit(skincare)
+    expect(missing.valid).toBe(false)
+    expect(missing.missing).toEqual(
+      expect.arrayContaining(['Application site', 'Cosmetic reaction type', 'Onset timing', 'Discontinued use', 'Resolution status'])
+    )
+
+    const complete = await adrValidation.validateForSubmit({
+      ...skincare,
+      application_site: 'face',
+      cosmetic_reaction_type: 'irritation',
+      onset_timing: 'immediate',
+      discontinued_use: true,
+      resolution_status: 'improving',
+    })
+    expect(complete.valid).toBe(true)
+
+    // Other modules never check skincare columns.
+    const pharmacy = await adrValidation.validateForSubmit({ ...validReport, module_type: 'community_pharmacy' })
+    expect(pharmacy.missing).not.toContain('Application site')
+  })
   it('requires all six seriousness fields non-null on at least one reaction', async () => {
     const withNulls = await adrValidation.validateForSubmit({
       ...validReport,

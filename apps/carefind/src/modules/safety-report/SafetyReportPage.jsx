@@ -30,6 +30,7 @@ const SERVER_LABEL_TO_STEP = {
   Outcome: STEPS.REACTIONS,
   'Seriousness answers': STEPS.REACTIONS,
   'All six seriousness fields': STEPS.REACTIONS,
+  'All six seriousness fields': STEPS.REACTIONS,
 }
 
 function companyIssues(products) {
