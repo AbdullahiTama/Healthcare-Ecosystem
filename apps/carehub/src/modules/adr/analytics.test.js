@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { deadlineBucket, bucketCounts, countBy, countBySource, monthlyVolume, seriousCount } from './analytics.js'
+import { deadlineBucket, bucketCounts, countBy, countBySource, monthlyVolume, seriousCount, trendsByMonth, topReactionTerms, seriousnessBreakdown, outcomeCounts, byProductBrand, byBatchLot, suppressCounts, SMALL_GROUP_THRESHOLD } from './analytics.js'
 
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
@@ -118,3 +118,43 @@ describe('seriousCount', () => {
 // HOUR/DAY constants are used above for window math).
 void HOUR
 void DAY
+describe('pv analytics helpers', () => {
+  const rxn = (over = {}) => ({ reaction_description: 'Rash', severity: 'moderate', outcome: 'recovering', seriousness_death: false, seriousness_life_threatening: false, seriousness_hospitalization: false, seriousness_disability: false, seriousness_congenital_anomaly: false, seriousness_other_medically_important: false, ...over })
+  const kase = (over = {}) => ({ report_id: 'r1', created_at: '2026-08-01T00:00:00Z', report_source: 'public', reporter_qualification: 'consumer', reactions: [rxn()], products: [{ product_brand_name: 'Ampiclox', batch_lot_number: 'L1' }], ...over })
+
+  it('trendsByMonth buckets volume over trailing months, zero-filled', () => {
+    const rows = trendsByMonth([kase(), kase({ created_at: '2026-09-15T00:00:00Z' })], 3, new Date('2026-09-20T00:00:00Z'))
+    expect(rows).toEqual([['2026-07', 0], ['2026-08', 1], ['2026-09', 1]])
+  })
+
+  it('topReactionTerms groups normalized descriptions, ranked with limit', () => {
+    const cases = [kase(), kase({ report_id: 'r2', reactions: [rxn({ reaction_description: '  RASH ' }), rxn({ reaction_description: 'Vomiting' })] })]
+    expect(topReactionTerms(cases, 10)).toEqual([['rash', 2], ['vomiting', 1]])
+    expect(topReactionTerms(cases, 1)).toEqual([['rash', 2]])
+  })
+
+  it('seriousnessBreakdown counts each criterion plus the any-serious denominator', () => {
+    const cases = [kase(), kase({ report_id: 'r2', reactions: [rxn({ seriousness_hospitalization: true })] })]
+    const b = seriousnessBreakdown(cases)
+    expect(b.anySerious).toBe(1)
+    expect(b.total).toBe(2)
+    expect(b.criteria.hospitalization).toBe(1)
+    expect(b.criteria.death).toBe(0)
+  })
+
+  it('outcomeCounts buckets six outcomes with an unknown bucket, never invents', () => {
+    const cases = [kase(), kase({ report_id: 'r2', reactions: [rxn({ outcome: 'fatal' }), rxn({ outcome: '' })] })]
+    expect(outcomeCounts(cases)).toEqual({ recovered: 0, recovering: 1, not_recovered: 0, recovered_with_sequelae: 0, fatal: 1, unknown: 1 })
+  })
+
+  it('byProductBrand and byBatchLot group blanks as not-recorded', () => {
+    const cases = [kase(), kase({ report_id: 'r2', products: [{ product_brand_name: '', batch_lot_number: '' }] })]
+    expect(byProductBrand(cases)).toEqual({ Ampiclox: 1, 'Not recorded': 1 })
+    expect(byBatchLot(cases)).toEqual({ L1: 1, 'Not recorded': 1 })
+  })
+
+  it('suppressCounts withholds small groups below threshold', () => {
+    expect(suppressCounts([['rash', 7], ['vomiting', 3]], 5)).toEqual([{ label: 'rash', count: 7, suppressed: false }, { label: 'vomiting', count: null, suppressed: true }])
+  })
+})
+
