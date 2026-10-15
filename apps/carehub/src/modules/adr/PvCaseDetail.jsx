@@ -25,6 +25,27 @@ export function CaseExportBar({ onCsv, onPrint, onE2b }) {
   )
 }
 
+// New-safety-signal escalation banner: 3-day internal review, not a filing.
+export function SignalEscalation({ active }) {
+  if (!active) return null
+  return (
+    <p role="alert" style={{ fontSize: 13, fontWeight: 700, color: '#b45309', background: '#fffbeb', border: '1px solid #d97706', borderRadius: 10, padding: '8px 12px' }}>
+      Flagged as a new safety signal — internal review within 3 days. This flag prioritizes internal review; it is not a regulatory submission.
+    </p>
+  )
+}
+
+// Deadline line naming the rule version behind the date plus internal status.
+export function DeadlineLine({ deadline, createdAt, ruleVersion }) {
+  if (!deadline) return null
+  return (
+    <p style={{ fontSize: 12, color: theme.textLight }}>
+      Due {fmtDate(deadline)} ({getDeadlineStatus(deadline, createdAt).replace('_', ' ')}) ·
+      Rule: {ruleVersion || 'not recorded'} · Internal platform deadline — not a regulator-confirmed submission deadline.
+    </p>
+  )
+}
+
 function Section({ title, children }) {
   return (
     <Card style={{ padding: '12px 14px', marginBottom: 10 }}>
@@ -154,6 +175,8 @@ export default function PvCaseDetail({ brand, reportId }) {
     <div>
       <Card style={{ padding: '14px 16px', marginBottom: 10 }}>
         <CaseHeader kase={kase} />
+        <SignalEscalation active={kase.new_safety_signal === true} />
+        <DeadlineLine deadline={kase.submission_deadline} createdAt={kase.created_at} ruleVersion={kase.deadline_rule_version} />
         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: theme.textLight }}>Workflow: <strong>{companyStatusLabel(activeRoute?.company_status || 'new')}</strong></span>
           <span style={{ fontSize: 12, color: theme.textLight }}>{serious ? 'Serious' : 'Non-serious'}</span>

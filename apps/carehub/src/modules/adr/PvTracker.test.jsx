@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { TrackerSummary, TrackerList, CaseHeader, WorkflowActions, TrackerExportBar } from './PvTracker.jsx'
-import { CaseExportBar } from './PvCaseDetail.jsx'
+import { CaseExportBar, SignalEscalation, DeadlineLine } from './PvCaseDetail.jsx'
 
 vi.mock('./repositories', () => ({
   adrReportRepository: {},
@@ -131,5 +131,30 @@ describe('CaseExportBar', () => {
     expect(html).toMatch(/prep\. only/i)
     expect(html).toMatch(/Export CSV/i)
     expect(html).toMatch(/NAFDAC print view/i)
+  })
+})
+
+describe('TrackerList due pills', () => {
+  it('shows the due date and overdue state per row', () => {
+    const html = render(<TrackerList cases={[kase({ submission_deadline: new Date(Date.now() - 3600 * 1000).toISOString() })]} onOpen={() => {}} />)
+    expect(html).toMatch(/Due /)
+    expect(html).toMatch(/overdue/i)
+  })
+})
+
+describe('SignalEscalation', () => {
+  it('escalates new safety signals and stays silent otherwise', () => {
+    expect(render(<SignalEscalation active={true} />)).toMatch(/safety signal/i)
+    expect(render(<SignalEscalation active={false} />)).toBe('')
+  })
+})
+
+describe('DeadlineLine', () => {
+  it('names the rule version and the internal-only status', () => {
+    const html = render(
+      <DeadlineLine deadline={new Date(Date.now() + 86400000).toISOString()} createdAt={new Date().toISOString()} ruleVersion="brief-2026-10-unverified" />
+    )
+    expect(html).toContain('brief-2026-10-unverified')
+    expect(html).toMatch(/internal/i)
   })
 })

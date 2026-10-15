@@ -5,10 +5,10 @@ import { adrReportRepository } from './repositories'
 import { adrValidation } from './validation'
 import { getDeadlineStatus } from './services'
 import { bucketTrackerCounts, sourceBadge, companyStatusLabel, allowedCompanyTransitions, logBulkExport } from './pvWorkflow'
+import { theme } from '../../styles/theme'
 import { buildAdrCsv, buildBulkPdfHtml, buildAnalyticsHtml, csvRowsFromCases, downloadTextFile, openPrintView, BULK_PDF_CAP } from './exports'
 import { outcomeCounts, topReactionTerms, suppressCounts } from './analytics'
 import PvAnalytics from './PvAnalytics'
-import { theme } from '../../styles/theme'
 import { Card, Loading, Empty, ErrorState, Button, useToast } from '../../components/ui'
 
 const { tealDeep, gray500, border } = theme
@@ -79,6 +79,9 @@ export function TrackerList({ cases, onOpen }) {
               <span>{k.is_serious ? 'Serious' : 'Non-serious'}</span>
               <span>{companyStatusLabel(k.company_status)}</span>
               <span>Submitted {fmtDate(k.created_at)}</span>
+              {k.submission_deadline && (
+                <span>Due {fmtDate(k.submission_deadline)} ({getDeadlineStatus(k.submission_deadline, k.created_at).replace('_', ' ')})</span>
+              )}
             </div>
           </div>
         </Card>

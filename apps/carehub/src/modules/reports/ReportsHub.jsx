@@ -28,7 +28,7 @@ export default function ReportsHub({ brand, role, customRoles = {}, ...pageProps
 
   const subtitles = {
     reports: 'Sales, expenses, purchases and VAT across your business',
-    'adr-reports': 'Adverse drug reaction reporting with a 24-hour NAFDAC/PCN submission window',
+    'adr-reports': 'Adverse drug reaction reporting with internal deadline tracking (platform deadlines are not regulator-confirmed)',
   }
 
   return (

@@ -418,7 +418,7 @@ export default function AdrReportPage({ reportId }) {
       </div>
 
       {deadline && (
-        <DeadlineBanner status={deadlineStatus} deadline={deadline} createdAt={report.created_at} industry={isIndustry} />
+        <DeadlineBanner status={deadlineStatus} deadline={deadline} createdAt={report.created_at} industry={isIndustry} ruleVersion={report.deadline_rule_version} />
       )}
 
       {restorableDraft && (
@@ -1089,7 +1089,7 @@ function EvidenceSection({ photos, onUpload, onRemove, uploading, fileInputRef, 
 }
 
 // ── Deadline banner ───────────────────────────────────────────────────────────
-function DeadlineBanner({ status, deadline, createdAt, industry }) {
+function DeadlineBanner({ status, deadline, createdAt, industry, ruleVersion }) {
   const palette = {
     overdue: { bg: theme.dangerBg, border: theme.danger, text: theme.danger, label: 'Overdue' },
     due_soon: { bg: theme.warningBg, border: theme.warning, text: theme.warning, label: 'Due soon' },
@@ -1111,6 +1111,9 @@ function DeadlineBanner({ status, deadline, createdAt, industry }) {
             : status === 'due_soon' ? '20–50% of the reporting window remains.'
             : 'Over 50% of the reporting window remains.'
           : 'The deadline is fixed by the seriousness and expected/unexpected status of the reaction.'}
+      </div>
+      <div style={{ fontSize: 11.5, color: theme.gray600, marginTop: 4 }}>
+        Rule: {ruleVersion || 'not recorded'} · Internal platform deadline — not a regulator-confirmed submission deadline, and no action here confirms NAFDAC receipt.
       </div>
     </div>
   )
