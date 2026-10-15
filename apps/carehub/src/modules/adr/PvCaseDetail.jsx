@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { adrReportRepository } from './repositories'
 import { adrValidation } from './validation'
 import { getDeadlineStatus } from './services'
 import { buildE2bXml, buildPdfHtml, openPrintView, downloadTextFile, exportFilename } from './exports'
-import { companyStatusLabel, allowedCompanyTransitions } from './pvWorkflow'
-import { CaseHeader, SourcePill, WorkflowActions } from './PvTracker.jsx'
+import { companyStatusLabel } from './pvWorkflow'
+import { CaseHeader, WorkflowActions } from './PvTracker.jsx'
 import { theme } from '../../styles/theme'
-import { Card, Loading, Empty, ErrorState, Button, useToast } from '../../components/ui'
+import { Card, Loading, ErrorState, Button, useToast } from '../../components/ui'
 
 function fmtDate(d) {
   if (!d) return '—'
@@ -36,8 +36,18 @@ export default function PvCaseDetail({ brand, reportId }) {
   const [followupMsg, setFollowupMsg] = useState('')
   const [assessment, setAssessment] = useState('')
   const [actionTaken, setActionTaken] = useState('')
+  const accessLogged = useRef(false)
 
   useEffect(() => { load() }, [reportId])
+
+  // Access logging: one `note` audit event per case view (the Phase 6
+  // migration authorizes routed companies to write it; failures stay silent
+  // so a logging outage never blocks safety work).
+  useEffect(() => {
+    if (accessLogged.current || !reportId) return
+    accessLogged.current = true
+    adrReportRepository.logEvent(reportId, 'note', { action: 'pv_case_viewed', via: 'pv-tracker' }).catch(() => {})
+  }, [reportId])
 
   async function load() {
     setError(null)

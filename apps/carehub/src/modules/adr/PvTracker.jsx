@@ -5,6 +5,7 @@ import { adrReportRepository } from './repositories'
 import { adrValidation } from './validation'
 import { getDeadlineStatus } from './services'
 import { bucketTrackerCounts, sourceBadge, companyStatusLabel, allowedCompanyTransitions } from './pvWorkflow'
+import PvAnalytics from './PvAnalytics'
 import { theme } from '../../styles/theme'
 import { Card, Loading, Empty, ErrorState, Button } from '../../components/ui'
 
@@ -132,6 +133,7 @@ export function filterTrackerCases(cases, f) {
     if (f.seriousness === 'non_serious' && k.is_serious) return false
     if (f.companyStatus && k.company_status !== f.companyStatus) return false
     if (f.outcome && !(k.reactions || []).some((r) => r.outcome === f.outcome)) return false
+    if (f.reporterType && k.reporter_qualification !== f.reporterType) return false
     if (f.from && new Date(k.created_at) < new Date(f.from)) return false
     if (f.to && new Date(k.created_at) > new Date(f.to + 'T23:59:59')) return false
     if (!q) return true
@@ -146,10 +148,10 @@ export function filterTrackerCases(cases, f) {
 
 export default function PvTracker({ brand }) {
   const navigate = useNavigate()
-  const [routes, setRoutes] = useState(null)
   const [cases, setCases] = useState(null)
   const [error, setError] = useState(null)
-  const [filters, setFilters] = useState({ query: '', source: '', seriousness: '', companyStatus: '', outcome: '', from: '', to: '' })
+  const [filters, setFilters] = useState({ query: '', source: '', seriousness: '', companyStatus: '', outcome: '', reporterType: '', from: '', to: '' })
+  const [tab, setTab] = useState('cases')
 
   useEffect(() => { load() }, [brand?.id])
 
@@ -158,7 +160,6 @@ export default function PvTracker({ brand }) {
     setError(null)
     try {
       const assigned = await adrReportRepository.getRoutedRoutes(brand.id)
-      setRoutes(assigned || [])
       const full = await Promise.all((assigned || []).map(async (rt) => {
         const kase = await adrReportRepository.getPvCase(rt.report_id)
         if (!kase) return null
@@ -184,6 +185,24 @@ export default function PvTracker({ brand }) {
   }
 
   const visible = useMemo(() => filterTrackerCases(cases || [], filters), [cases, filters])
+
+  const activeFilterLabel = useMemo(() => {
+    const parts = []
+    if (filters.query.trim()) parts.push(`search “${filters.query.trim()}”`)
+    if (filters.source) parts.push(sourceBadge(filters.source).label)
+    if (filters.seriousness) parts.push(filters.seriousness === 'serious' ? 'Serious' : 'Non-serious')
+    if (filters.companyStatus) parts.push(companyStatusLabel(filters.companyStatus))
+    if (filters.outcome) parts.push(`outcome: ${filters.outcome}`)
+    if (filters.reporterType) parts.push(`reporter: ${filters.reporterType}`)
+    if (filters.from) parts.push(`from ${filters.from}`)
+    if (filters.to) parts.push(`to ${filters.to}`)
+    return parts.length > 0 ? parts.join(' · ') : 'All routed cases'
+  }, [filters])
+
+  const drill = (patch) => {
+    setFilters((f) => ({ ...f, ...patch }))
+    setTab('cases')
+  }
 
   if (error) return <ErrorState message={`We couldn't load your PV Tracker: ${error}`} onRetry={load} />
   if (!cases) return <Loading text="Loading routed cases…" />
@@ -224,10 +243,48 @@ export default function PvTracker({ brand }) {
               <option key={s} value={s}>{companyStatusLabel(s)}</option>
             ))}
           </select>
+          <select aria-label="Outcome" value={filters.outcome} onChange={(e) => setFilters({ ...filters, outcome: e.target.value })} style={inputStyle}>
+            <option value="">Any outcome</option>
+            {['recovered', 'recovering', 'not_recovered', 'recovered_with_sequelae', 'fatal', 'unknown'].map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+          <select aria-label="Reporter type" value={filters.reporterType} onChange={(e) => setFilters({ ...filters, reporterType: e.target.value })} style={inputStyle}>
+            <option value="">Any reporter type</option>
+            {['physician', 'pharmacist', 'nurse', 'other_hcp', 'consumer', 'caregiver', 'lawyer'].map((q) => (
+              <option key={q} value={q}>{q}</option>
+            ))}
+          </select>
+          <input aria-label="From date" type="date" value={filters.from} onChange={(e) => setFilters({ ...filters, from: e.target.value })} style={inputStyle} />
+          <input aria-label="To date" type="date" value={filters.to} onChange={(e) => setFilters({ ...filters, to: e.target.value })} style={inputStyle} />
         </div>
       </Card>
 
-      <TrackerList cases={visible} onOpen={(id) => navigate(`/dashboard/reports/pv-tracker/${id}`)} />
+      <div role="tablist" aria-label="PV Tracker views" style={{ display: 'flex', gap: 4, marginBottom: 12, borderBottom: `1px solid ${border}` }}>
+        {['cases', 'analytics'].map((t) => {
+          const on = tab === t
+          return (
+            <button
+              key={t}
+              role="tab"
+              aria-selected={on}
+              onClick={() => setTab(t)}
+              style={{
+                padding: '9px 16px', background: 'none', border: 'none', borderBottom: `2px solid ${on ? tealDeep : 'transparent'}`,
+                color: on ? tealDeep : gray500, fontWeight: 700, fontSize: 13, cursor: 'pointer', textTransform: 'capitalize',
+              }}
+            >
+              {t}
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'analytics' ? (
+        <PvAnalytics cases={visible} periodLabel="Last 6 months" activeFilters={activeFilterLabel} onDrill={drill} />
+      ) : (
+        <TrackerList cases={visible} onOpen={(id) => navigate(`/dashboard/reports/pv-tracker/${id}`)} />
+      )}
     </div>
   )
 }
