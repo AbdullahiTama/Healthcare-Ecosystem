@@ -3,6 +3,8 @@ import { ArrowLeft, Plus, Trash2, Download, Camera, X, RefreshCw, CheckCircle, A
 import { useNavigate } from 'react-router-dom'
 import { Button, Card, Pill, Input, Select, Textarea, Toggle, useToast, Toast, Loading, Empty, ErrorState, ConfirmDialog } from '../../components/ui'
 import { adrReportRepository } from './repositories'
+import { validateRouteInput } from './routing'
+import CompanySelector, { describeRoute } from './CompanySelector'
 import { sourceBadge } from './pvWorkflow'
 import { adrValidation, normalizeChildRow } from './validation'
 import { ADR_FORM } from './formEngine'
@@ -58,6 +60,8 @@ export default function AdrReportPage({ reportId }) {
   const [photos, setPhotos] = useState([])
   const [events, setEvents] = useState([])
   const [eventsLoading, setEventsLoading] = useState(false)
+  const [routes, setRoutes] = useState([])
+  const [companyNames, setCompanyNames] = useState({})
 
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -92,6 +96,7 @@ export default function AdrReportPage({ reportId }) {
       }
       setReport(full)
       setProducts(full.adr_products || [])
+      loadRoutes(reportId).catch(() => {})
       setMeds(full.adr_concomitant_meds || [])
       setReactions(full.adr_reactions || [])
       setPhotos(full.adr_evidence_photos || [])
@@ -108,6 +113,65 @@ export default function AdrReportPage({ reportId }) {
       setError(true)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // ── Product-company routing (Phase 1 backend, Hub UI) ────────────────────
+  // Loads route rows plus display names resolved through the eligible-company
+  // type-ahead (business names are only readable via that RPC). Best-effort:
+  // routing display must never block the report form.
+  async function loadRoutes(id = reportId) {
+    try {
+      const [rows, companies] = await Promise.all([
+        adrReportRepository.getProductRoutes(id),
+        adrReportRepository.searchEligibleCompanies('', 50).catch(() => []),
+      ])
+      setRoutes(rows || [])
+      const names = {}
+      for (const c of companies || []) {
+        if (c && c.business_id) names[c.business_id] = c.business_name || c.business_id
+      }
+      setCompanyNames(names)
+    } catch (e) {
+      setRoutes([])
+    }
+  }
+
+  // Persists one company selection for a saved product. Hub rows may carry
+  // more than one selection (multi-company cardinality preserved) — this
+  // appends; it never edits or removes existing routes.
+  async function handleSaveRoute(productId, selection) {
+    const check = validateRouteInput({
+      reportId,
+      productId,
+      kind: selection.kind,
+      businessId: selection.businessId || null,
+      candidateName: selection.candidateName || null,
+    })
+    if (!check.ok) {
+      showToast(check.error || 'Invalid company selection', { type: 'error' })
+      return
+    }
+    try {
+      const created = await adrReportRepository.createProductRoute({
+        reportId,
+        productId,
+        kind: selection.kind,
+        businessId: selection.businessId || null,
+        candidateName: selection.candidateName || null,
+      })
+      if (selection.kind === 'verified' && selection.businessId && selection.businessName) {
+        setCompanyNames(prev => ({ ...prev, [selection.businessId]: selection.businessName }))
+      }
+      await loadRoutes()
+      showToast(
+        created && created.status === 'pending'
+          ? 'Company selection saved (pending verification)'
+          : 'Company selection saved',
+        { type: 'success' }
+      )
+    } catch (e) {
+      showToast('Could not save the company selection — check the values and try again', { type: 'error' })
     }
   }
 
@@ -308,7 +372,9 @@ export default function AdrReportPage({ reportId }) {
   // ── Child-row persistence ───────────────────────────────────────────────────
   async function addProduct(p) {
     const created = await adrReportRepository.addProduct(report.report_id, p)
+    const row = Array.isArray(created) ? created[0] : created
     setProducts(prev => [...prev, ...(created || [])])
+    return row && row.product_id ? row.product_id : null
   }
   async function updateProduct(pid, patch) {
     await adrReportRepository.updateProduct(pid, report.report_id, patch)
@@ -468,6 +534,9 @@ export default function AdrReportPage({ reportId }) {
         disabled={isLocked}
         industry={isIndustry}
         showToast={showToast}
+        routes={routes}
+        companyNames={companyNames}
+        onSaveRoute={handleSaveRoute}
       />
 
       <ConcomitantSection meds={meds} onAdd={addMed} onRemove={removeMed} disabled={isLocked} />
@@ -659,17 +728,48 @@ const emptyProduct = () => ({
 
 const ROUTE_OPTIONS = ['Oral', 'Topical', 'IV', 'IM', 'Subcutaneous', 'Inhalation', 'Ophthalmic', 'Other']
 
-function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, industry, showToast }) {
+const BLANK_COMPANY = { kind: 'unknown', businessId: '', businessName: '', candidateName: '' }
+
+function groupRoutesByProduct(routes) {
+  const map = {}
+  for (const r of routes || []) {
+    if (!r || !r.product_id) continue
+    if (!map[r.product_id]) map[r.product_id] = []
+    map[r.product_id].push(r)
+  }
+  return map
+}
+
+function routeToSelection(route) {
+  if (!route) return { ...BLANK_COMPANY }
+  if (route.selection_kind === 'verified') {
+    return { kind: 'verified', businessId: route.responsible_business_id || '', businessName: '', candidateName: '' }
+  }
+  if (route.selection_kind === 'unverified_candidate') {
+    return { kind: 'unverified_candidate', businessId: '', businessName: '', candidateName: route.candidate_name || '' }
+  }
+  return { ...BLANK_COMPANY }
+}
+
+function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, industry, showToast, routes, companyNames, onSaveRoute }) {
   const [editing, setEditing] = useState(null)
   const [draft, setDraft] = useState(emptyProduct())
+  const [company, setCompany] = useState({ ...BLANK_COMPANY })
+  const [companyTouched, setCompanyTouched] = useState(false)
+  const routesByProduct = groupRoutesByProduct(routes)
 
   function startEdit(p) {
     setEditing(p.product_id)
     setDraft({ ...p })
+    const existing = (routesByProduct[p.product_id] || [])[0]
+    setCompany(existing ? routeToSelection(existing) : { ...BLANK_COMPANY })
+    setCompanyTouched(false)
   }
   function startNew() {
     setEditing('__new__')
     setDraft(emptyProduct())
+    setCompany({ ...BLANK_COMPANY })
+    setCompanyTouched(false)
   }
   async function save() {
     if (!draft.product_brand_name || !draft.product_brand_name.trim()) return
@@ -677,14 +777,31 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
     // database CHECK constraints and used to fail silently.
     const row = normalizeChildRow(draft)
     try {
-      if (editing === '__new__') await onAdd(row)
-      else await onUpdate(editing, row)
+      let productId = null
+      if (editing === '__new__') {
+        productId = await onAdd(row)
+      } else {
+        await onUpdate(editing, row)
+        productId = editing
+      }
+      // Persist the company selection alongside the product row (Hub rows may
+      // carry more than one selection; the server appends idempotently).
+      if (companyTouched && productId && onSaveRoute) {
+        await onSaveRoute(productId, company)
+      }
       setEditing(null)
     } catch (e) {
       showToast('Could not save the suspect product — check its values and try again', { type: 'error' })
     }
   }
   function set(field, value) { setDraft(prev => ({ ...prev, [field]: value })) }
+  function setCompanySel(next) {
+    setCompany(next)
+    setCompanyTouched(true)
+  }
+  function doSearchCompanies(query) {
+    return adrReportRepository.searchEligibleCompanies(query, 10)
+  }
 
   return (
     <Section
@@ -700,7 +817,7 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
         {products.map(p => (
           <div key={p.product_id} style={{ borderBottom: `1px solid ${theme.gray100}`, padding: '12px 0' }}>
             {editing === p.product_id ? (
-              <ProductForm draft={draft} set={set} industry={industry} onSave={save} onCancel={() => setEditing(null)} />
+              <ProductForm draft={draft} set={set} industry={industry} onSave={save} onCancel={() => setEditing(null)} company={company} setCompany={setCompanySel} searchCompanies={doSearchCompanies} disabled={disabled} />
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <div style={{ minWidth: 0 }}>
@@ -708,6 +825,7 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
                   <div style={{ fontSize: 12, color: theme.textLight, marginTop: 2, lineHeight: 1.6 }}>
                     {[p.product_generic_name, p.manufacturer, p.batch_lot_number, p.dose, p.route, p.indication].filter(Boolean).join(' · ') || 'No details yet'}
                   </div>
+                  <ProductRouteChips routes={routesByProduct[p.product_id] || []} companyNames={companyNames} />
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {!disabled && <Button variant="ghost" size="sm" onClick={() => startEdit(p)}>Edit</Button>}
@@ -720,7 +838,7 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
 
         {editing === '__new__' && (
           <div style={{ borderTop: `1px solid ${theme.gray100}`, paddingTop: 14 }}>
-            <ProductForm draft={draft} set={set} industry={industry} onSave={save} onCancel={() => setEditing(null)} />
+            <ProductForm draft={draft} set={set} industry={industry} onSave={save} onCancel={() => setEditing(null)} company={company} setCompany={setCompanySel} searchCompanies={doSearchCompanies} disabled={disabled} />
           </div>
         )}
       </div>
@@ -728,7 +846,24 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
   )
 }
 
-function ProductForm({ draft, set, industry, onSave, onCancel }) {
+function ProductRouteChips({ routes, companyNames }) {
+  if (!routes || routes.length === 0) return null
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+      {routes.map(r => (
+        <span
+          key={r.route_id}
+          title={`Selection: ${r.selection_kind}; status: ${r.status}`}
+          style={{ fontSize: 11.5, fontWeight: 600, color: theme.textDark, background: theme.gray100, borderRadius: 999, padding: '2px 10px', whiteSpace: 'nowrap' }}
+        >
+          {describeRoute(r, companyNames[r.responsible_business_id])}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function ProductForm({ draft, set, industry, onSave, onCancel, company, setCompany, searchCompanies, disabled }) {
   return (
     <div>
       <div style={grid}>
@@ -744,6 +879,7 @@ function ProductForm({ draft, set, industry, onSave, onCancel }) {
         <Input label="Stop date" type="date" value={draft.stop_date} onChange={v => set('stop_date', v)} />
         <Input label="Indication" value={draft.indication} onChange={v => set('indication', v)} placeholder="Why it was given" />
       </div>
+      <CompanySelector value={company} onChange={setCompany} searchCompanies={searchCompanies} disabled={disabled} />
       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
         <Button variant="primary" size="sm" onClick={onSave}>Save product</Button>
         <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
