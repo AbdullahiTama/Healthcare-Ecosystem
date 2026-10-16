@@ -46,7 +46,7 @@ export default function ReporterStep({ value, onChange }) {
           <span>I am reporting through a health facility and do not wish to give my name.</span>
         </label>
         {value.anonymousConfirmed && (
-          <Field label="Facility name" required htmlFor="sr-facility" help="The hospital, clinic or pharmacy submitting on your behalf. Their contact above is used for follow-up.">
+          <Field label="Facility name" required htmlFor="sr-facility" help="The hospital, clinic or pharmacy you are reporting through. Only your name is withheld — your own phone number or email above is still required so reviewers can follow up.">
             <TextInput id="sr-facility" value={value.facilityName} onChange={(e) => set({ facilityName: e.target.value })} maxLength={160} />
           </Field>
         )}

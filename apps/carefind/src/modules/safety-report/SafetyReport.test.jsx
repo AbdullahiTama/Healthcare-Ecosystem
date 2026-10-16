@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import SafetyReportPage from './SafetyReportPage.jsx'
 import ReviewStep from './steps/ReviewStep.jsx'
+import ReporterStep from './steps/ReporterStep.jsx'
 import CompanyPicker from './CompanyPicker.jsx'
 import { WELCOME_HEADING, STEPS } from './constants.js'
 
@@ -153,5 +154,21 @@ describe('CompanyPicker', () => {
     rerender(<CompanyPicker value={value} onChange={onChange} searchCompanies={mockRepo.searchCompanies} />)
     fireEvent.click(await screen.findByRole('option', { name: /fidson/i }))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: 'verified', businessId: 'b1', businessName: 'Fidson' }))
+  })
+})
+
+describe('ReporterStep anonymous facility', () => {
+  const base = { name: '', qualification: '', phone: '', email: '', consentFollowup: null, anonymousConfirmed: false, facilityName: '' }
+
+  it('hides the facility field until anonymity is chosen', () => {
+    render(<ReporterStep value={base} onChange={() => {}} />)
+    expect(screen.queryByLabelText(/facility name/i)).toBeNull()
+  })
+
+  it('states that only the name is withheld and own contact is still required', () => {
+    render(<ReporterStep value={{ ...base, anonymousConfirmed: true }} onChange={() => {}} />)
+    expect(screen.getByLabelText(/facility name/i)).toBeTruthy()
+    expect(screen.getByText(/only your name is withheld/i)).toBeTruthy()
+    expect(screen.queryByText(/their contact above is used/i)).toBeNull()
   })
 })

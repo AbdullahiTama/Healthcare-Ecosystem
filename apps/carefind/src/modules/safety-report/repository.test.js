@@ -68,6 +68,7 @@ describe('safetyReportRepository', () => {
     expect(call.op).toBe('insert')
     expect(call.payload.report_source).toBe('public')
     expect(call.payload.module_type).toBe('public')
+    expect(call.payload.origin_channel_detail).toBe('carefind-web')
     expect(call.payload.status).toBe('draft')
     expect(call.payload.business_id).toBe(null)
     expect(call.payload.reporter_auth_user_id).toBe(USER.id)

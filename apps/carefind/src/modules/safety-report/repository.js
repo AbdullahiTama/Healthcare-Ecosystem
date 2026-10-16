@@ -84,7 +84,7 @@ export function createSafetyReportRepository(client = defaultClient) {
       const user = await mustAuth()
       const { data, error } = await client
         .from('adr_reports')
-        .insert({ ...reportRowFromDraft(initial), report_source: 'public', module_type: 'public', status: 'draft', business_id: null, reporter_auth_user_id: user.id })
+        .insert({ ...reportRowFromDraft(initial), report_source: 'public', module_type: 'public', status: 'draft', business_id: null, reporter_auth_user_id: user.id, origin_channel_detail: 'carefind-web' })
         .select()
         .single()
       if (error) throw error
