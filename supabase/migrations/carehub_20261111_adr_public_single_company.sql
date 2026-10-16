@@ -2,9 +2,11 @@
 -- ADR Reporting Module - Completion audit gap 2: single-company rule for
 -- public reports at the trusted boundary.
 --
--- Status: WRITTEN FOR REVIEW — do NOT apply to production without explicit
---         owner authorisation (program constraint: no production migration
---         apply). Covered by PGlite adversarial tests in
+-- Status: APPLIED live 2026-10-16 under explicit owner authorisation
+--         ("okay lets apply the migrations"). Pre-apply live verification:
+--         all referenced objects/columns present (no drift vs. the PGlite
+--         fixture), zero pre-existing public-product violations. Covered by
+--         PGlite adversarial tests in
 --         apps/carefind/src/test/adr/routingAdversarial.db.test.js, which
 --         replay this file verbatim.
 --

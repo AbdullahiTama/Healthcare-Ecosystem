@@ -1,12 +1,14 @@
 -- ============================================================================
 -- ADR notifications: cross-tenant party notify RPC (in-app staff_notifications).
 --
--- Status: WRITTEN FOR REVIEW — do NOT apply to production without explicit
---         owner authorisation AND comms/privacy sign-off on notification copy
---         (program constraint: no production migration apply). Covered by
---         PGlite adversarial tests in
+-- Status: APPLIED live 2026-10-16 under explicit owner authorisation
+--         ("okay lets apply the migrations"). Pre-apply live verification:
+--         all referenced functions/tables/columns present (no drift vs. the
+--         PGlite fixture). Covered by PGlite adversarial tests in
 --         apps/carefind/src/test/adr/routingAdversarial.db.test.js, which
---         replay this file verbatim.
+--         replay this file verbatim. Comms/privacy sign-off on notification
+--         copy (D6) remains outstanding — see ADR-Release-Record §6b; the RPC
+--         ships with conservative fixed templates and deadline kinds blocked.
 --
 -- Why an RPC and not the client notify() helper: staff_notifications RLS
 -- requires the WRITER to belong to the target business

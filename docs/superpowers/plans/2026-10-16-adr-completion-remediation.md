@@ -1,7 +1,9 @@
 # ADR/PV Tracker Completion Audit — Remediation Plan
 
-> Status: BATCH A + B IMPLEMENTED (commits 1564c38, 93da6ef, cc61c78, 68fed73,
-> 2e36871, 390ae03). Batch C (verification + release) in progress.
+> Status: BATCH A + B + C COMPLETE. Both Batch B migrations APPLIED live
+> 2026-10-16 under explicit owner authorisation. Constraints honored: no
+> production data writes, no deploy, no regulatory-compliance claims without
+> explicit approval.
 > Evidence so far: CareHub ADR+permissions 14 files / 219 tests PASS (incl.
 > CompanySelector 6, AdrNav 4, draftBackup new contract, all running against
 > the parallel copy-pass edits); PGlite adversarial 14/14 PASS; CareFind
@@ -100,13 +102,13 @@
 - A7 (gap 9-doc): rewrite the 7 contradictory Status/body pairs to reference
   the release record; add explicit "last verified live" caveat (no MCP here).
 
-### Batch B — new UNAPPLIED migration files + PGlite adversarial tests (gaps 2, 7)
+### Batch B — new migration files + PGlite adversarial tests (gaps 2, 7)
 - B1 (gap 2): `supabase/migrations/carehub_20261111_adr_public_single_company.sql`
   (+ mirror): BEFORE INSERT/UPDATE trigger on routes — when parent report is
   `report_source='public'`, reject a second route row for the same product
   (any kind: verified/unknown/candidate each count as the one selection).
   Hub/business rows explicitly exempt (documented in trigger comment).
-  NOT applied (constraint prohibits).
+  APPLIED live 2026-10-16 (owner authorisation).
 - B2 (gap 2 tests): `apps/carefind/src/test/adr/routingAdversarial.db.test.js`
   (PGlite, established `*.db.test.js` pattern): stub auth/storage/businesses/
   staff + replay real ADR migrations in order + the NEW migration file;
@@ -115,7 +117,7 @@
   raises; (v) candidate-name never grants read; (vi) unverified org cannot read
   case/attachments. Skipped without PGlite (pattern precedent).
 - B3 (gap 7): `supabase/migrations/carehub_20261112_adr_notify_party.sql`
-  (+ mirror), NOT applied: DEFINER `notify_adr_party(p_report_id,
+  (+ mirror), APPLIED live 2026-10-16 (owner authorisation): DEFINER `notify_adr_party(p_report_id,
   p_kind, p_title, p_body, p_link)` — resolves recipients from verified
   routes (company staff/owner) or submitting business (follow-up direction),
   writes `staff_notifications`, returns recipient count; kinds allow-listed
