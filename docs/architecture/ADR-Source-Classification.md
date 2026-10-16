@@ -42,5 +42,6 @@ prompt requires. Nothing about submission flows, validation, or access changed.
 
 ## Rollback
 
-Unapplied migration: delete the files. UI: revert badge/card/export-line edits
+Pre-apply rollback was file deletion. Applied 2026-10-15: drop the trigger,
+RPC and CHECK widening first, restoring the prior events CHECK. UI: revert badge/card/export-line edits
 (data unchanged — source column and history intact).

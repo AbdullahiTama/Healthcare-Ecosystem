@@ -31,7 +31,8 @@ records. No Hub list/form/export was modified.
 
 ## Status: APPLIED live 2026-10-15 (`adr_pv_tracker`, verified post-apply incl. masked-view ownership and trigger presence)
 
-No Phase 1–4 migration applied to any database.
+Superseded: applied live — see `ADR-Release-Record.md` §4. The sentence this
+replaces (claiming no migration applied) predates the reviewed apply.
 
 ## Rulings
 
@@ -68,5 +69,7 @@ No Phase 1–4 migration applied to any database.
 
 ## Rollback
 
-Unapplied migrations: delete the files. UI: revert Tracker pages + nav/route
+Pre-apply rollback was file deletion. Applied 2026-10-15: drop the Tracker
+objects in reverse dependency order (RPCs → triggers → tables → view →
+policies → route columns → events CHECK widening). UI: revert Tracker pages + nav/route
 wiring (Hub lists/forms keep working — nothing existing was modified).

@@ -31,7 +31,8 @@ No form, workflow, or existing-visibility changes.
 
 ## Status: APPLIED live 2026-10-15 (`adr_icsr_hardening` + `adr_verify_event_restore` correction; live gate returns structured errors, verified on real data)
 
-No migration in Phases 1–3 has been applied to any database.
+Superseded: applied live — see `ADR-Release-Record.md` §4. The sentence this
+replaces (claiming no migration applied) predates the reviewed apply.
 
 ## Rulings
 
@@ -61,6 +62,8 @@ reusing when a test database is available).
 
 ## Rollback
 
-Unapplied migrations: delete the files. Code twins: revert the validator edits
+Pre-apply rollback was file deletion. Applied 2026-10-15: drop the redefined
+functions/constraints first (core, submits, verify, module CHECK), restoring
+the prior definitions from the earlier migration files. Code twins: revert the validator edits
 (server strings are the authority; clients degrade to prompting less, never to
 accepting more than the server).

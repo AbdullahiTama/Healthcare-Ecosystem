@@ -26,9 +26,10 @@ form, validation, or existing-visibility changes.
 
 ## Status: APPLIED live 2026-10-15 (`adr_routing_foundation`, verified post-apply; view-column fix committed pre-apply)
 
-The migration has not been applied to any database (local or production).
-Application requires PV/regulatory + privacy sign-off per master prompt §14.
-No production data, deploy, or destructive DDL is involved (all additive).
+Superseded: this migration is applied live — see `ADR-Release-Record.md` §4
+for the applied-migrations table and verification evidence. Production
+sign-off references in earlier drafts now apply to future changes, not to
+this migration.
 
 ## RLS matrix delta
 
@@ -54,6 +55,27 @@ No production data, deploy, or destructive DDL is involved (all additive).
   pending the §7 regulatory decision; Unknown must keep living in form copy,
   not coerced to No. Cost if wrong: regulatory mis-mapping — blocked from prod.
 
+## Completion audit — business taxonomy decisions (2026-10-16, no code change)
+
+- Stored `business_type` values for eligible product companies are exactly
+  `manufacturer_importer` (single combined Importer/Manufacturer type — there
+  are no separate `manufacturer`/`importer` stored values) and `wholesale`.
+  The JS helper (`routing.js`) and the SQL gate
+  (`is_eligible_product_company`, type-ahead) use identical sets; SQL
+  additionally requires `status = 'active'`.
+- `business_type` has no DB CHECK/enum (free TEXT); the values above are a
+  convention enforced by the eligibility predicates, not the schema.
+- `wholesale` inclusion predates this work (permissions `ENTERPRISE_TYPES`,
+  role templates, ADR industry mapping, docs). No documented product decision
+  either way was found — **kept as-is; explicit product sign-off required
+  before adding or removing any eligible type** (owner decision D1).
+- Registration gap (no code change): the current signup UI
+  (`config/constants.js` `BUSINESS_TYPES`, `Register.jsx`) offers none of the
+  enterprise types and defaults to `skincare` — eligible companies cannot
+  self-register today and must be provisioned/converted out-of-band.
+  **Product decision required** (owner decision D2): add
+  Importer/Manufacturer options to registration or keep admin-provisioned.
+
 ## Intentionally deferred
 
 3-state seriousness, deadline-rule engine (only a version column stub),
@@ -68,13 +90,20 @@ PV Tracker UI, public submission flow, historical-linking procedure
 - Full `src/modules/adr` suite re-run post-change: see commit message / final report.
 - ESLint on changed source files: 0 errors (test files are eslint-ignored by repo config).
 - Migration correctness: static self-review against the 5 Review Focus lines
-  (plan §Review Focus); NOT live-applied — first apply must be a reviewed
-  staging migration with RLS probe tests (anon / guessed-UUID / cross-tenant /
-  idempotent retry).
+  (plan §Review Focus), then a reviewed live apply on 2026-10-15 with RLS
+  probe tests (anon / guessed-UUID / cross-tenant / idempotent retry) —
+  see `ADR-Release-Record.md` §4 for evidence.
 
 ## Rollback
 
-Migration file only (unapplied): delete the two files. Post-apply rollback
+Pre-apply rollback was file deletion. Post-apply rollback (reverse order):
+drop RPCs/helper → drop route/alias RLS + tables → restore analytics view →
+restore events CHECK → drop added columns (data loss of routing data only;
+core ADR rows untouched). No existing column is narrowed.
+
+## Rollback
+
+Pre-apply rollback was file deletion (the two files). Applied 2026-10-15 — post-apply rollback
 (reverse order): drop RPCs/helper → drop route/alias RLS + tables → restore
 analytics view → restore events CHECK → drop added columns (data loss of
 routing data only; core ADR rows untouched). No existing column is narrowed.

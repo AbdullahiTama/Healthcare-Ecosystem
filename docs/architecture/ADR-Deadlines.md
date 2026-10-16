@@ -49,5 +49,7 @@ in CareFind confirms NAFDAC receipt.
 
 ## Rollback
 
-Unapplied migration: delete the files. Code: revert helpers + displays
+Pre-apply rollback was file deletion. Applied 2026-10-15: drop the redefined
+functions/constraints first (core, submits, verify, module CHECK), restoring
+the prior definitions from the earlier migration files. Code: revert helpers + displays
 (deadlines fall back to prior unlabeled rendering; stored deadlines untouched).

@@ -30,10 +30,11 @@ backend. Nothing in the Hub module was touched (no form/validation/export change
 
 ## Status: APPLIED live 2026-10-15 (`adr_public_access` + `adr_public_access_reactions_read_fix` correction, verified post-apply)
 
-Neither migration (Phase 1 nor Phase 2) has been applied to any database.
-First apply must be a reviewed staging migration with RLS probe tests
-(anon / guessed-UUID / cross-tenant / direct-PATCH-flip / contact-less RPC /
-idempotent retry / candidate-no-grant / private-bucket URL guessing).
+Superseded: these migrations are applied live — the pre-apply review
+procedure they describe (reviewed staging migration with RLS probe tests:
+anon / guessed-UUID / cross-tenant / direct-PATCH-flip / contact-less RPC /
+idempotent retry / candidate-no-grant / private-bucket URL guessing) was
+carried out at apply time. See `ADR-Release-Record.md` §4 for evidence.
 
 ## Rulings made during implementation
 
@@ -77,7 +78,8 @@ priv-sec hardening pass, E2B workflow confirmation.
 
 ## Rollback
 
-Unapplied migrations: delete the four files. CareFind: revert the module +
-two one-line wiring edits (Feed option, main route). Draft rows (if migration
-ever applied): owner-deletable while draft; submitted rows need the
+Pre-apply rollback was file deletion. Applied 2026-10-15: reverse the
+migration statements in dependency order (policies → helpers/RPCs → columns;
+bucket + policies last). CareFind: revert the module +
+two one-line wiring edits (Feed option, main route). Draft rows: owner-deletable while draft; submitted rows need the
 approved retention handling, not hard delete.

@@ -44,5 +44,6 @@ authorized routed cases. The Hub analytics tab is untouched.
 
 ## Rollback
 
-Unapplied migration: delete the files. UI: revert analytics section + tabs
+Pre-apply rollback was file deletion. Applied 2026-10-15: reverse the
+migration statements in dependency order. UI: revert analytics section + tabs
 (Tracker list/detail keep working).
