@@ -9,7 +9,7 @@ import { sourceBadge } from './pvWorkflow'
 import { adrValidation, normalizeChildRow } from './validation'
 import { ADR_FORM } from './formEngine'
 import { buildPdfHtml, buildE2bXml, openPrintView, downloadTextFile, exportFilename, buildAdrCsv, csvRowsFromCases, E2B_FORMAT_NOTE } from './exports'
-import { draftBackup, buildDraftSnapshot, isStale } from './draftBackup'
+import { draftBackup, buildDraftSnapshot, isStale, scopeFor, pruneExpired } from './draftBackup'
 import { ADR_MODULE_TYPES, REPORT_STATUS, REACTION_SEVERITY_LABELS, REACTION_OUTCOME_LABELS, ACTION_TAKEN_LABELS, DECHALLENGE_LABELS, RECHALLENGE_LABELS, CAUSALITY_LABELS, EVIDENCE_PHOTO_TYPE_LABELS, QUALIFICATION_LABELS, PATIENT_GENDER_LABELS, PATIENT_AGE_GROUP_LABELS } from './types'
 import { theme } from '../../styles/theme'
 
@@ -104,7 +104,8 @@ export default function AdrReportPage({ reportId }) {
       setNewSafetySignal(!!full.new_safety_signal)
       // Offer a local draft backup only when it is newer than the last server
       // save — otherwise the server copy is authoritative.
-      const draft = draftBackup.load(reportId)
+      pruneExpired()
+      const draft = draftBackup.load(reportId, scopeFor(full))
       if (draft && !isStale(draft, full.updated_at)) {
         setRestorableDraft(draft)
       }
@@ -196,7 +197,7 @@ export default function AdrReportPage({ reportId }) {
   useEffect(() => {
     if (!report || isLocked) return
     const timer = setTimeout(() => {
-      draftBackup.save(report.report_id, buildDraftSnapshot({
+      draftBackup.save(report.report_id, scopeFor(report), buildDraftSnapshot({
         report,
         products,
         meds,
@@ -217,14 +218,14 @@ export default function AdrReportPage({ reportId }) {
     setReactions(d.reactions || [])
     setReactionExpected(d.reactionExpected ?? null)
     setNewSafetySignal(!!d.newSafetySignal)
-    draftBackup.clear(report.report_id)
+    draftBackup.clear(report.report_id, scopeFor(report))
     setRestorableDraft(null)
     showToast('Draft restored', { type: 'success' })
   }
 
   function handleDiscardDraft() {
     if (!report) return
-    draftBackup.clear(report.report_id)
+    draftBackup.clear(report.report_id, scopeFor(report))
     setRestorableDraft(null)
     showToast('Local draft discarded', { type: 'info' })
   }
@@ -273,6 +274,9 @@ export default function AdrReportPage({ reportId }) {
 
       if (result && result.valid) {
         showToast(`${terminology.adrLabel} submitted`, { type: 'success' })
+        // Submitted reports are server-authoritative: drop the local backup
+        // so stale patient data never lingers on the device.
+        draftBackup.clear(report.report_id, scopeFor(report))
         await load()
       } else {
         // The server path returns plain strings with no anchor ids — they

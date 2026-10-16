@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense, lazy } from 'react'
 import { initSentry, Sentry } from './lib/sentry'
 import { authClient } from './lib/authClient'
 import { resolveAccountByEmail } from './services/supabase'
+import { clearAllDraftBackups } from './modules/adr/draftBackup'
 import AuthProvider from './providers/AuthProvider'
 
 // Lazy-loaded pages for code splitting
@@ -76,6 +77,9 @@ let loggingOut = false
     loggingOut = true
     setAuth(null)
     localStorage.removeItem('carehub_auth')
+    // ADR draft backups carry full patient/reporter rows: a shared device
+    // must not retain them after sign-out. Never throws (logout proceeds).
+    try { clearAllDraftBackups() } catch (e) {}
     try { await authClient.auth.signOut() } catch (e) {}
     loggingOut = false
     window.location.href = '/login'
@@ -89,6 +93,7 @@ let loggingOut = false
   const logoutAgent = async () => {
     setAgent(null)
     localStorage.removeItem('carehub_agent_auth')
+    try { clearAllDraftBackups() } catch (e) {}
     try { await authClient.auth.signOut() } catch (e) {}
     window.location.href = '/login'
   }

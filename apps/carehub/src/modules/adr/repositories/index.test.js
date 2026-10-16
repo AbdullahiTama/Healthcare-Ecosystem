@@ -86,6 +86,15 @@ describe('adrReportRepository', () => {
       })
     })
 
+    it('createReport records the business channel (never inferred later)', async () => {
+      const { repo, client } = build()
+      await repo.createReport(BIZ_A, { module_type: 'community_pharmacy', status: 'draft' })
+      expect(client.rows('adr_reports')[0]).toMatchObject({
+        report_source: 'business_facility',
+        origin_channel_detail: 'carehub-web',
+      })
+    })
+
     // Phase 2 Item 4: per-user visibility relies on created_by_user_id being
     // written at creation — a reporter who skips it would create a row they can
     // never read back under the reporter-self RLS policy.

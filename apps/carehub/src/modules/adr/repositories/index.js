@@ -65,7 +65,14 @@ export function createAdrReportRepository({ request = sbFetch, upload = sbUpload
     async createReport(businessId, reportData) {
       return request('adr_reports', {
         method: 'POST',
-        body: JSON.stringify({ ...reportData, business_id: businessId }),
+        // The channel is recorded at write time from the known submission
+        // path — never inferred later from profession or organisation name.
+        body: JSON.stringify({
+          ...reportData,
+          business_id: businessId,
+          report_source: reportData.report_source || 'business_facility',
+          origin_channel_detail: reportData.origin_channel_detail || 'carehub-web',
+        }),
         prefer: 'return=representation',
       })
     },
@@ -341,6 +348,9 @@ export function createAdrReportRepository({ request = sbFetch, upload = sbUpload
           follow_up_of_report_id: followUpOfReportId,
           created_by_user_id: createdByUserId || null,
           follow_up_version_number: followUpVersionNumber || null,
+          // Same recorded channel as the originating Hub flow (see createReport).
+          report_source: 'business_facility',
+          origin_channel_detail: 'carehub-web',
         }),
         prefer: 'return=representation',
       })
