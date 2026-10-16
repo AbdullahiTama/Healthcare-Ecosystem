@@ -1,7 +1,8 @@
-import { 
-  Dossier, Search, Clipboard, 
+import {
+  Dossier, Search, Clipboard,
   Pill, Stethoscope, Factory, Sparkles
 } from 'lucide-react'
+import { getPerms } from '../../lib/permissions'
 
 export const ADR_NAV_ITEMS = {
   [ 'community_pharmacy' ]: [
@@ -19,9 +20,21 @@ export const ADR_NAV_ITEMS = {
   ],
 }
 
+// Maps each ADR nav item onto the permissions.js nav key that gates the same
+// area in the real sidebar and route guards. The backend RLS remains the
+// authoritative access control; this only decides what is offered.
+const ITEM_PERMISSION = {
+  'adr-community-pharmacy': 'adr-reports',
+  'adr-hospital': 'adr-reports',
+  'adr-industry': 'adr-reports',
+  'adr-skincare': 'adr-reports',
+  'pv-tracker': 'pv-tracker',
+}
+
 export function getAdrNavItems(role, businessType) {
   const items = ADR_NAV_ITEMS[businessType] || ADR_NAV_ITEMS['community_pharmacy']
-  return items.filter(item => /* role check could go here */ true)
+  const nav = getPerms(role).nav || []
+  return items.filter(item => nav.includes(ITEM_PERMISSION[item.id] || 'adr-reports'))
 }
 
 export const ALL_NAV_ADR_DEFAULT = ADR_NAV_ITEMS['community_pharmacy'].map(item => [item.id, item.icon, item.label])
