@@ -328,6 +328,17 @@ export function createAdrReportRepository({ request = sbFetch, upload = sbUpload
       return Array.isArray(rows) ? rows[0] : rows
     },
 
+    // Cross-tenant party notifications (gap 7). The DEFINER RPC resolves
+    // recipients from verified relationships; direct client inserts would
+    // fail RLS outside the writer's own business. Best-effort at call sites.
+    async notifyAdrParty({ reportId, kind, title, body = null, link = null }) {
+      const rows = await request('rpc/notify_adr_party', {
+        method: 'POST',
+        body: JSON.stringify({ p_report_id: reportId, p_kind: kind, p_title: title, p_body: body, p_link: link }),
+      })
+      return Array.isArray(rows) ? rows[0] : rows
+    },
+
     // Admin-owned versioned deadline intervals (Phase 8). Reads are
     // authenticated-wide; the row carries its own unverified/verified notes.
     async getActiveDeadlineRule() {

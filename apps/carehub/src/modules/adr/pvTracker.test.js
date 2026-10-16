@@ -91,4 +91,16 @@ describe('adrReportRepository PV Tracker methods', () => {
       },
     ])
   })
+
+  it('notifyAdrParty posts the cross-tenant notify RPC', async () => {
+    const { calls, repo } = recordingRepo()
+    await repo.notifyAdrParty({ reportId: REPORT, kind: 'followup_version_created', title: 'T', body: null, link: '/x' })
+    expect(calls).toEqual([
+      {
+        path: 'rpc/notify_adr_party',
+        method: 'POST',
+        body: { p_report_id: REPORT, p_kind: 'followup_version_created', p_title: 'T', p_body: null, p_link: '/x' },
+      },
+    ])
+  })
 })

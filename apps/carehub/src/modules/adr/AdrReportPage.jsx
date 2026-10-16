@@ -33,17 +33,17 @@ const genderOptions = () => Object.entries(PATIENT_GENDER_LABELS).map(([value, l
 const ageGroupOptions = () => Object.entries(PATIENT_AGE_GROUP_LABELS).map(([value, label]) => ({ value, label }))
 
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return 'Not recorded'
   return new Date(d).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 function fmtDeadline(ms) {
-  if (!ms) return '—'
+  if (!ms) return 'Not set'
   return new Date(ms).toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
 function fmtDateTime(d) {
-  if (!d) return '—'
+  if (!d) return 'Not recorded'
   return new Date(d).toLocaleString('en-NG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
@@ -172,7 +172,7 @@ export default function AdrReportPage({ reportId }) {
         { type: 'success' }
       )
     } catch (e) {
-      showToast('Could not save the company selection — check the values and try again', { type: 'error' })
+      showToast('Could not save the company selection. Check the values and try again', { type: 'error' })
     }
   }
 
@@ -264,7 +264,7 @@ export default function AdrReportPage({ reportId }) {
         // Structured items carry a stable id that doubles as a DOM anchor —
         // the banner renders them as jump-to-field buttons.
         setMissing(client.missingFields || [])
-        showToast('Cannot submit — complete the highlighted fields', { type: 'warning' })
+        showToast('Cannot submit. Complete the highlighted fields', { type: 'warning' })
         setSubmitting(false)
         return
       }
@@ -277,13 +277,25 @@ export default function AdrReportPage({ reportId }) {
         // Submitted reports are server-authoritative: drop the local backup
         // so stale patient data never lingers on the device.
         draftBackup.clear(report.report_id, scopeFor(report))
+        // A submitted follow-up version is new safety information on the
+        // parent case: tell the routed companies (best-effort, never blocks).
+        // Fixed template with the report number only — never patient data.
+        if (report.follow_up_of_report_id) {
+          adrReportRepository.notifyAdrParty({
+            reportId: report.follow_up_of_report_id,
+            kind: 'followup_version_created',
+            title: `New follow-up submitted for ${report.report_number || 'a tracked case'}`,
+            body: null,
+            link: `/dashboard/reports/pv-tracker/${report.follow_up_of_report_id}`,
+          }).catch(() => {})
+        }
         await load()
       } else {
         // The server path returns plain strings with no anchor ids — they
         // render as text items in the same banner.
         const list = (result && result.missing) || ['Submission could not be completed']
         setMissing((Array.isArray(list) ? list : [list]).map(label => ({ label })))
-        showToast('Cannot submit — server rejected the report', { type: 'warning' })
+        showToast('Cannot submit. The server rejected the report', { type: 'warning' })
       }
     } catch (e) {
       showToast('Error submitting report', { type: 'error' })
@@ -469,7 +481,7 @@ export default function AdrReportPage({ reportId }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <h2 style={{ fontSize: 20, fontWeight: 900, color: theme.navy, margin: 0 }}>
-              {ADR_FORM.formatReportNumber(report.report_number)} — {ADR_FORM.getModuleTitle(moduleType)}
+              {ADR_FORM.formatReportNumber(report.report_number)} ({ADR_FORM.getModuleTitle(moduleType)})
             </h2>
             <Pill label={ADR_FORM.getStatusLabel(report.status)} type={statusToken === 'info' ? 'blue' : statusToken === 'success' ? 'green' : statusToken === 'warning' ? 'amber' : 'gray'} />
             <Pill label={sourceBadge(report.report_source).label} type={sourceBadge(report.report_source).tone === 'info' ? 'blue' : sourceBadge(report.report_source).tone === 'success' ? 'green' : sourceBadge(report.report_source).tone === 'warning' ? 'amber' : 'gray'} />
@@ -507,7 +519,7 @@ export default function AdrReportPage({ reportId }) {
 
       {missing.length > 0 && (
         <div role="alert" style={{ marginBottom: 20, padding: '14px 16px', borderRadius: theme.radius.md, background: theme.warningBg, border: `1px solid ${theme.warning}` }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, marginBottom: 6 }}>Cannot submit yet — tap a field to jump to it:</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, marginBottom: 6 }}>Complete these fields before you can submit. Select one to jump to it.</div>
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: theme.gray600, lineHeight: 1.7 }}>
             {missing.map((m, i) => {
               const label = typeof m === 'string' ? m : m.label
@@ -584,7 +596,7 @@ export default function AdrReportPage({ reportId }) {
         <div style={{ fontSize: 12, color: theme.textLight, lineHeight: 1.9 }}>
           <strong style={{ color: theme.navy }}>Report ID:</strong> {report.report_id}<br />
           {report.follow_up_of_report_id && (<><strong style={{ color: theme.navy }}>Follow-up of:</strong> {report.follow_up_of_report_id}<br /></>)}
-          <strong style={{ color: theme.navy }}>Submission deadline:</strong> {fmtDeadline(deadline)} · {deadlineStatus ? deadlineStatus.replace('_', ' ') : '—'}
+          <strong style={{ color: theme.navy }}>Submission deadline:</strong> {fmtDeadline(deadline)} · {deadlineStatus ? deadlineStatus.replace('_', ' ') : 'Unknown'}
         </div>
       </Card>
 
@@ -651,7 +663,7 @@ function AuditTrailSection({ events, loading }) {
               <div key={ev.event_id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0', borderBottom: '1px solid ' + theme.border }}>
                 <div style={{ fontSize: 18, lineHeight: 1.3, color: theme.textLight }}>•</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: theme.navy }}>{label} {detail ? <span style={{ color: theme.gray500, fontWeight: 500 }}>— {detail}</span> : null}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: theme.navy }}>{label} {detail ? <span style={{ color: theme.gray500, fontWeight: 500 }}>. {detail}</span> : null}</div>
                   <div style={{ fontSize: 12, color: theme.textLight, marginTop: 2 }}>
                     {ev.actor_name || 'System'} ({ev.actor_type || 'system'}) · {fmtDateTime(ev.created_at)}
                   </div>
@@ -688,7 +700,7 @@ function ReporterSection({ report, setField, disabled }) {
           label="Anonymous confirmed by facility"
           value={r.reporter_anonymous_confirmed_by_facility ? 'yes' : 'no'}
           onChange={v => setField('reporter_anonymous_confirmed_by_facility', v === 'yes')}
-          options={[{ value: 'yes', label: 'Yes — name may be blank' }, { value: 'no', label: 'No' }]}
+          options={[{ value: 'yes', label: 'Yes, name may be blank' }, { value: 'no', label: 'No' }]}
           disabled={disabled}
         />
       </div>
@@ -795,7 +807,7 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
       }
       setEditing(null)
     } catch (e) {
-      showToast('Could not save the suspect product — check its values and try again', { type: 'error' })
+      showToast('Could not save the suspect product. Check its values and try again', { type: 'error' })
     }
   }
   function set(field, value) { setDraft(prev => ({ ...prev, [field]: value })) }
@@ -961,7 +973,7 @@ function ReactionsSection({ reactions, onAdd, onUpdate, onRemove, disabled, term
       else await onUpdate(editing, row)
       setEditing(null)
     } catch (e) {
-      showToast('Could not save the reaction — check its values and try again', { type: 'error' })
+      showToast('Could not save the reaction. Check its values and try again', { type: 'error' })
     }
   }
   function set(field, value) { setDraft(prev => ({ ...prev, [field]: value })) }
@@ -1085,7 +1097,7 @@ function IndustrySection({ report, setField, newSafetySignal, setNewSafetySignal
       <div style={{ marginTop: 12 }}>
         <Toggle
           label="New safety signal"
-          desc="Industry only — forces the 3-day reporting deadline."
+          desc="Industry reports only. This applies the three day reporting deadline."
           value={newSafetySignal}
           onChange={setNewSafetySignal}
         />
@@ -1206,7 +1218,7 @@ function EvidenceSection({ photos, onUpload, onRemove, uploading, fileInputRef, 
       <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => e.target.files && e.target.files[0] && onUpload(e.target.files[0])} />
 
       {photos.length === 0 && (
-        <Empty icon={<Camera size={20} />} message="No evidence photos yet. You can add photos of the product or the effect — they are never required." />
+        <Empty icon={<Camera size={20} />} message="No evidence photos yet. You can add photos of the product or of the effect. Photos are never required." />
       )}
 
       {photos.length > 0 && (
@@ -1234,7 +1246,7 @@ function DeadlineBanner({ status, deadline, createdAt, industry, ruleVersion }) 
     overdue: { bg: theme.dangerBg, border: theme.danger, text: theme.danger, label: 'Overdue' },
     due_soon: { bg: theme.warningBg, border: theme.warning, text: theme.warning, label: 'Due soon' },
     on_track: { bg: theme.successBg, border: theme.success, text: theme.success, label: 'On track' },
-  }[status] || { bg: theme.gray50, border: theme.gray200, text: theme.gray600, label: status || '—' }
+  }[status] || { bg: theme.gray50, border: theme.gray200, text: theme.gray600, label: status || 'Unknown' }
 
   return (
     <div style={{ marginBottom: 20, padding: '14px 18px', borderRadius: theme.radius.md, background: palette.bg, border: `1px solid ${palette.border}` }}>
@@ -1248,12 +1260,12 @@ function DeadlineBanner({ status, deadline, createdAt, industry, ruleVersion }) 
       <div style={{ fontSize: 11.5, color: theme.gray600, marginTop: 6 }}>
         {industry
           ? status === 'overdue' ? 'Under 20% of the window remains (or the deadline has passed).'
-            : status === 'due_soon' ? '20–50% of the reporting window remains.'
+            : status === 'due_soon' ? '20% to 50% of the reporting window remains.'
             : 'Over 50% of the reporting window remains.'
           : 'The deadline is fixed by the seriousness and expected/unexpected status of the reaction.'}
       </div>
       <div style={{ fontSize: 11.5, color: theme.gray600, marginTop: 4 }}>
-        Rule: {ruleVersion || 'not recorded'} · Internal platform deadline — not a regulator-confirmed submission deadline, and no action here confirms NAFDAC receipt.
+        Rule: {ruleVersion || 'not recorded'} · Internal platform deadline. This is not a regulator confirmed submission deadline, and no action here confirms NAFDAC receipt.
       </div>
     </div>
   )
