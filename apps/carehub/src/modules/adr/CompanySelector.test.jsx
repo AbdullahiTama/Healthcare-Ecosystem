@@ -21,15 +21,17 @@ function render(el) {
 
 describe('describeRoute', () => {
   it('labels a verified route with the business name and status', () => {
+    // Copy normalized by the parallel UI-copy pass (parentheses over em-dash);
+    // meaning pinned here: name + status, no access implications.
     expect(describeRoute({ selection_kind: 'verified', status: 'routed' }, 'Acme Ltd'))
-      .toBe('Acme Ltd — routed')
+      .toBe('Acme Ltd (routed)')
   })
 
   it('labels unknown and candidate selections without implying access', () => {
     expect(describeRoute({ selection_kind: 'unknown', status: 'pending' }, null))
       .toBe('Unknown company')
     expect(describeRoute({ selection_kind: 'unverified_candidate', status: 'pending', candidate_name: 'Typed Co' }, null))
-      .toBe('Typed Co (unverified — no access granted)')
+      .toBe('Typed Co (unverified, no access granted)')
   })
 })
 
