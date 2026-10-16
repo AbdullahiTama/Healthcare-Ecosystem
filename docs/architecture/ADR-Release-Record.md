@@ -58,7 +58,17 @@ NOT represented as one anywhere). No compliance is claimed by building screens.
 - Live probes: anon denial everywhere; structured gate on real data; delete guards (rolled back, zero residue); calculator branches; grant/search_path/advisor review.
 - ESLint: **0 errors** on all touched files (CareHub sweep + safety-report module clean; remaining warnings pre-existing).
 - Builds: CareHub `npm run build` → **✓ built in 4m 2s**; CareFind `npm run build` → **✓ built in 4m 36s** (both include all Phase 2–8 UI; chunk warnings only).
-- `SafetyReport.test.jsx` (9 component tests): environment-blocked locally, **CI-bound** (jsdom suites cannot complete on this box; proven pre-existing).
+- `SafetyReport.test.jsx` (component tests incl. 2 new ReporterStep anon-copy tests): re-attempted twice post-remediation — the local jsdom environment hung both times (second run: 98 min wall, 0 ms test execution, environment-level crash). Pre-existing, documented box condition; **CI-bound** — the 2 new copy assertions will first run in CI, not locally. The underlying reporter rules (contact required even when anonymous) remain pinned locally by `validation.test.js` 17/17.
+- Builds post-remediation: CareHub `npm run build` → **✓ built in 3m 27s**; CareFind `npm run build` → **✓ built in 4m 29s** (both include all Batch A/B changes; chunk-size warnings only, same as Phase 10 baseline).
+
+## 6b. Completion remediation evidence (2026-10-16, Batch A/B/C)
+
+- CareHub ADR + permissions: **14 files / 219 tests PASS** (`npx vitest run src/modules/adr src/lib/__tests__/permissions.test.js`), incl. new CompanySelector (6), AdrNav (4), draftBackup contract (15), source payload assertions — all green against the parallel copy-pass edits.
+- CareFind safety fast suites: **42/42 PASS** (validation 17 + repository 8 + separation 3 + PGlite adversarial 14).
+- PGlite adversarial (`routingAdversarial.db.test.js`): 14/14 incl. public second-company rejection, idempotent retry without duplicate events, Hub multi-company preserved, cross-tenant denial with zero residue, candidate-no-grant, unverified-org blindness, verify-refuses-unvalidated, owner+manager notify routing, dedupe suppression, public no-recipient reason, deadline-kind block, stranger denial. New migration files replayed verbatim in-suite.
+- `npm audit --audit-level=high`: CareFind 10 findings (5 moderate / 2 high / 3 critical), CareHub 9 (5 / 1 / 3) — unchanged from the `d7d2495` baseline; every remaining item needs a breaking major (react-router 7, vitest 5, vite 8) or has no fix (xlsx). No forced upgrades run.
+- ESLint: **0 errors** on all Batch A/B touched files (remaining warnings pre-existing or matching existing empty-catch idiom).
+- New migration files (UNAPPLIED, by explicit constraint): `carehub_20261111_adr_public_single_company.sql`, `carehub_20261112_adr_notify_party.sql` (+ mirrors, hash-verified identical).
 
 ## 7. Security implications and risks
 
