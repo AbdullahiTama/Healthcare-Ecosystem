@@ -110,7 +110,20 @@ let loggingOut = false
     let cancelled = false
     authClient.auth.getSession().then(async ({ data }) => {
       const session = data?.session
-      if (!session || cancelled) return
+      if (cancelled) return
+      if (!session) {
+        // A cached business identity with no Supabase session can only be an
+        // expired one: Login.jsx routes every sign-in through
+        // signInWithPassword and bails without a session, and legacy accounts
+        // were backfilled to confirmed auth users — so "no session" is never a
+        // legitimate state. Leaving it cached is what let the dashboard stay
+        // reachable while every sbFetch fell back to the anon key, so RLS
+        // denied each read with "permission denied for function
+        // can_access_adr_report_row". logout() clears the cache (plus the ADR
+        // draft backups) and suppresses the SIGNED_OUT bounce via loggingOut.
+        if (auth) await logout()
+        return
+      }
       const account = await resolveAccountByEmail(session.user.email)
       if (!account || cancelled) return
       if (account.biz.is_platform_admin) {

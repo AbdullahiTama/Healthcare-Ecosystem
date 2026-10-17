@@ -55,7 +55,13 @@ export async function sbFetch(path, options = {}) {
     let detail = text
     try { detail = JSON.parse(text).message || text } catch (e) {}
     console.error('[sbFetch] Error response:', res.status, detail)
-    if (res.status === 403 && isAnon) {
+    // PostgREST reports an anon request denied by an authenticated RLS helper
+    // as 401, not 403 (verified live against can_access_adr_report_row: code
+    // 42501, status 401), so match both — otherwise the caller surfaces a raw
+    // database error instead of the sign-in prompt. isAnon is required: with a
+    // real session this is a genuine permission problem, not an expired
+    // sign-in, and it must keep its original detail.
+    if ((res.status === 401 || res.status === 403) && isAnon) {
       authClient.auth.signOut().catch(() => {})
       throw new Error('Session expired. Please log in again.')
     }
@@ -202,7 +208,7 @@ export function summarizeBulkApproval(outcomes, preSkipped = 0, failureMessages 
   }
   const note = notes.join('; ')
   let message = ''
-  if (approved > 0) message = `Approved ${approved} businesses — undo?` + (note ? ` (${note})` : '')
+  if (approved > 0) message = `Approved ${approved} businesses. Undo?` + (note ? ` (${note})` : '')
   else message = note
   return { approved, skippedUnverified, failed, message }
 }
