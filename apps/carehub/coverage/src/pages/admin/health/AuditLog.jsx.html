@@ -1,0 +1,553 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/pages/admin/health/AuditLog.jsx</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../../prettify.css" />
+    <link rel="stylesheet" href="../../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../../index.html">All files</a> / <a href="index.html">src/pages/admin/health</a> AuditLog.jsx</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/133</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/133</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >import { useState, useEffect, useCallback } from 'react'</span></span></span>
+import { Search, RefreshCw, Undo2, Download, Shield, Clock } from 'lucide-react'
+import { Card, GhostBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../../components/ui'
+import { createHealthRepository } from '../../../modules/health/repositories'
+&nbsp;
+<span class="cstat-no" title="statement not covered" >function fmtDate(s) {</span>
+<span class="cstat-no" title="statement not covered" >  if (!s) return 'Not set'</span>
+<span class="cstat-no" title="statement not covered" >  try { return new Date(s).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }) } catch { return s }</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export default function AuditLog({ repository = createHealthRepository() }) {</span>
+<span class="cstat-no" title="statement not covered" >  const [logs, setLogs] = useState(null)</span>
+<span class="cstat-no" title="statement not covered" >  const [exportsLog, setExportsLog] = useState([])</span>
+<span class="cstat-no" title="statement not covered" >  const [loading, setLoading] = useState(true)</span>
+<span class="cstat-no" title="statement not covered" >  const [error, setError] = useState('')</span>
+<span class="cstat-no" title="statement not covered" >  const [filterAction, setFilterAction] = useState('')</span>
+<span class="cstat-no" title="statement not covered" >  const [filterTable, setFilterTable] = useState('')</span>
+<span class="cstat-no" title="statement not covered" >  const [search, setSearch] = useState('')</span>
+<span class="cstat-no" title="statement not covered" >  const [page, setPage] = useState(1)</span>
+<span class="cstat-no" title="statement not covered" >  const pageSize = 20</span>
+<span class="cstat-no" title="statement not covered" >  const { msg, type, show: showToast } = useToast()</span>
+<span class="cstat-no" title="statement not covered" >  const [undoBusy, setUndoBusy] = useState(null)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const load = useCallback(async () =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    setLoading(true); setError('')</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      const [a, e] = await Promise.all([</span>
+<span class="cstat-no" title="statement not covered" >        repository.getAuditLogs({ limit: 100, action: filterAction || undefined, target_table: filterTable || undefined }).catch(() =&gt; []),</span>
+<span class="cstat-no" title="statement not covered" >        repository.getExportLogs({ limit: 20 }).catch(() =&gt; []),</span>
+<span class="cstat-no" title="statement not covered" >      ])</span>
+<span class="cstat-no" title="statement not covered" >      setLogs(Array.isArray(a) ? a : [])</span>
+<span class="cstat-no" title="statement not covered" >      setExportsLog(Array.isArray(e) ? e : [])</span>
+<span class="cstat-no" title="statement not covered" >    } catch (err) { setError(err.message) }</span>
+<span class="cstat-no" title="statement not covered" >    setLoading(false)</span>
+<span class="cstat-no" title="statement not covered" >  }, [repository, filterAction, filterTable])</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  useEffect(() =&gt; { load() }, [load])</span>
+<span class="cstat-no" title="statement not covered" >  useEffect(() =&gt; { setPage(1) }, [filterAction, filterTable, search])</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const filtered = (() =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    const list = Array.isArray(logs) ? logs : []</span>
+<span class="cstat-no" title="statement not covered" >    if (!search.trim()) return list</span>
+<span class="cstat-no" title="statement not covered" >    const q = search.trim().toLowerCase()</span>
+<span class="cstat-no" title="statement not covered" >    return list.filter(l =&gt; `${l.action} ${l.target_table} ${l.target_id} ${l.ip}`.toLowerCase().includes(q))</span>
+<span class="cstat-no" title="statement not covered" >  })()</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))</span>
+<span class="cstat-no" title="statement not covered" >  const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const handleUndo = async (row) =&gt; {</span>
+    // Undo is audit-only for now: marks intention, does not auto-revert business row
+    // Real undo for businesses already handled via BusinessesPanel optimistic + toast
+<span class="cstat-no" title="statement not covered" >    if (undoBusy) return</span>
+<span class="cstat-no" title="statement not covered" >    setUndoBusy(row.id)</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      await repository.logAudit({ action: `undo_${row.action}`, target_table: row.target_table, target_id: row.target_id, before: row.after, after: row.before, actor_admin_id: row.actor_admin_id }).catch(() =&gt; {})</span>
+<span class="cstat-no" title="statement not covered" >      showToast('Undo logged — revert business row via Businesses if needed', { type: 'info' })</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) { showToast(e.message, { type: 'error' }) }</span>
+<span class="cstat-no" title="statement not covered" >    setUndoBusy(null)</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  if (loading &amp;&amp; logs == null) return &lt;Loading /&gt;</span>
+<span class="cstat-no" title="statement not covered" >  if (error) return &lt;ErrorState message={error} onRetry={load} /&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  return (</span>
+<span class="cstat-no" title="statement not covered" >    &lt;div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;Card style={{ padding: 12, background: 'var(--panel)', border: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', flex: 1 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ position: 'relative', flex: '1 1 200px', maxWidth: 320 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;input value={search} onChange={e =&gt; setSearch(e.target.value)} placeholder="Search action / table / IP" aria-label="Search audit log" style={{ width: '100%', padding: '9px 12px 9px 30px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', fontSize: 13 }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;select value={filterAction} onChange={e =&gt; setFilterAction(e.target.value)} aria-label="Filter by action" style={{ padding: '9px 10px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', fontSize: 13 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value=""&gt;All actions&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value="create_incident"&gt;create_incident&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value="dismiss_incident"&gt;dismiss_incident&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value="suspend_business"&gt;suspend_business&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value="export"&gt;export&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value="update_feature_flag"&gt;update_feature_flag&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/select&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;select value={filterTable} onChange={e =&gt; setFilterTable(e.target.value)} aria-label="Filter by table" style={{ padding: '9px 10px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', fontSize: 13 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value=""&gt;All tables&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value="admin_incidents"&gt;admin_incidents&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value="businesses"&gt;businesses&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value="feature_flags"&gt;feature_flags&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value="export_logs"&gt;export_logs&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/select&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;span style={{ fontSize: 12, color: 'var(--muted)' }}&gt;{filtered.length} result(s) • page {page}/{totalPages}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;GhostBtn onClick={load}&gt;&lt;RefreshCw size={13} style={{ marginRight: 6 }} /&gt;Refresh&lt;/GhostBtn&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/Card&gt;</span>
+&nbsp;
+      {/* Export governance strip */}
+<span class="cstat-no" title="statement not covered" >      &lt;Card style={{ padding: 12, background: 'var(--panel)', border: '1px solid var(--border)' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ fontWeight: 800, fontSize: 12, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}&gt;&lt;Download size={13} /&gt; Recent exports (governed — reason + watermark required)&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        {exportsLog.length === 0 ? (</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ fontSize: 12, color: 'var(--muted)' }}&gt;No exports yet. Use Businesses “Export filtered” — now asks for reason and watermarks CSV.&lt;/div&gt;</span>
+        ) : (
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 160, overflowY: 'auto' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            {exportsLog.slice(0, 5).map(ex =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div key={ex.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '6px 8px', background: 'var(--hairline)', borderRadius: 8 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;span style={{ color: 'var(--fg)' }}&gt;{ex.export_type} • {ex.row_count} rows • reason: {ex.reason} • {fmtDate(ex.created_at)}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;span style={{ color: 'var(--muted)', fontFamily: 'var(--font-mono)', fontSize: 11 }}&gt;{ex.watermark?.slice(0, 8)}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            ))}</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+        )}
+<span class="cstat-no" title="statement not covered" >      &lt;/Card&gt;</span>
+&nbsp;
+      {/* Audit feed */}
+<span class="cstat-no" title="statement not covered" >      {filtered.length === 0 ? (</span>
+<span class="cstat-no" title="statement not covered" >        &lt;Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}&gt;&lt;Empty icon={&lt;Shield size={28} /&gt;} message={search || filterAction ? 'No audit entries match filters.' : 'No actions yet — admin writes appear here with 90d retention.'} /&gt;&lt;/Card&gt;</span>
+      ) : (
+<span class="cstat-no" title="statement not covered" >        &lt;&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Card style={{ padding: 0, overflow: 'hidden', background: 'var(--panel)', border: '1px solid var(--border)' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ overflowX: 'auto' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;thead style={{ background: 'var(--panel)', borderBottom: '1px solid var(--border)' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;tr style={{ height: 36 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;th style={{ padding: '0 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}&gt;Time&lt;/th&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;th style={{ padding: '0 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}&gt;Actor&lt;/th&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;th style={{ padding: '0 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}&gt;Action&lt;/th&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;th style={{ padding: '0 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}&gt;Target&lt;/th&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;th style={{ padding: '0 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}&gt;IP&lt;/th&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;th style={{ padding: '0 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' }}&gt;Undo&lt;/th&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;/tr&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/thead&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;tbody&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  {pageRows.map(row =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;tr key={row.id} style={{ height: 36, borderBottom: '1px solid var(--hairline)' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;td style={{ padding: '0 12px', whiteSpace: 'nowrap', color: 'var(--muted)', fontSize: 12 }}&gt;&lt;Clock size={11} style={{ marginRight: 4 }} /&gt;{fmtDate(row.created_at)}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;td style={{ padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg)' }}&gt;{(row.actor_admin_id || 'Not set').slice(0, 8)}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;td style={{ padding: '0 12px' }}&gt;&lt;span style={{ padding: '3px 7px', borderRadius: 6, background: 'var(--hairline)', color: 'var(--fg)', fontWeight: 700, fontSize: 11 }}&gt;{row.action}&lt;/span&gt;&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;td style={{ padding: '0 12px', fontSize: 12, color: 'var(--fg)' }}&gt;{row.target_table}&lt;span style={{ color: 'var(--muted)' }}&gt;/{(row.target_id || '').slice(0, 8)}&lt;/span&gt;&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;td style={{ padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)' }}&gt;{row.ip || 'Not set'}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;td style={{ padding: '0 12px', textAlign: 'right' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        &lt;button disabled={!!undoBusy} onClick={() =&gt; handleUndo(row)} style={{ padding: '5px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', fontWeight: 700, fontSize: 11, cursor: undoBusy ? 'not-allowed' : 'pointer' }}&gt;&lt;Undo2 size={11} style={{ marginRight: 4 }} /&gt;Log undo&lt;/button&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;/tr&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  ))}</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/tbody&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/table&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/Card&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;GhostBtn onClick={() =&gt; setPage(p =&gt; Math.max(1, p - 1))} disabled={page &lt;= 1}&gt;Prev&lt;/GhostBtn&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;span style={{ fontSize: 12, color: 'var(--muted)' }}&gt;Page {page} of {totalPages}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;GhostBtn onClick={() =&gt; setPage(p =&gt; Math.min(totalPages, p + 1))} disabled={page &gt;= totalPages}&gt;Next&lt;/GhostBtn&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/&gt;</span>
+      )}
+<span class="cstat-no" title="statement not covered" >      &lt;div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}&gt;Append-only • 90d retention • every write audited • watermark on exports&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;Toast msg={msg} type={type} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;/div&gt;</span>
+  )
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-10-16T15:21:14.166Z
+            </div>
+        <script src="../../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../../sorter.js"></script>
+        <script src="../../../../block-navigation.js"></script>
+    </body>
+</html>
+    

@@ -56,18 +56,21 @@ export const GENDERS = [
 ]
 
 export const AGE_GROUPS = [
-  { value: 'neonate', label: 'Newborn (0–28 days)' },
+  { value: 'neonate', label: 'Newborn (0 to 28 days)' },
   { value: 'infant', label: 'Infant (under 1 year)' },
-  { value: 'child', label: 'Child (1–11 years)' },
-  { value: 'adolescent', label: 'Adolescent (12–17 years)' },
-  { value: 'adult', label: 'Adult (18–64 years)' },
-  { value: 'elderly', label: 'Elderly (65+ years)' },
+  { value: 'child', label: 'Child (1 to 11 years)' },
+  { value: 'adolescent', label: 'Adolescent (12 to 17 years)' },
+  { value: 'adult', label: 'Adult (18 to 64 years)' },
+  { value: 'elderly', label: 'Elderly (65 years and above)' },
 ]
 
+// The value is what gets recorded on the case. The label is only what the
+// reporter reads, so this wording can be plain English without touching the
+// stored severity.
 export const SEVERITIES = [
-  { value: 'mild', label: 'Mild — did not interfere with daily activities' },
-  { value: 'moderate', label: 'Moderate — interfered with daily activities' },
-  { value: 'severe', label: 'Severe — prevented daily activities' },
+  { value: 'mild', label: 'Mild. It did not interfere with daily activities.' },
+  { value: 'moderate', label: 'Moderate. It interfered with daily activities.' },
+  { value: 'severe', label: 'Severe. It prevented daily activities.' },
 ]
 
 export const OUTCOMES = [

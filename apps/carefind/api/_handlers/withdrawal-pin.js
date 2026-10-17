@@ -26,7 +26,7 @@ function subPath(req) {
 // already sitting in the user's inbox. That is precisely how a correct code turned into
 // "Incorrect code": the next submit could only answer `otp_superseded`.
 async function draftActiveResponse(supabase, userId) {
-  const base = { error: 'A code is already on its way — check your email.', code: 'draft_active' }
+  const base = { error: 'A code is already on its way. Check your email.', code: 'draft_active' }
   try {
     const draft = describeWithdrawalDraft(await getWithdrawalDraft(supabase, { userId }))
     if (!draft) return { status: 409, body: base }

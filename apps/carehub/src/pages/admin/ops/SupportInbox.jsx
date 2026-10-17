@@ -150,7 +150,7 @@ export default function SupportInbox({ repository = createOpsRepository() }) {
                   <tr key={t.id} onClick={() => openTicket(t)} style={{ height: 40, borderBottom: '1px solid var(--hairline)', cursor: 'pointer', background: selected?.id === t.id ? 'var(--teal-mist)' : 'transparent' }}>
                     <td style={{ padding: '0 12px', fontWeight: 700, color: 'var(--fg)' }}>{t.subject} <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)' }}>• {t.business_id?.slice(0, 6) || 'no biz'}</span></td>
                     <td style={{ padding: '0 12px' }}><span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontWeight: 700, fontSize: 11, color: t.priority === 'urgent' ? 'var(--red)' : t.priority === 'high' ? 'var(--amber)' : 'var(--muted)' }}><PriorityDot p={t.priority} /> {t.priority}</span></td>
-                    <td style={{ padding: '0 12px', fontSize: 11, color: slaTone(t.sla_due_at), fontWeight: 700 }}><Clock size={11} style={{ marginRight: 4 }} />{t.sla_due_at ? new Date(t.sla_due_at).toLocaleString() : '—'}</td>
+                    <td style={{ padding: '0 12px', fontSize: 11, color: slaTone(t.sla_due_at), fontWeight: 700 }}><Clock size={11} style={{ marginRight: 4 }} />{t.sla_due_at ? new Date(t.sla_due_at).toLocaleString() : 'Not set'}</td>
                     <td style={{ padding: '0 12px' }}><span style={{ padding: '3px 7px', borderRadius: 6, background: 'var(--hairline)', color: 'var(--fg)', fontWeight: 700, fontSize: 11 }}>{t.status}</span></td>
                     <td style={{ padding: '0 12px', textAlign: 'right' }} onClick={e => e.stopPropagation()}><GhostBtn onClick={() => openTicket(t)}>Open</GhostBtn></td>
                   </tr>
@@ -173,7 +173,7 @@ export default function SupportInbox({ repository = createOpsRepository() }) {
             <TealBtn disabled={busy} onClick={handleResolve}><CheckCircle size={12} style={{ marginRight: 6 }} />Resolve</TealBtn>
           </div>
           <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--fg)', marginBottom: 6 }}>Messages</div>
-          {messages.length === 0 ? <div style={{ fontSize: 12, color: 'var(--muted)', padding: 8, border: '1px dashed var(--border)', borderRadius: 8, textAlign: 'center' }}>No messages — add one.</div> : (
+          {messages.length === 0 ? <div style={{ fontSize: 12, color: 'var(--muted)', padding: 8, border: '1px dashed var(--border)', borderRadius: 8, textAlign: 'center' }}>No messages yet. Add one.</div> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto', marginBottom: 10 }}>
               {messages.map(m => (
                 <div key={m.id} style={{ padding: '8px 10px', background: 'var(--hairline)', borderRadius: 8, fontSize: 12, color: 'var(--fg)' }}>{m.body} <span style={{ fontSize: 11, color: 'var(--muted)' }}>• {new Date(m.created_at).toLocaleString()}</span></div>

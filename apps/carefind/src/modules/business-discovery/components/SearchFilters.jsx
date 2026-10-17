@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import { theme } from '../../../styles/theme';
 import { useCategories } from '../../business-directory/hooks';
 
@@ -165,32 +166,52 @@ export default function SearchFilters({ filters, onFilterChange, onClearLocation
             {filters.category && (
               <span style={styles.filterTag}>
                 {categories.find((c) => c.id === filters.category)?.name || 'Category'}
-                <button onClick={() => handleCategoryChange(null)} style={styles.tagRemove}>
-                  Ã—
+                <button
+                  type="button"
+                  onClick={() => handleCategoryChange(null)}
+                  aria-label={`Remove category filter ${categories.find((c) => c.id === filters.category)?.name || ''}`.trim()}
+                  style={styles.tagRemove}
+                >
+                  <X size={12} aria-hidden="true" />
                 </button>
               </span>
             )}
             {filters.state && (
               <span style={styles.filterTag}>
                 {filters.state}
-                <button onClick={() => handleStateChange(null)} style={styles.tagRemove}>
-                  Ã—
+                <button
+                  type="button"
+                  onClick={() => handleStateChange(null)}
+                  aria-label={`Remove state filter ${filters.state}`}
+                  style={styles.tagRemove}
+                >
+                  <X size={12} aria-hidden="true" />
                 </button>
               </span>
             )}
             {filters.lga && (
               <span style={styles.filterTag}>
                 {filters.lga}
-                <button onClick={() => handleLgaChange(null)} style={styles.tagRemove}>
-                  Ã—
+                <button
+                  type="button"
+                  onClick={() => handleLgaChange(null)}
+                  aria-label={`Remove area filter ${filters.lga}`}
+                  style={styles.tagRemove}
+                >
+                  <X size={12} aria-hidden="true" />
                 </button>
               </span>
             )}
             {hasLocation && (
               <span style={styles.filterTag}>
                 Near me ({filters.radius} km)
-                <button onClick={onClearLocation} style={styles.tagRemove}>
-                  Ã—
+                <button
+                  type="button"
+                  onClick={onClearLocation}
+                  aria-label="Turn off location search"
+                  style={styles.tagRemove}
+                >
+                  <X size={12} aria-hidden="true" />
                 </button>
               </span>
             )}
@@ -345,15 +366,16 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '14px',
-    height: '14px',
+    width: '24px',
+    height: '24px',
+    marginRight: '-4px',
     border: 'none',
-    borderRadius: '50%',
-    background: 'rgba(0,0,0,0.1)',
+    borderRadius: theme.radius.full,
+    background: 'rgba(14,111,90,0.10)',
     color: 'inherit',
-    fontSize: '12px',
     cursor: 'pointer',
     padding: 0,
     lineHeight: 1,
+    flexShrink: 0,
   },
 };

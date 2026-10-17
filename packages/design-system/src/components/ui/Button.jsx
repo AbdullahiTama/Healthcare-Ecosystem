@@ -10,6 +10,25 @@ import { theme } from '../../theme'
 const SPIN_KEYFRAMES = `
 @keyframes ds-spin {
   to { transform: rotate(360deg); }
+}
+/* Focus ring. Buttons render inline styles, so the one thing inline styles
+   cannot express — a ring drawn OUTSIDE the box so it is not clipped, and only
+   for keyboard users — lives here. Injected once, never per instance. */
+.ds-btn:focus { outline: none; }
+.ds-btn:focus-visible {
+  outline: 2px solid ${theme.tealDeep};
+  outline-offset: 2px;
+}
+.ds-btn[disabled] { cursor: not-allowed; }
+.ds-btn:not([disabled]):hover {
+  background: var(--ds-btn-bg-hover);
+  color: var(--ds-btn-color-hover);
+  border-color: var(--ds-btn-border-hover);
+}
+.ds-btn:not([disabled]):active { transform: scale(0.985); }
+@media (prefers-reduced-motion: reduce) {
+  .ds-btn { transition: none !important; }
+  .ds-btn:not([disabled]):active { transform: none !important; }
 }`
 if (typeof document !== 'undefined' && !document.getElementById('ds-button-keyframes')) {
   const style = document.createElement('style')
@@ -59,15 +78,20 @@ const VARIANT_STYLES = {
 }
 
 const SIZE_STYLES = {
-  sm: { minHeight: 40, padding: '8px 16px', fontSize: 12 },
-  md: { minHeight: 44, padding: '10px 20px', fontSize: 13 },
-  lg: { minHeight: 48, padding: '12px 24px', fontSize: 14 },
+  sm: { minHeight: 40, padding: '8px 16px', fontSize: 12, radius: theme.radius.sm },
+  md: { minHeight: 44, padding: '10px 20px', fontSize: 13, radius: theme.radius.sm },
+  lg: { minHeight: 48, padding: '12px 24px', fontSize: 14, radius: theme.radius.md },
 }
 
 /**
  * Unified Button component — one button for the whole ecosystem.
  * Variants: primary, secondary, ghost, danger, outline.
- * Sizes: sm (40px), md (44px), lg (48px).
+ * Sizes: sm (40px), md (44px), lg (48px). Heights stay at the documented
+ * minimum touch target so a control never shrinks below it on a phone or
+ * tablet at the counter. Density comes from the tighter radius: sm and md now
+ * sit at 6px rather than 10px, which is what made a 44px control read padded.
+ * Keyboard focus gets a ring drawn outside the box; hover and press feedback
+ * come from the injected rule at the top of this file, not inline handlers.
  * Supports left/right icons, loading state, full width.
  */
 export const Button = forwardRef(function Button(
@@ -96,10 +120,8 @@ export const Button = forwardRef(function Button(
   const baseStyle = {
     minHeight: s.minHeight,
     padding: s.padding,
-    borderRadius: theme.radius.md,
+    borderRadius: s.radius,
     border: v.border,
-    background: disabled ? theme.gray200 : v.background,
-    color: disabled ? theme.gray400 : v.color,
     cursor: disabled || loading ? 'not-allowed' : 'pointer',
     fontWeight: 700,
     fontSize: s.fontSize,
@@ -110,8 +132,23 @@ export const Button = forwardRef(function Button(
     gap: 8,
     width: fullWidth ? '100%' : 'auto',
     boxSizing: 'border-box',
-    transition: `background ${theme.motion.fast} ${theme.motion.easeOut}, border-color ${theme.motion.fast} ${theme.motion.easeOut}, color ${theme.motion.fast} ${theme.motion.easeOut}, box-shadow ${theme.motion.fast} ${theme.motion.easeOut}, transform ${theme.motion.fast} ${theme.motion.easeOut}`,
-    ...style,
+    transition: `background ${theme.motion.fast} ${theme.motion.easeOut}, border-color ${theme.motion.fast} ${theme.motion.easeOut}, color ${theme.motion.fast} ${theme.motion.easeOut}, transform ${theme.motion.instant}`,
+  }
+
+  const inert = disabled || loading
+
+  // The base colours stay as resolved literals so the component's contract is
+  // readable from its style object (and assertable). Only the interaction
+  // states live in CSS, because the old onMouseEnter/onMouseLeave handlers
+  // wrote inline styles: a hover colour survived a re-render, and nothing
+  // happened at all for keyboard or touch activation. Passing the hover values
+  // in as custom properties lets one injected rule serve every variant.
+  const variantStyle = {
+    '--ds-btn-bg-hover': disabled ? theme.gray200 : v.hoverBackground,
+    '--ds-btn-color-hover': disabled ? theme.gray400 : v.hoverColor,
+    '--ds-btn-border-hover': v.hoverBorder || 'transparent',
+    background: disabled ? theme.gray200 : v.background,
+    color: disabled ? theme.gray400 : v.color,
   }
 
   return (
@@ -119,21 +156,10 @@ export const Button = forwardRef(function Button(
       ref={ref || innerRef}
       type={type}
       onClick={onClick}
-      disabled={disabled || loading}
-      className={className}
-      style={baseStyle}
-      onMouseEnter={disabled || loading ? undefined : (e) => {
-        e.currentTarget.style.background = v.hoverBackground
-        e.currentTarget.style.color = v.hoverColor
-        if (v.hoverBorder) e.currentTarget.style.borderColor = v.hoverBorder
-      }}
-      onMouseLeave={disabled || loading ? undefined : (e) => {
-        e.currentTarget.style.background = v.background
-        e.currentTarget.style.color = v.color
-        if (v.border) e.currentTarget.style.borderColor = v.border
-      }}
-      onMouseDown={disabled || loading ? undefined : (e) => { e.currentTarget.style.transform = 'scale(0.97)' }}
-      onMouseUp={disabled || loading ? undefined : (e) => { e.currentTarget.style.transform = 'scale(1)' }}
+      disabled={inert}
+      className={`ds-btn${className ? ` ${className}` : ''}`}
+      style={{ ...baseStyle, ...variantStyle, ...style }}
+      data-loading={loading ? 'true' : undefined}
       {...rest}
     >
       {loading && (

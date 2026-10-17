@@ -261,7 +261,7 @@ describe('BusinessesHub search + pagination', () => {
     await waitFor(() => expect(screen.getByTestId('businesses-hub')).toBeInTheDocument())
     // first page shows 20
     expect(screen.getAllByTestId('business-row')).toHaveLength(20)
-    expect(screen.getByTestId('page-info').textContent).toMatch(/1–20 of 45/)
+    expect(screen.getByTestId('page-info').textContent).toMatch(/1 to 20 of 45/)
     expect(screen.getByTestId('page-info').textContent).toMatch(/Page 1 of 3/)
 
     // search filters
@@ -271,7 +271,7 @@ describe('BusinessesHub search + pagination', () => {
     await waitFor(() => expect(screen.getAllByTestId('business-row')).toHaveLength(1), { timeout: 4000 })
     expect(screen.getByText('Acme Special')).toBeInTheDocument()
     // pagination should reflect filtered count
-    await waitFor(() => expect(screen.getByTestId('page-info').textContent).toMatch(/1–1 of 1/))
+    await waitFor(() => expect(screen.getByTestId('page-info').textContent).toMatch(/1 to 1 of 1/))
 
     // next page
     // clear search first
@@ -280,12 +280,12 @@ describe('BusinessesHub search + pagination', () => {
     const nextBtn = screen.getByTestId('next-page')
     expect(nextBtn).not.toBeDisabled()
     fireEvent.click(nextBtn)
-    await waitFor(() => expect(screen.getByTestId('page-info').textContent).toMatch(/21–40 of 45/))
+    await waitFor(() => expect(screen.getByTestId('page-info').textContent).toMatch(/21 to 40 of 45/))
     expect(screen.getAllByTestId('business-row')).toHaveLength(20)
 
     const prevBtn = screen.getByTestId('prev-page')
     fireEvent.click(prevBtn)
-    await waitFor(() => expect(screen.getByTestId('page-info').textContent).toMatch(/1–20 of 45/))
+    await waitFor(() => expect(screen.getByTestId('page-info').textContent).toMatch(/1 to 20 of 45/))
   })
 
   it('no crash on empty search result', async () => {
@@ -309,7 +309,7 @@ describe('BusinessesHub search + pagination', () => {
     expect(mockSupabase.from).toHaveBeenCalledWith('businesses')
     // Check that pagination respected PAGE_SIZE (20)
     await waitFor(() => expect(screen.getAllByTestId('business-row')).toHaveLength(20))
-    expect(screen.getByTestId('page-info').textContent).toMatch(/1–20 of 25/)
+    expect(screen.getByTestId('page-info').textContent).toMatch(/1 to 20 of 25/)
   })
 })
 
@@ -348,8 +348,9 @@ describe('BusinessesHub detail', () => {
     expect(within(screen.getByTestId('detail-field-status')).getByText('active')).toBeInTheDocument()
     // date onboarded field should contain 2026
     expect(screen.getByTestId('detail-field-date-onboarded').textContent).toMatch(/2026/)
-    // ecommerce_enabled
-    expect(screen.getByTestId('detail-field-e-commerce-enabled').textContent).toMatch(/Yes/)
+    // The store capability is labelled "Online store enabled"; the test id is
+    // derived from that label.
+    expect(screen.getByTestId('detail-field-online-store-enabled').textContent).toMatch(/Yes/)
   })
 
   it('shows 404 if deleted', async () => {
@@ -393,8 +394,9 @@ describe('BusinessesHub Suspend', () => {
     fireEvent.click(suspendBtn)
     // ConfirmDialog should appear with correct copy
     await waitFor(() => expect(screen.getByText('Suspend business?')).toBeInTheDocument())
-    expect(screen.getByText(/Suspended — temporary, data retained/)).toBeInTheDocument()
-    expect(screen.getByText(/dashboard access/)).toBeInTheDocument()
+    expect(screen.getByText(/Suspension is temporary/)).toBeInTheDocument()
+    expect(screen.getByText(/loses dashboard access/)).toBeInTheDocument()
+    expect(screen.getByText(/data is retained and can be restored/)).toBeInTheDocument()
     // confirm — scope to dialog to avoid matching the underlying detail button (detail + confirm both have Suspend)
     const confirmBtn = screen.getAllByRole('button', { name: /Suspend/i }).pop()
     fireEvent.click(confirmBtn)
@@ -437,9 +439,10 @@ describe('BusinessesHub Revoke', () => {
     expect(revokeBtn).not.toBeDisabled()
     fireEvent.click(revokeBtn)
     await waitFor(() => expect(screen.getByText('Revoke business?')).toBeInTheDocument())
-    expect(screen.getByText(/Revoked — approval withdrawn, reapplication required/)).toBeInTheDocument()
+    expect(screen.getByText(/Revocation withdraws approval permanently/)).toBeInTheDocument()
+    expect(screen.getByText(/must reapply/)).toBeInTheDocument()
     // Ensure copy is distinct from Suspend copy
-    expect(screen.queryByText(/Suspended — temporary, data retained/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Suspension is temporary/)).not.toBeInTheDocument()
     const confirmBtn = screen.getAllByRole('button', { name: /Revoke/i }).pop()
     fireEvent.click(confirmBtn)
     await waitFor(() => expect(screen.getByTestId('status-hint-revoked')).toBeInTheDocument())
@@ -704,6 +707,6 @@ describe('BusinessesHub quality states', () => {
     await waitFor(() => expect(screen.getByTestId('business-detail')).toBeInTheDocument())
     expect(screen.getByRole('tablist')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /Overview/i })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: /E-commerce/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Online store/i })).toBeInTheDocument()
   })
 })

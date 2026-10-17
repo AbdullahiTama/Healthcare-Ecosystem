@@ -104,7 +104,7 @@ export default function DrugIntel({ repository = createTrustRepository() }) {
 
       <Card style={{ padding: 12, background: 'var(--amber-bg)', border: '1px solid var(--amber)', display: 'flex', gap: 8 }}>
         <AlertTriangle size={14} style={{ color: 'var(--amber)', flexShrink: 0, marginTop: 2 }} />
-        <div style={{ fontSize: 12, color: 'var(--amber)' }}><b>Auto-signal:</b> rating ≤2 or keywords {ADVERSE_KEYWORDS.slice(0, 5).join(', ')}… → quarantine + auto ADR draft. Review → `adr_reports` spike by business.</div>
+        <div style={{ fontSize: 12, color: 'var(--amber)' }}><b>Automatic signal:</b> rating ≤2 or keywords {ADVERSE_KEYWORDS.slice(0, 5).join(', ')}… → quarantine + auto ADR draft. Review → `adr_reports` spike by business.</div>
       </Card>
 
       <Card style={{ padding: 12, background: 'var(--panel)', border: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -132,14 +132,14 @@ export default function DrugIntel({ repository = createTrustRepository() }) {
               <Card key={r.id} style={{ padding: 12, background: flaggedRow ? 'var(--red-bg)' : 'var(--panel)', border: `1px solid ${flaggedRow ? 'var(--red)' : 'var(--border)'}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   <div style={{ fontWeight: 700, fontSize: 13, color: flaggedRow ? 'var(--red)' : 'var(--fg)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {flaggedRow ? <AlertTriangle size={12} /> : <Pill size={12} />} Rating {r.rating ?? '—'} <span style={{ fontWeight: 600, fontSize: 11, color: 'var(--muted)' }}>• {new Date(r.created_at).toLocaleString()} {adverse ? '• adverse keyword' : ''} {lowRating ? '• low rating' : ''}</span>
+                    {flaggedRow ? <AlertTriangle size={12} /> : <Pill size={12} />} Rating {r.rating ?? 'Not set'} <span style={{ fontWeight: 600, fontSize: 11, color: 'var(--muted)' }}>• {new Date(r.created_at).toLocaleString()} {adverse ? '• adverse keyword' : ''} {lowRating ? '• low rating' : ''}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button disabled={busyId === r.id} onClick={() => setConfirmQuarantine(r)} style={{ padding: '5px 10px', borderRadius: 8, border: 'none', background: 'var(--amber)', color: 'white', fontWeight: 700, fontSize: 11, cursor: busyId ? 'not-allowed' : 'pointer' }}><Flag size={11} style={{ marginRight: 4 }} />Quarantine</button>
                     <button disabled={busyId === r.id} onClick={() => setConfirmAdr(r)} style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid var(--teal)', background: 'var(--panel)', color: 'var(--teal)', fontWeight: 700, fontSize: 11, cursor: busyId ? 'not-allowed' : 'pointer' }}><ExternalLink size={11} style={{ marginRight: 4 }} />ADR draft</button>
                   </div>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--fg)', background: 'var(--hairline)', padding: 8, borderRadius: 8, maxHeight: 100, overflow: 'auto' }}>{r.comment || r.review_text || '—'}</div>
+                <div style={{ fontSize: 12, color: 'var(--fg)', background: 'var(--hairline)', padding: 8, borderRadius: 8, maxHeight: 100, overflow: 'auto' }}>{r.comment || r.review_text || 'Not set'}</div>
                 <div style={{ fontSize: 11, color: 'var(--muted)' }}>Review {r.id.slice(0, 8)} {r.product_id ? `• product ${r.product_id.slice(0, 8)}` : ''} {r.user_id ? `• user ${r.user_id.slice(0, 6)}` : ''}</div>
               </Card>
             )

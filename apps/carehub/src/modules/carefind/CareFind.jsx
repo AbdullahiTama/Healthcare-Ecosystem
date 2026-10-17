@@ -39,7 +39,7 @@ export default function CareFind({ brand, products, setProducts, loadProducts })
       {/* Public profile preview */}
       <Card style={{ marginBottom: '20px', overflow: 'hidden' }}>
         <div style={{ padding: '16px', background: 'white', borderBottom: `1px solid ${border}` }}>
-          <div style={{ fontSize: '11px', color: gray400, marginBottom: '8px', letterSpacing: '1.5px', fontWeight: '700' }}>CAREFIND PUBLIC VIEW</div>
+          <div style={{ fontSize: '11px', color: gray400, marginBottom: '8px', letterSpacing: '0.02em', fontWeight: '700' }}>What patients see on CareFind</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{ width: '52px', height: '52px', borderRadius: theme.radius.lg, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               {(() => { const Icon = businessLucideIcon(bType); return <Icon size={26} /> })()}

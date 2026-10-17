@@ -339,7 +339,7 @@ describe('StockValidation hardening (spec-stock-validation-laptop-fix)', () => {
       await act(async () => { modalSave.click() })
       await act(async () => {})
       expect(stockValidationRepository.saveSession).not.toHaveBeenCalled()
-      expect(host.textContent).toContain('Missing business')
+      expect(host.textContent).toContain('The business could not be loaded')
     })
 
     it('shows Missing business when brand.id is undefined', async () => {
@@ -352,7 +352,7 @@ describe('StockValidation hardening (spec-stock-validation-laptop-fix)', () => {
       await act(async () => { getModalSaveButton(host).click() })
       await act(async () => {})
       expect(stockValidationRepository.saveSession).not.toHaveBeenCalled()
-      expect(host.textContent).toContain('Missing business')
+      expect(host.textContent).toContain('The business could not be loaded')
     })
 
     it('repository throws if businessId is null (input guard)', async () => {

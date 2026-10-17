@@ -220,7 +220,7 @@ describe('BusinessProfile — facility actions and per-business search', () => {
 
     // Should show the booking form (date, name, phone, service select if services exist)
     expect(screen.getByText('Book an Appointment')).toBeInTheDocument()
-    expect(await screen.findByText('Pick a date and time — the business will confirm your request.')).toBeInTheDocument()
+    expect(await screen.findByText('Choose a date and time. The business will confirm your request.')).toBeInTheDocument()
     // Form inputs should be present (use text query for label, fallback to input type)
     expect(await screen.findByText('Date')).toBeInTheDocument()
     expect(document.querySelector('input[type="date"]')).toBeInTheDocument()

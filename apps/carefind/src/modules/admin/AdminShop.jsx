@@ -54,12 +54,12 @@ function fmtMoney(kobo) {
 }
 
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return 'Not set'
   return new Date(d).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function fmtDateTime(d) {
-  if (!d) return '—'
+  if (!d) return 'Not set'
   return new Date(d).toLocaleString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
@@ -68,7 +68,7 @@ function exportCustomerPDF(customer, orders, summary) {
   if (!win) return
   const rows = (orders || []).map(o => `
     <tr>
-      <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${o.id?.slice(0, 8) || '—'}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${o.id?.slice(0, 8) || 'Not set'}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${fmtDate(o.created_at)}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${o.items_count || 0}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${fmtMoney(o.total_kobo)}</td>
@@ -78,7 +78,7 @@ function exportCustomerPDF(customer, orders, summary) {
     </tr>
   `).join('')
 
-  win.document.write(`<!DOCTYPE html><html><head><title>Customer Report — ${customer?.full_name || 'Unknown'}</title>
+  win.document.write(`<!DOCTYPE html><html><head><title>Customer Report: ${customer?.full_name || 'Unknown'}</title>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; color: #1a1a1a; }
     h1 { margin: 0 0 4px; font-size: 22px; }
@@ -92,11 +92,11 @@ function exportCustomerPDF(customer, orders, summary) {
     .footer { margin-top: 32px; font-size: 10px; color: #9ca3af; text-align: center; }
     @media print { body { padding: 20px; } }
   </style></head><body>
-  <h1>CareFind — Customer Report</h1>
+  <h1>CareFind Customer Report</h1>
   <p class="sub">Generated ${fmtDateTime(new Date().toISOString())}</p>
   <div style="margin-bottom:20px;padding:14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;">
     <p style="margin:0 0 4px;font-weight:800;font-size:15px;">${customer?.full_name || 'Unknown Customer'}</p>
-    <p style="margin:0;font-size:12px;color:#6b7280;">${customer?.email || '—'} · ${customer?.phone || '—'}</p>
+    <p style="margin:0;font-size:12px;color:#6b7280;">${customer?.email || 'Not set'} · ${customer?.phone || 'Not set'}</p>
     ${customer?.location ? `<p style="margin:4px 0 0;font-size:12px;color:#6b7280;">${customer.location}</p>` : ''}
   </div>
   <div class="metrics">
@@ -222,7 +222,7 @@ function OrdersList({ orders, loading, onOpenOrder, onLoadMore, hasMore }) {
         <div key={o.id} onClick={() => onOpenOrder(o.id)} style={{ ...card, cursor: 'pointer' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
             <div>
-              <p style={{ margin: '0 0 2px', fontWeight: 800, fontSize: 13, color: theme.navy }}>#{o.id?.slice(0, 12) || '—'}</p>
+              <p style={{ margin: '0 0 2px', fontWeight: 800, fontSize: 13, color: theme.navy }}>#{o.id?.slice(0, 12) || 'Not set'}</p>
               <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{o.customer_name || o.profiles?.full_name || 'Unknown'} · {fmtDate(o.created_at)}</p>
             </div>
             <StatusBadge status={o.status} />
@@ -331,7 +331,7 @@ function OrderDetail({ orderId, onBack, showToast }) {
           <div>
             <div style={{ border: `1px solid ${theme.border}`, borderRadius: 12, padding: 12, marginBottom: 10, background: '#f9fafb' }}>
               <p style={{ margin: '0 0 6px', fontWeight: 800, fontSize: 12, color: theme.tealDeep }}>🏪 Vendor</p>
-              <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 13, color: theme.navy }}>{vendor.name || '—'}</p>
+              <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 13, color: theme.navy }}>{vendor.name || 'Not set'}</p>
               {vendor.location && <p style={{ margin: '0 0 2px', fontSize: 11, color: theme.textLight }}>📍 {vendor.location}</p>}
               {vendor.whatsapp && <p style={{ margin: '0 0 2px', fontSize: 11, color: theme.textLight }}>📱 {vendor.whatsapp}</p>}
               {vendor.address && <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>🏠 {vendor.address}</p>}
@@ -339,7 +339,7 @@ function OrderDetail({ orderId, onBack, showToast }) {
 
             <div style={{ border: `1px solid ${theme.border}`, borderRadius: 12, padding: 12, marginBottom: 10, background: '#f9fafb' }}>
               <p style={{ margin: '0 0 6px', fontWeight: 800, fontSize: 12, color: theme.tealDeep }}>👤 Customer</p>
-              <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 13, color: theme.navy }}>{customer.full_name || customer.display_name || '—'}</p>
+              <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 13, color: theme.navy }}>{customer.full_name || customer.display_name || 'Not set'}</p>
               {customer.email && <p style={{ margin: '0 0 2px', fontSize: 11, color: theme.textLight }}>✉️ {customer.email}</p>}
               {customer.phone && <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>📱 {customer.phone}</p>}
             </div>
@@ -438,7 +438,7 @@ function OrderDetail({ orderId, onBack, showToast }) {
             {messages.map((m, i) => (
               <div key={m.id || i} style={{ padding: '8px 0', borderBottom: i < messages.length - 1 ? `1px solid ${theme.border}` : 'none' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: theme.navy }}>{m.sender_name || m.sender || '—'}</p>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: theme.navy }}>{m.sender_name || m.sender || 'Not set'}</p>
                   <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>{fmtDateTime(m.created_at)}</p>
                 </div>
                 <p style={{ margin: 0, fontSize: 12, color: theme.textMid }}>{m.body || m.content || m.message}</p>
@@ -543,7 +543,7 @@ function FulfilmentView({ showToast }) {
           {pickupStations.map(ps => (
             <div key={ps.id} style={{ padding: 10, background: '#f9fafb', borderRadius: theme.radius.md, border: `1px solid ${theme.border}` }}>
               <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 12, color: theme.navy }}>{ps.name}</p>
-              <p style={{ margin: '0 0 2px', fontSize: 11, color: theme.textLight }}>{ps.address || ps.location || '—'}</p>
+              <p style={{ margin: '0 0 2px', fontSize: 11, color: theme.textLight }}>{ps.address || ps.location || 'Not set'}</p>
               <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: theme.tealDeep }}>
                 {stationCounts[ps.id] || 0} orders waiting
               </p>
@@ -574,7 +574,7 @@ function FulfilmentView({ showToast }) {
               <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>{o.vendor_name || o.businesses?.name || ''}</p>
             </div>
             {o.pickup_stations && o.pickup_stations.length > 0 && (
-              <p style={{ margin: '0 0 6px', fontSize: 11, color: theme.textLight }}>📍 {o.pickup_stations[0]?.name || '—'}</p>
+              <p style={{ margin: '0 0 6px', fontSize: 11, color: theme.textLight }}>📍 {o.pickup_stations[0]?.name || 'Not set'}</p>
             )}
             {nextTransitions.length > 0 && (
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -644,7 +644,7 @@ function CustomersList({ showToast }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <p style={{ margin: '0 0 2px', fontWeight: 800, fontSize: 13, color: theme.navy }}>{c.full_name || c.display_name || 'Unknown'}</p>
-              <p style={{ margin: '0 0 2px', fontSize: 11, color: theme.textLight }}>{c.email || '—'}</p>
+              <p style={{ margin: '0 0 2px', fontSize: 11, color: theme.textLight }}>{c.email || 'Not set'}</p>
               {c.phone && <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{c.phone}</p>}
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -906,7 +906,7 @@ function VendorsView({ showToast }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                 <div>
                   <p style={{ margin: '0 0 2px', fontWeight: 800, fontSize: 13, color: theme.navy }}>{app.business_name || app.applicant_name || 'Unknown'}</p>
-                  <p style={{ margin: '0 0 2px', fontSize: 11, color: theme.textLight }}>{app.applicant_email || '—'}</p>
+                  <p style={{ margin: '0 0 2px', fontSize: 11, color: theme.textLight }}>{app.applicant_email || 'Not set'}</p>
                   <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>{fmtDate(app.created_at)}</p>
                 </div>
                 <span style={{
@@ -996,10 +996,10 @@ function ShopReports({ showToast }) {
     if (!win) return
     const rows = (reports.completed_orders || []).map(o => `
       <tr>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${o.order_ref || o.id?.slice(0, 8) || '—'}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${o.order_ref || o.id?.slice(0, 8) || 'Not set'}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${fmtDate(o.created_at)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${o.customer_name || '—'}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${o.businesses?.name || '—'}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${o.customer_name || 'Not set'}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${o.businesses?.name || 'Not set'}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${fmtMoney(o.total_kobo)}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${fmtMoney(o.commission_kobo)}</td>
       </tr>
@@ -1014,7 +1014,7 @@ function ShopReports({ showToast }) {
     `).join('')
     const customerRows = (reports.top_customers || []).map(c => `
       <tr>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${c.customer_name || c.customer_id?.slice(0, 8) || '—'}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${c.customer_name || c.customer_id?.slice(0, 8) || 'Not set'}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${c.total_orders}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${fmtMoney(c.total_spent_kobo)}</td>
       </tr>
@@ -1112,7 +1112,7 @@ function ShopReports({ showToast }) {
             {(reports.top_customers || []).slice(0, 10).map((c, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `1px solid ${theme.border}` }}>
                 <div>
-                  <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 12, color: theme.navy }}>{c.customer_name || c.customer_id?.slice(0, 8) || '—'}</p>
+                  <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 12, color: theme.navy }}>{c.customer_name || c.customer_id?.slice(0, 8) || 'Not set'}</p>
                   <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>{c.total_orders} orders</p>
                 </div>
                 <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: theme.tealDeep }}>{fmtMoney(c.total_spent_kobo)}</p>

@@ -178,7 +178,7 @@ export function NavBar() {
               whiteSpace: 'nowrap',
             }}
           >
-            Get started free
+            Start your account
           </Link>
 
           <button
@@ -279,7 +279,7 @@ export function NavBar() {
                   textDecoration: 'none',
                 }}
               >
-                Get started free
+                Start your account
               </Link>
             </div>
           </nav>

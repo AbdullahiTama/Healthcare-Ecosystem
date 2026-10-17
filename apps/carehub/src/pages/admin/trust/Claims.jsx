@@ -4,7 +4,7 @@ import { Card, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast, C
 import { createTrustRepository } from '../../../modules/trust/repositories'
 
 function timeAgo(s) {
-  if (!s) return '—'
+  if (!s) return 'Not set'
   const diff = Math.floor((Date.now() - new Date(s)) / 1000)
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
@@ -38,8 +38,8 @@ export default function Claims({ repository = createTrustRepository() }) {
   useEffect(() => { load() }, [load])
 
   const all = (() => {
-    const b = (businessClaims || []).map(r => ({ ...r, _type: 'business', _label: r.businesses?.name || r.business_id?.slice(0, 8) || 'Business claim', _who: r.claimant_name || r.email || r.user_id?.slice(0, 8) || '—' }))
-    const s = (staffClaims || []).map(r => ({ ...r, _type: 'staff', _label: r.staff_name || r.email || r.staff_id?.slice(0, 8) || 'Staff claim', _who: r.claimant_name || r.email || '—' }))
+    const b = (businessClaims || []).map(r => ({ ...r, _type: 'business', _label: r.businesses?.name || r.business_id?.slice(0, 8) || 'Business claim', _who: r.claimant_name || r.email || r.user_id?.slice(0, 8) || 'Not set' }))
+    const s = (staffClaims || []).map(r => ({ ...r, _type: 'staff', _label: r.staff_name || r.email || r.staff_id?.slice(0, 8) || 'Staff claim', _who: r.claimant_name || r.email || 'Not set' }))
     let list = [...b, ...s].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     if (filter !== 'all') list = list.filter(x => x._type === filter)
     if (search.trim()) {
@@ -109,7 +109,7 @@ export default function Claims({ repository = createTrustRepository() }) {
                   <span style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} />{timeAgo(r.created_at)} • {r.status}</span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>{r._who} {r.business_id ? `• biz ${r.business_id.slice(0, 8)}` : ''} {r.staff_id ? `• staff ${r.staff_id.slice(0, 8)}` : ''}</div>
-                {r.business_id && <div style={{ fontSize: 11, color: 'var(--teal)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}><ExternalLink size={11} /> Business 360: {r.business_id.slice(0, 8)} — open Businesses → select</div>}
+                {r.business_id && <div style={{ fontSize: 11, color: 'var(--teal)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}><ExternalLink size={11} /> Business 360: {r.business_id.slice(0, 8)} . Open Businesses, then select</div>}
               </div>
               {statusFilter === 'pending' && (
                 <div style={{ display: 'flex', gap: 6 }}>

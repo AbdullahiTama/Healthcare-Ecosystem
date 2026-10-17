@@ -42,7 +42,7 @@ export default function Appointments({ brand, role, perms }) {
         if (cancelled) return
         window.history.replaceState({}, '', window.location.pathname)
         if (res.ok) {
-          showToast(data.alreadyPaid ? 'Payment already confirmed' : 'Payment confirmed — appointment marked as paid', { type: 'success' })
+          showToast(data.alreadyPaid ? 'Payment already confirmed' : 'Payment confirmed. The appointment is marked as paid.', { type: 'success' })
           load()
         } else {
           showToast(data.error || 'Could not confirm payment. Keep your reference and contact support.', { type: 'error' })
@@ -162,7 +162,7 @@ export default function Appointments({ brand, role, perms }) {
     if (!form.clientName || !form.date || !form.time) { showToast('Please enter client name, date and time.', { type: 'warning' }); return }
     const feeKobo = form.fee ? Math.round(parseFloat(form.fee) * 100) : null
     if (feeKobo && feeKobo > 0 && !form.paymentChannel) { showToast('Select payment channel (cash / POS / transfer / paystack)', { type: 'warning' }); return }
-    if (feeKobo && form.paymentChannel === 'pos' && !form.posRef && !confirm('POS reference is empty — proceed without receipt code?')) { /* allow */ }
+    if (feeKobo && form.paymentChannel === 'pos' && !form.posRef && !confirm('The POS reference is empty. Save without a receipt code?')) { /* allow */ }
     setSaving(true)
     try {
       // One channel per appointment — no split. Cash is instant paid, pos/transfer unpaid pending attest, paystack unpaid pending Paystack.
@@ -199,14 +199,14 @@ export default function Appointments({ brand, role, perms }) {
         const createdId = Array.isArray(created) ? created[0]?.id : created?.id
         if (createdId) {
           try { await handleSendPaymentLink({ id: createdId, client_name: form.clientName, date: form.date, time: form.time, fee_amount: feeKobo }) } catch {}
-          showToast('Appointment booked — paystack link created, share it with the client', { type: 'success' })
+          showToast('Appointment booked. A Paystack link was created, send it to the client.', { type: 'success' })
         } else {
           showToast('Appointment booked!', { type: 'success' })
         }
       } else if (ch === 'cash' && feeKobo) {
-        showToast('Appointment booked — cash marked as paid', { type: 'success' })
+        showToast('Appointment booked. Cash recorded as paid.', { type: 'success' })
       } else if ((ch === 'pos' || ch === 'transfer') && feeKobo) {
-        showToast(`Appointment booked — ${ch === 'pos' ? 'POS' : 'transfer'} awaiting staff confirmation`, { type: 'success' })
+        showToast(`Appointment booked. The ${ch === 'pos' ? 'POS' : 'transfer'} payment is awaiting staff confirmation.`, { type: 'success' })
       } else {
         showToast('Appointment booked!', { type: 'success' })
       }
@@ -243,7 +243,7 @@ export default function Appointments({ brand, role, perms }) {
           return
         }
         // Notify patient and refresh wallet
-        notificationRepository.notify(brand.id, [{ }], 'booking_confirmed', `Appointment confirmed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
+        notificationRepository.notify(brand.id, [{ }], 'booking_confirmed', `Appointment confirmed: ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
         // Refresh wallet balances
         sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => {
           if (Array.isArray(w) && w[0]) setWallet(w[0])
@@ -261,11 +261,11 @@ export default function Appointments({ brand, role, perms }) {
           else showToast('Could not complete appointment. Please try again.', { type: 'error' })
           return
         }
-        notificationRepository.notify(brand.id, [{ }], 'booking_completed', `Appointment completed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
+        notificationRepository.notify(brand.id, [{ }], 'booking_completed', `Appointment completed: ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
         sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => {
           if (Array.isArray(w) && w[0]) setWallet(w[0])
         }).catch(() => {})
-        load(); showToast('Appointment completed — funds released to available balance.', { type: 'success' })
+        load(); showToast('Appointment completed. Funds released to your available balance.', { type: 'success' })
         return
       }
       await appointmentRepository.update(id, brand.id, { status, confirmed_at: status === 'confirmed' ? new Date().toISOString() : undefined, cancelled_at: status === 'cancelled' ? new Date().toISOString() : undefined, completed_at: status === 'completed' ? new Date().toISOString() : undefined })
@@ -327,7 +327,7 @@ export default function Appointments({ brand, role, perms }) {
       clearWithdrawalOtpMeta()
       // Refresh the wallet balance.
       sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => { if (Array.isArray(w) && w[0]) setWallet(w[0]) }).catch(() => {})
-      showToast('Withdrawal started — it will arrive shortly.', { type: 'success' })
+      showToast('Withdrawal started. It should arrive shortly.', { type: 'success' })
     } catch (e) {
       showToast('Network error. Please try again.', { type: 'error' })
     }
@@ -341,7 +341,7 @@ export default function Appointments({ brand, role, perms }) {
     try {
       const res = await appointmentRepository.confirmPos(appt.id, brand.id, posRef || null)
       if (typeof res === 'string' && res !== 'ok') throw new Error(res)
-      showToast('POS confirmed — marked as paid', { type: 'success' })
+      showToast('POS payment confirmed and marked as paid.', { type: 'success' })
       load()
     } catch (e) {
       const m = String(e.message || '')
@@ -353,11 +353,11 @@ export default function Appointments({ brand, role, perms }) {
   }
 
   async function handleConfirmTransfer(appt) {
-    if (!confirm(`Confirm transfer received for ${appt.client_name} — ₦${(appt.fee_amount/100).toLocaleString()}?`)) return
+    if (!confirm(`Confirm you received the transfer of ₦${(appt.fee_amount/100).toLocaleString()} from ${appt.client_name}?`)) return
     try {
       const res = await appointmentRepository.confirmTransfer(appt.id, brand.id, null)
       if (typeof res === 'string' && res !== 'ok') throw new Error(res)
-      showToast('Transfer confirmed — marked as paid', { type: 'success' })
+      showToast('Transfer confirmed and marked as paid.', { type: 'success' })
       load()
     } catch (e) {
       const m = String(e.message || '')
@@ -385,7 +385,7 @@ export default function Appointments({ brand, role, perms }) {
         return
       }
       setPayLink({ url: data.authorization_url, ref: data.reference, fee: data.fee, clientName: appt.client_name, date: appt.date, time: appt.time })
-      showToast('Payment link created — share it with the client.', { type: 'success' })
+      showToast('Payment link created. Send it to the client.', { type: 'success' })
     } catch (e) {
       showToast('Network error. Please try again.', { type: 'error' })
       setPayLink(null)
@@ -468,9 +468,9 @@ export default function Appointments({ brand, role, perms }) {
             key: 'concern', label: 'Concern', sortable: true,
             render: a => a.concern
               ? <span style={{ display: 'block', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '12px', color: gray600 }} title={a.concern}>{a.concern}</span>
-              : <span style={{ color: gray400 }}>—</span>,
+              : <span style={{ color: gray400 }}>None recorded</span>,
           },
-          { key: 'service', label: 'Service', sortable: true, render: a => <span style={{ fontSize: '13px', color: gray600 }}>{a.service || '—'}</span> },
+          { key: 'service', label: 'Service', sortable: true, render: a => <span style={{ fontSize: '13px', color: gray600 }}>{a.service || 'Not specified'}</span> },
           { key: 'date', label: 'Date', sortable: true, render: a => <span style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{a.date}</span> },
           { key: 'time', label: 'Time', sortable: true, render: a => <span style={{ fontSize: '13px', color: gray600 }}>{a.time}</span> },
           {
@@ -481,7 +481,7 @@ export default function Appointments({ brand, role, perms }) {
                 {a.payment_status === 'paid' && a.released_at && <Pill label={`Available ${feeLabel(a.fee_amount)}`} type='green' />}
                 {a.payment_status === 'unpaid' && <Pill label='Unpaid' type='red' />}
                 {a.payment_status === 'refunded' && <Pill label='Refunded' type='gray' />}
-                {!a.payment_status && <span style={{ color: gray400 }}>—</span>}
+                {!a.payment_status && <span style={{ color: gray400 }}>Not paid</span>}
                 {a.payment_channel && <div style={{ marginTop: '3px', fontSize: '10px', color: gray400, textTransform: 'capitalize' }}>{a.payment_channel}</div>}
               </>
             ),
@@ -533,12 +533,12 @@ export default function Appointments({ brand, role, perms }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Sel label='Booking type' value={form.bookingType || 'physical'} onChange={v => f('bookingType', v)} options={[{ value: 'physical', label: 'Physical visit' }, { value: 'online', label: 'Online (video/phone)' }]} />
-            <Sel label='Payment channel *' value={form.paymentChannel || 'cash'} onChange={v => f('paymentChannel', v)} options={[{ value: 'cash', label: 'Cash — instant paid' }, { value: 'pos', label: 'POS — confirm after terminal' }, { value: 'transfer', label: 'Transfer — confirm after receipt' }, { value: 'paystack', label: 'Paystack link — pay online' }]} />
+            <Sel label='Payment channel *' value={form.paymentChannel || 'cash'} onChange={v => f('paymentChannel', v)} options={[{ value: 'cash', label: 'Cash (marked paid at once)' }, { value: 'pos', label: 'POS (confirm after the terminal)' }, { value: 'transfer', label: 'Transfer (confirm after the receipt)' }, { value: 'paystack', label: 'Paystack link (client pays online)' }]} />
           </div>
           {form.paymentChannel === 'pos' && form.fee && (
             <Inp label='POS reference (optional)' value={form.posRef || ''} onChange={v => f('posRef', v)} placeholder='Last 4-6 digits of receipt' />
           )}
-          {form.fee && <div style={{ fontSize: 11, color: gray400, marginTop: -8, marginBottom: 4 }}>{form.paymentChannel === 'cash' ? 'Cash: will be marked paid immediately.' : form.paymentChannel === 'pos' ? 'POS: appointment stays unpaid until you tap Confirm POS after terminal approval.' : form.paymentChannel === 'transfer' ? 'Transfer: stays unpaid until you tap Confirm Transfer.' : form.paymentChannel === 'paystack' ? 'Paystack: a shareable link will be created — client pays online, you are notified when confirmed.' : ''}</div>}
+          {form.fee && <div style={{ fontSize: 11, color: gray400, marginTop: -8, marginBottom: 4 }}>{form.paymentChannel === 'cash' ? 'Cash: the appointment is marked paid immediately.' : form.paymentChannel === 'pos' ? 'POS: the appointment stays unpaid until you tap Confirm POS after the terminal approves it.' : form.paymentChannel === 'transfer' ? 'Transfer: the appointment stays unpaid until you tap Confirm Transfer.' : form.paymentChannel === 'paystack' ? 'Paystack: a shareable link is created. The client pays online and you are notified when it clears.' : ''}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Inp label='Client Phone' value={form.phone} onChange={v => f('phone', v)} placeholder='08012345678' />
             <Inp label='Client Email (optional)' type='email' value={form.clientEmail} onChange={v => f('clientEmail', v)} placeholder='client@example.com' />

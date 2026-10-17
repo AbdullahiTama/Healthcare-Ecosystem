@@ -1867,7 +1867,7 @@ function Feed() {
           }}
           role="dialog"
           aria-modal="true"
-          aria-label="Full-screen video feed"
+          aria-label="Full screen video feed"
         >
           <div
             style={{
@@ -1888,7 +1888,7 @@ function Feed() {
             <button
               type="button"
               onClick={() => setFeedTab('foryou')}
-              aria-label="Exit full-screen video and return to For you"
+              aria-label="Leave full screen video and return to For you"
               style={{
                 pointerEvents: 'auto',
                 width: 36,
@@ -1935,7 +1935,7 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: theme.tealMist, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md }}>
               <Stethoscope size={15} color={theme.tealDeep} aria-hidden="true" />
               <span style={{ fontSize: 12, fontWeight: 700, color: theme.navy }}>
-                Medical professionals only — posts from verified professionals and approved facilities. General posts are never mixed in here.
+                Posts from verified professionals and approved facilities only. General posts never appear here.
               </span>
             </div>
           )}
@@ -1955,7 +1955,7 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
               <button
                 key={opt.key}
                 type="button"
-                aria-label={locked ? `${opt.label} — verified accounts only` : opt.label}
+                aria-label={locked ? `${opt.label}, verified accounts only` : opt.label}
                 onClick={() => {
                   setCreateOpen(false)
                   if (locked) { navigate('/verify'); return }

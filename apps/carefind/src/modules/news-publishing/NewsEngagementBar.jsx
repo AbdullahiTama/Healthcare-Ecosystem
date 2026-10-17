@@ -62,7 +62,7 @@ function NewsEngagementBar({ article, user, compact, onNavigate }) {
   async function handleShare(e) {
     e.stopPropagation()
     e.preventDefault()
-    const text = article.subtitle ? `${article.headline} — ${article.subtitle}` : article.headline
+    const text = article.subtitle ? `${article.headline}: ${article.subtitle}` : article.headline
     const result = await shareOrCopy({
       title: article.headline,
       text,

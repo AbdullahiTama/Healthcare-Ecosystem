@@ -98,11 +98,11 @@ function NewsArticle() {
   // the clipboard fallback so recipients always get the media. Best-effort:
   // a failed media fetch leaves the text share intact.
   async function shareArticle() {
-    const text = article.subtitle ? `${article.headline} — ${toShareText(article.subtitle)}` : article.headline
+    const text = article.subtitle ? `${article.headline}: ${toShareText(article.subtitle)}` : article.headline
     const mediaUrl = article.hero_image_url || null
     const file = mediaUrl ? await mediaToFile(mediaUrl) : null
     const result = await shareOrCopy({ title: article.headline, text, url: `${window.location.origin}/news/${article.id}`, files: file ? [file] : undefined, mediaUrl })
-    if (result === 'copied') setShareMsg('Link copied — paste it anywhere to share.')
+    if (result === 'copied') setShareMsg('Link copied. Paste it anywhere to share.')
     if (result === 'failed') setShareMsg("This browser won't let us share or copy from here.")
     if (result === 'copied' || result === 'failed') setTimeout(() => setShareMsg(''), 4000)
   }

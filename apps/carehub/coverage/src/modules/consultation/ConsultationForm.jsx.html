@@ -1,0 +1,1081 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/modules/consultation/ConsultationForm.jsx</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">src/modules/consultation</a> ConsultationForm.jsx</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/273</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/273</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a>
+<a name='L290'></a><a href='#L290'>290</a>
+<a name='L291'></a><a href='#L291'>291</a>
+<a name='L292'></a><a href='#L292'>292</a>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >import { useRef, useState, useEffect, useMemo } from 'react'</span></span></span>
+import { theme } from '../../styles/theme'
+import { Card, Inp, Textarea, Toggle, TealBtn, GhostBtn, useToast } from '../../components/ui'
+import SignaturePad from './SignaturePad'
+import { Chips, Pills, YesNo, SectionCard, ProductSearchPicker } from './formParts'
+import { consultationRepository } from './repositories'
+import { clientRepository } from '../clients/repositories'
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, bg } = theme</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const CONCERN_OPTIONS = ['Acne/Breakouts', 'Dark Spots/Hyperpigmentation', 'Uneven Skin Tone', 'Fine Lines/Wrinkles', 'Dull Skin', 'Dry Skin', 'Oily Skin', 'Sensitive Skin', 'Enlarged Pores', 'Blackheads/Whiteheads', 'Rosacea', 'Skin Tags', 'Sun Damage', 'Scarring', 'Other']</span>
+<span class="cstat-no" title="statement not covered" >const SKIN_TYPE_OPTIONS = ['Dry', 'Oily', 'Combination', 'Normal', 'Sensitive']</span>
+<span class="cstat-no" title="statement not covered" >const SYMPTOM_OPTIONS = ['Breakouts', 'Itching', 'Redness', 'Burning', 'Peeling', 'None']</span>
+<span class="cstat-no" title="statement not covered" >const TREATMENT_OPTIONS = ['Chemical Peel', 'Microneedling', 'Dermaplaning', 'Microdermabrasion', 'Laser', 'Acne Extraction', 'Other']</span>
+<span class="cstat-no" title="statement not covered" >const MEDICAL_OPTIONS = ['Diabetes', 'High BP', 'Asthma', 'Thyroid Disorder', 'Epilepsy', 'Autoimmune Disorder', 'Eczema', 'Psoriasis', 'Active Cold Sores', 'Keloid Scarring', 'None', 'Other']</span>
+<span class="cstat-no" title="statement not covered" >const ALLERGY_OPTIONS = ['Skincare Products', 'Fragrances', 'Latex', 'Aspirin', 'Nuts', 'Medications', 'Foods']</span>
+<span class="cstat-no" title="statement not covered" >const FITZPATRICK = ['I', 'II', 'III', 'IV', 'V', 'VI']</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const today = () =&gt; new Date().toISOString().split('T')[0]</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export default function ConsultationForm({ brand, products = [], staffName = '', initialClient = null, onSaved, onCancel }) {</span>
+<span class="cstat-no" title="statement not covered" >  const toast = useToast()</span>
+<span class="cstat-no" title="statement not covered" >  const [client, setClient] = useState(initialClient)</span>
+<span class="cstat-no" title="statement not covered" >  const [clientSearch, setClientSearch] = useState('')</span>
+<span class="cstat-no" title="statement not covered" >  const [allClients, setAllClients] = useState([])</span>
+<span class="cstat-no" title="statement not covered" >  const [showQuickAdd, setShowQuickAdd] = useState(false)</span>
+<span class="cstat-no" title="statement not covered" >  const [quick, setQuick] = useState({ fullName: '', phone: '', email: '' })</span>
+<span class="cstat-no" title="statement not covered" >  const [saving, setSaving] = useState(false)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const consentPad = useRef(null)</span>
+<span class="cstat-no" title="statement not covered" >  const therapistPad = useRef(null)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const [form, setForm] = useState(() =&gt; ({</span>
+<span class="cstat-no" title="statement not covered" >    date: today(),</span>
+<span class="cstat-no" title="statement not covered" >    clientInfo: { dob: '', age: '', phone: '', email: '', address: '', occupation: '' },</span>
+<span class="cstat-no" title="statement not covered" >    emergency: { name: '', relationship: '', phone: '' },</span>
+<span class="cstat-no" title="statement not covered" >    concerns: { selected: [], other: '' },</span>
+<span class="cstat-no" title="statement not covered" >    skinHistory: { skin_type: '', symptoms: [], had_facial: '', facial_date: '', past_treatments: [], other_treatment: '' },</span>
+<span class="cstat-no" title="statement not covered" >    routine: { cleanser: '', toner: '', serum: '', moisturizer: '', sunscreen: '', exfoliant: '', other: '' },</span>
+<span class="cstat-no" title="statement not covered" >    medical: { selected: [], other: '' },</span>
+<span class="cstat-no" title="statement not covered" >    allergies: { selected: [], specify: '' },</span>
+<span class="cstat-no" title="statement not covered" >    lifestyle: { water: '', sleep: '', stress: '', smoker: '', sunscreen_frequency: '' },</span>
+<span class="cstat-no" title="statement not covered" >    female: { pregnant: '', contraceptives: '' },</span>
+<span class="cstat-no" title="statement not covered" >    consent: { agreed: false, date: today() },</span>
+<span class="cstat-no" title="statement not covered" >    assessment: { skin_type: '', skin_condition: '', fitzpatrick: '', treatment_recommended: '', products_recommended: [], homecare_plan: '', facial_care_recommendations: '', instructions: '', therapist_name: staffName || '', therapist_signature: '' },</span>
+<span class="cstat-no" title="statement not covered" >  }))</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const set = (section, key, value) =&gt; setForm(p =&gt; ({ ...p, [section]: { ...p[section], [key]: value } }))</span>
+<span class="cstat-no" title="statement not covered" >  const toggle = (section, key, option) =&gt; setForm(p =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    const cur = p[section][key] || []</span>
+<span class="cstat-no" title="statement not covered" >    return { ...p, [section]: { ...p[section], [key]: cur.includes(option) ? cur.filter(x =&gt; x !== option) : [...cur, option] } }</span>
+<span class="cstat-no" title="statement not covered" >  })</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  useEffect(() =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    clientRepository.getAll(brand.id).then(c =&gt; setAllClients(c || [])).catch(() =&gt; {})</span>
+<span class="cstat-no" title="statement not covered" >  }, [brand.id])</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const matched = useMemo(() =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    const q = clientSearch.toLowerCase().trim()</span>
+<span class="cstat-no" title="statement not covered" >    return q</span>
+<span class="cstat-no" title="statement not covered" >      ? allClients.filter(c =&gt; c.full_name.toLowerCase().includes(q) || (c.phone || '').includes(q))</span>
+<span class="cstat-no" title="statement not covered" >      : []</span>
+<span class="cstat-no" title="statement not covered" >  }, [allClients, clientSearch])</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const recProductIds = form.assessment.products_recommended</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  async function saveQuickAdd() {</span>
+<span class="cstat-no" title="statement not covered" >    if (!quick.fullName.trim() || !quick.phone.trim()) { toast.show('Name and phone are required for a new client.', { type: 'warning' }); return }</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      const created = (await clientRepository.create(brand.id, {</span>
+<span class="cstat-no" title="statement not covered" >        full_name: quick.fullName.trim(),</span>
+<span class="cstat-no" title="statement not covered" >        phone: quick.phone.trim(),</span>
+<span class="cstat-no" title="statement not covered" >        email: quick.email || '',</span>
+<span class="cstat-no" title="statement not covered" >        total_spend: 0,</span>
+<span class="cstat-no" title="statement not covered" >        visit_count: 0,</span>
+<span class="cstat-no" title="statement not covered" >      }))[0] || null</span>
+<span class="cstat-no" title="statement not covered" >      setClient(created)</span>
+<span class="cstat-no" title="statement not covered" >      setShowQuickAdd(false)</span>
+<span class="cstat-no" title="statement not covered" >      setQuick({ fullName: '', phone: '', email: '' })</span>
+<span class="cstat-no" title="statement not covered" >      setAllClients(prev =&gt; [...prev, created])</span>
+<span class="cstat-no" title="statement not covered" >      toast.show('Client added!', { type: 'success' })</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) { toast.show('Could not add client. Please try again.', { type: 'error' }) }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  async function save() {</span>
+<span class="cstat-no" title="statement not covered" >    if (!client) { toast.show('Pick or create the client first.', { type: 'warning' }); return }</span>
+<span class="cstat-no" title="statement not covered" >    const consentSig = consentPad.current?.getDataUrl() || ''</span>
+<span class="cstat-no" title="statement not covered" >    const therapistSig = therapistPad.current?.getDataUrl() || ''</span>
+<span class="cstat-no" title="statement not covered" >    setSaving(true)</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      const saved = await consultationRepository.create({</span>
+<span class="cstat-no" title="statement not covered" >        business_id: brand.id,</span>
+<span class="cstat-no" title="statement not covered" >        client_id: client.id,</span>
+<span class="cstat-no" title="statement not covered" >        client_name: client.full_name,</span>
+<span class="cstat-no" title="statement not covered" >        consultation_date: form.date,</span>
+<span class="cstat-no" title="statement not covered" >        consultation_type: 'skincare',</span>
+<span class="cstat-no" title="statement not covered" >        provider_name: form.assessment.therapist_name,</span>
+<span class="cstat-no" title="statement not covered" >        recommended_products: recProductIds.map(id =&gt; { const p = products.find(x =&gt; x.id === id); return p ? { id: p.id, name: p.name } : null }).filter(Boolean),</span>
+<span class="cstat-no" title="statement not covered" >        data: {</span>
+<span class="cstat-no" title="statement not covered" >          client_info: { full_name: client.full_name, ...form.clientInfo },</span>
+<span class="cstat-no" title="statement not covered" >          emergency_contact: form.emergency,</span>
+<span class="cstat-no" title="statement not covered" >          skin_concerns: form.concerns,</span>
+<span class="cstat-no" title="statement not covered" >          skin_history: form.skinHistory,</span>
+<span class="cstat-no" title="statement not covered" >          routine: form.routine,</span>
+<span class="cstat-no" title="statement not covered" >          medical_history: form.medical,</span>
+<span class="cstat-no" title="statement not covered" >          allergies: form.allergies,</span>
+<span class="cstat-no" title="statement not covered" >          lifestyle: form.lifestyle,</span>
+<span class="cstat-no" title="statement not covered" >          female: form.female,</span>
+<span class="cstat-no" title="statement not covered" >          consent: { ...form.consent, signature: consentSig },</span>
+<span class="cstat-no" title="statement not covered" >          assessment: { ...form.assessment, therapist_signature: therapistSig },</span>
+<span class="cstat-no" title="statement not covered" >        },</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >      toast.show('Consultation saved!', { type: 'success' })</span>
+<span class="cstat-no" title="statement not covered" >      onSaved?.(saved)</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) {</span>
+<span class="cstat-no" title="statement not covered" >      console.error('Consultation save error:', e)</span>
+<span class="cstat-no" title="statement not covered" >      toast.show('Could not save consultation. Please try again.', { type: 'error' })</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    setSaving(false)</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  return (</span>
+<span class="cstat-no" title="statement not covered" >    &lt;div&gt;</span>
+      {/* Client step */}
+<span class="cstat-no" title="statement not covered" >      {!client ? (</span>
+<span class="cstat-no" title="statement not covered" >        &lt;SectionCard title="Client" hint="The consultation is saved inside the client's file — search for an existing client or add a new one."&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Inp label="Search clients" value={clientSearch} onChange={setClientSearch} placeholder="Search by name or phone..." /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          {matched.length &gt; 0 &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              {matched.map(c =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >                &lt;button key={c.id} type="button" onClick={() =&gt; setClient(c)}</span>
+<span class="cstat-no" title="statement not covered" >                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderRadius: 10, border: `1px solid ${border}`, background: bg, cursor: 'pointer', textAlign: 'left' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;span style={{ fontWeight: 700, fontSize: 13, color: navy }}&gt;{c.full_name}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;span style={{ fontSize: 12, color: gray400 }}&gt;{c.phone || 'No phone'}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/button&gt;</span>
+<span class="cstat-no" title="statement not covered" >              ))}</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+          )}
+<span class="cstat-no" title="statement not covered" >          {clientSearch &amp;&amp; matched.length === 0 &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >            &lt;button type="button" onClick={() =&gt; setShowQuickAdd(v =&gt; !v)} style={{ alignSelf: 'flex-start', padding: '8px 14px', borderRadius: 10, border: 'none', background: tealMist, color: tealDeep, fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              + Add "{clientSearch}" as a new client</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/button&gt;</span>
+          )}
+<span class="cstat-no" title="statement not covered" >          {showQuickAdd &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 14, borderRadius: 12, border: `1px solid ${border}`, background: bg }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Full Name *" value={quick.fullName} onChange={v =&gt; setQuick(p =&gt; ({ ...p, fullName: v }))} placeholder={clientSearch || 'Client full name'} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Phone *" value={quick.phone} onChange={v =&gt; setQuick(p =&gt; ({ ...p, phone: v }))} placeholder="08012345678" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Email" value={quick.email} onChange={v =&gt; setQuick(p =&gt; ({ ...p, email: v }))} placeholder="client@email.com" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;TealBtn onClick={saveQuickAdd} style={{ alignSelf: 'flex-start', padding: '9px 18px' }}&gt;Add Client&lt;/TealBtn&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+          )}
+<span class="cstat-no" title="statement not covered" >        &lt;/SectionCard&gt;</span>
+      ) : (
+<span class="cstat-no" title="statement not covered" >        &lt;SectionCard title="Client"&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ fontWeight: 800, fontSize: 14, color: navy }}&gt;{client.full_name}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ fontSize: 12, color: gray400 }}&gt;{client.phone}{client.email ? ' · ' + client.email : ''}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;GhostBtn onClick={() =&gt; setClient(null)} style={{ padding: '7px 12px', fontSize: 12 }}&gt;Change&lt;/GhostBtn&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/SectionCard&gt;</span>
+      )}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      {client &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >        &lt;&gt;</span>
+          {/* 1. Client Information */}
+<span class="cstat-no" title="statement not covered" >          &lt;SectionCard title="Client Information"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Date of Birth" type="date" value={form.clientInfo.dob} onChange={v =&gt; set('clientInfo', 'dob', v)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Age" type="number" value={form.clientInfo.age} onChange={v =&gt; set('clientInfo', 'age', v)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label="Phone" value={form.clientInfo.phone} onChange={v =&gt; set('clientInfo', 'phone', v)} placeholder="08012345678" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label="Email" value={form.clientInfo.email} onChange={v =&gt; set('clientInfo', 'email', v)} placeholder="client@email.com" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label="Address" value={form.clientInfo.address} onChange={v =&gt; set('clientInfo', 'address', v)} placeholder="Home address" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label="Occupation" value={form.clientInfo.occupation} onChange={v =&gt; set('clientInfo', 'occupation', v)} placeholder="What they do" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/SectionCard&gt;</span>
+&nbsp;
+          {/* 2. Emergency Contact */}
+<span class="cstat-no" title="statement not covered" >          &lt;SectionCard title="Emergency Contact"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label="Name" value={form.emergency.name} onChange={v =&gt; set('emergency', 'name', v)} placeholder="Emergency contact name" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Relationship" value={form.emergency.relationship} onChange={v =&gt; set('emergency', 'relationship', v)} placeholder="e.g. Spouse" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Phone" value={form.emergency.phone} onChange={v =&gt; set('emergency', 'phone', v)} placeholder="08012345678" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/SectionCard&gt;</span>
+&nbsp;
+          {/* 3. Skin Concerns */}
+<span class="cstat-no" title="statement not covered" >          &lt;SectionCard title="Skin Concerns" hint="Select all that apply"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Chips options={CONCERN_OPTIONS} selected={form.concerns.selected} onToggle={o =&gt; toggle('concerns', 'selected', o)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            {form.concerns.selected.includes('Other') &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Other concern" value={form.concerns.other} onChange={v =&gt; set('concerns', 'other', v)} placeholder="Describe..." /&gt;</span>
+            )}
+<span class="cstat-no" title="statement not covered" >          &lt;/SectionCard&gt;</span>
+&nbsp;
+          {/* 4. Skin History */}
+<span class="cstat-no" title="statement not covered" >          &lt;SectionCard title="Skin History"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}&gt;Skin type&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Pills options={SKIN_TYPE_OPTIONS} value={form.skinHistory.skin_type} onChange={v =&gt; set('skinHistory', 'skin_type', v)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}&gt;Current symptoms&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Chips options={SYMPTOM_OPTIONS} selected={form.skinHistory.symptoms} onToggle={o =&gt; toggle('skinHistory', 'symptoms', o)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}&gt;Had a facial before?&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;YesNo value={form.skinHistory.had_facial} onChange={v =&gt; set('skinHistory', 'had_facial', v)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              {form.skinHistory.had_facial === 'yes' &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ marginTop: 10 }}&gt;&lt;Inp label="Last facial date" type="date" value={form.skinHistory.facial_date} onChange={v =&gt; set('skinHistory', 'facial_date', v)} /&gt;&lt;/div&gt;</span>
+              )}
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}&gt;Past treatments&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Chips options={TREATMENT_OPTIONS} selected={form.skinHistory.past_treatments} onToggle={o =&gt; toggle('skinHistory', 'past_treatments', o)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            {form.skinHistory.past_treatments.includes('Other') &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Other treatment" value={form.skinHistory.other_treatment} onChange={v =&gt; set('skinHistory', 'other_treatment', v)} placeholder="Describe..." /&gt;</span>
+            )}
+<span class="cstat-no" title="statement not covered" >          &lt;/SectionCard&gt;</span>
+&nbsp;
+          {/* 5. Current Skincare Routine */}
+<span class="cstat-no" title="statement not covered" >          &lt;SectionCard title="Current Skincare Routine"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            {[['cleanser', 'Cleanser'], ['toner', 'Toner'], ['serum', 'Serum'], ['moisturizer', 'Moisturizer'], ['sunscreen', 'Sunscreen'], ['exfoliant', 'Exfoliant'], ['other', 'Other Products']].map(([k, label]) =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp key={k} label={label} value={form.routine[k]} onChange={v =&gt; set('routine', k, v)} placeholder={k === 'other' ? 'Anything else they use' : 'Products they currently use'} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            ))}</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/SectionCard&gt;</span>
+&nbsp;
+          {/* 6. Medical History */}
+<span class="cstat-no" title="statement not covered" >          &lt;SectionCard title="Medical History" hint="Select all that apply"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Chips options={MEDICAL_OPTIONS} selected={form.medical.selected} onToggle={o =&gt; toggle('medical', 'selected', o)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            {form.medical.selected.includes('Other') &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Other condition" value={form.medical.other} onChange={v =&gt; set('medical', 'other', v)} placeholder="Describe..." /&gt;</span>
+            )}
+<span class="cstat-no" title="statement not covered" >          &lt;/SectionCard&gt;</span>
+&nbsp;
+          {/* 7. Allergies */}
+<span class="cstat-no" title="statement not covered" >          &lt;SectionCard title="Allergies" hint="Select all that apply"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Chips options={ALLERGY_OPTIONS} selected={form.allergies.selected} onToggle={o =&gt; toggle('allergies', 'selected', o)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label="Specify" value={form.allergies.specify} onChange={v =&gt; set('allergies', 'specify', v)} placeholder="Details of any allergies..." /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/SectionCard&gt;</span>
+&nbsp;
+          {/* 8. Lifestyle */}
+<span class="cstat-no" title="statement not covered" >          &lt;SectionCard title="Lifestyle"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Water intake" value={form.lifestyle.water} onChange={v =&gt; set('lifestyle', 'water', v)} placeholder="e.g. 3 glasses a day" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Sleep" value={form.lifestyle.sleep} onChange={v =&gt; set('lifestyle', 'sleep', v)} placeholder="e.g. 6 hours / night" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Stress level" value={form.lifestyle.stress} onChange={v =&gt; set('lifestyle', 'stress', v)} placeholder="e.g. Moderate" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Inp label="Sunscreen use" value={form.lifestyle.sunscreen_frequency} onChange={v =&gt; set('lifestyle', 'sunscreen_frequency', v)} placeholder="e.g. Daily / Rarely" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}&gt;Smoker?&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;YesNo value={form.lifestyle.smoker} onChange={v =&gt; set('lifestyle', 'smoker', v)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/SectionCard&gt;</span>
+&nbsp;
+          {/* 9. For Female Clients */}
+<span class="cstat-no" title="statement not covered" >          &lt;SectionCard title="For Female Clients" hint="Skip if not applicable"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}&gt;Pregnant / breastfeeding?&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;YesNo value={form.female.pregnant} onChange={v =&gt; set('female', 'pregnant', v)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}&gt;On hormonal contraceptives?&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;YesNo value={form.female.contraceptives} onChange={v =&gt; set('female', 'contraceptives', v)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/SectionCard&gt;</span>
+&nbsp;
+          {/* 10. Consent */}
+<span class="cstat-no" title="statement not covered" >          &lt;SectionCard title="Consent"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ fontSize: 13, color: gray600, lineHeight: 1.6, padding: 12, borderRadius: 10, background: bg }}&gt;</span>
+              I consent to the skin consultation and the treatment plan given to me. I confirm that the information I have provided is accurate to the best of my knowledge.
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Toggle label="I agree to the above statement" value={form.consent.agreed} onChange={v =&gt; set('consent', 'agreed', v)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            {form.consent.agreed &amp;&amp; &lt;SignaturePad ref={consentPad} label="Client signature — sign with finger or mouse" height={130} /&gt;}</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label="Consent date" type="date" value={form.consent.date} onChange={v =&gt; set('consent', 'date', v)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/SectionCard&gt;</span>
+&nbsp;
+          {/* 11. Therapist Assessment */}
+<span class="cstat-no" title="statement not covered" >          &lt;SectionCard title="Therapist Assessment" hint="Staff section — filled by the aesthetician / skincare scientist"&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label="Therapist name" value={form.assessment.therapist_name} onChange={v =&gt; set('assessment', 'therapist_name', v)} placeholder="Your name" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}&gt;Assessed skin type&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Pills options={SKIN_TYPE_OPTIONS} value={form.assessment.skin_type} onChange={v =&gt; set('assessment', 'skin_type', v)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label="Skin condition" value={form.assessment.skin_condition} onChange={v =&gt; set('assessment', 'skin_condition', v)} placeholder="e.g. Mild acne with post-inflammatory hyperpigmentation" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}&gt;Fitzpatrick skin type&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Pills options={FITZPATRICK} value={form.assessment.fitzpatrick} onChange={v =&gt; set('assessment', 'fitzpatrick', v)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label="Treatment recommended" value={form.assessment.treatment_recommended} onChange={v =&gt; set('assessment', 'treatment_recommended', v)} placeholder="e.g. Chemical peel series + prescription products" /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}&gt;Products recommended&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              {products.length === 0 ? (</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontSize: 12, color: gray400 }}&gt;No products in your catalog yet — add them in Inventory.&lt;/div&gt;</span>
+              ) : (
+<span class="cstat-no" title="statement not covered" >                &lt;ProductSearchPicker businessId={brand.id} selectedIds={recProductIds} onToggle={prod =&gt; toggle('assessment', 'products_recommended', prod.id)} placeholder='Search products to recommend...' /&gt;</span>
+              )}
+<span class="cstat-no" title="statement not covered" >              {recProductIds.length &gt; 0 &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  {recProductIds.map(id =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >                    const p = products.find(x =&gt; x.id === id)</span>
+<span class="cstat-no" title="statement not covered" >                    if (!p) return null</span>
+<span class="cstat-no" title="statement not covered" >                    return (</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;button key={id} type="button" onClick={() =&gt; toggle('assessment', 'products_recommended', id)} aria-label={'Remove ' + p.name}</span>
+<span class="cstat-no" title="statement not covered" >                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: theme.radius.full, border: `1px solid ${tealDeep}`, background: tealMist, color: tealDeep, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        {p.name} &lt;span style={{ fontSize: 13, lineHeight: 1 }}&gt;×&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;/button&gt;</span>
+                    )
+<span class="cstat-no" title="statement not covered" >                  })}</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/div&gt;</span>
+              )}
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Textarea label="Homecare plan" value={form.assessment.homecare_plan} onChange={v =&gt; set('assessment', 'homecare_plan', v)} rows={3} placeholder="What the client should do at home — morning / evening routine, SPF..." /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Textarea label="Facial / other care recommendations" value={form.assessment.facial_care_recommendations} onChange={v =&gt; set('assessment', 'facial_care_recommendations', v)} rows={3} placeholder="Specific facials or other care services recommended (e.g. hydrafacial, LED therapy)..." /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Textarea label="Instructions" value={form.assessment.instructions} onChange={v =&gt; set('assessment', 'instructions', v)} rows={3} placeholder="Aftercare instructions, precautions, when to return..." /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;SignaturePad ref={therapistPad} label="Therapist signature" height={130} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/SectionCard&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ display: 'flex', gap: 10, marginBottom: 8 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;TealBtn onClick={save} disabled={saving} style={{ flex: 1, padding: '12px' }}&gt;{saving ? 'Saving...' : 'Save Consultation'}&lt;/TealBtn&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;GhostBtn onClick={onCancel} style={{ padding: '14px 20px' }}&gt;Cancel&lt;/GhostBtn&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/&gt;</span>
+      )}
+<span class="cstat-no" title="statement not covered" >    &lt;/div&gt;</span>
+  )
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-10-16T15:21:14.166Z
+            </div>
+        <script src="../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
+    </body>
+</html>
+    

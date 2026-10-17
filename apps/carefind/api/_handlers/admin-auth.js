@@ -222,7 +222,7 @@ async function handleRequest(req, res) {
     const { id, userId, profession } = req.body
     if (!id) return res.status(400).json({ error: 'id is required' })
     if (!userId) return res.status(400).json({ error: 'userId is required' })
-    if (!profession || typeof profession !== 'string' || !profession.trim()) return res.status(400).json({ error: 'A non-empty profession string is required' })
+    if (!profession || typeof profession !== 'string' || !profession.trim()) return res.status(400).json({ error: 'A profession is required' })
     const { error: e1 } = await supabase.from('verification_requests').update({ status: 'approved' }).eq('id', id)
     if (e1) return res.status(400).json({ error: `Failed to update verification request: ${e1.message}` })
     const { error: e2 } = await supabase.from('profiles').update({ is_verified: true, verification_label: profession.trim(), specialty: profession.trim() }).eq('id', userId)
@@ -1349,7 +1349,7 @@ async function handleRequest(req, res) {
     }
 
     if (!allSucceeded) {
-      return res.status(207).json({ success: false, results, message: 'Some operations failed — no further rollback attempted. Individual results in results array.' })
+      return res.status(207).json({ success: false, results, message: 'Some operations failed. No further rollback was attempted. Individual results are in the results array.' })
     }
     return res.status(200).json({ success: true, results })
   }
@@ -1492,9 +1492,9 @@ function analyzeSentiment(text) {
   }
 
   const CATEGORY_LABELS = {
-    toxic: 'Toxic content detected — contains aggressive or abusive language',
-    harassment: 'Harassment detected — targets or attacks individuals',
-    spam: 'Spam detected — promotional or unsolicited content',
+    toxic: 'Toxic content detected: contains aggressive or abusive language',
+    harassment: 'Harassment detected: targets or attacks individuals',
+    spam: 'Spam detected: promotional or unsolicited content',
     neutral: 'No significant issues detected',
   }
 
@@ -1515,7 +1515,7 @@ function generateRecommendations(currentTab, recentActions) {
     recommendations.push({
       id: 'show_pending_reports',
       text: 'Show pending reports',
-      reasoning: 'You\'re on the reports tab — reviewing pending reports is the most common next action.',
+      reasoning: 'You\'re on the reports tab. Reviewing pending reports is the most common next action.',
       priority: 'high',
     })
     recommendations.push({
@@ -1539,7 +1539,7 @@ function generateRecommendations(currentTab, recentActions) {
     recommendations.push({
       id: 'show_pending_news',
       text: 'Show pending news submissions',
-      reasoning: 'You\'re on the news tab — reviewing submissions is the primary workflow.',
+      reasoning: 'You\'re on the news tab. Reviewing submissions is the primary workflow.',
       priority: 'high',
     })
   }
@@ -1552,7 +1552,7 @@ function generateRecommendations(currentTab, recentActions) {
     if (allApproved) {
       recommendations.push({
         id: 'continue_approving',
-        text: 'You might want to approve the next item — you\'ve been approving recent ones.',
+        text: 'You might want to approve the next item. You have been approving recent ones.',
         reasoning: 'Pattern detected: you\'ve approved the last 3 items. This suggestion is based on your recent behavior.',
         priority: 'low',
       })
@@ -1560,7 +1560,7 @@ function generateRecommendations(currentTab, recentActions) {
     if (allRejected) {
       recommendations.push({
         id: 'consider_approving',
-        text: 'Consider reviewing criteria — you\'ve rejected the last 3 items.',
+        text: 'Consider reviewing criteria. You have rejected the last 3 items.',
         reasoning: 'Pattern detected: you\'ve rejected the last 3 items. You may want to check if the criteria need adjustment.',
         priority: 'low',
       })
@@ -1571,7 +1571,7 @@ function generateRecommendations(currentTab, recentActions) {
     recommendations.push({
       id: 'generic_stats',
       text: 'Ask me about users, reports, or revenue',
-      reasoning: 'No specific pattern detected — here are some general things I can help with.',
+      reasoning: 'No specific pattern detected. Here are some general things I can help with.',
       priority: 'info',
     })
   }

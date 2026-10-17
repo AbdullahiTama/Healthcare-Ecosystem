@@ -91,7 +91,7 @@ export const HERO = {
 // restate the FIXTURES below, which are themselves illustrative.
 export const PREVIEW = {
   disclaimer:
-    'Illustrative sample of CareFind content — not live data.',
+    'This is a sample of CareFind content, not live data.',
   cards: [
     {
       id: 'discussion',
@@ -208,7 +208,7 @@ export const STEPS = [
     title: 'Connect',
     body:
       'Message on WhatsApp, call, get directions, or book an appointment and pay for '
-      + 'it — all from the same profile.',
+      + 'it, all from the same profile.',
   },
 ]
 
@@ -219,7 +219,7 @@ export const CAPABILITIES = {
   title: 'Ask, discover, connect, book.',
   body:
     'Four things CareFind does today. Each card opens the screen that does the '
-    + 'work — no waitlist, no demo.',
+    + 'work, no waitlist, no demo.',
   items: [
     {
       id: 'ask',

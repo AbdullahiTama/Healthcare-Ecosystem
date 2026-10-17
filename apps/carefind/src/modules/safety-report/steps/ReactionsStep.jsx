@@ -26,7 +26,7 @@ export default function ReactionsStep({ value, onChange }) {
   return (
     <section aria-labelledby="sr-reactions-h">
       <h2 id="sr-reactions-h" style={s.h2}>What happened</h2>
-      <p style={s.muted}>Describe the suspected side effect. Answer each question as best you can — “Not sure” is a valid answer and is never treated as “No”.</p>
+      <p style={s.muted}>Describe the suspected side effect. Answer each question as best you can. “Not sure” is a valid answer and is never treated as “No”.</p>
 
       {list.map((r, i) => (
         <div key={r.reaction_id || `new-${i}`} style={s.card}>
@@ -50,7 +50,7 @@ export default function ReactionsStep({ value, onChange }) {
           </Field>
 
           <fieldset style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, margin: '12px 0 0' }}>
-            <legend style={{ fontSize: 13, fontWeight: 800, padding: '0 6px' }}>Seriousness — answer all six</legend>
+            <legend style={{ fontSize: 13, fontWeight: 800, padding: '0 6px' }}>Seriousness. Please answer all six.</legend>
             {SERIOUSNESS_QUESTIONS.map((q) => (
               <RadioRow
                 key={q.key}
@@ -61,7 +61,7 @@ export default function ReactionsStep({ value, onChange }) {
                 options={TERNARY}
               />
             ))}
-            <p style={s.help}>Not sure about birth defects? Choose “Not sure” — it is recorded as unknown, never as “No”.</p>
+            <p style={s.help}>Not sure about birth defects? Choose “Not sure”. It is recorded as unknown, never as “No”.</p>
           </fieldset>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>

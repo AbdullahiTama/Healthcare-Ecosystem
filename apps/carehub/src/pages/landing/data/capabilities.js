@@ -18,27 +18,27 @@ export const CAPABILITIES = [
     value: '32',
     label: 'Dashboard modules',
     detail: 'POS, inventory, appointments, lab, imaging, reports, staff, locations and more.',
-    source: 'src/lib/permissions.js — MODULES (32 keys, cross-checked against the 32-entry nav array)',
+    source: 'src/lib/permissions.js, MODULES',
   },
   {
     value: '9',
     label: 'Business types',
     detail: 'Each one gets its own navigation, dashboard and vocabulary.',
-    source: 'src/config/constants.js — BUSINESS_TYPES',
+    source: 'src/config/constants.js, BUSINESS_TYPES',
   },
   {
     value: '8',
-    label: 'Built-in staff roles',
+    label: 'Staff roles you get to start with',
     detail: 'Owner through Doctor, plus any custom role your business defines.',
-    source: 'src/lib/permissions.js — ROLES',
+    source: 'src/lib/permissions.js, ROLES',
   },
   {
     value: '5',
     label: 'Pricing plans',
     detail: 'Basic, Growth, Premium, Enterprise and Custom.',
-    source: 'src/lib/planLimits.js — PLAN_YEARLY_NAIRA',
+    source: 'src/lib/planLimits.js, PLAN_YEARLY_NAIRA',
   },
 ]
 
 export const CAPABILITY_NOTE =
-  'Platform capabilities, measured from the product — not usage statistics.'
+  'Platform capabilities, measured from the product, not usage statistics.'

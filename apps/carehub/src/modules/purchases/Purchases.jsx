@@ -293,14 +293,14 @@ export default function Purchases({ brand, role, perms }) {
                 {purchases.map(p => (
                   <tr key={p.id} style={{ borderBottom: `1px solid ${gray100}` }}>
                     <td style={{ padding: '12px 12px', fontWeight: '700', fontSize: '13px', color: navy }}>{p.supplier_name}</td>
-                    <td style={{ padding: '12px 12px', fontSize: '13px', color: gray600, maxWidth: '260px' }}>{p.product_name || '—'}</td>
-                    <td style={{ padding: '12px 12px', fontSize: '13px', color: navy }}>{p.quantity || '—'}</td>
-                    <td style={{ padding: '12px 12px', fontSize: '13px', color: navy }}>{p.cost_price ? fmt(p.cost_price) : '—'}</td>
+                    <td style={{ padding: '12px 12px', fontSize: '13px', color: gray600, maxWidth: '260px' }}>{p.product_name || 'Not set'}</td>
+                    <td style={{ padding: '12px 12px', fontSize: '13px', color: navy }}>{p.quantity || 'Not set'}</td>
+                    <td style={{ padding: '12px 12px', fontSize: '13px', color: navy }}>{p.cost_price ? fmt(p.cost_price) : 'Not set'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(p.total_cost || 0)}</td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', color: success }}>{fmt(p.amount_paid || 0)}</td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: '900', color: (p.balance || 0) > 0 ? danger : success }}>{fmt(p.balance || 0)}</td>
-                    <td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}>{p.supply_date || '—'}</td>
-                    <td style={{ padding: '12px 12px', fontSize: '12px', color: gray400 }}>{p.due_date || '—'}</td>
+                    <td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}>{p.supply_date || 'Not set'}</td>
+                    <td style={{ padding: '12px 12px', fontSize: '12px', color: gray400 }}>{p.due_date || 'Not set'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}>{fmtDate(p.expiry)}</td>
                     <td style={{ padding: '12px 12px' }}><Pill label={p.status} type={p.status === 'paid' ? 'green' : 'amber'} /></td>
                     <td style={{ padding: '12px 12px' }}>
@@ -370,7 +370,7 @@ export default function Purchases({ brand, role, perms }) {
                       </select>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: '700', color: sub > 0 ? tealDeep : gray400 }}>{sub > 0 ? 'Subtotal: ' + fmt(sub) : '—'}</span>
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: sub > 0 ? tealDeep : gray400 }}>{sub > 0 ? 'Subtotal: ' + fmt(sub) : 'Not set'}</span>
                     </div>
                   </div>
                 )

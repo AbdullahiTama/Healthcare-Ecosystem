@@ -72,7 +72,7 @@ export default function Hierarchy({ repository = createGrowthRepository() }) {
                 </button>
                 {isOpen && (
                   <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {coordinators.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>No coordinators — agents are unparented.</div>}
+                    {coordinators.length === 0 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>No coordinators yet. These agents are not attached to a coordinator.</div>}
                     {coordinators.map(c => {
                       const children = (node.byParent[c.id] || [])
                       const cap = 20
@@ -80,14 +80,14 @@ export default function Hierarchy({ repository = createGrowthRepository() }) {
                       return (
                         <div key={c.id} style={{ padding: 10, border: `1px solid ${isFull ? 'var(--amber)' : 'var(--border)'}`, borderRadius: 10, background: isFull ? 'var(--amber-bg)' : 'var(--panel)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg)' }}>{c.full_name || c.name} <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)' }}>• {c.tier} • {c.referral_code || '—'} {isFull ? '• 20/20 FULL' : `• ${children.length}/${cap}`}</span></div>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg)' }}>{c.full_name || c.name} <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)' }}>• {c.tier} • {c.referral_code || 'Not set'} {isFull ? '• 20/20 FULL' : `• ${children.length}/${cap}`}</span></div>
                             <span style={{ fontSize: 11, color: 'var(--muted)' }}>{c.email}</span>
                           </div>
                           {children.length ? (
                             <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                               {children.map(ch => (
                                 <div key={ch.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'var(--hairline)', borderRadius: 8, fontSize: 12 }}>
-                                  <span style={{ fontWeight: 600, color: 'var(--fg)' }}>{ch.full_name || ch.name} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>• {ch.tier} • {ch.referral_code || '—'}</span></span>
+                                  <span style={{ fontWeight: 600, color: 'var(--fg)' }}>{ch.full_name || ch.name} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>• {ch.tier} • {ch.referral_code || 'Not set'}</span></span>
                                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)' }}>{ch.email}</span>
                                 </div>
                               ))}
@@ -103,7 +103,7 @@ export default function Hierarchy({ repository = createGrowthRepository() }) {
                         {(node.byParent['__root'] || []).map(ch => (
                           <div key={ch.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, marginBottom: 6 }}>
                             <span style={{ fontWeight: 600, color: 'var(--fg)' }}>{ch.full_name || ch.name} • {ch.tier}</span>
-                            <span style={{ fontSize: 11, color: 'var(--muted)' }}>{ch.referral_code || '—'}</span>
+                            <span style={{ fontSize: 11, color: 'var(--muted)' }}>{ch.referral_code || 'Not set'}</span>
                           </div>
                         ))}
                       </div>

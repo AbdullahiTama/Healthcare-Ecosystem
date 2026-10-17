@@ -6,10 +6,17 @@ import { useCart } from './CartProvider'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Card, Button, Empty, Loading } from '../../components/ui'
-import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ChevronLeft } from 'lucide-react'
+import { Check, RotateCcw, Truck, ShoppingCart, Trash2, Plus, Minus, ArrowRight, ChevronLeft } from 'lucide-react'
+
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
+
+// Cart assurance strip. Plain list items separated by whitespace and hairlines
+// rather than three identical outlined pills, which read as badges the shopper
+// might have to earn.
+const assuranceRow = { display: 'flex', alignItems: 'center', gap: 6 }
+const assuranceIcon = { color: theme.tealDeep, flexShrink: 0 }
 
 function SwipeToDelete({ onDelete, children }) {
   const [offsetX, setOffsetX] = useState(0)
@@ -213,11 +220,11 @@ function CartContent() {
         <p style={{ fontSize: 14, color: theme.textMid, marginBottom: 12 }}>
           Delivery and fulfilment fees will be calculated at checkout
         </p>
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:16 }}>
-          <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:theme.navy, border:`1px solid ${theme.border}`, borderRadius:999, padding:'4px 8px', background:'#fff' }}>✓ CareFind Authentic</span>
-          <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:theme.navy, border:`1px solid ${theme.border}`, borderRadius:999, padding:'4px 8px', background:'#fff' }}>↩ 7-day return</span>
-          <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:theme.navy, border:`1px solid ${theme.border}`, borderRadius:999, padding:'4px 8px', background:'#fff' }}>⚡ Pickup FREE ≤3km</span>
-        </div>
+        <ul style={{ listStyle:'none', margin:'0 0 16px 0', padding:'8px 0', borderTop:`1px solid ${theme.border}`, borderBottom:`1px solid ${theme.border}`, display:'flex', flexWrap:'wrap', gap:'4px 18px', fontSize:11.5, fontWeight:600, color:theme.navy }}>
+          <li style={assuranceRow}><Check size={13} aria-hidden="true" style={assuranceIcon} />CareFind Authentic</li>
+          <li style={assuranceRow}><RotateCcw size={13} aria-hidden="true" style={assuranceIcon} />Returns within 7 days</li>
+          <li style={assuranceRow}><Truck size={13} aria-hidden="true" style={assuranceIcon} />Free pickup within 3 km</li>
+        </ul>
         <Button
           onClick={handleCheckout}
           style={{

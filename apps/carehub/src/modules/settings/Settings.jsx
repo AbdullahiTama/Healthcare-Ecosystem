@@ -199,8 +199,8 @@ export default function Settings({ brand, role, perms }) {
         const path = 'businesses/' + brand.id + '/' + (kind === 'logo_url' ? 'logo' : 'cover') + '-' + Date.now() + '.' + ext
         const url = await sbUpload('business-assets', path, file, file.type || 'image/jpeg', 'Image upload failed')
         b(kind, url)
-        showToast('Image uploaded — click "Save Business Details" to publish it.', { type: 'success' })
-      } catch (e) { showToast('Upload failed — ' + e.message, { type: 'error' }) }
+        showToast('Image uploaded. Select Save Business Details to publish it.', { type: 'success' })
+      } catch (e) { showToast('Upload failed: ' + e.message, { type: 'error' }) }
       setUploading(null)
     }
     input.click()
@@ -275,7 +275,7 @@ export default function Settings({ brand, role, perms }) {
     const svc = deleteServiceTarget
     setDeleteServiceTarget(null)
     if (!svc?.id) return
-    try { await settingsRepository.deleteService(svc.id, brand.id); showToast(`"${svc.name}" deactivated — hidden from patients but historical bookings preserved.`, { type: 'success' }); loadServices() } catch (e) { showToast(e.message || 'Could not deactivate service.', { type: 'error' }) }
+    try { await settingsRepository.deleteService(svc.id, brand.id); showToast(`"${svc.name}" deactivated. It is hidden from patients, but past bookings are kept.`, { type: 'success' }); loadServices() } catch (e) { showToast(e.message || 'Could not deactivate service.', { type: 'error' }) }
   }
 
   async function handleAddAvailability() {
@@ -337,7 +337,7 @@ export default function Settings({ brand, role, perms }) {
 
         {hospitalBlocked && (
           <div style={{ marginBottom: '12px', padding: '12px 14px', borderRadius: theme.radius.md, background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, color: theme.danger, fontSize: '13px', fontWeight: '600' }}>
-            Hospitals start from Growth — Basic is not available for hospital accounts. Please upgrade to Growth or higher.
+            Hospital accounts start on Growth. Basic is not available for hospitals, so please upgrade to Growth or higher.
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', padding: '14px 16px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealMist}`, marginBottom: '16px' }}>
@@ -352,7 +352,7 @@ export default function Settings({ brand, role, perms }) {
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontWeight: '700', fontSize: '13px', color: isExpired ? danger : (daysLeft !== null && daysLeft <= 7) ? warning : success }}>
-              {isExpired ? 'Expired' : expiresAt ? `Renews by ${expiresAt.toLocaleDateString()}` : '—'}
+              {isExpired ? 'Expired' : expiresAt ? `Renews by ${expiresAt.toLocaleDateString()}` : 'Not set'}
             </div>
             {!isExpired && daysLeft !== null && (
               <div style={{ fontSize: '11px', color: gray400 }}>{daysLeft} day{daysLeft === 1 ? '' : 's'} left</div>
@@ -364,15 +364,15 @@ export default function Settings({ brand, role, perms }) {
           yearlyPrice ? (
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <TealBtn onClick={() => handleRenew(1)} disabled={renewing} style={{ padding: '12px 20px' }}>
-                {renewing ? 'Redirecting…' : `Renew 1 month — ₦${monthlyPrice.toLocaleString()}`}
+                {renewing ? 'Redirecting…' : `Renew 1 month (₦${monthlyPrice.toLocaleString()})`}
               </TealBtn>
               <GhostBtn onClick={() => handleRenew(12)} disabled={renewing} style={{ padding: '12px 20px' }}>
-                {renewing ? 'Redirecting…' : `Renew 12 months — ₦${yearlyPrice.toLocaleString()}`}
+                {renewing ? 'Redirecting…' : `Renew 12 months (₦${yearlyPrice.toLocaleString()})`}
               </GhostBtn>
             </div>
           ) : (
             <div style={{ padding: '14px', borderRadius: theme.radius.md, background: theme.gray50, border: `1px solid ${border}`, fontSize: '13px', color: gray600 }}>
-              Custom plan — pricing is tailored to your organization. Contact <strong>support@carehub.ng</strong> to discuss your requirements.
+              Custom plan. Pricing is tailored to your organisation. Contact <strong>support@carehub.ng</strong> to discuss your requirements.
             </div>
           )
         ) : (
@@ -387,7 +387,7 @@ export default function Settings({ brand, role, perms }) {
         </div>
         <div>
           <div style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{businessName(bType)}</div>
-          <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>Business type — determines your consultation forms and workflow</div>
+          <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>Business type. This decides which consultation forms and workflow you get.</div>
         </div>
       </div>
 
@@ -412,7 +412,7 @@ export default function Settings({ brand, role, perms }) {
             <Inp label='GPS Longitude (optional)' value={bizForm.longitude} onChange={v => b('longitude', v)} placeholder='e.g. 3.4359' />
           </div>
           <div style={{ fontSize: '12px', color: gray500, padding: '10px 12px', borderRadius: theme.radius.md, background: bg }}>
-            Pin your exact location on the public CareFind map. Find your coordinates on <a href='https://www.google.com/maps' target='_blank' rel='noopener noreferrer' style={{ color: tealDeep, fontWeight: '600' }}>Google Maps</a> — right-click anywhere and copy the numbers.
+            Pin your exact location on the public CareFind map. Find your coordinates on <a href='https://www.google.com/maps' target='_blank' rel='noopener noreferrer' style={{ color: tealDeep, fontWeight: '600' }}>Google Maps</a> Right-click anywhere on the page and copy the numbers.
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -431,7 +431,7 @@ export default function Settings({ brand, role, perms }) {
           {bizForm.logo_url && (
             <img src={bizForm.logo_url} alt='Logo preview' style={{ width: '48px', height: '48px', borderRadius: '8px', objectFit: 'cover', border: `1px solid ${border}` }} onError={e => e.target.style.display = 'none'} />
           )}
-          <Textarea label='About your business' value={bizForm.description || ''} onChange={v => b('description', v)} rows={3} placeholder='Shown on your public CareFind profile — services, specialties, what makes you stand out...' />
+          <Textarea label='About your business' value={bizForm.description || ''} onChange={v => b('description', v)} rows={3} placeholder='Shown on your public CareFind profile: your services, specialties and what sets you apart...' />
           <Toggle label='Listed on CareFind' desc='Allow patients to find your business on the public CareFind platform' value={bizForm.visible_on_carefind !== false} onChange={v => b('visible_on_carefind', v)} />
           <Toggle label='Show product prices on CareFind' desc='When off, patients see "Ask for price" instead of your product prices' value={bizForm.show_prices !== false} onChange={v => b('show_prices', v)} />
           <TealBtn onClick={saveBizDetails} style={{ alignSelf: 'flex-start', padding: '12px 24px' }}>{savingBiz ? 'Saving...' : 'Save Business Details'}</TealBtn>
@@ -446,8 +446,8 @@ export default function Settings({ brand, role, perms }) {
           <Toggle label='Accept online bookings' desc='Shows a "Book an Appointment" section on your CareFind profile page' value={bookingForm.enabled} onChange={v => bk('enabled', v)} />
           {bookingForm.enabled && (
             <>
-              <Sel label='Appointment type' value={bookingForm.type} onChange={v => bk('type', v)} options={[{ value: 'physical', label: 'Physical visits only' }, { value: 'online', label: 'Online (video/phone) only' }, { value: 'both', label: 'Both — let the patient choose' }]} />
-              <Inp label='Available time slots (comma-separated, 24h)' value={bookingForm.slotsText} onChange={v => bk('slotsText', v)} placeholder='09:00, 10:00, 11:00, 14:00, 15:00' />
+              <Sel label='Appointment type' value={bookingForm.type} onChange={v => bk('type', v)} options={[{ value: 'physical', label: 'Physical visits only' }, { value: 'online', label: 'Online (video/phone) only' }, { value: 'both', label: 'Both, let the patient choose' }]} />
+              <Inp label='Available time slots (separated by commas, in 24 hour time)' value={bookingForm.slotsText} onChange={v => bk('slotsText', v)} placeholder='09:00, 10:00, 11:00, 14:00, 15:00' />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <Inp label='Online fee (₦, blank = free)' value={bookingForm.onlineFee} onChange={v => bk('onlineFee', v)} type='number' placeholder='0' />
                 <Inp label='Physical fee (₦, blank = free)' value={bookingForm.physicalFee} onChange={v => bk('physicalFee', v)} type='number' placeholder='0' />
@@ -492,7 +492,7 @@ export default function Settings({ brand, role, perms }) {
               <div key={svc.id} role="article" aria-label={`Service ${svc.name}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: svc.is_active ? 'white' : theme.gray50, gap: '12px', flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: '800', fontSize: '14px', color: navy, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {svc.name} {!svc.is_active && <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 6px', borderRadius: theme.radius.sm, background: theme.gray200, color: gray500 }}>INACTIVE — hidden from patients</span>}
+                    {svc.name} {!svc.is_active && <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 6px', borderRadius: theme.radius.sm, background: theme.gray200, color: gray500 }}>INACTIVE. Hidden from patients.</span>}
                   </div>
                   {svc.description && <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{svc.description}</div>}
                   <div style={{ display: 'flex', gap: '12px', marginTop: '6px', flexWrap: 'wrap' }}>
@@ -524,15 +524,15 @@ export default function Settings({ brand, role, perms }) {
             <TealBtn onClick={handleAddAvailability} style={{ padding: '10px 16px' }} aria-label="Add availability slot">Add</TealBtn>
           </div>
           {availability.length === 0 ? (
-            <div style={{ fontSize: '12px', color: gray400, textAlign: 'center', padding: '12px', background: bg, borderRadius: theme.radius.md }}>No date-specific slots yet. Daily slots from Booking above will be used.</div>
+            <div style={{ fontSize: '12px', color: gray400, textAlign: 'center', padding: '12px', background: bg, borderRadius: theme.radius.md }}>No slots for specific dates yet. Daily slots from Booking above will be used.</div>
           ) : (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               {availability.map(a => {
                 const svcName = a.service_id ? (services.find(s => s.id === a.service_id)?.name || a.service_id.slice(0, 8)) : 'General'
                 const isBooked = a.is_booked || a.status === 'booked' || !!a.appointment_id
                 return (
-                  <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: theme.radius.full, background: isBooked ? theme.gray50 : tealMist, border: `1px solid ${isBooked ? theme.gray200 : tealDeep}`, fontSize: '12px', fontWeight: '600', color: isBooked ? gray500 : tealDeep, textDecoration: isBooked ? 'line-through' : 'none' }} title={isBooked ? 'Booked — cannot delete' : 'Available'}>
-                    {svcName} · {a.date} {a.time}{a.end_time ? `–${a.end_time}` : ''} {isBooked && '(booked)'}
+                  <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: theme.radius.full, background: isBooked ? theme.gray50 : tealMist, border: `1px solid ${isBooked ? theme.gray200 : tealDeep}`, fontSize: '12px', fontWeight: '600', color: isBooked ? gray500 : tealDeep, textDecoration: isBooked ? 'line-through' : 'none' }} title={isBooked ? 'Booked, cannot delete' : 'Available'}>
+                    {svcName} · {a.date} {a.time}{a.end_time ? ` to ${a.end_time}` : ''}{isBooked ? ' (booked)' : ''}
                     {!isBooked && <button onClick={() => handleDeleteAvailability(a.id)} aria-label={`Remove slot ${a.date} ${a.time}`} style={{ background: 'none', border: 'none', cursor: 'pointer', color: theme.danger, fontWeight: '900', padding: 0 }}>×</button>}
                   </span>
                 )
@@ -569,7 +569,7 @@ export default function Settings({ brand, role, perms }) {
           <Card style={{ maxWidth: '420px', width: '100%', padding: '24px', textAlign: 'center' }}>
             <div style={{ fontSize: '16px', fontWeight: '800', color: navy, marginBottom: '8px' }}>Deactivate service?</div>
             <div style={{ fontSize: '13px', color: gray500, marginBottom: '8px' }}>This will hide <strong>{deleteServiceTarget.name}</strong> from patients. Historical bookings keep their price and remain visible.</div>
-            <div style={{ fontSize: '11px', color: gray400, marginBottom: '20px', padding: '8px', background: bg, borderRadius: theme.radius.sm }}>The service is soft-deactivated, not deleted, to preserve audit history per spec §3.2.</div>
+            <div style={{ fontSize: '11px', color: gray400, marginBottom: '20px', padding: '8px', background: bg, borderRadius: theme.radius.sm }}>This service is switched off rather than deleted, so its audit history is kept.</div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <GhostBtn onClick={() => setDeleteServiceTarget(null)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
               <button onClick={handleDeleteService} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: theme.danger, color: 'white', fontWeight: '800', cursor: 'pointer' }}>Deactivate</button>
@@ -587,25 +587,25 @@ export default function Settings({ brand, role, perms }) {
           {settings.logo_url && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderRadius: theme.radius.md, background: bg }}>
               <img src={settings.logo_url} alt='Logo preview' style={{ width: '48px', height: '48px', borderRadius: '8px', objectFit: 'cover', border: `1px solid ${border}` }} onError={e => e.target.style.display = 'none'} />
-              <div style={{ fontSize: '12px', color: gray500 }}>Logo preview — this is how it appears on receipts</div>
+              <div style={{ fontSize: '12px', color: gray500 }}>Logo preview, exactly as it appears on receipts</div>
             </div>
           )}
           <Textarea label='Receipt Header' value={settings.receipt_header} onChange={v => s('receipt_header', v)} placeholder='e.g. NAFDAC Reg No: A1-234 | PCN Reg No: PCN/LIC/123' rows={2} />
           <Textarea label='Refund / Return Policy' value={settings.refund_policy} onChange={v => s('refund_policy', v)} placeholder='e.g. No refund on dispensed medicines. Report issues within 24 hours.' rows={3} />
           <Textarea label='Receipt Footer Message' value={settings.receipt_footer} onChange={v => s('receipt_footer', v)} placeholder='e.g. Thank you for choosing us! Your health is our priority.' rows={2} />
           <Inp label='Tax Rate (%)' value={settings.tax_rate} onChange={v => s('tax_rate', v)} type='number' placeholder='0 (leave blank if no tax)' />
-          <Sel label='Receipt Paper Width' value={settings.receipt_width || '80'} onChange={v => s('receipt_width', v)} options={[{ value: '80', label: '80mm — counter printer' }, { value: '58', label: '58mm — portable printer' }]} />
+          <Sel label='Receipt Paper Width' value={settings.receipt_width || '80'} onChange={v => s('receipt_width', v)} options={[{ value: '80', label: '80mm, for a counter printer' }, { value: '58', label: '58mm, for a portable printer' }]} />
         </div>
 
         {/* Preview */}
         <div style={{ marginTop: '20px', padding: '16px', borderRadius: theme.radius.md, border: `2px dashed ${border}`, background: bg }}>
-          <div style={{ fontSize: '11px', fontWeight: '700', color: gray400, marginBottom: '10px', letterSpacing: '1px' }}>RECEIPT PREVIEW</div>
+          <div style={{ fontSize: '11px', fontWeight: '700', color: gray400, marginBottom: '10px', letterSpacing: '0.02em' }}>Receipt preview</div>
           <div style={{ fontFamily: theme.fontMono, fontSize: '12px', color: navy, lineHeight: '1.8' }}>
             <div style={{ textAlign: 'center', marginBottom: '8px' }}>
               {settings.logo_url && <img src={settings.logo_url} alt='' style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', display: 'block', margin: '0 auto 6px' }} onError={e => e.target.style.display = 'none'} />}
               <div style={{ fontWeight: '700' }}>{brand?.name || 'Your Business Name'}</div>
               <div style={{ fontSize: '10px', color: gray500 }}>{brand?.address || 'Business Address'}</div>
-              <div style={{ fontSize: '10px', color: gray500 }}>WhatsApp: {brand?.whatsapp || '—'}</div>
+              <div style={{ fontSize: '10px', color: gray500 }}>WhatsApp: {brand?.whatsapp || 'Not set'}</div>
               {settings.receipt_header && <div style={{ fontSize: '10px', fontStyle: 'italic', marginTop: '4px' }}>{settings.receipt_header}</div>}
             </div>
             <div style={{ borderTop: `1px dashed ${border}`, margin: '8px 0' }} />

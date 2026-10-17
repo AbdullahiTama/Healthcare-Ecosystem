@@ -63,7 +63,7 @@ export function FinalCta() {
               textDecoration: 'none',
             }}
           >
-            Get started free
+            Start your account
             <span
               aria-hidden
               style={{

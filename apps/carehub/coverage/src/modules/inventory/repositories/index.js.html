@@ -1,0 +1,460 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/modules/inventory/repositories/index.js</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../../prettify.css" />
+    <link rel="stylesheet" href="../../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../../index.html">All files</a> / <a href="index.html">src/modules/inventory/repositories</a> index.js</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/126</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/126</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >import { sbFetch } from '../../../services/supabase'</span></span></span>
+<span class="cstat-no" title="statement not covered" >import { pagedQuery } from '../../../lib/pagedQuery'</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >// ── Product repository ────────────────────────────────────────────────────────</span>
+<span class="cstat-no" title="statement not covered" >// A deep module over the `products` / `stock_batches` tables. Its interface is</span>
+<span class="cstat-no" title="statement not covered" >// small (getAll/getById/create/update/delete/deleteBulk/…); the implementation</span>
+<span class="cstat-no" title="statement not covered" >// owns two things callers must never re-derive: the PostgREST query shape and</span>
+<span class="cstat-no" title="statement not covered" >// tenant scoping — every read and write is filtered by business_id so one</span>
+<span class="cstat-no" title="statement not covered" >// organisation can never touch another's rows.</span>
+<span class="cstat-no" title="statement not covered" >//</span>
+<span class="cstat-no" title="statement not covered" >// The repository's only outside dependency is `request`, a function with</span>
+<span class="cstat-no" title="statement not covered" >// sbFetch's shape: (path, options) =&gt; Promise&lt;rows&gt;. Production binds the real</span>
+<span class="cstat-no" title="statement not covered" >// PostgREST-backed sbFetch (the default below); tests bind an in-memory adapter.</span>
+<span class="cstat-no" title="statement not covered" >// That injected transport is the seam — one interface, two adapters.</span>
+<span class="cstat-no" title="statement not covered" >export function createProductRepository(request = sbFetch) {</span>
+<span class="cstat-no" title="statement not covered" >  return {</span>
+<span class="cstat-no" title="statement not covered" >    // PostgREST clamps every response to db-max-rows (1000 on this project —</span>
+<span class="cstat-no" title="statement not covered" >    // proven live 2026-08-11: a `limit=50000` request for products came back</span>
+<span class="cstat-no" title="statement not covered" >    // `Content-Range: 0-999/12276`, so 11,276 rows were unreachable through a</span>
+<span class="cstat-no" title="statement not covered" >    // single query, which is why uploaded products past 1000 never appeared).</span>
+<span class="cstat-no" title="statement not covered" >    // A raised limit cannot help; the rows are fetched by offset-paging until</span>
+<span class="cstat-no" title="statement not covered" >    // the last short page. `id.asc` pins the order so pages cannot shift rows.</span>
+<span class="cstat-no" title="statement not covered" >    // The UI paginates the returned array for rendering.</span>
+<span class="cstat-no" title="statement not covered" >    async getAll(businessId) {</span>
+<span class="cstat-no" title="statement not covered" >      return pagedQuery(request, `products?business_id=eq.${businessId}&amp;order=name.asc,id.asc&amp;select=*`)</span>
+<span class="cstat-no" title="statement not covered" >    },</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    async getById(productId, businessId) {</span>
+<span class="cstat-no" title="statement not covered" >      const results = await request(`products?id=eq.${productId}&amp;business_id=eq.${businessId}&amp;select=*`)</span>
+<span class="cstat-no" title="statement not covered" >      return results[0] || null</span>
+<span class="cstat-no" title="statement not covered" >    },</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    // Type-ahead lookup for consultation forms: matches the brand name OR the</span>
+<span class="cstat-no" title="statement not covered" >    // generic name, case-insensitively. The query is URL-encoded before it is</span>
+<span class="cstat-no" title="statement not covered" >    // interpolated so a product name containing a comma cannot break the</span>
+<span class="cstat-no" title="statement not covered" >    // or=() clause structure. Selects only what pickers render — an earlier</span>
+<span class="cstat-no" title="statement not covered" >    // service-layer version selected a nonexistent `sku` column, which made</span>
+<span class="cstat-no" title="statement not covered" >    // every search fail with PGRST204 (swallowed by the caller's catch).</span>
+<span class="cstat-no" title="statement not covered" >    async search(businessId, query, limit = 30) {</span>
+<span class="cstat-no" title="statement not covered" >      const q = encodeURIComponent(query.trim())</span>
+<span class="cstat-no" title="statement not covered" >      if (!q) return []</span>
+<span class="cstat-no" title="statement not covered" >      return request(</span>
+<span class="cstat-no" title="statement not covered" >        `products?business_id=eq.${businessId}` +</span>
+<span class="cstat-no" title="statement not covered" >        `&amp;or=(name.ilike.*${q}*,generic_name.ilike.*${q}*)` +</span>
+<span class="cstat-no" title="statement not covered" >        `&amp;order=name.asc,id.asc&amp;select=id,name,generic_name,price,category&amp;limit=${limit}`,</span>
+<span class="cstat-no" title="statement not covered" >      )</span>
+<span class="cstat-no" title="statement not covered" >    },</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    async create(businessId, product) {</span>
+<span class="cstat-no" title="statement not covered" >      return request('products', {</span>
+<span class="cstat-no" title="statement not covered" >        method: 'POST',</span>
+<span class="cstat-no" title="statement not covered" >        body: JSON.stringify({ ...product, business_id: businessId }),</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >    },</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    async update(productId, businessId, updates) {</span>
+<span class="cstat-no" title="statement not covered" >      return request(`products?id=eq.${productId}&amp;business_id=eq.${businessId}`, {</span>
+<span class="cstat-no" title="statement not covered" >        method: 'PATCH',</span>
+<span class="cstat-no" title="statement not covered" >        body: JSON.stringify(updates),</span>
+<span class="cstat-no" title="statement not covered" >        prefer: 'return=minimal',</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >    },</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    async delete(productId, businessId) {</span>
+<span class="cstat-no" title="statement not covered" >      return request(`products?id=eq.${productId}&amp;business_id=eq.${businessId}`, {</span>
+<span class="cstat-no" title="statement not covered" >        method: 'DELETE',</span>
+<span class="cstat-no" title="statement not covered" >        prefer: 'return=minimal',</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >    },</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    // Deletes many products in one round-trip, scoped to the tenant so an id</span>
+<span class="cstat-no" title="statement not covered" >    // list can never reach across the business boundary. Empty list is a no-op</span>
+<span class="cstat-no" title="statement not covered" >    // (an unscoped `id=in.()` would otherwise be a malformed request).</span>
+<span class="cstat-no" title="statement not covered" >    async deleteBulk(productIds, businessId) {</span>
+<span class="cstat-no" title="statement not covered" >      if (!productIds || productIds.length === 0) return</span>
+<span class="cstat-no" title="statement not covered" >      return request(`products?id=in.(${productIds.join(',')})&amp;business_id=eq.${businessId}`, {</span>
+<span class="cstat-no" title="statement not covered" >        method: 'DELETE',</span>
+<span class="cstat-no" title="statement not covered" >        prefer: 'return=minimal',</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >    },</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    // Atomic replenishment via the increment_product_stock RPC (C5/C12,</span>
+<span class="cstat-no" title="statement not covered" >    // 20260804_sale_stock_movement.sql). Purchases used to read stock, add the</span>
+<span class="cstat-no" title="statement not covered" >    // quantity in JavaScript and write an absolute value back — against the</span>
+<span class="cstat-no" title="statement not covered" >    // sale_stock_movement trigger that is a lost update, so recording a</span>
+<span class="cstat-no" title="statement not covered" >    // purchase while a till sold the same product silently restored the sold</span>
+<span class="cstat-no" title="statement not covered" >    // units. The RPC does `stock = stock + qty` inside the database instead.</span>
+<span class="cstat-no" title="statement not covered" >    //</span>
+<span class="cstat-no" title="statement not covered" >    // The RPC is SECURITY INVOKER, so products' RLS still scopes it; passing</span>
+<span class="cstat-no" title="statement not covered" >    // businessId keeps the filter explicit on this side too.</span>
+<span class="cstat-no" title="statement not covered" >    async incrementStock(productId, businessId, qty) {</span>
+<span class="cstat-no" title="statement not covered" >      if (!qty || qty &lt;= 0) return null</span>
+<span class="cstat-no" title="statement not covered" >      const result = await request('rpc/increment_product_stock', {</span>
+<span class="cstat-no" title="statement not covered" >        method: 'POST',</span>
+<span class="cstat-no" title="statement not covered" >        body: JSON.stringify({</span>
+<span class="cstat-no" title="statement not covered" >          p_product_id: productId,</span>
+<span class="cstat-no" title="statement not covered" >          p_business_id: businessId,</span>
+<span class="cstat-no" title="statement not covered" >          p_qty: qty,</span>
+<span class="cstat-no" title="statement not covered" >        }),</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >      // PostgREST returns the scalar the function returns — the new stock</span>
+<span class="cstat-no" title="statement not covered" >      // level, or null when no row matched (wrong tenant, deleted product).</span>
+<span class="cstat-no" title="statement not covered" >      return Array.isArray(result) ? result[0] : result</span>
+<span class="cstat-no" title="statement not covered" >    },</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    // NOTE: `getStockBatches`/`addStockBatch` used to live here too. They had</span>
+<span class="cstat-no" title="statement not covered" >    // zero callers and zero test coverage, and they reached into</span>
+<span class="cstat-no" title="statement not covered" >    // `stock_batches` — a table the stock module owns — with a different</span>
+<span class="cstat-no" title="statement not covered" >    // ordering (expiry_date vs created_at) than the functions the app actually</span>
+<span class="cstat-no" title="statement not covered" >    // used. Removed when `stock` adopted the seam; batches belong to</span>
+<span class="cstat-no" title="statement not covered" >    // modules/stock/repositories.</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    // NOTE: a previous `updateStock` issued an unscoped PATCH with a</span>
+<span class="cstat-no" title="statement not covered" >    // `{ stock: { increment } }` body PostgREST does not honour — it was dead</span>
+<span class="cstat-no" title="statement not covered" >    // and would have corrupted every row's stock. Removed. Stock changes go</span>
+<span class="cstat-no" title="statement not covered" >    // through update() with a read-modify-written value. A truly atomic</span>
+<span class="cstat-no" title="statement not covered" >    // increment needs a Postgres RPC (out of scope for this pilot).</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >export const productRepository = createProductRepository()</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >// This file now holds only the product aggregate. The expense, purchase and</span>
+<span class="cstat-no" title="statement not covered" >// debt repositories that used to sit here — misplaced, and in the latter two</span>
+<span class="cstat-no" title="statement not covered" >// cases never imported by anything — have moved to the modules that own those</span>
+<span class="cstat-no" title="statement not covered" >// aggregates: modules/expenses, modules/purchases and modules/debts.</span></pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-10-16T15:21:14.166Z
+            </div>
+        <script src="../../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../../sorter.js"></script>
+        <script src="../../../../block-navigation.js"></script>
+    </body>
+</html>
+    

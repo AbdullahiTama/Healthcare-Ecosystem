@@ -288,7 +288,7 @@ export default function Checkout() {
         clearCart()
         return
       } catch (err) {
-        notice = `${err.message || 'Could not start payment'} Your order is saved — you can pay for it here.`
+        notice = `${err.message || 'Could not start payment'} Your order is saved. You can pay for it here.`
       }
     }
     clearCart()
@@ -365,7 +365,7 @@ export default function Checkout() {
                 >
                   {savedAddresses.map((addr) => (
                     <option key={addr.id} value={addr.id}>
-                      {addr.label}{addr.is_default ? ' (Default)' : ''} — {addr.street}, {addr.city}
+                      {addr.label}{addr.is_default ? ' (Default)' : ''}: {addr.street}, {addr.city}
                     </option>
                   ))}
                   <option value="__new__">+ Add new address</option>
@@ -495,7 +495,7 @@ export default function Checkout() {
                     required
                   />
                   <p style={{ fontSize: 12, color: theme.textMid, marginTop: 4 }}>
-                    Up to 3km free · 4–6km ₦600 · 7–9km ₦1,200 · 10–12km ₦1,800
+                    Up to 3 km free. 4 to 6 km costs ₦600. 7 to 9 km costs ₦1,200. 10 to 12 km costs ₦1,800.
                   </p>
                 </div>
               )}
@@ -673,7 +673,7 @@ export default function Checkout() {
 
           <div role="note" style={{ padding: 12, borderRadius: 8, background: theme.tealMist, border: `1px solid ${theme.tealDeep}20`, fontSize: 12, color: theme.textMid, textAlign: 'center' }}>
             {deliveryFeeDisplay
-              ? <>Delivery to your area is quoted by the seller. Place your order now — you pay once delivery is quoted.</>
+              ? <>Delivery to your area is quoted by the seller. Place your order now and you pay once the delivery quote arrives.</>
               : <>You pay securely with <b>Paystack</b> (card, bank transfer, USSD). Your order is confirmed once Paystack confirms the payment.</>}
           </div>
 
@@ -748,7 +748,7 @@ export default function Checkout() {
               opacity: (loading||payLoading) ? 0.7 : 1
             }}
           >
-            {payLoading ? 'Redirecting to Paystack...' : loading ? 'Creating Order...' : deliveryFeeDisplay ? 'Place Order — Get Delivery Quote' : `Pay ₦${(grandTotal/100).toLocaleString()} with Paystack`}
+            {payLoading ? 'Redirecting to Paystack...' : loading ? 'Creating Order...' : deliveryFeeDisplay ? 'Place Order. Get Delivery Quote' : `Pay ₦${(grandTotal/100).toLocaleString()} with Paystack`}
           </Button>
           <p style={{ fontSize: 11, color: theme.textLight, textAlign:'center' }}>Payments secured by Paystack</p>
         </div>

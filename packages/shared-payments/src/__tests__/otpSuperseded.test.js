@@ -6,7 +6,7 @@ describe('checkOtp superseded', () => {
     const supabase = { rpc: vi.fn().mockResolvedValue({ data: 'superseded', error: null }) }
     process.env.OTP_HMAC_SECRET = 'test-secret'
     const r = await (await import('../otp.js')).checkOtp({ supabase, userId: 'u-1', purpose: 'withdrawal', code: '123456', logger })
-    expect(r).toEqual({ ok: false, status: 400, code: 'otp_superseded', error: 'A newer code was issued — please use the latest email.' })
+    expect(r).toEqual({ ok: false, status: 400, code: 'otp_superseded', error: 'A newer code was issued. Please use the code in the latest email.' })
     expect(logger.warn).toHaveBeenCalledWith('otp.superseded_typed', expect.objectContaining({ purpose: 'withdrawal' }))
   })
 })

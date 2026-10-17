@@ -92,7 +92,7 @@ export default async function handler(req, res) {
       // for ten minutes. Voiding is idempotent (it only stamps voided_at) and moves no
       // money, so a void failure here is safe to ignore — the draft expires on its own.
       await voidWithdrawalDraft(supabase, { userId: user.id, reason: 'submit_mismatch' }).catch(() => null)
-      return res.status(400).json({ error: 'Your withdrawal details changed — request a fresh code.', code: 'draft_mismatch' })
+      return res.status(400).json({ error: 'Your withdrawal details changed. Request a fresh code.', code: 'draft_mismatch' })
     }
   }
 
@@ -229,7 +229,7 @@ export default async function handler(req, res) {
         console.error('[initiate-withdrawal] Paystack balance insufficient', { available, payoutKobo, bufferKobo })
         await releaseUnsent('provider_balance_low')
         res.setHeader('Retry-After', '60')
-        return res.status(503).json({ error: 'Payment provider balance low - try again later', code: 'provider_balance_low', refunded: true })
+        return res.status(503).json({ error: 'Payment provider balance is low. Try again later.', code: 'provider_balance_low', refunded: true })
       }
     } catch (err) {
       console.error('[initiate-withdrawal] Paystack balance check failed', { reference: String(err && err.message).slice(0, 120) })

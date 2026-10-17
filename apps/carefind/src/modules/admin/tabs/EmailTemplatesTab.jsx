@@ -334,7 +334,7 @@ export default function EmailTemplatesTab({ showToast }) {
                 value={form.slug}
                 onChange={v => { setSlugManual(true); updateField('slug', v) }}
                 placeholder="e.g. order_confirmation"
-                helperText="Unique identifier. Auto-generated from name."
+                helperText="Unique identifier, created automatically from the name."
               />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: theme.space[5] }}>
@@ -462,7 +462,7 @@ export default function EmailTemplatesTab({ showToast }) {
             <span style={{
               fontSize: theme.type.micro.size, fontWeight: 700, padding: '2px 8px',
               borderRadius: theme.radius.full, background: theme.gray100, color: theme.gray500,
-            }}>Read-only</span>
+            }}>View only</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: theme.space[3] }}>
             {systemTemplates.map(tpl => {

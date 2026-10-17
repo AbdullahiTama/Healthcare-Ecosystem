@@ -157,7 +157,7 @@ export default function DashboardHome({ brand, products, role, perms }) {
           title={branchLabel}
           description={today}
           contextActions={
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: gray500 }} title={online ? 'Connected — all sales synced' : 'Offline — sales will sync when reconnected'}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: gray500 }} title={online ? 'Connected, all sales synced' : 'Offline, sales will sync when reconnected'}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: online ? success : gray400, flexShrink: 0 }} />
               {online ? 'Online · synced' : 'Offline'}
             </span>
@@ -252,7 +252,7 @@ export default function DashboardHome({ brand, products, role, perms }) {
                       tone: 'brand',
                       icon: <Calendar size={17} />,
                       title: `${upcomingAppts.length} appointment${upcomingAppts.length === 1 ? '' : 's'} coming up`,
-                      meta: nextAppt ? `First at ${nextAppt.time || '—'}${nextAppt.staff_name ? ' — ' + nextAppt.staff_name : ''}` : '',
+                      meta: nextAppt ? `First at ${nextAppt.time || 'Not set'}${nextAppt.staff_name ? ' · ' + nextAppt.staff_name : ''}` : '',
                       badge: <button type="button" onClick={() => navigate('/dashboard/appointments')} style={badgeBtn}>Review</button>,
                     }] : []),
                   ]}

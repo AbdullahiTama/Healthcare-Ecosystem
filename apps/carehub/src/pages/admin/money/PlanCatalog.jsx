@@ -67,7 +67,7 @@ export default function PlanCatalog({ repository = createMoneyRepository() }) {
       </Card>
 
       {plans.length === 0 ? (
-        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<CheckCircle size={24} />} message="No plans — seed basic/pro/enterprise or create one." /></Card>
+        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<CheckCircle size={24} />} message="No plans yet. Create one to get started." /></Card>
       ) : (
         <Card style={{ padding: 0, overflow: 'hidden', background: 'var(--panel)', border: '1px solid var(--border)' }}>
           <div style={{ overflowX: 'auto' }}>

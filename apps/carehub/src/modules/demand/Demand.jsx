@@ -212,7 +212,7 @@ export default function Demand({ brand, role, perms, products }) {
       quantity: i.quantity > 0 ? String(i.quantity) : '',
       cost: i.cost, unit: i.unit,
     }))
-    if (items.length === 0) { showToast('Nothing open to order — log out-of-stock items or customer requests first.', { type: 'info' }); return }
+    if (items.length === 0) { showToast('Nothing is open to order. Log an out of stock item or a customer request first.', { type: 'info' }); return }
     setReqsForm({ supplier: '', items, notes: '' })
     setShowReqs(true)
   }
@@ -337,11 +337,11 @@ export default function Demand({ brand, role, perms, products }) {
                     {outItems.map(i => (
                       <tr key={i.id} style={{ borderBottom: `1px solid ${gray100}`, background: i.status !== 'fulfilled' ? '#fff8f3' : 'white' }}>
                         <td style={{ padding: '12px 14px', fontWeight: '700', fontSize: '13px', color: navy }}>{i.product_name}</td>
-                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray600 }}>{i.quantity_needed || '—'}</td>
-                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray600 }}>{i.target_price ? fmt(i.target_price) : '—'}</td>
-                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500, maxWidth: '160px' }}>{i.supplier_notes || i.notes || '—'}</td>
-                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500 }}>{i.created_by || '—'}</td>
-                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray400 }}>{i.created_at?.slice(0, 10) || '—'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray600 }}>{i.quantity_needed || 'Not set'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray600 }}>{i.target_price ? fmt(i.target_price) : 'Not set'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500, maxWidth: '160px' }}>{i.supplier_notes || i.notes || 'Not set'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500 }}>{i.created_by || 'Not set'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray400 }}>{i.created_at?.slice(0, 10) || 'Not set'}</td>
                         <td style={{ padding: '12px 14px' }}><Pill label={i.status} type={i.status === 'fulfilled' ? 'green' : 'red'} /></td>
                         <td style={{ padding: '12px 14px' }}>
                           {i.status !== 'fulfilled' && <button onClick={() => fulfillOut(i)} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Fulfilled</button>}
@@ -380,11 +380,11 @@ export default function Demand({ brand, role, perms, products }) {
                       <tr key={r.id} style={{ borderBottom: `1px solid ${gray100}`, background: r.status !== 'fulfilled' ? '#fff8f3' : 'white' }}>
                         <td style={{ padding: '12px 14px', fontWeight: '700', fontSize: '13px', color: navy }}>{r.product_name}</td>
                         <td style={{ padding: '12px 14px', fontSize: '13px', color: gray600 }}>{r.client_name || 'Walk-in'}</td>
-                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500 }}>{r.phone || '—'}</td>
-                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500 }}>{r.quantity || '—'}</td>
-                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500, maxWidth: '160px' }}>{r.notes || '—'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500 }}>{r.phone || 'Not set'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500 }}>{r.quantity || 'Not set'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500, maxWidth: '160px' }}>{r.notes || 'Not set'}</td>
                         <td style={{ padding: '12px 14px' }}><Pill label={r.status} type={r.status === 'fulfilled' ? 'green' : 'amber'} /></td>
-                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray400 }}>{r.created_at?.slice(0, 10) || '—'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray400 }}>{r.created_at?.slice(0, 10) || 'Not set'}</td>
                         <td style={{ padding: '12px 14px' }}>
                           {r.status !== 'fulfilled' && <button onClick={() => fulfillReq(r)} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Fulfilled</button>}
                         </td>
@@ -430,7 +430,7 @@ export default function Demand({ brand, role, perms, products }) {
                           <td style={{ padding: '12px 14px', fontSize: '13px', color: gray600 }}>{items.length} item(s)</td>
                           <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(reqTotalOf(r))}</td>
                           <td style={{ padding: '12px 14px' }}><Pill label={r.status} type={r.status === 'sent' ? 'green' : 'amber'} /></td>
-                          <td style={{ padding: '12px 14px', fontSize: '12px', color: gray400 }}>{r.created_at?.slice(0, 10) || '—'}</td>
+                          <td style={{ padding: '12px 14px', fontSize: '12px', color: gray400 }}>{r.created_at?.slice(0, 10) || 'Not set'}</td>
                           <td style={{ padding: '12px 14px' }}>
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                               <button onClick={() => printRequisition(r)} title='Print or save as PDF' style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}><Printer size={12} /> PDF</button>
@@ -566,7 +566,7 @@ export default function Demand({ brand, role, perms, products }) {
                       <input value={item.unit} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map(it => it._uid === item._uid ? { ...it, unit: e.target.value } : it) }))} placeholder='unit'
                         aria-label='Unit label'
                         style={{ width: '110px', padding: '6px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', background: 'white', color: navy }} />
-                      <span style={{ fontSize: '12px', fontWeight: '700', color: sub > 0 ? tealDeep : gray400 }}>{sub > 0 ? 'Subtotal: ' + fmt(sub) : '—'}</span>
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: sub > 0 ? tealDeep : gray400 }}>{sub > 0 ? 'Subtotal: ' + fmt(sub) : 'Not set'}</span>
                     </div>
                   </div>
                 )

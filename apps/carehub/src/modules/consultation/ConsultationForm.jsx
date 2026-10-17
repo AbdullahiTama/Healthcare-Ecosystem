@@ -123,7 +123,7 @@ export default function ConsultationForm({ brand, products = [], staffName = '',
     <div>
       {/* Client step */}
       {!client ? (
-        <SectionCard title="Client" hint="The consultation is saved inside the client's file — search for an existing client or add a new one.">
+        <SectionCard title="Client" hint="The consultation is saved inside the client's file. Search for an existing client or add a new one.">
           <Inp label="Search clients" value={clientSearch} onChange={setClientSearch} placeholder="Search by name or phone..." />
           {matched.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -276,12 +276,12 @@ export default function ConsultationForm({ brand, products = [], staffName = '',
               I consent to the skin consultation and the treatment plan given to me. I confirm that the information I have provided is accurate to the best of my knowledge.
             </div>
             <Toggle label="I agree to the above statement" value={form.consent.agreed} onChange={v => set('consent', 'agreed', v)} />
-            {form.consent.agreed && <SignaturePad ref={consentPad} label="Client signature — sign with finger or mouse" height={130} />}
+            {form.consent.agreed && <SignaturePad ref={consentPad} label="Client signature. Sign with a finger or the mouse." height={130} />}
             <Inp label="Consent date" type="date" value={form.consent.date} onChange={v => set('consent', 'date', v)} />
           </SectionCard>
 
           {/* 11. Therapist Assessment */}
-          <SectionCard title="Therapist Assessment" hint="Staff section — filled by the aesthetician / skincare scientist">
+          <SectionCard title="Therapist Assessment" hint="Staff section, filled in by the aesthetician or skincare scientist">
             <Inp label="Therapist name" value={form.assessment.therapist_name} onChange={v => set('assessment', 'therapist_name', v)} placeholder="Your name" />
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}>Assessed skin type</div>
@@ -296,7 +296,7 @@ export default function ConsultationForm({ brand, products = [], staffName = '',
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}>Products recommended</div>
               {products.length === 0 ? (
-                <div style={{ fontSize: 12, color: gray400 }}>No products in your catalog yet — add them in Inventory.</div>
+                <div style={{ fontSize: 12, color: gray400 }}>No products in your catalog yet. Add them in Inventory.</div>
               ) : (
                 <ProductSearchPicker businessId={brand.id} selectedIds={recProductIds} onToggle={prod => toggle('assessment', 'products_recommended', prod.id)} placeholder='Search products to recommend...' />
               )}
@@ -315,7 +315,7 @@ export default function ConsultationForm({ brand, products = [], staffName = '',
                 </div>
               )}
             </div>
-            <Textarea label="Homecare plan" value={form.assessment.homecare_plan} onChange={v => set('assessment', 'homecare_plan', v)} rows={3} placeholder="What the client should do at home — morning / evening routine, SPF..." />
+            <Textarea label="Homecare plan" value={form.assessment.homecare_plan} onChange={v => set('assessment', 'homecare_plan', v)} rows={3} placeholder="What the client should do at home, for example their morning and evening routine or SPF advice..." />
             <Textarea label="Facial / other care recommendations" value={form.assessment.facial_care_recommendations} onChange={v => set('assessment', 'facial_care_recommendations', v)} rows={3} placeholder="Specific facials or other care services recommended (e.g. hydrafacial, LED therapy)..." />
             <Textarea label="Instructions" value={form.assessment.instructions} onChange={v => set('assessment', 'instructions', v)} rows={3} placeholder="Aftercare instructions, precautions, when to return..." />
             <SignaturePad ref={therapistPad} label="Therapist signature" height={130} />

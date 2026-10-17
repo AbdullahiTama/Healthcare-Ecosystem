@@ -32,6 +32,7 @@ describe('design-system Button', () => {
     const btn = host.querySelector('button')
     expect(btn.textContent).toContain('Save')
     expect(btn.style.background).toBe(rgb(theme.tealDeep))
+    // Height stays at the documented touch target; density comes from radius.
     expect(btn.style.minHeight).toBe('44px')
   })
 

@@ -1,8 +1,23 @@
 import { Link } from 'react-router-dom'
-import { X, ShoppingBag, ArrowRight } from 'lucide-react'
+import { X, ShoppingBag, ArrowRight, Minus, Plus } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useCart } from './CartProvider'
 import { useDialog } from '../../hooks/useDialog'
+
+// Quantity stepper control. 30px keeps it compact in the cart panel while
+// staying above the 24px minimum target size from WCAG 2.2.
+const stepperBtn = {
+  width: 30,
+  height: 30,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  border: 'none',
+  background: '#fff',
+  color: theme.navy,
+  cursor: 'pointer',
+  padding: 0,
+}
 export default function MiniCart({ open, onClose }) {
   const { items, total, removeItem, updateQuantity } = useCart()
   const panelRef = useDialog({ open, onClose })
@@ -30,7 +45,36 @@ export default function MiniCart({ open, onClose }) {
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontWeight:700, fontSize:13, color:theme.navy, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{i.product_name}</div>
                 <div style={{ fontSize:12, color:theme.textLight }}>₦{(i.unit_price_kobo/100).toLocaleString()} × {i.quantity}</div>
-                <div style={{ display:'flex', gap:6, marginTop:6 }}><button onClick={()=>updateQuantity(i.ecommerce_product_id, Math.max(0,i.quantity-1))} aria-label={`Decrease quantity of ${i.product_name}`} style={{ width:24, height:24, border:`1px solid ${theme.border}`, borderRadius:6, background:'#fff' }}>−</button><span style={{ fontSize:12, fontWeight:700, minWidth:16, textAlign:'center' }}>{i.quantity}</span><button onClick={()=>updateQuantity(i.ecommerce_product_id, i.quantity+1)} aria-label={`Increase quantity of ${i.product_name}`} style={{ width:24, height:24, border:`1px solid ${theme.border}`, borderRadius:6, background:'#fff' }}>+</button><button onClick={()=>removeItem(i.ecommerce_product_id)} aria-label={`Remove ${i.product_name} from cart`} style={{ marginLeft:8, fontSize:11, color:theme.danger, background:'none', border:`1px solid ${theme.danger}20`, borderRadius:6, padding:'2px 8px' }}>Remove</button></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${theme.border}`, borderRadius: theme.radius.sm, overflow: 'hidden' }}>
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(i.ecommerce_product_id, Math.max(0, i.quantity - 1))}
+                      disabled={i.quantity <= 1}
+                      aria-label={`Decrease quantity of ${i.product_name}`}
+                      style={stepperBtn}
+                    >
+                      <Minus size={14} aria-hidden="true" />
+                    </button>
+                    <span style={{ minWidth: 28, textAlign: 'center', fontSize: 12, fontWeight: 700, borderLeft: `1px solid ${theme.border}`, borderRight: `1px solid ${theme.border}`, padding: '5px 0' }}>{i.quantity}</span>
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(i.ecommerce_product_id, i.quantity + 1)}
+                      aria-label={`Increase quantity of ${i.product_name}`}
+                      style={stepperBtn}
+                    >
+                      <Plus size={14} aria-hidden="true" />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(i.ecommerce_product_id)}
+                    aria-label={`Remove ${i.product_name} from cart`}
+                    style={{ fontSize: 11, color: theme.danger, background: 'none', border: `1px solid ${theme.danger}30`, borderRadius: theme.radius.sm, padding: '5px 8px', cursor: 'pointer' }}
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
               <div style={{ fontWeight:800, color:theme.tealDeep, fontSize:12 }}>₦{(i.unit_price_kobo*i.quantity/100).toLocaleString()}</div>
             </div>

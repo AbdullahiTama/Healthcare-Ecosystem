@@ -7,7 +7,7 @@ import { isDuplicateError } from '../../../lib/dbErrors'
 // queues on a dead connection is a sale that may never land — or replay twice.
 // Callers that record a dispense pass `{ queueOffline: false }` and `create`
 // throws instead of parking, so the pharmacist is told the truth immediately.
-const NO_QUEUE_OFFLINE_MSG = 'Dispensing requires a connection — the sale was not recorded and nothing was queued.'
+const NO_QUEUE_OFFLINE_MSG = 'Dispensing requires a connection. The sale was not recorded and nothing was queued.'
 
 // ── Offline sale queue ────────────────────────────────────────────────────────
 // The counter has to keep selling when the network drops, so an unsent sale is

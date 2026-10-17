@@ -43,12 +43,12 @@ export default function RxInbox({ brand, products }) {
       <div>
         <DetailHeader onBack={() => setSelected(null)} title='Prescription Details' sub={`Patient: ${selected.patient_name}`} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealMist}`, fontSize: '12px', color: tealDeep, fontWeight: '600', marginBottom: '14px' }}>
-          <PillIcon size={14} /> Pharmacy — Prescription received from Doctor
+          <PillIcon size={14} /> Pharmacy. Prescription received from Doctor
         </div>
         <Card style={{ padding: '16px', marginBottom: '14px', background: bg }}>
           <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '8px' }}>Prescription Info</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            {[['Patient', selected.patient_name], ['Doctor', selected.doctor_name || '—'], ['Date', selected.created_at?.split('T')[0] || '—'], ['Status', selected.status]].map(([l, v]) => (
+            {[['Patient', selected.patient_name], ['Doctor', selected.doctor_name || 'Not set'], ['Date', selected.created_at?.split('T')[0] || 'Not set'], ['Status', selected.status]].map(([l, v]) => (
               <div key={l}><div style={{ fontSize: '10px', color: gray400, fontWeight: '700' }}>{l}</div><div style={{ fontSize: '12px', fontWeight: '600', color: navy }}>{v}</div></div>
             ))}
           </div>
@@ -67,7 +67,7 @@ export default function RxInbox({ brand, products }) {
                     ))}
                   </div>
                   {med.instructions && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: gray600, padding: '6px 8px', borderRadius: theme.radius.sm, background: 'white', border: `1px solid ${border}` }}><ClipboardList size={12} /> {med.instructions}</div>}
-                  {stockItem && stockItem.stock <= 0 && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '6px', padding: '6px 8px', borderRadius: theme.radius.sm, background: dangerBg, fontSize: '12px', color: danger, fontWeight: '700' }}><AlertTriangle size={12} /> OUT OF STOCK — Please inform doctor</div>}
+                  {stockItem && stockItem.stock <= 0 && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '6px', padding: '6px 8px', borderRadius: theme.radius.sm, background: dangerBg, fontSize: '12px', color: danger, fontWeight: '700' }}><AlertTriangle size={12} /> OUT OF STOCK. Please inform the doctor</div>}
                   {stockItem && stockItem.stock > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px', fontSize: '11px', color: success }}><Check size={11} /> {stockItem.stock} units in stock</div>}
                 </div>
               )
@@ -79,7 +79,7 @@ export default function RxInbox({ brand, products }) {
         {selected.status === 'pending' ? (
           <button onClick={() => markDispensed(selected)} disabled={dispensing}
             style={{ width: '100%', padding: '14px', borderRadius: theme.radius.md, border: 'none', background: dispensing ? theme.gray200 : tealDeep, color: dispensing ? gray400 : 'white', fontWeight: '800', fontSize: '15px', cursor: dispensing ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-            {dispensing ? 'Saving...' : <><CheckCircle size={16} /> Mark as Dispensed — Discharge Patient</>}
+            {dispensing ? 'Saving...' : <><CheckCircle size={16} /> Mark as Dispensed and Discharge Patient</>}
           </button>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '14px', borderRadius: theme.radius.md, background: successBg, border: `1px solid ${success}`, textAlign: 'center', fontSize: '14px', fontWeight: '700', color: success }}><CheckCircle size={15} /> Already Dispensed</div>

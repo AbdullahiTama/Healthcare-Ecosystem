@@ -77,7 +77,7 @@ export default async function handler(req, res) {
       // Void the stale draft so the owner's next request is NOT answered with `draft_active` for ten minutes. Idempotent
       // (it only stamps voided_at) and moves no money, so a void failure is safe to ignore.
       await voidWithdrawalDraft(supabase, { userId: user.id, reason: 'submit_mismatch' }).catch(() => null)
-      return res.status(400).json({ error: 'Your withdrawal details changed — request a fresh code.', code: 'draft_mismatch' })
+      return res.status(400).json({ error: 'Your withdrawal details changed. Request a fresh code.', code: 'draft_mismatch' })
     }
   }
 
@@ -149,7 +149,7 @@ export default async function handler(req, res) {
       const available = await checkBalance()
       if (available < amountKobo) {
         await releaseUnsent('provider_balance_low')
-        return res.status(503).json({ error: 'Payment provider balance low - try again later', refunded: true })
+        return res.status(503).json({ error: 'Payment provider balance is low. Try again later.', refunded: true })
       }
     } catch (err) {
       const refunded = await releaseUnsent('provider_balance_check_failed')

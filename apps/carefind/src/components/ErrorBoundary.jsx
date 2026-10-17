@@ -53,7 +53,7 @@ class ErrorBoundary extends React.Component {
             Something went wrong
           </h2>
           <p style={{ margin: '0 0 6px 0', fontSize: 14, color: theme.textMid, lineHeight: 1.6 }}>
-            We hit an unexpected error. Your data is safe — try again or head back to the feed.
+            Something went wrong on our side. Nothing you saved was lost. Try again, or go back to the feed.
           </p>
           <p style={{ margin: '0 0 20px 0', fontSize: 12, color: theme.textLight }}>
             {this.state.error?.message ? `“${this.state.error.message}”` : 'An unexpected error occurred.'}

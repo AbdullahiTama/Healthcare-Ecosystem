@@ -79,7 +79,7 @@ export default function ShopTab({ showToast }) {
 
   return (
     <div>
-      <AdminPageHeader title="Shop" subtitle="Manage e-commerce products and seller applications">
+      <AdminPageHeader title="Shop" subtitle="Manage online products and seller applications">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
             {products.length} products · {pendingApps.length} pending apps
@@ -144,7 +144,7 @@ export default function ShopTab({ showToast }) {
                           </span>
                           <span style={{ fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>{p.name || 'Unnamed'}</span>
                         </td>
-                        <td style={{ padding: '0 12px', color: 'var(--muted)', fontSize: 13, whiteSpace: 'nowrap' }}>{p.seller_name || '—'}</td>
+                        <td style={{ padding: '0 12px', color: 'var(--muted)', fontSize: 13, whiteSpace: 'nowrap' }}>{p.seller_name || 'Not set'}</td>
                         <td style={{ padding: '0 12px', textAlign: 'right', fontWeight: 700, color: 'var(--fg)' }}>₦{(p.price || 0).toLocaleString()}</td>
                         <td style={{ padding: '0 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: p.status === 'active' ? 'var(--green)' : p.status === 'pending' ? 'var(--amber)' : 'var(--muted)' }}>
@@ -188,7 +188,7 @@ export default function ShopTab({ showToast }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg)' }}>{a.business_name || a.applicant_name || 'Application'}</div>
-                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.applicant_email || a.contact_email || ''} · {a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.applicant_email || a.contact_email || ''} · {a.created_at ? new Date(a.created_at).toLocaleDateString() : 'Not set'}</div>
                     </div>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: a.status === 'approved' ? 'var(--green)' : a.status === 'pending' || a.status === 'submitted' ? 'var(--amber)' : 'var(--muted)', background: a.status === 'approved' ? 'var(--green-bg)' : a.status === 'pending' || a.status === 'submitted' ? 'var(--amber-bg)' : 'var(--hairline)', padding: '4px 8px', borderRadius: 9999 }}>
                       <StatusDot status={a.status === 'approved' ? 'active' : a.status === 'rejected' ? 'rejected' : 'pending'} /> {a.status}

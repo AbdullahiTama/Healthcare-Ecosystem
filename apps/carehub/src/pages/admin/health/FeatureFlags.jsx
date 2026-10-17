@@ -71,11 +71,11 @@ export default function FeatureFlags({ repository = createHealthRepository() }) 
                 <button key={pct} disabled={!!busyKey} onClick={() => setRollout(f, pct)} style={{ padding: '6px 10px', borderRadius: 8, border: f.rollout_pct === pct ? '1px solid var(--teal)' : '1px solid var(--border)', background: f.rollout_pct === pct ? 'var(--teal-mist)' : 'var(--panel)', color: f.rollout_pct === pct ? 'var(--teal)' : 'var(--muted)', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>{pct}%</button>
               ))}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>Updated {f.updated_at ? new Date(f.updated_at).toLocaleString() : '—'} {f.allowlist?.length ? `• allowlist: ${f.allowlist.slice(0, 2).join(', ')}` : ''}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>Updated {f.updated_at ? new Date(f.updated_at).toLocaleString() : 'Not set'} {f.allowlist?.length ? `• allowlist: ${f.allowlist.slice(0, 2).join(', ')}` : ''}</div>
           </Card>
         ))}
       </div>
-      <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>Toggles gate `visible_on_carefind` / `ecommerce_enabled` / `booking_enabled` / `maintenance_mode` — every change audited to admin_audit_log.</div>
+      <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>These toggles control what each tenant can see and do. Every change is written to the audit log.</div>
       <Toast msg={msg} type={type} />
     </div>
   )

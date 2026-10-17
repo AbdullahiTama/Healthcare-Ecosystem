@@ -154,7 +154,7 @@ export default function AgentLogin() {
       <div data-testid="agent-login-page" style={{ fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: 16, minHeight: '100vh' }}>
         <div style={{ marginBottom: 16, textAlign: 'center' }}>
           <h1 style={{ margin: '0 0 4px 0', fontSize: theme.type.h1.size, fontWeight: theme.type.h1.weight, color: theme.navy }}>Agent Login</h1>
-          <p style={{ margin: 0, fontSize: 13, color: theme.textLight }}>Sign in with your agent email & password to view your referrals & earnings. RLS own-record scoped.</p>
+          <p style={{ margin: 0, fontSize: 13, color: theme.textLight }}>Sign in with your agent email and password to see your referrals and earnings.</p>
         </div>
         <Card style={{ padding: 20 }}>
           <form onSubmit={handleLogin} noValidate aria-label="Agent login form" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -164,13 +164,10 @@ export default function AgentLogin() {
             <Button type="submit" variant="primary" size="md" loading={loading} loadingText="Signing in..." fullWidth disabled={loading} aria-label="Sign in as agent">
               Sign in
             </Button>
-            <p style={{ margin: 0, fontSize: 11, color: theme.textLight, textAlign: 'center' }}>
-              Checks <code>agents.email / password_hash</code> via <code>crypt</code>. RLS <code>own-record</code> + service-role scoping.
-            </p>
           </form>
         </Card>
         <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12 }}>
-          <a href="/agents/register" style={{ color: theme.tealDeep, fontWeight: 700, textDecoration: 'none' }}>New agent? Register → get CF- code</a>
+          <a href="/agents/register" style={{ color: theme.tealDeep, fontWeight: 700, textDecoration: 'none' }}>New agent? Register to get your referral code</a>
         </div>
       </div>
     )
@@ -193,7 +190,7 @@ export default function AgentLogin() {
           <div style={{ fontSize: 12, color: theme.textLight }}>{agent.email} · {agent.tier || 'unplaced'} · {agent.state || ''} · {agent.status}</div>
           <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 8, background: theme.gray100, border: `1px solid ${theme.border}`, borderRadius: theme.radius.full, padding: '6px 12px' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: theme.textLight, textTransform: 'uppercase' }}>Referral code</span>
-            <span data-testid="own-referral-code" style={{ fontFamily: theme.fontMono, fontWeight: 800, color: theme.tealDeep }}>{agent.referral_code || '—'}</span>
+            <span data-testid="own-referral-code" style={{ fontFamily: theme.fontMono, fontWeight: 800, color: theme.tealDeep }}>{agent.referral_code || 'Not set'}</span>
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={handleLogout} aria-label="Sign out">Sign out</Button>

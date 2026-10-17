@@ -174,7 +174,7 @@ function VideoRecorder({ showId, onRecorded }) {
             <button onClick={() => { discard(); openCamera(facing) }} disabled={uploading} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>Re-record</button>
             <button onClick={discard} disabled={uploading} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>Discard</button>
           </div>
-          <p style={{ margin: '5px 0 0 0', fontSize: 10, color: theme.textLight }}>Max 2 minutes. Keep clips short on weak networks — uploads preserve audio.</p>
+          <p style={{ margin: '5px 0 0 0', fontSize: 10, color: theme.textLight }}>Max 2 minutes. Keep clips short on weak networks. Uploads preserve audio.</p>
         </div>
       )}
     </div>

@@ -52,7 +52,7 @@ export default function OrdersTab({ businesses = [], showToast }) {
   useEffect(() => { setPage(1) }, [status, paymentStatus, vendorId, dateFrom, dateTo])
 
   const vendorName = useMemo(
-    () => (id) => businesses.find((b) => b.id === id)?.name || '—',
+    () => (id) => businesses.find((b) => b.id === id)?.name || 'Not set',
     [businesses],
   )
 
@@ -119,7 +119,7 @@ export default function OrdersTab({ businesses = [], showToast }) {
       </div>
 
       {error ? (
-        <ErrorState message={`Could not load orders — ${error.message || 'the server rejected the query'}`} onRetry={() => refetch()} />
+        <ErrorState message={`Could not load orders. ${error.message || 'The server rejected the query'}`} onRetry={() => refetch()} />
       ) : isLoading ? (
         <Loading text="Loading orders…" />
       ) : orders.length === 0 ? (
@@ -141,13 +141,13 @@ export default function OrdersTab({ businesses = [], showToast }) {
                 {orders.map((o) => (
                   <tr key={o.id} className="ds-data-row" style={{ height: 36, borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '0 12px', color: 'var(--fg)', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                      {o.order_ref || '—'}
+                      {o.order_ref || 'Not set'}
                       {o.payment_reference && (
                         <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }} title="Receipt / payment reference">{o.payment_reference}</div>
                       )}
                     </td>
                     <td style={{ padding: '0 12px', color: 'var(--fg)', fontSize: 13, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {o.customer_name || o.profiles?.full_name || o.profiles?.display_name || '—'}
+                      {o.customer_name || o.profiles?.full_name || o.profiles?.display_name || 'Not set'}
                     </td>
                     <td style={{ padding: '0 12px', color: 'var(--muted)', fontSize: 12, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {o.businesses?.name || vendorName(o.vendor_business_id)}
@@ -159,15 +159,15 @@ export default function OrdersTab({ businesses = [], showToast }) {
                       {kobo(o.total_kobo)}
                     </td>
                     <td style={{ padding: '0 12px', textAlign: 'right', color: 'var(--muted)', fontSize: 12, whiteSpace: 'nowrap' }}>
-                      {label(o.payment_status) || '—'}
+                      {label(o.payment_status) || 'Not set'}
                     </td>
                     <td style={{ padding: '0 12px', textAlign: 'right' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: statusColor(o.status), whiteSpace: 'nowrap' }}>
-                        <StatusDot status={o.status} /> {label(o.status) || '—'}
+                        <StatusDot status={o.status} /> {label(o.status) || 'Not set'}
                       </span>
                     </td>
                     <td style={{ padding: '0 12px', textAlign: 'right', color: 'var(--muted)', fontSize: 12, whiteSpace: 'nowrap' }}>
-                      {o.created_at ? new Date(o.created_at).toLocaleDateString() : '—'}
+                      {o.created_at ? new Date(o.created_at).toLocaleDateString() : 'Not set'}
                     </td>
                   </tr>
                 ))}

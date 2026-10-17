@@ -15,13 +15,13 @@ import { BUSINESS_TYPES } from '../../../config/constants'
 // Where a type has no distinct note, it gets the general operating note rather
 // than an invented specialty.
 const NOTES = {
-  pharmacy: 'Point of sale, stock control with cost prices and reorder points, staff accounts and customer history — with eligible products listed on CareFind.',
+  pharmacy: 'Point of sale, stock control with cost prices and reorder points, staff accounts and customer history, with eligible products listed on CareFind.',
   hospital: 'Patients, reception, triage, consultations, lab, imaging and pharmacy records carried as one patient flow.',
   clinic: 'Appointments, consultations, client records, staff scheduling and the services you actually bill for.',
   laboratory: 'Laboratory services and requests, results, client billing and the stock your consumables depend on.',
   aesthetic: 'Treatments and appointments, the clinicians delivering them, and the products you retail alongside.',
   spa: 'Appointments, service menus, therapist assignments and product sales in one place.',
-  cosmetics: 'Product catalogue, stock levels, counter sales, staff and repeat-customer history.',
+  cosmetics: 'Product catalogue, stock levels, counter sales, staff and customer history.',
   haircare: 'Appointments, service menus, stylist assignments and the product stock behind the chair.',
   other: 'Sales, stock, staff, locations and reporting, shaped around the business you actually run.',
 }

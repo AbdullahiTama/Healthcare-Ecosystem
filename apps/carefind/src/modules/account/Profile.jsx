@@ -671,7 +671,7 @@ function Profile() {
         {/* Manage upcoming scheduled shows */}
         {upcomingShows.length > 0 && (
           <div style={{ border: `1px solid ${theme.border}`, borderRadius: 12, padding: 12, marginBottom: 12, background: theme.cardBg }}>
-            <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.navy, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Upcoming lives — manage</p>
+            <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.navy, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Upcoming live sessions to manage</p>
             {upcomingShows.map((s) => {
               const target = s.scheduled_at ? new Date(s.scheduled_at) : null
               const when = target ? target.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', weekday: 'short' }) : ''
@@ -756,7 +756,7 @@ function Profile() {
               <Lock size={14} aria-hidden="true" /> Paid subscriptions
             </p>
             <p style={{ margin: '0 0 10px 0', fontSize: 11.5, color: theme.textLight }}>
-              Set a monthly price and people can subscribe to unlock your subscriber-only posts. Set 0 to turn it off.
+              Set a monthly price and people can subscribe to see posts that are for subscribers only. Set the price to 0 to turn this off.
             </p>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
               {[0, 1, 2, 3, 5, 8, 12].map((c) => (

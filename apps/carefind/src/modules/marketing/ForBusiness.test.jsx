@@ -158,13 +158,13 @@ describe('ForBusiness — the public landing page at /', () => {
       setViewportWidth(1440)
     })
 
-    it('renders a primary nav with the logo, Get started and the menu button at every width', () => {
+    it('renders a primary nav with the logo, Sign up and the menu button at every width', () => {
       for (const width of [375, 768, 1440]) {
         setViewportWidth(width)
         const { container, unmount } = renderLanding()
         const nav = within(container.querySelector('nav[aria-label="Primary"]'))
         expect(nav.getByRole('link', { name: 'CareFind home' })).toBeInTheDocument()
-        expect(nav.getByRole('button', { name: 'Get started' })).toBeInTheDocument()
+        expect(nav.getByRole('button', { name: 'Sign up' })).toBeInTheDocument()
         expect(nav.getByRole('button', { name: 'Open menu' })).toBeInTheDocument()
         unmount()
       }
@@ -237,11 +237,11 @@ describe('ForBusiness — the public landing page at /', () => {
         .toHaveAttribute('href', '/feed')
     })
 
-    it('marks every illustrative preview as an example', () => {
+    it('marks every sample preview as an example, not live data', () => {
       // The previews must never read as live posts, inventory or ratings.
       renderLanding()
-      expect(screen.getAllByText(/illustrative/i).length).toBeGreaterThanOrEqual(1)
-      expect(content.PREVIEW.disclaimer).toMatch(/illustrative/i)
+      expect(screen.getAllByText(/sample of CareFind content/i).length).toBeGreaterThanOrEqual(1)
+      expect(content.PREVIEW.disclaimer).toMatch(/not live data/i)
     })
   })
 

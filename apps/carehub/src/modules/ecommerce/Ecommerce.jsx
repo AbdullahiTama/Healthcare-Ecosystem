@@ -72,7 +72,7 @@ export default function Ecommerce({ brand, role }) {
     setTermsLoading(true); setTermsError('')
     try {
       const t = await ecommerceRepository.getTermsForSegment(segment)
-      if (!t) setTermsError('No active Terms for this segment — contact support')
+      if (!t) setTermsError('No active Terms for this segment. Contact support.')
       setTerms(t || null)
     } catch (e) {
       setTermsError('Could not load Terms & Conditions')
@@ -174,7 +174,7 @@ export default function Ecommerce({ brand, role }) {
     if (!termsAccepted) { showToast('You must accept the terms and conditions', { type: 'warning' }); return }
     if (!String(sellerInfo.contactName || '').trim() || !String(sellerInfo.contactPhone || '').trim()) { showToast('Contact name and phone are required', { type: 'warning' }); return }
     if (!String(sellerInfo.accountNumber || '').trim()) { showToast('Account number is required', { type: 'warning' }); return }
-    if (!terms) { showToast('Terms not loaded — please retry', { type: 'warning' }); return }
+    if (!terms) { showToast('The terms have not loaded yet. Try again.', { type: 'warning' }); return }
     setSubmittingApp(true)
     try {
       let applicantUserId = null
@@ -197,7 +197,7 @@ export default function Ecommerce({ brand, role }) {
         audit_metadata: auditMetadata,
         account_number: String(sellerInfo.accountNumber || '').trim(),
       })
-      showToast('Application approved — E-commerce setup unlocked.', { type: 'success' })
+      showToast('Application approved. Your Shop setup is now unlocked.', { type: 'success' })
       setTermsAccepted(false)
       await loadApp()
       await loadInventory()
@@ -210,7 +210,7 @@ export default function Ecommerce({ brand, role }) {
   }
 
   function handleSetupBlocked() {
-    showToast('E-commerce application required. Please review and accept the applicable Terms & Conditions and apply for E-commerce access before setting up products.', { type: 'warning' })
+    showToast('You need an online store before you can set up products. Review and accept the Terms and Conditions, then apply.', { type: 'warning' })
     scrollToTerms()
   }
 
@@ -240,7 +240,7 @@ export default function Ecommerce({ brand, role }) {
     if (app?.status !== 'Approved') { handleSetupBlocked(); return }
     if (!ecomForm.description || ecomForm.description.trim().length < 10) { showToast('Description must be at least 10 characters', { type: 'warning' }); return }
     if (!ecomForm.category) { showToast('Category is required', { type: 'warning' }); return }
-    if (ecomForm.is_restricted) { showToast('Restricted products cannot be saved as publishable — clear restricted flag or contact admin', { type: 'warning' }); }
+    if (ecomForm.is_restricted) { showToast('A restricted product cannot be published. Clear the restricted flag or contact an administrator.', { type: 'warning' }); }
     setSavingProduct(true)
     try {
       const priceKobo = ecomForm.ecommerce_price ? Math.round(parseFloat(ecomForm.ecommerce_price) * 100) : null
@@ -277,7 +277,7 @@ export default function Ecommerce({ brand, role }) {
       try {
         await handleSaveProduct()
         ecom = await ecommerceRepository.getEcommerceProduct(brand.id, selected.product.id)
-        if (!ecom) { showToast('Save product info first — fill description and category, then try again', { type: 'warning' }); e.target.value = ''; setUploadingImage(false); return }
+        if (!ecom) { showToast('Save the product details first. Add a description and a category, then try again.', { type: 'warning' }); e.target.value = ''; setUploadingImage(false); return }
         setSelected(prev => ({ ...prev, ecommerce: ecom }))
       } catch (err) { showToast(err.message || 'Save product before uploading images', { type: 'warning' }); e.target.value = ''; setUploadingImage(false); return }
     }
@@ -319,20 +319,20 @@ export default function Ecommerce({ brand, role }) {
   async function handleActivate() {
     if (!selected) return
     if (selected?.status==='Active') {
-      showToast('Already activated — this product is already live for your store', { type: 'warning' })
+      showToast('Already activated. This product is live for your store.', { type: 'warning' })
       return
     }
     setActivating(true)
     try {
       await ecommerceRepository.activate(brand.id, selected.product.id)
-      showToast('Product activated — visible in Shop', { type: 'success' })
+      showToast('Product activated. It is now visible in Shop.', { type: 'success' })
       loadInventory()
       setSelected(null)
     } catch (e) {
       const msg = String(e.message || '')
       const isDuplicate = msg.includes('23505') || msg.includes('business_id_product_id_key') || msg.includes('Already activated')
       if (isDuplicate) {
-        showToast('Already activated — this product is already live for your store', { type: 'warning' })
+        showToast('Already activated. This product is live for your store.', { type: 'warning' })
       } else {
         showToast(e.message || 'Could not activate', { type: 'error' })
       }
@@ -372,13 +372,13 @@ export default function Ecommerce({ brand, role }) {
   if (!isOwner) return (
     <div style={{ padding: 32, textAlign: 'center', color: gray400 }}>
       <ShoppingBag size={40} style={{ margin: '0 auto 12px', display: 'block' }} />
-      <div style={{ fontWeight: 700, color: gray600 }}>E-commerce is restricted to the business Owner</div>
+      <div style={{ fontWeight: 700, color: gray600 }}>Only the business Owner can run the online store</div>
     </div>
   )
 
   return (
     <div>
-      <SectionHead title="E-commerce" sub="Prepare inventory for CareFind Shop — onboarding, product setup, and activation" />
+      <SectionHead title="E-commerce" sub="Prepare your inventory for CareFind Shop: apply to sell, set up products, then activate them" />
 
       {/* Application — segment-specific mandatory gate */}
       <Card style={{ padding: 20, marginBottom: 20 }}>
@@ -392,12 +392,12 @@ export default function Ecommerce({ brand, role }) {
           <div role="alert" style={{ padding: 10, borderRadius: 8, background: danger + '10', border: `1px solid ${danger}30`, color: danger, fontSize: 13 }}>{appError} <button onClick={loadApp} style={{ marginLeft: 8, background: 'none', border: `1px solid ${danger}`, color: danger, borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>Retry</button></div>
         ) : isApproved ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ padding: 12, borderRadius: 8, background: success + '10', border: `1px solid ${success}40`, color: success, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}><CheckCircle size={16} /> Approved — you can now activate products for Shop.</div>
+            <div style={{ padding: 12, borderRadius: 8, background: success + '10', border: `1px solid ${success}40`, color: success, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}><CheckCircle size={16} /> Approved. You can now activate products for Shop.</div>
             {app.segment && (
               <div style={{ padding: 10, borderRadius: 8, background: bg, border: `1px solid ${border}`, fontSize: 12, color: gray600 }}>
                 <div style={{ fontWeight: 700, color: navy, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}><ShieldCheck size={14} color={tealDeep} /> Accepted Terms</div>
                 <div>Segment: <b>{app.segment}</b> • Commission: <b>{app.accepted_commission_rate != null ? `${(app.accepted_commission_rate * 100).toFixed(app.accepted_commission_rate === 0.025 ? 1 : 0)}%` : (commissionRate*100)+ '%'}</b> {app.terms_version_id ? `• Version: ${app.terms_version_id.slice(0,8)}` : ''}</div>
-                <div style={{ fontSize: 11, color: gray400, marginTop: 2 }}>Accepted: {app.acceptance_timestamp ? new Date(app.acceptance_timestamp).toLocaleString() : '—'} • Approved: {app.approval_timestamp ? new Date(app.approval_timestamp).toLocaleString() : (app.submitted_at ? new Date(app.submitted_at).toLocaleString() : '—')}</div>
+                <div style={{ fontSize: 11, color: gray400, marginTop: 2 }}>Accepted: {app.acceptance_timestamp ? new Date(app.acceptance_timestamp).toLocaleString() : 'Not set'} • Approved: {app.approval_timestamp ? new Date(app.approval_timestamp).toLocaleString() : (app.submitted_at ? new Date(app.submitted_at).toLocaleString() : 'Not set')}</div>
               </div>
             )}
             <details style={{ border: `1px solid ${border}`, borderRadius: 8, background: '#fff', padding: 10 }}>
@@ -416,7 +416,7 @@ export default function Ecommerce({ brand, role }) {
                   <div style={{ fontWeight: 800, color: navy, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>Shop Payment Mode <Pill label="Paystack" type="teal" /></div>
                   {/* Pay at Pickup is paused: there is no way yet to record a cash payment, so such orders could never be accepted.
                       The vendor's saved choice is kept for when it returns. */}
-                  <div style={{ fontSize: 11, color: gray500, marginTop: 2 }}>Customers pay online with Paystack before you prepare an order. Pay at Pickup is paused for now{allowPayOnDelivery ? ' — your choice to offer it is saved for when it returns' : ''}.</div>
+                  <div style={{ fontSize: 11, color: gray500, marginTop: 2 }}>Customers pay online with Paystack before you prepare an order. Pay at Pickup is paused for now{allowPayOnDelivery ? '. Your choice to offer it is saved for when it returns' : ''}.</div>
                 </div>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, color: gray500, cursor: 'not-allowed', opacity: 0.6 }}>
                   <input type="checkbox" checked={allowPayOnDelivery} disabled aria-label="Allow pay at pickup (paused)" style={{ width: 18, height: 18 }} />
@@ -429,7 +429,7 @@ export default function Ecommerce({ brand, role }) {
           <div ref={termsRef} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {app?.status === 'Rejected' && (
               <div role="alert" style={{ padding: 10, borderRadius: 8, background: danger + '10', border: `1px solid ${danger}30`, color: danger, fontSize: 12 }}>
-                Rejected{app.rejection_reason ? `: ${app.rejection_reason}` : ''} — review the terms and re-apply below.
+                Rejected{app.rejection_reason ? `: ${app.rejection_reason}` : ''}. Review the terms and re-apply below.
               </div>
             )}
             {/* Full Terms — dedicated scrollable gate */}
@@ -444,8 +444,8 @@ export default function Ecommerce({ brand, role }) {
               ) : terms ? (
                 <div style={{ padding: 14 }}>
                   <div style={{ padding: 10, borderRadius: 8, background: tealMist, border: `1px solid ${tealDeep}20`, fontSize: 12, color: navy, marginBottom: 10 }}>
-                    <div style={{ fontWeight: 800, marginBottom: 4 }}>Commission Disclosure — {segmentLabel}</div>
-                    <div>Commission: <b>{commissionLabel}</b> — paid by the vendor and deducted from vendor payout.</div>
+                    <div style={{ fontWeight: 800, marginBottom: 4 }}>Commission Disclosure ({segmentLabel})</div>
+                    <div>Commission: <b>{commissionLabel}</b>. Paid by the vendor and deducted from the vendor payout.</div>
                     <div style={{ marginTop: 4, fontSize: 11, color: gray600 }}>Example: {example.label}</div>
                     <div style={{ marginTop: 4, fontSize: 11, color: gray500 }}>Customer fulfilment and optional delivery fees are separate customer charges under the applicable pricing rules.</div>
                   </div>
@@ -469,11 +469,11 @@ export default function Ecommerce({ brand, role }) {
             <Textarea label="Business Description" value={sellerInfo.businessDescription} onChange={v => setSellerInfo(p => ({ ...p, businessDescription: v }))} placeholder="What you sell, specialties..." rows={2} />
             <TealBtn onClick={handleSubmitApp} disabled={submittingApp || !termsAccepted || !terms} aria-disabled={!termsAccepted || !terms} style={{ alignSelf: 'flex-start', padding: '10px 20px', opacity: (!termsAccepted || !terms) ? 0.55 : 1 }}>{submittingApp ? 'Submitting...' : 'Apply'}</TealBtn>
             {!termsAccepted && <div style={{ fontSize: 11, color: warning }}>Check the box above to enable Apply.</div>}
-            <div style={{ fontSize: 11, color: gray400 }}>By clicking Apply you will be automatically approved for E-commerce setup. Products still require at least one image and explicit activation before Shop visibility.</div>
+            <div style={{ fontSize: 11, color: gray400 }}>Applying here approves your online store automatically. Products still require at least one image and explicit activation before Shop visibility.</div>
           </div>
         ) : app.status === 'Submitted' || app.status === 'Under Review' ? (
           <div style={{ padding: 12, borderRadius: 8, background: tealMist, border: `1px solid ${tealDeep}30`, color: navy, fontSize: 13 }}>
-            Application <b>{app.status}</b> — our team is reviewing your submission. You will be notified when approved. Product activation remains blocked until Approved.
+            Application <b>{app.status}</b> . Our team is reviewing your submission and you will be notified when it is approved. Product activation stays blocked until then.
           </div>
         ) : (
           <div style={{ padding: 12, borderRadius: 8, background: bg, border: `1px solid ${border}`, fontSize: 13 }}>Status: {app.status}</div>
@@ -483,8 +483,8 @@ export default function Ecommerce({ brand, role }) {
       {/* Blocked setup banner when not Approved */}
       {!isApproved && !appLoading && (
         <Card style={{ padding: 14, marginBottom: 20, background: warning + '10', border: `1px solid ${warning}40` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: warning, fontWeight: 800, fontSize: 13 }}><AlertTriangle size={16} /> E-commerce application required.</div>
-          <div style={{ fontSize: 12, color: gray600, marginTop: 4 }}>E-commerce application required. Please review and accept the applicable Terms & Conditions and apply for E-commerce access before setting up products.</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: warning, fontWeight: 800, fontSize: 13 }}><AlertTriangle size={16} /> You need an online store first.</div>
+          <div style={{ fontSize: 12, color: gray600, marginTop: 4 }}>You need an online store before you can set up products. Review and accept the Terms and Conditions, then apply.</div>
           <TealBtn onClick={scrollToTerms} style={{ marginTop: 8, padding: '8px 14px', fontSize: 12 }}>Apply for E-commerce</TealBtn>
         </Card>
       )}
@@ -493,9 +493,9 @@ export default function Ecommerce({ brand, role }) {
       <Card style={{ padding: 20, marginBottom: 20, opacity: isApproved ? 1 : 0.78 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <ShoppingBag size={18} color={tealDeep} />
-          <div style={{ fontWeight: 800, color: navy }}>Inventory → E-commerce</div>
+          <div style={{ fontWeight: 800, color: navy }}>Inventory → Online Store</div>
           <span style={{ fontSize: 11, color: gray400, marginLeft: 8 }}>{filtered.length} products</span>
-          {!isApproved && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, color: warning, background: warning + '14', border: `1px solid ${warning}30`, padding: '2px 6px', borderRadius: 20 }}>Locked — apply above</span>}
+          {!isApproved && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, color: warning, background: warning + '14', border: `1px solid ${warning}30`, padding: '2px 6px', borderRadius: 20 }}>Locked until approved. Apply above.</span>}
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 180, display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${border}`, borderRadius: 8, padding: '0 10px', background: '#fff' }}>
@@ -517,19 +517,19 @@ export default function Ecommerce({ brand, role }) {
               <div>
                 <div style={{ fontWeight: 700, color: navy, fontSize: 13 }}>{r.product.name}</div>
                 {r.product.generic_name && <div style={{ fontSize: 11, color: gray500, fontStyle: 'italic' }}>{r.product.generic_name}</div>}
-                <div style={{ fontSize: 11, color: gray400 }}>Stock: {r.product.stock ?? '—'} {r.product.stock === 0 && <span style={{ color: danger }}>(out of stock)</span>}</div>
+                <div style={{ fontSize: 11, color: gray400 }}>Stock: {r.product.stock ?? 'Not set'} {r.product.stock === 0 && <span style={{ color: danger }}>(out of stock)</span>}</div>
               </div>
             )},
-            { key: 'category', label: 'Category', render: r => <span style={{ fontSize: 12, color: gray600 }}>{r.ecommerce?.category || r.product.cat || r.product.category || '—'}</span> },
+            { key: 'category', label: 'Category', render: r => <span style={{ fontSize: 12, color: gray600 }}>{r.ecommerce?.category || r.product.cat || r.product.category || 'Not set'}</span> },
             { key: 'price', label: 'Price', render: r => (
               <span style={{ fontWeight: 700, color: tealDeep, fontSize: 12 }}>
                 {(() => {
                   const p = r.ecommerce?.ecommerce_price_kobo ?? (r.product.price != null ? Math.round(r.product.price * 100) : null)
-                  return p != null ? `₦${(p/100).toLocaleString()}` : '—'
+                  return p != null ? `₦${(p/100).toLocaleString()}` : 'Not set'
                 })()}
               </span>
             )},
-            { key: 'status', label: 'E-commerce Status', render: r => <Pill label={r.status} type={statusPillType(r.status)} /> },
+            { key: 'status', label: 'Application status', render: r => <Pill label={r.status} type={statusPillType(r.status)} /> },
             { key: 'hint', label: 'Missing', render: r => {
               const missing = []
               if (!r.ecommerce?.description) missing.push('description')
@@ -565,7 +565,7 @@ export default function Ecommerce({ brand, role }) {
         {ordersLoading ? <Loading text="Loading orders..." /> : ordersError ? (
           <div role="alert" style={{ padding:10, borderRadius:8, background:danger+'10', border:`1px solid ${danger}30`, color:danger, fontSize:12 }}>{ordersError} <button onClick={() => loadOrders()} style={{ marginLeft:8, background:'none', border:`1px solid ${danger}`, color:danger, borderRadius:6, padding:'2px 8px', cursor:'pointer' }}>Retry</button></div>
         ) : orders.length === 0 ? (
-          <Empty icon={<ShoppingBag size={32} />} message={orderSearch||orderStatus!=='all' ? 'No orders match this filter' : 'No Shop orders yet — activate products and share your Shop.'} />
+          <Empty icon={<ShoppingBag size={32} />} message={orderSearch||orderStatus!=='all' ? 'No orders match this filter' : 'No Shop orders yet. Activate products and share your Shop.'} />
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap: 8 }}>
             {orders.map(o=>(
@@ -617,7 +617,7 @@ export default function Ecommerce({ brand, role }) {
                 <div style={{ borderTop:`1px solid ${border}`, paddingTop:10 }}>
                   <div style={{ fontWeight:700, color:navy, marginBottom:6, fontSize:13 }}>Status history (audit trail)</div>
                   {(orderDetail.history||[]).map(h=>(
-                    <div key={h.id} style={{ fontSize:11, color:gray600, padding:'2px 0' }}>{new Date(h.created_at).toLocaleString()} — {h.from_status||'—'} → <b>{h.to_status}</b> {h.note?`· ${h.note}`:''}</div>
+                    <div key={h.id} style={{ fontSize:11, color:gray600, padding:'2px 0' }}>{new Date(h.created_at).toLocaleString()} · {h.from_status||'Not set'} → <b>{h.to_status}</b>{h.note ? ` · ${h.note}` : ''}</div>
                   ))}
                   <div style={{ display:'flex', gap:6, marginTop:8, flexWrap:'wrap' }}>
                     {orderDetail.status==='paid' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'accepted','Accepted by vendor'),'Order accepted')} style={{ padding:'6px 10px', fontSize:11 }}>Accept</TealBtn>}
@@ -644,7 +644,7 @@ export default function Ecommerce({ brand, role }) {
                 <div style={{ borderTop:`1px solid ${border}`, paddingTop:10 }}>
                   <div style={{ fontWeight:700, color:navy, marginBottom:6, fontSize:13 }}>Order Communication (vendor ↔ CareFind)</div>
                   <div style={{ maxHeight:160, overflowY:'auto', border:`1px solid ${border}`, borderRadius:8, padding:8, background:bg, display:'flex', flexDirection:'column', gap:6 }}>
-                    {(orderDetail.messages||[]).length===0 ? <div style={{ fontSize:11, color:gray400, textAlign:'center', padding:12 }}>No messages yet — instructions from CareFind will appear here</div> : orderDetail.messages.map(m=>(
+                    {(orderDetail.messages||[]).length===0 ? <div style={{ fontSize:11, color:gray400, textAlign:'center', padding:12 }}>No messages yet. Instructions from CareFind will appear here.</div> : orderDetail.messages.map(m=>(
                       <div key={m.id} style={{ fontSize:11, background: m.sender_role==='vendor' ? tealMist : '#fff', border:`1px solid ${border}`, borderRadius:6, padding:'6px 8px' }}><b style={{ color:navy }}>{m.sender_role}</b> · {new Date(m.created_at).toLocaleString()}<div style={{ color:gray600 }}>{m.message}</div></div>
                     ))}
                   </div>
@@ -670,7 +670,7 @@ export default function Ecommerce({ brand, role }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Textarea label="Description *" value={ecomForm.description} onChange={v => setEcomForm(p => ({ ...p, description: v }))} placeholder="Brief product description (min 10 chars)" rows={2} />
               <Sel label="Category *" value={ecomForm.category} onChange={v => setEcomForm(p => ({ ...p, category: v }))} options={[{ value: '', label: 'Select category' }, { value: 'medicine', label: 'Medicine' }, { value: 'device', label: 'Medical Device' }, { value: 'cosmetics', label: 'Cosmetics' }, { value: 'wellness', label: 'Wellness' }, { value: 'other', label: 'Other' }]} />
-              <Inp label="E-commerce Price (₦)" type="number" value={ecomForm.ecommerce_price} onChange={v => setEcomForm(p => ({ ...p, ecommerce_price: v }))} placeholder="Leave blank to use inventory price" />
+              <Inp label="Online price (₦)" type="number" value={ecomForm.ecommerce_price} onChange={v => setEcomForm(p => ({ ...p, ecommerce_price: v }))} placeholder="Leave blank to use inventory price" />
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: navy }}>
                 <input type="checkbox" checked={ecomForm.prescription_required} onChange={e => setEcomForm(p => ({ ...p, prescription_required: e.target.checked }))} />
                 Prescription required
@@ -688,7 +688,7 @@ export default function Ecommerce({ brand, role }) {
               <div style={{ borderTop: `1px solid ${border}`, paddingTop: 12, marginTop: 8 }}>
                 <div style={{ fontWeight: 700, color: navy, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}><ImageIcon size={14} /> Product Images * <span style={{ fontWeight: 400, color: gray500, fontSize: 11 }}>(at least 1 required)</span></div>
                 {images.length === 0 ? (
-                  <div style={{ padding: 12, borderRadius: 8, background: warning + '10', border: `1px solid ${warning}30`, color: warning, fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}><AlertTriangle size={14} /> No images yet — upload at least one to activate.</div>
+                  <div style={{ padding: 12, borderRadius: 8, background: warning + '10', border: `1px solid ${warning}30`, color: warning, fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}><AlertTriangle size={14} /> No images yet. Upload at least one to activate.</div>
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8, marginBottom: 8 }}>
                     {images.map((img, idx) => (
@@ -710,7 +710,7 @@ export default function Ecommerce({ brand, role }) {
                   <Upload size={14} /> {uploadingImage ? 'Uploading…' : 'Add Image'}
                   <input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploadingImage} style={{ display: 'none' }} aria-label="Upload product image" />
                 </label>
-                <div style={{ fontSize: 11, color: gray400, marginTop: 6 }}>{uploadingImage ? 'Uploading image, please wait…' : 'Supports JPEG/PNG/WebP/GIF, max 5MB, ordered set — you can reorder by drag (future) or delete and re-add.'}</div>
+                <div style={{ fontSize: 11, color: gray400, marginTop: 6 }}>{uploadingImage ? 'Uploading image, please wait…' : 'Supports JPEG/PNG/WebP/GIF, max 5MB. The first image is the cover. To change it, delete an image and upload it again.'}</div>
               </div>
 
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
@@ -721,7 +721,7 @@ export default function Ecommerce({ brand, role }) {
                   <TealBtn onClick={handleActivate} disabled={activating || selected.status==='Active'} aria-busy={activating} style={{ flex: 1, padding: 10 }}>{activating ? 'Activating...' : 'Activate for Shop'}</TealBtn>
                 )}
               </div>
-              {app?.status !== 'Approved' && <div style={{ fontSize: 11, color: danger, textAlign: 'center' }}>Business must be Approved to activate — application required. Please review and accept the applicable Terms & Conditions and apply for E-commerce access before setting up products.</div>}
+              {app?.status !== 'Approved' && <div style={{ fontSize: 11, color: danger, textAlign: 'center' }}>Your business must be approved before you can activate products. Please review and accept the applicable Terms & Conditions and apply for E-commerce access before setting up products.</div>}
             </div>
           </Card>
         </div>

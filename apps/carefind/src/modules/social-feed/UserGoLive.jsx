@@ -145,7 +145,7 @@ function UserGoLive({ onClose }) {
         )}
 
         {/* Invite co-hosts */}
-        <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: theme.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invite co-hosts (optional)</label>
+        <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: theme.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Guests to invite (optional)</label>
         <input value={guestSearch} onChange={(e) => searchGuests(e.target.value)} placeholder="Search people by name…" style={{ ...inputStyle, marginBottom: 8 }} />
         {guests.length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>

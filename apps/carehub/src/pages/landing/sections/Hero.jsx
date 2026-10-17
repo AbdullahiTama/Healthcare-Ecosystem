@@ -36,7 +36,7 @@ function PrimaryCta() {
         whiteSpace: 'nowrap',
       }}
     >
-      Get started free
+      Start your account
       <span
         aria-hidden
         style={{
@@ -111,7 +111,7 @@ export function Hero() {
               textWrap: 'pretty',
             }}
           >
-            Point of sale, inventory, staff, reports and healthcare workflow — with
+            Point of sale, inventory, staff, reports and healthcare workflow, with
             CareFind discovery built in. CareHub is the operating platform behind
             pharmacies, hospitals, clinics, laboratories and wellness businesses.
           </p>

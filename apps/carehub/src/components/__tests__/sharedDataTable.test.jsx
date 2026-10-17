@@ -55,12 +55,12 @@ describe('design-system DataTable', () => {
     expect(nameHeader.getAttribute('aria-sort')).toBe('descending')
   })
 
-  it('paginates with controlled page props and a X–Y of N footer', async () => {
+  it('paginates with controlled page props and a "first to last of total" footer', async () => {
     let page = 0
     const setPage = (p) => { page = p }
     await act(async () => { root.render(<DataTable rows={ROWS} columns={COLUMNS} page={page} setPage={setPage} pageSize={2} />) })
     expect(host.querySelectorAll('tbody tr').length).toBe(2)
-    expect(host.textContent).toContain('1–2 of 3')
+    expect(host.textContent).toContain('1 to 2 of 3')
     const next = host.querySelector('button[aria-label="Next page"]')
     await act(async () => { next.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     expect(page).toBe(1)

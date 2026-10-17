@@ -51,7 +51,7 @@ export async function logBulkExport(logEvent, reportIds, meta = {}) {
 
 const SOURCE_BADGES = {
   public: { label: 'Public report', tone: 'info' },
-  health_facility: { label: 'Health-facility report', tone: 'success' },
+  health_facility: { label: 'Health facility report', tone: 'success' },
   business_facility: { label: 'Business report', tone: 'neutral' },
   unknown: { label: 'Source not recorded', tone: 'warning' },
 }

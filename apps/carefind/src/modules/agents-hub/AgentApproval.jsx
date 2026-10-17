@@ -112,7 +112,7 @@ export default function AgentApproval() {
     const count = childrenCounts[p.id] || 0
     const max = p.tier === 'community_coordinator' ? 20 : null
     const atCap = max != null && count >= max
-    const label = `${p.full_name || p.email || p.id} (${p.tier}) — ${p.state || ''} ${max ? `· ${count}/${max}` : ''}${atCap ? ' · FULL' : ''}`
+    const label = `${p.full_name || p.email || p.id} (${p.tier}) · ${p.state || ''} ${max ? `· ${count}/${max}` : ''}${atCap ? ' · FULL' : ''}`
     return { value: p.id, label, disabled: atCap }
   })
 
@@ -120,7 +120,7 @@ export default function AgentApproval() {
     <div data-testid="agent-approval" style={{ fontFamily: theme.fontFamily, maxWidth: 1100, margin: '0 auto', padding: 16 }}>
       <div style={{ marginBottom: 16 }}>
         <h1 style={{ margin: '0 0 4px 0', fontSize: theme.type.h1.size, fontWeight: theme.type.h1.weight, color: theme.navy }}>Agent Applications</h1>
-        <p style={{ margin: 0, fontSize: theme.type.body.size, color: theme.textLight }}>Review pending agents (status=pending, tier=unplaced). Set tier / parent / commission then approve. 20-cap enforced server-side (42501).</p>
+        <p style={{ margin: 0, fontSize: theme.type.body.size, color: theme.textLight }}>Review applications that are still waiting for a decision. Set the tier, parent agent and commission rate, then approve.</p>
       </div>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
@@ -191,13 +191,13 @@ export default function AgentApproval() {
                           const p = parents.find((x) => x.id === parentId)
                           const c = childrenCounts[parentId] || 0
                           if (!p) return ''
-                          if (p.tier === 'community_coordinator') return `${c}/20 children · ${c >= 20 ? 'FULL — will reject 42501' : `${20 - c} slots left`}`
+                          if (p.tier === 'community_coordinator') return `${c}/20 children · ${c >= 20 ? 'FULL · at capacity' : `${20 - c} slots left`}`
                           return `Parent: ${p.tier} · ${p.full_name}`
                         })() : 'Optional hierarchy: direct → community → state'}
                       />
                       {parentId && parents.find((p) => p.id === parentId)?.tier === 'community_coordinator' && (
                         <div data-testid="cap-indicator" style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: (childrenCounts[parentId] || 0) >= 20 ? theme.danger : theme.success }}>
-                          {(childrenCounts[parentId] || 0)}/20 { (childrenCounts[parentId]||0)>=20 ? '— FULL' : '— capacity'}
+                          {(childrenCounts[parentId] || 0)}/20 { (childrenCounts[parentId]||0)>=20 ? '· FULL' : '· capacity'}
                         </div>
                       )}
                     </div>

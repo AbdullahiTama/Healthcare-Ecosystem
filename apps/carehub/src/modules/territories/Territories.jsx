@@ -134,7 +134,7 @@ export default function Territories({ brand }) {
   }
 
   async function importTerritories() {
-    if (resolution.creates.length === 0) { showToast('Nothing new to import — everything in the file already exists.', { type: 'warning' }); return }
+    if (resolution.creates.length === 0) { showToast('Nothing new to import. Everything in the file already exists.', { type: 'warning' }); return }
     setImporting(true)
     showToast('Importing ' + resolution.creates.length + ' territories…', { type: 'info' })
     try {
@@ -202,7 +202,7 @@ export default function Territories({ brand }) {
     <>
       <PageHeader
         title="Territories"
-        description="Regions, states, or coverage areas — named however your company works. Assign reps to each."
+        description="Regions, states or coverage areas, named however your company works. Assign reps to each."
         primaryAction={{ label: 'Add territory', leftIcon: <Plus size={15} />, onClick: openNew }}
         secondaryActions={[{ label: 'Bulk upload', leftIcon: <Upload size={15} />, onClick: () => { setUploadData([]); setUploadError(''); setShowUpload(true) } }]}
       />
@@ -285,7 +285,7 @@ export default function Territories({ brand }) {
             </div>
       </Modal>
 
-      <Modal show={!!assigningTerritory} onClose={() => setAssigningTerritory(null)} sheet title={'Assign Reps — ' + (assigningTerritory?.name || '')}
+      <Modal show={!!assigningTerritory} onClose={() => setAssigningTerritory(null)} sheet title={'Assign reps to ' + (assigningTerritory?.name || 'this territory')}
         footer={<GhostBtn onClick={() => setAssigningTerritory(null)} style={{ width: '100%', padding: '12px' }}>Done</GhostBtn>}>
             <div style={{ fontSize: '12px', color: gray500, marginBottom: '16px' }}>Tap to toggle who covers this territory.</div>
 
@@ -314,7 +314,7 @@ export default function Territories({ brand }) {
           <div style={{ padding: '14px', borderRadius: '12px', background: tealMist, border: `1px solid ${tealDeep}`, fontSize: '13px', color: tealDeep, lineHeight: '1.9' }}>
             1. Tap <strong>Download Template</strong><br />
             2. Open in <strong>Microsoft Excel</strong> or Google Sheets<br />
-            3. Fill in your territories row by row — "Sits Under" must match an existing territory's name, or another row in this file (children may be listed before their parents)<br />
+            3. Fill in your territories row by row. "Sits Under" must match an existing territory's name, or another row in this file (children may be listed before their parents)<br />
             4. Save as <strong>CSV</strong><br />
             5. Upload here
           </div>
@@ -342,7 +342,7 @@ export default function Territories({ brand }) {
                         {(isDupe || failedRow) && <AlertTriangle size={12} />}{t.name}
                       </span>
                       <span style={{ color: failedRow ? danger : isDupe ? warning : gray500 }}>
-                        {failedRow ? failedRow.reason : isDupe ? 'Already exists' : [t.level, t.parent_name ? 'under ' + t.parent_name : ''].filter(Boolean).join(' · ') || '—'}
+                        {failedRow ? failedRow.reason : isDupe ? 'Already exists' : [t.level, t.parent_name ? 'under ' + t.parent_name : ''].filter(Boolean).join(' · ') || 'Unassigned'}
                       </span>
                     </div>
                   )

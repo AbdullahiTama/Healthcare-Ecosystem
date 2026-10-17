@@ -13,9 +13,9 @@ describe('value formatting', () => {
     expect(fmt(undefined)).toBe('₦0')
   })
 
-  it('renders an em dash for missing dates', () => {
-    expect(fmtDate(null)).toBe('—')
-    expect(fmtDate(undefined)).toBe('—')
+  it('renders a plain label for missing dates', () => {
+    expect(fmtDate(null)).toBe('Not recorded')
+    expect(fmtDate(undefined)).toBe('Not recorded')
   })
 })
 

@@ -148,7 +148,7 @@ export default function SiteNav() {
               fontFamily: 'inherit',
             }}
           >
-            Get started
+            Sign up
           </button>
           <button
             type="button"

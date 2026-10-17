@@ -357,11 +357,11 @@ function DrugProfile() {
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Sellers</p>
           </div>
           <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{lowestPrice != null ? `₦${lowestPrice.toLocaleString()}` : '—'}</p>
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{lowestPrice != null ? `₦${lowestPrice.toLocaleString()}` : 'Price unavailable'}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Lowest Price</p>
           </div>
           <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || '—'}</p>
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || 'No rating'}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Avg Rating</p>
           </div>
         </div>
@@ -489,7 +489,7 @@ function DrugProfile() {
                 >
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {sellerName(p)}{canShowPrice(p) ? ` — ₦${Number(p.price).toLocaleString()}` : ' — Ask for price'}
+                      {sellerName(p)}{canShowPrice(p) ? ` · ₦${Number(p.price).toLocaleString()}` : ' · Ask for price'}
                     </option>
                   ))}
                 </select>

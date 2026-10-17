@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint:undef": "eslint --no-eslintrc -c eslint.no-undef.json --quiet src api"
+    "lint:undef": "eslint --no-eslintrc -c eslint.no-undef.json --quiet src api",
+    "audit:copy": "node ../../scripts/audit-ui-copy.mjs --app=carehub"
   },
   "dependencies": {
     "@care-ecosystem/shared-email": "file:../../packages/shared-email",

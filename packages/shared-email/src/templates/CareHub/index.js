@@ -262,7 +262,7 @@ export function agentApproved({ agentName, agentEmail, referralCode, city, area 
       detailsTable([['Referral code', referralCode], ['Email', agentEmail], ['Coverage', [city, area].filter(Boolean).join(', ')]]),
       smallPrint('Questions? Reply to this email and we will help.'),
     ],
-    cta: { href: siteLink(APP, '/login'), label: 'Get started' },
+    cta: { href: siteLink(APP, '/login'), label: 'Sign in to CareHub' },
   })
 }
 

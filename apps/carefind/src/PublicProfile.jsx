@@ -120,7 +120,7 @@ function PublicProfile() {
   async function handleCancelAutoRenew() {
     await cancelAutoRenew(user.id, id)
     await qc.invalidateQueries({ queryKey: keys.subscriptionAccess(user.id, id) })
-    showToast("Auto-renew turned off. You'll keep access until your current period ends.", { type: 'info' })
+    showToast("Automatic renewal turned off. You'll keep access until your current period ends.", { type: 'info' })
   }
 
   function handleBookConsultation() {
@@ -481,13 +481,13 @@ function PublicProfile() {
           </div>
           {profile.show_followers === false && !isOwnProfile ? (
             <div>
-              <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>—</p>
+              <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.gray400 }}>Hidden</p>
               <p style={{ margin: 0, fontSize: 10.5, color: theme.gray400, fontWeight: 600 }}>Followers</p>
             </div>
           ) : (
             <button
               onClick={() => setSheetKind('followers')}
-              aria-label={`${followerCount} followers — view list`}
+              aria-label={`${followerCount} followers, view list`}
               style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: theme.fontFamily }}
             >
               <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>{followerCount}</p>
@@ -496,13 +496,13 @@ function PublicProfile() {
           )}
           {profile.show_followers === false && !isOwnProfile ? (
             <div>
-              <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>—</p>
+              <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.gray400 }}>Hidden</p>
               <p style={{ margin: 0, fontSize: 10.5, color: theme.gray400, fontWeight: 600 }}>Following</p>
             </div>
           ) : (
             <button
               onClick={() => setSheetKind('following')}
-              aria-label={`${followingCount} following — view list`}
+              aria-label={`${followingCount} following, view list`}
               style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: theme.fontFamily }}
             >
               <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>{followingCount}</p>
@@ -514,7 +514,7 @@ function PublicProfile() {
             style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: theme.fontFamily }}
           >
             <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>
-              {avgReviewRating ? avgReviewRating.toFixed(1) : '\u2014'}
+              {avgReviewRating ? avgReviewRating.toFixed(1) : 'No rating'}
               <Star size={big ? 13 : 12} color={theme.warning} fill={theme.warning} aria-hidden="true" />
             </p>
             <p style={{ margin: 0, fontSize: 10.5, color: theme.gray400, fontWeight: 600 }}>{userReviews.length} review{userReviews.length !== 1 ? 's' : ''}</p>
@@ -781,7 +781,7 @@ function PublicProfile() {
               <input type="radio" name="consultPayMethod" value="coins" checked={consultPayMethod === 'coins'} onChange={e => setConsultPayMethod(e.target.value)} style={{ accentColor: theme.tealDeep }} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <span style={{ fontWeight: 700, fontSize: 13, color: theme.navy }}>CareCoins (Wallet)</span>
-                <span style={{ fontSize: 11, color: theme.gray500 }}>Use your CareCoins balance — instant, no fees</span>
+                <span style={{ fontSize: 11, color: theme.gray500 }}>Spend your CareCoins balance. No fees.</span>
               </div>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', borderRadius: theme.radius.md, border: `2px solid ${consultPayMethod === 'card' ? theme.tealDeep : theme.border}`, background: consultPayMethod === 'card' ? theme.tealMist : 'transparent' }}>

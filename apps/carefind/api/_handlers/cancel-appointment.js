@@ -117,8 +117,8 @@ export default async function handler(req, res) {
     staff_id: null,
     is_owner: true,
     kind: 'booking_cancelled',
-    title: `Appointment cancelled — ${appt.client_name}`,
-    body: `${appt.date} at ${appt.time} — ${cancelledBy === 'patient' ? 'Patient cancelled' : 'Cancelled by business'}`,
+    title: `Appointment cancelled: ${appt.client_name}`,
+    body: `${appt.date} at ${appt.time}. ${cancelledBy === 'patient' ? 'Patient cancelled' : 'Cancelled by business'}`,
     link: '/dashboard/appointments',
     read_at: null,
   }).catch(() => {})

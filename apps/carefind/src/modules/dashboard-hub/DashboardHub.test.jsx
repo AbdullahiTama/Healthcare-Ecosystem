@@ -102,7 +102,7 @@ describe('DashboardHub', () => {
     expect(screen.getByText('Vendor approvals pending')).toBeInTheDocument()
     expect(screen.getByText('Active users')).toBeInTheDocument()
     expect(screen.getByText('Admin teams')).toBeInTheDocument()
-    expect(screen.getByText('E-commerce participants')).toBeInTheDocument()
+    expect(screen.getByText('Online sellers')).toBeInTheDocument()
     // values: check at least that 0 appears multiple times
     // StatCard renders value as text; we check by querying testids which contain value via live region fallback?
     // Better: check stats via text content of stat containers

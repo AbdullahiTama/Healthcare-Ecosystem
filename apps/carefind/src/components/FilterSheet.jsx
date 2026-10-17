@@ -139,7 +139,7 @@ export default function FilterSheet({
                 aria-label="Minimum price"
                 style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: `1px solid ${theme.border}`, fontSize: 13, minHeight: 44, boxSizing: 'border-box' }}
               />
-              <span style={{ color: theme.textMid, fontSize: 13 }}>–</span>
+              <span style={{ color: theme.textMid, fontSize: 13 }}>to</span>
               <input
                 placeholder="Max ₦"
                 value={priceMax}

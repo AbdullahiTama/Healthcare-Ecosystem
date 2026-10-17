@@ -12,7 +12,7 @@ export default function PatientStep({ value, onChange }) {
         label="Patient initials or identifier"
         required
         htmlFor="sr-pat-id"
-        help="Use initials or a private code (e.g. AB). Do not enter a full name — initials are enough for safety monitoring."
+        help="Use initials or a private code (e.g. AB). Do not enter a full name. Initials are enough for safety monitoring."
       >
         <TextInput id="sr-pat-id" value={value.identifier} onChange={(e) => set({ identifier: e.target.value })} maxLength={64} autoComplete="off" />
       </Field>

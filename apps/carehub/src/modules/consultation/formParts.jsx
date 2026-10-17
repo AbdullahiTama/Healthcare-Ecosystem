@@ -114,7 +114,7 @@ export function ProductSearchPicker({ businessId, selectedIds = [], onToggle, pl
         {!loading && error && (
           <button type="button" onClick={() => setRetryNonce(n => n + 1)}
             style={{ display: 'block', width: '100%', marginTop: 8, padding: '10px 12px', borderRadius: theme.radius.md, border: `1px solid ${theme.danger}`, background: theme.dangerBg, color: theme.danger, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>
-            Couldn't load products. Tap to retry — or keep typing.
+            Could not load the products. Tap to retry, or keep typing.
           </button>
         )}
         {!loading && !error && query.trim().length >= 2 && notFound && (

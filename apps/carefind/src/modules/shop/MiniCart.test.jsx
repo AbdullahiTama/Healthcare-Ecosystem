@@ -97,7 +97,10 @@ describe('MiniCart drawer', () => {
     render(<Harness />)
     openDrawer()
     const dialog = screen.getByRole('dialog')
-    const plus = [...dialog.querySelectorAll('button')].find((b) => b.textContent === '+')
+    // Found by accessible name, not by the "+" glyph: the control is now an
+    // icon, so its text content is empty. The name is what a screen reader and
+    // this test both actually depend on.
+    const plus = screen.getByRole('button', { name: 'Increase quantity of Paracetamol' })
     plus.focus()
 
     fireEvent.click(plus) // re-renders the parent chain

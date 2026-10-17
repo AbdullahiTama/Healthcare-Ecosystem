@@ -122,11 +122,11 @@ describe('BusinessDashboard shell migration', () => {
   it('shows the offline strip in the topbar slot when offline', async () => {
     onlineState.value = false
     m = await mountDashboard()
-    expect(m.host.textContent).toContain('No internet — Offline mode. Sales will sync when connected.')
+    expect(m.host.textContent).toContain('You are offline. Sales are saved on this device and will sync when you reconnect.')
   })
 
   it('does not show the offline strip when online', async () => {
     m = await mountDashboard()
-    expect(m.host.textContent).not.toContain('No internet — Offline mode.')
+    expect(m.host.textContent).not.toContain('You are offline.')
   })
 })

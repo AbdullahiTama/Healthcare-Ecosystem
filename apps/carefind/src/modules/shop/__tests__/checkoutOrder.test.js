@@ -54,7 +54,7 @@ describe('orderErrorMessage', () => {
     expect(orderErrorMessage(new Error('INSUFFICIENT_STOCK'))).toMatch(/out of stock/)
     expect(orderErrorMessage(new Error('PRICE_CHANGED: Price mismatch'))).toMatch(/price changed/)
     expect(orderErrorMessage(new Error('Vendor not approved'))).toMatch(/not currently approved/)
-    expect(orderErrorMessage(new Error('Order total mismatch: expected 1, got 2'))).toMatch(/refresh the page/)
+    expect(orderErrorMessage(new Error('Order total mismatch: expected 1, got 2'))).toMatch(/refresh the page/i)
     expect(orderErrorMessage(new Error('Cart is empty'))).toBe('Cart is empty')
     expect(orderErrorMessage(null)).toMatch(/Failed to create order/)
   })

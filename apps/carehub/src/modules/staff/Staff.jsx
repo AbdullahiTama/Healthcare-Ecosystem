@@ -124,7 +124,7 @@ export default function Staff({ brand, role, perms }) {
     // "Owner" is reserved for the business admin — getPerms always resolves it to
     // the full-access preset, so a custom role by that name could never take
     // effect and would only mislead (issue: admin was locked out of POS).
-    if (roleForm.name.trim().toLowerCase() === 'owner') { showToast('"Owner" is reserved for the business admin — pick a different name.', { type: 'warning' }); return }
+    if (roleForm.name.trim().toLowerCase() === 'owner') { showToast('Owner is reserved for the business admin. Choose a different name.', { type: 'warning' }); return }
     setSavingRole(true)
     // Modules outside this business type's registry are meaningless (another
     // vertical's gate would neutralise them) — never persist them.
@@ -244,7 +244,7 @@ export default function Staff({ brand, role, perms }) {
     const s = editTarget
     // Locking the Owner row out of Owner is a permanent lockout: demoting it
     // removes canManageStaff, so nobody could ever change it back.
-    if (s?.role === 'Owner' && editRole !== 'Owner') { showToast('The Owner role cannot be demoted here — you would lose access.', { type: 'warning' }); return }
+    if (s?.role === 'Owner' && editRole !== 'Owner') { showToast('The Owner role cannot be demoted here because you would lose access.', { type: 'warning' }); return }
     setSavingRoleEdit(true)
     try {
       const updates = { role: editRole.trim() }
@@ -388,20 +388,20 @@ export default function Staff({ brand, role, perms }) {
                 list='enterprise-role-suggestions'
                 value={form.role || ''}
                 onChange={e => f('role', e.target.value)}
-                placeholder='e.g. Regional Manager, Medical Rep — type your own'
+                placeholder='e.g. Regional Manager, Medical Rep. You can type your own.'
                 style={{ width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box', color: navy, outline: 'none' }}
               />
               <datalist id='enterprise-role-suggestions'>
                 {usedRoles.map(r => <option key={r} value={r} />)}
               </datalist>
               <div style={{ fontSize: '11px', color: gray400, marginTop: '4px' }}>
-                {usedRoles.length > 0 ? 'Start typing to reuse a role you\'ve already created, or type a new one.' : 'Type any role name — your team structure is entirely up to you.'}
+                {usedRoles.length > 0 ? 'Start typing to reuse a role you\'ve already created, or type a new one.' : 'Type any role name. Your team structure is entirely up to you.'}
               </div>
             </div>
           ) : (
             <div>
               <Sel label='Role *' value={form.role} onChange={v => f('role', v)} options={roleOptions} required />
-              {customRoleNames.length > 0 && <div style={{ fontSize: '11px', color: gray400, marginTop: '4px' }}>Custom roles appear alongside the presets — manage them in Roles &amp; Permissions below.</div>}
+              {customRoleNames.length > 0 && <div style={{ fontSize: '11px', color: gray400, marginTop: '4px' }}>Custom roles appear alongside the presets. Manage them in Roles and Permissions below.</div>}
             </div>
           )}
 
@@ -427,7 +427,7 @@ export default function Staff({ brand, role, perms }) {
         </div>
       </Modal>
 
-            <Modal show={!!editTarget} onClose={() => setEditTarget(null)} title={'Edit role — ' + (editTarget?.full_name || 'Staff member')}
+            <Modal show={!!editTarget} onClose={() => setEditTarget(null)} title={'Edit role for ' + (editTarget?.full_name || 'this staff member')}
         footer={<><GhostBtn onClick={() => setEditTarget(null)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveRoleEdit} style={{ flex: 1, padding: '12px' }}>{savingRoleEdit ? 'Saving...' : 'Save Role'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {isEnterprise ? (
@@ -437,7 +437,7 @@ export default function Staff({ brand, role, perms }) {
                 list='enterprise-role-suggestions'
                 value={editRole}
                 onChange={e => setEditRole(e.target.value)}
-                placeholder='e.g. Regional Manager, Medical Rep — type your own'
+                placeholder='e.g. Regional Manager, Medical Rep. You can type your own.'
                 style={{ width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box', color: navy, outline: 'none' }}
               />
               <datalist id='enterprise-role-suggestions'>
@@ -477,7 +477,7 @@ export default function Staff({ brand, role, perms }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {roles.length === 0 && (
-              <Card style={{ padding: '16px', fontSize: '13px', color: gray500 }}>No custom roles yet. Preset roles (Owner, Manager, Pharmacist…) are always available — create your first custom role to tailor access.</Card>
+              <Card style={{ padding: '16px', fontSize: '13px', color: gray500 }}>No custom roles yet. Preset roles (Owner, Manager, Pharmacist…) are always available. Create your first custom role to tailor access.</Card>
             )}
             {roles.map(r => {
               const p = r.permissions || {}
@@ -578,7 +578,7 @@ export default function Staff({ brand, role, perms }) {
 
       <ConfirmDialog show={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete}
         title='Remove this staff member?'
-        consequence={`This permanently deletes ${deleteTarget?.full_name || 'this staff member'}'s account and revokes their login access immediately. This cannot be undone — you'll need to add them again from scratch if you change your mind.`}
+        consequence={`This permanently deletes ${deleteTarget?.full_name || 'this staff member'}'s account and revokes their login access immediately. This cannot be undone, so you'll need to add them again from scratch if you change your mind.`}
         confirmLabel='Remove' />
 
       <ConfirmDialog show={!!roleDeleteTarget} onClose={() => setRoleDeleteTarget(null)} onConfirm={handleDeleteRole}

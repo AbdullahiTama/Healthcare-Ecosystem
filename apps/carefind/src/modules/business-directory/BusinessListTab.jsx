@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { theme } from '../../styles/theme';
 import Button from '@care-ecosystem/design-system/components/ui/Button';
 import Card from '@care-ecosystem/design-system/components/ui/Card';
@@ -162,9 +163,10 @@ export default function BusinessListTab({
               <button
                 type="button"
                 onClick={() => setQuery('')}
+                aria-label="Clear search"
                 style={styles.clearButton}
               >
-                Ã—
+                <X size={16} aria-hidden="true" />
               </button>
             )}
           </div>
@@ -393,10 +395,16 @@ const styles = {
   clearButton: {
     background: 'none',
     border: 'none',
-    fontSize: '18px',
     color: theme.gray400,
     cursor: 'pointer',
-    padding: '0 4px',
+    padding: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderRadius: '50%',
+    flexShrink: 0,
   },
   filters: {
     display: 'flex',

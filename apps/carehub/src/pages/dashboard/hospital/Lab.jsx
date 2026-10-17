@@ -138,13 +138,13 @@ export default function Lab({ brand }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <button onClick={() => setSelected(null)} aria-label='Back' style={{ width: '38px', height: '38px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: navy, flexShrink: 0 }}><ArrowLeft size={16} /></button>
           <div>
-            <div style={{ fontWeight: '900', fontSize: '18px', color: navy }}>Lab Request — {selected.patient_name || 'Patient'}</div>
+            <div style={{ fontWeight: '900', fontSize: '18px', color: navy }}>Lab Request: {selected.patient_name || 'Patient'}</div>
             <div style={{ fontSize: '12px', color: gray400 }}>Requested by: {selected.requested_by} · {selected.created_at?.split('T')[0]}</div>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '10px 14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealMist}`, fontSize: '12px', color: tealDeep, fontWeight: '600', marginBottom: '16px' }}>
-          <Microscope size={14} /> Lab Module · Performed by: <strong>{staffName}</strong> — Your name will be attached to all results
+          <Microscope size={14} /> Lab Module · Performed by: <strong>{staffName}</strong> . Your name is attached to every result.
         </div>
 
         {selected.notes && (
@@ -211,7 +211,7 @@ export default function Lab({ brand }) {
             ) : messages.map(m => { const isLab = m.sender_role === 'Lab Technician'; return (
               <div key={m.id} style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: isLab ? tealMist : infoBg, border: `1px solid ${isLab ? tealMist : infoBg}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: '700', color: isLab ? tealDeep : info }}>{m.sender_name} — {m.sender_role}</span>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: isLab ? tealDeep : info }}>{m.sender_name}, {m.sender_role}</span>
                   <span style={{ fontSize: '10px', color: gray400 }}>{m.created_at?.replace('T', ' ').slice(0, 16)}</span>
                 </div>
                 <div style={{ fontSize: '13px', color: navy }}>{m.message}</div>

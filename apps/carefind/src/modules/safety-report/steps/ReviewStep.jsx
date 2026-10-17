@@ -4,7 +4,7 @@ import { s } from '../ui.jsx'
 const COMPANY_SUMMARY = {
   verified: (c) => `Company: ${c.businessName || 'selected company'}`,
   unknown: () => 'Company: unknown',
-  unverified_candidate: (c) => `Company (as printed): ${c.candidateName || '—'}`,
+  unverified_candidate: (c) => `Company (as printed): ${c.candidateName || 'Not recorded'}`,
 }
 
 export default function ReviewStep({ draft, missing, onEdit, onSubmit, submitting, submitError }) {
@@ -21,7 +21,7 @@ export default function ReviewStep({ draft, missing, onEdit, onSubmit, submittin
   )
 
   const line = (label, value) => (
-    <p key={label} style={{ ...s.muted, margin: '2px 0' }}><span style={{ fontWeight: 700, color: 'var(--fg)' }}>{label}:</span> {value || '—'}</p>
+    <p key={label} style={{ ...s.muted, margin: '2px 0' }}><span style={{ fontWeight: 700, color: 'var(--fg)' }}>{label}:</span> {value || 'Not recorded'}</p>
   )
 
   return (
@@ -38,7 +38,7 @@ export default function ReviewStep({ draft, missing, onEdit, onSubmit, submittin
           <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
             {missing.map((m, i) => (
               <li key={`${m.step}-${m.label}-${i}`}>
-                {m.label} — <button type="button" onClick={() => onEdit(m.step)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--teal)', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>Edit {STEP_LABELS[m.step]}</button>
+                {m.label}. <button type="button" onClick={() => onEdit(m.step)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--teal)', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>Edit {STEP_LABELS[m.step]}</button>
               </li>
             ))}
           </ul>
@@ -48,7 +48,7 @@ export default function ReviewStep({ draft, missing, onEdit, onSubmit, submittin
       {section(STEPS.REPORTER, 'About you', <>
         {line('Name', reporter.anonymousConfirmed ? `Withheld (via ${reporter.facilityName || 'facility'})` : reporter.name)}
         {line('Contact', [reporter.phone, reporter.email].filter(Boolean).join(' · '))}
-        {line('Follow-up contact', reporter.consentFollowup === true ? 'Yes' : reporter.consentFollowup === false ? 'No' : '—')}
+        {line('Follow-up contact', reporter.consentFollowup === true ? 'Yes' : reporter.consentFollowup === false ? 'No' : 'Not recorded')}
       </>)}
 
       {section(STEPS.PATIENT, 'Person affected', <>
@@ -61,7 +61,7 @@ export default function ReviewStep({ draft, missing, onEdit, onSubmit, submittin
         {products.map((p, i) => (
           <p key={p.product_id || i} style={{ ...s.muted, margin: '2px 0' }}>
             <span style={{ fontWeight: 700, color: 'var(--fg)' }}>{p.brandName || 'Unnamed product'}</span>
-            {' — '}{(COMPANY_SUMMARY[p.company?.kind || 'unknown'] || COMPANY_SUMMARY.unknown)(p.company || {})}
+            {' · '}{(COMPANY_SUMMARY[p.company?.kind || 'unknown'] || COMPANY_SUMMARY.unknown)(p.company || {})}
           </p>
         ))}
       </>)}
@@ -70,7 +70,7 @@ export default function ReviewStep({ draft, missing, onEdit, onSubmit, submittin
         {reactions.map((r, i) => (
           <p key={r.reaction_id || i} style={{ ...s.muted, margin: '2px 0' }}>
             <span style={{ fontWeight: 700, color: 'var(--fg)' }}>{r.description || 'Undescribed reaction'}</span>
-            {` — ${r.severity || '—'} / ${r.outcome || '—'}`}
+            {` · ${r.severity || 'Not recorded'} / ${r.outcome || 'Not recorded'}`}
           </p>
         ))}
       </>)}

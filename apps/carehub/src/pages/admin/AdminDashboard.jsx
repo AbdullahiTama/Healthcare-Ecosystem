@@ -144,24 +144,24 @@ function DailyBrief({ businesses, payouts, onNavigate, onRefresh, lastSynced, lo
       {pending.length === 0 && readyPayouts.length === 0 ? (
         <div style={{ fontSize: 13, color: 'var(--muted)', padding: '8px 0', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', textAlign: 'center' }}>
           <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--teal-mist)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--teal)' }}><CheckCircle size={24} /></div>
-          <div>All caught up — no pending approvals or payouts awaiting action.</div>
+          <div>Nothing is waiting on you. No approvals or payouts need action.</div>
           <button onClick={() => onNavigate('businesses')} style={{ color: 'white', background: 'var(--teal)', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12, padding: '8px 14px', borderRadius: 8 }}>Go to Businesses</button>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {pending.length > 0 && (
             <div style={{ fontSize: 13, color: 'var(--fg)', lineHeight: 1.5 }}>
-              <b>{pending.length} pending</b> {pending.length === 1 ? 'business' : 'businesses'} • {pending.map(b=>b.name).join(', ')} — <button onClick={() => onNavigate('businesses')} style={{ color: 'var(--teal)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, padding: 0 }}>Review →</button>
+              <b>{pending.length} pending</b> {pending.length === 1 ? 'business' : 'businesses'} • {pending.map(b=>b.name).join(', ')}. <button onClick={() => onNavigate('businesses')} style={{ color: 'var(--teal)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, padding: 0 }}>Review →</button>
               {awaitingCount > 0 && <div style={{ marginTop: 4 }}><AwaitingVerificationBadge /> <span style={{ fontSize: 11, color: 'var(--muted)' }}>{awaitingCount} of {allPending.length} cannot be approved yet</span></div>}
             </div>
           )}
           {readyPayouts.length > 0 && (
             <div style={{ fontSize: 13, color: 'var(--fg)', lineHeight: 1.5 }}>
-              <b>{readyPayouts.length} payouts ready</b> • {readyPayouts.map(p=> (p.requester_id||p.id).slice(0,6)).join(', ')} — <button onClick={() => onNavigate('payouts')} style={{ color: 'var(--teal)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, padding: 0 }}>Process →</button>
+              <b>{readyPayouts.length} payouts ready</b> • {readyPayouts.map(p=> (p.requester_id||p.id).slice(0,6)).join(', ')}. <button onClick={() => onNavigate('payouts')} style={{ color: 'var(--teal)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, padding: 0 }}>Process →</button>
             </div>
           )}
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, borderTop: '1px solid var(--hairline)', paddingTop: 8 }}>
-            Suggested next: <b style={{ color: 'var(--fg)' }}>{nextApprovable ? `Approve ${nextApprovable.name}` : readyPayouts[0] ? 'Mark next payout Paid' : 'Check coverage'}</b> — source: businesses & payout_requests • <span style={{ fontFamily: 'var(--font-mono)' }}>{staleness}</span>
+            Suggested next: <b style={{ color: 'var(--fg)' }}>{nextApprovable ? `Approve ${nextApprovable.name}` : readyPayouts[0] ? 'Mark next payout Paid' : 'Check coverage'}</b>. Source: businesses and payout requests · <span style={{ fontFamily: 'var(--font-mono)' }}>{staleness}</span>
           </div>
         </div>
       )}
@@ -206,7 +206,7 @@ function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: stat
         <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
           <div style={{ width: 64, height: 64, borderRadius: 16, background: 'var(--hairline)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}><Building2 size={28} /></div>
           <div style={{ fontWeight: 800, color: 'var(--fg)' }}>No businesses yet</div>
-          <div style={{ fontSize: 13, color: 'var(--muted)' }}>Start onboarding — businesses will appear here once registered.</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)' }}>Start onboarding. Businesses appear here once they register.</div>
           <TealBtn onClick={()=>onNav('businesses')}>Go to Businesses</TealBtn>
         </Card>
       </div>
@@ -246,7 +246,7 @@ function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: stat
       { label: 'Pending approvals', value: pendingBusinesses.length, icon: <Hourglass />, hero: true, delta: pendingBusinesses.length > 0 ? `+${Math.min(pendingBusinesses.length,3)} today` : 'All clear', spark: sparkPending, tone: pendingBusinesses.length>0 ? 'warning' : undefined },
       { label: 'Active businesses', value: active.length, icon: <CheckCircle />, delta: `${active.length} live`, spark: sparkActive, tone: undefined },
       { label: 'Total businesses', value: safeBusinesses.filter(b=>!b.deleted_at).length, icon: <Building2 />, delta: `${safeBusinesses.length} onboarded`, spark: trend.slice(-7), tone: undefined },
-      { label: 'E-commerce', value: ecommerce.length, icon: <Store />, delta: `${ecommerce.length} enabled`, spark: trend.slice(-7).map(v=> v?1:0), tone: undefined },
+      { label: 'Online Store', value: ecommerce.length, icon: <Store />, delta: `${ecommerce.length} enabled`, spark: trend.slice(-7).map(v=> v?1:0), tone: undefined },
       { label: 'Admin team', value: safeTeam.length, icon: <Users />, delta: `${safeTeam.length} members`, spark: [1,1,2,1,2,2,1], tone: undefined },
       { label: 'Payouts pending', value: safePayouts.filter(p=>p.status==='pending'||p.status==='processing').length, icon: <Wallet />, delta: `${safePayouts.filter(p=>p.status==='paid').length} paid`, spark: safePayouts.slice(0,7).map(()=>1), tone: safePayouts.some(p=>p.status==='pending')?'warning':undefined },
     ]
@@ -281,7 +281,7 @@ function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: stat
       {/* One 30d trend only — span label + staleness */}
       <Card style={{ padding: 16, background: 'var(--panel)', border: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 6 }}>Onboarding — last 30 days <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--hairline)', color: 'var(--muted)', padding: '2px 6px', borderRadius: 6 }}>30d</span> {lastSynced && <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>• Updated {lastSynced}</span>} {onRefresh && <button onClick={onRefresh} aria-label="Refresh trend" style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', cursor: 'pointer', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}><RefreshCw size={11} /> Refresh</button>}</div>
+          <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 6 }}>Onboarding, last 30 days <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--hairline)', color: 'var(--muted)', padding: '2px 6px', borderRadius: 6 }}>30d</span> {lastSynced && <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>• Updated {lastSynced}</span>} {onRefresh && <button onClick={onRefresh} aria-label="Refresh trend" style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', cursor: 'pointer', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}><RefreshCw size={11} /> Refresh</button>}</div>
           <div style={{ fontSize: 11, color: 'var(--muted)' }}>{safeBusinesses.filter(b=>!b.deleted_at).length} total • {trend.reduce((a,b)=>a+b,0)} in 30d</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'end', gap: 2, height: 48 }}>
@@ -291,7 +291,7 @@ function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: stat
             return <div key={i} style={{ flex: 1, height: h, background: v? 'var(--teal)' : 'var(--border)', borderRadius: 3, opacity: v? 0.9 : 0.4 }} title={`${v} on day ${i+1}`} />
           })}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8, textAlign: 'center' }}>One trend only — Plausible restraint. No decorative charts.</div>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8, textAlign: 'center' }}></div>
       </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 14 }}>
@@ -304,7 +304,7 @@ function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: stat
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
               {pendingBusinesses.slice(0, 6).map(b => (
                 <button key={b.id} onClick={() => onNav('businesses', b.id)} style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--panel)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div><div style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg)' }}>{b.name}</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{b.owner || b.owner_name} • {b.state || '—'} • {b.category || b.business_type}</div>{unverifiedIds && unverifiedIds.has(b.id) && <div style={{ marginTop: 4 }}><AwaitingVerificationBadge /></div>}</div>
+                  <div><div style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg)' }}>{b.name}</div><div style={{ fontSize: 11, color: 'var(--muted)' }}>{b.owner || b.owner_name} • {b.state || 'Not set'} • {b.category || b.business_type}</div>{unverifiedIds && unverifiedIds.has(b.id) && <div style={{ marginTop: 4 }}><AwaitingVerificationBadge /></div>}</div>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: 'var(--amber)', background: 'var(--amber-bg)', padding: '4px 8px', borderRadius: 9999 }}><StatusDot status="pending" /> pending</span>
                 </button>
               ))}
@@ -411,7 +411,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
     // undo toast 5s
     const undoEntry = { id, prevStatus: prev }
     setUndo(undoEntry)
-    showToast(next==='active' ? 'Approved — undo?' : next==='suspended' ? 'Suspended — undo?' : next==='revoked' ? 'Revoked — undo?' : `Moved to ${next}`, { type: 'success', actionLabel: 'Undo', onAction: async () => {
+    showToast(next==='active' ? 'Approved. Undo?' : next==='suspended' ? 'Suspended. Undo?' : next==='revoked' ? 'Revoked. Undo?' : `Moved to ${next}`, { type: 'success', actionLabel: 'Undo', onAction: async () => {
       try { await onStatusChange(id, prev); setRows(prevRows); if (selected?.id===id) setSelected(s=> ({...s, status: prev})); showToast('Undone', { type: 'info' }) } catch(e){ showToast(e.message,{type:'error'}) }
       setUndo(null)
     }, duration: 5000 })
@@ -574,8 +574,8 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
                           <span style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--teal-mist)', color: 'var(--teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{(() => { const Icon = businessLucideIcon(b.business_type || b.type); return <Icon size={14} /> })()}</span>
                           <span style={{ fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>{b.name}</span>
                         </td>
-                        <td style={{ padding: '0 12px', color: 'var(--muted)', fontSize: 13, whiteSpace: 'nowrap' }}>{b.state || '—'}</td>
-                        <td style={{ padding: '0 12px', color: 'var(--muted)', fontSize: 13, whiteSpace: 'nowrap' }}>{b.category || b.business_type || '—'}</td>
+                        <td style={{ padding: '0 12px', color: 'var(--muted)', fontSize: 13, whiteSpace: 'nowrap' }}>{b.state || 'Not set'}</td>
+                        <td style={{ padding: '0 12px', color: 'var(--muted)', fontSize: 13, whiteSpace: 'nowrap' }}>{b.category || b.business_type || 'Not set'}</td>
                         <td style={{ padding: '0 12px', color: 'var(--muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{b.plan || 'basic'}</td>
                         <td style={{ padding: '0 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                           {isAwaitingVerification(b) && <span style={{ marginRight: 8 }}><AwaitingVerificationBadge id={`awaiting-verification-table-${b.id}`} /></span>}
@@ -608,7 +608,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
                       <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--teal-mist)', color: 'var(--teal)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{(() => { const Icon = businessLucideIcon(b.business_type || b.type); return <Icon size={16} /> })()}</div>
                       <div>
                         <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--fg)' }}>{b.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{b.state || '—'} • {b.category || b.business_type || '—'} • {b.plan}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{b.state || 'Not set'} • {b.category || b.business_type || 'Not set'} • {b.plan}</div>
                         {isAwaitingVerification(b) && <div style={{ marginTop: 4 }}><AwaitingVerificationBadge id={`awaiting-verification-card-${b.id}`} /></div>}
                       </div>
                     </div>
@@ -654,7 +654,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
       <Sheet show={!!selected} onClose={()=>setSelected(null)} title={selected?.name || 'Business Details'} footer={selected && (
         <div style={{ display: 'flex', gap: 8, width: '100%', flexWrap: 'wrap' }}>
           {selected.status==='pending' && <>{isAwaitingVerification(selected) && <div style={{ flexBasis: '100%' }}><AwaitingVerificationBadge id={`awaiting-verification-sheet-${selected.id}`} /> <span style={{ fontSize: 12, color: 'var(--muted)' }}>Approval is unavailable until the owner verifies their email.</span></div>}<TealBtn disabled={busy || isAwaitingVerification(selected)} aria-describedby={isAwaitingVerification(selected) ? `awaiting-verification-sheet-${selected.id}` : undefined} onClick={async()=>{ await handleApprove(selected); }} style={{ flex:1, padding:11 }}><Check size={14} /> Approve</TealBtn><button disabled={busy} onClick={async()=>{ await handleRevoke(selected); }} style={{ flex:1, padding:11, borderRadius:12, border:'none', background: 'var(--hairline)', color: 'var(--muted)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }}><X size={14} /> Reject (revoke)</button></>}
-          {selected.status==='active' && <><button disabled={busy} onClick={()=>handleSuspend(selected)} style={{ flex:1, padding:11, borderRadius:12, border:'none', background:'var(--amber-bg)', color:'var(--amber)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }}><Pause size={14} /> Suspend (temporary)</button><button disabled={busy} onClick={()=>handleRevoke(selected)} style={{ flex:1, padding:11, borderRadius:12, border:'none', background: 'var(--hairline)', color: 'var(--muted)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }} title="Revoke withdraws approval — must reapply"><X size={14} /> Revoke (withdrawal)</button></>}
+          {selected.status==='active' && <><button disabled={busy} onClick={()=>handleSuspend(selected)} style={{ flex:1, padding:11, borderRadius:12, border:'none', background:'var(--amber-bg)', color:'var(--amber)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }}><Pause size={14} /> Suspend (temporary)</button><button disabled={busy} onClick={()=>handleRevoke(selected)} style={{ flex:1, padding:11, borderRadius:12, border:'none', background: 'var(--hairline)', color: 'var(--muted)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }} title="Revoke withdraws approval permanently. The business must reapply."><X size={14} /> Revoke (withdrawal)</button></>}
           {selected.status==='suspended' && <TealBtn disabled={busy} onClick={async()=>{ await handleReactivate(selected); }} style={{ flex:1, padding:11 }}><Play size={14} /> Reactivate</TealBtn>}
           {selected.status==='revoked' && <TealBtn disabled={busy} onClick={async()=>{ await handleToPending(selected); }} style={{ flex:1, padding:11 }}>Move to pending (reapply)</TealBtn>}
           <button disabled={busy} onClick={()=>setShowDeleteConfirm(selected)} style={{ padding:'11px 14px', borderRadius:12, border:'1px solid var(--red)', background:'var(--panel)', color: 'var(--red)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }}><Trash2 size={14} /> Delete</button>
@@ -679,20 +679,20 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
               })}
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 14, padding: '8px 10px', background: 'var(--hairline)', borderRadius: 8 }}>
-              <b>Suspend</b> = temporary — dashboard access lost but data retained. <b>Revoke</b> = withdrawal — approval withdrawn, reapplication required.
+              <b>Suspend</b> is temporary. Dashboard access is lost but the data is kept. <b>Revoke</b> is permanent. Approval is withdrawn and the business must reapply.
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:0, marginBottom: 14 }}>
-              {[['Business Name', selected.name], ['Owner Name', selected.owner_name || selected.owner], ['Owner Email', selected.owner_email || selected.email], ['Category', selected.category || selected.business_type], ['State', selected.state || '—'], ['Plan', selected.plan||'basic'], ['Status', selected.status], ['Date Onboarded', fmtDate(selected.created_at)], ['Phone', selected.phone||'—'], ['Address', selected.address||'—'], ['E-commerce', selected.ecommerce_enabled ? 'enabled' : 'disabled']].map(([l,v]) => (
+              {[['Business Name', selected.name], ['Owner Name', selected.owner_name || selected.owner], ['Owner Email', selected.owner_email || selected.email], ['Category', selected.category || selected.business_type], ['State', selected.state || 'Not set'], ['Plan', selected.plan||'basic'], ['Status', selected.status], ['Date Onboarded', fmtDate(selected.created_at)], ['Phone', selected.phone||'Not set'], ['Address', selected.address||'Not set'], ['E-commerce', selected.ecommerce_enabled ? 'enabled' : 'disabled']].map(([l,v]) => (
                 <div key={l} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--hairline)', fontSize:13 }}><span style={{ color: 'var(--muted)', fontWeight:600 }}>{l}</span><span style={{ color: 'var(--fg)', textAlign:'right' }}>{v}</span></div>
               ))}
             </div>
             <div style={{ borderTop:'1px solid var(--hairline)', paddingTop: 12 }}>
-              <div style={{ fontWeight:800, fontSize:13, marginBottom:8, display:'flex', alignItems:'center', gap:6, color: 'var(--fg)' }}><Store size={14} /> E-commerce products for this business</div>
-              {ecomLoading ? <Loading /> : ecomProducts.length===0 ? <div style={{ fontSize:13, color: 'var(--muted)', padding:10, textAlign:'center', border:'1px dashed var(--border)', borderRadius:10 }}>No e-commerce products — showing will appear here when the business has active store items.</div> : (
+              <div style={{ fontWeight:800, fontSize:13, marginBottom:8, display:'flex', alignItems:'center', gap:6, color: 'var(--fg)' }}><Store size={14} /> Online store products for this business</div>
+              {ecomLoading ? <Loading /> : ecomProducts.length===0 ? <div style={{ fontSize:13, color: 'var(--muted)', padding:10, textAlign:'center', border:'1px dashed var(--border)', borderRadius:10 }}>No online store products. Items appear here once the business activates a product.</div> : (
                 <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight: 240, overflowY:'auto' }}>
                   {ecomProducts.map(p => (
                     <div key={p.id} style={{ display:'flex', justifyContent:'space-between', padding:'10px 12px', border:'1px solid var(--border)', borderRadius:10, fontSize:13, background: 'var(--panel)' }}>
-                      <div><div style={{ fontWeight:700, color: 'var(--fg)' }}>{p.products?.name || p.name || 'Product'}</div><div style={{ fontSize:11, color: 'var(--muted)' }}>Units sold: {(p.units_sold ?? p.total_sold ?? '—')} • Price: {p.ecommerce_price_kobo ? '₦'+(p.ecommerce_price_kobo/100).toLocaleString() : p.products?.price ? '₦'+p.products.price : '—'}</div></div>
+                      <div><div style={{ fontWeight:700, color: 'var(--fg)' }}>{p.products?.name || p.name || 'Product'}</div><div style={{ fontSize:11, color: 'var(--muted)' }}>Units sold: {(p.units_sold ?? p.total_sold ?? 'Not set')} • Price: {p.ecommerce_price_kobo ? '₦'+(p.ecommerce_price_kobo/100).toLocaleString() : p.products?.price ? '₦'+p.products.price : 'Not set'}</div></div>
                       <Pill label={(p.status||'').toLowerCase().includes('active')||p.is_active ? 'live' : 'inactive'} type={(p.status||'').toLowerCase().includes('active')||p.is_active ? 'green':'gray'} />
                     </div>
                   ))}
@@ -796,7 +796,7 @@ function TeamAgentsPanel() {
     setBusy(false)
   }
 
-  const parentOptions = safeAgents.filter(a=> a.id!==selected?.id).map(a=> ({ value: a.id, label: `${a.full_name||a.name} (${a.tier}/${a.state||'—'})` }))
+  const parentOptions = safeAgents.filter(a=> a.id!==selected?.id).map(a=> ({ value: a.id, label: `${a.full_name||a.name} (${a.tier}/${a.state||'Not set'})` }))
 
   if (loading) return <Loading />
   if (error) return <ErrorState message={error} onRetry={load} />
@@ -812,7 +812,7 @@ function TeamAgentsPanel() {
         <TealBtn onClick={()=>setShowRegister(true)}>+ Register agent (admin)</TealBtn>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:10 }}>
-        <Card style={{ padding:12, background: 'var(--teal-mist)', border:'1px solid var(--teal)', color: 'var(--fg)' }}><div style={{ fontSize:12, color: 'var(--muted)' }}>Agent tiers</div><div style={{ fontSize:13 }}>{(Array.isArray(tiers)?tiers:[]).map(t=> `${t.name} (${t.max_children ?? '∞'} @ ${t.commission_pct}%)`).join(' • ') || '—'}</div></Card>
+        <Card style={{ padding:12, background: 'var(--teal-mist)', border:'1px solid var(--teal)', color: 'var(--fg)' }}><div style={{ fontSize:12, color: 'var(--muted)' }}>Agent tiers</div><div style={{ fontSize:13 }}>{(Array.isArray(tiers)?tiers:[]).map(t=> `${t.name} (${t.max_children ?? '∞'} @ ${t.commission_pct}%)`).join(' • ') || 'Not set'}</div></Card>
         <Card style={{ padding:12, background: 'var(--panel)', border: '1px solid var(--border)' }}><div style={{ fontSize:12, color: 'var(--muted)' }}>Total agents</div><div style={{ fontWeight:800, color: 'var(--fg)' }}>{safeAgents.length}</div></Card>
         <Card style={{ padding:12, background: 'var(--panel)', border: '1px solid var(--border)' }}><div style={{ fontSize:12, color: 'var(--muted)' }}>Pending</div><div style={{ fontWeight:800, color: 'var(--fg)' }}>{safeAgents.filter(a=>a.status==='pending').length}</div></Card>
       </div>
@@ -822,8 +822,8 @@ function TeamAgentsPanel() {
             <Card key={a.id} style={{ padding:14, display:'flex', justifyContent:'space-between', gap:12, alignItems:'center', flexWrap:'wrap', background: 'var(--panel)', border: '1px solid var(--border)' }}>
               <div>
                 <div style={{ fontWeight:800, color: 'var(--fg)' }}>{a.full_name || a.name} <span style={{ fontWeight:400, color: 'var(--muted)', fontSize:12 }}>• {a.tier}</span></div>
-                <div style={{ fontSize:12, color: 'var(--muted)' }}>{a.email || a.contact_email} • {a.state || '—'} • {a.referral_code || 'no code'} • {a.commission_pct ?? '—'}% • {a.status}</div>
-                <div style={{ fontSize:11, color: 'var(--muted)' }}>Parent: {a.parent_agent_id ? agents.find(x=>x.id===a.parent_agent_id)?.full_name || a.parent_agent_id.slice(0,8) : '—'}</div>
+                <div style={{ fontSize:12, color: 'var(--muted)' }}>{a.email || a.contact_email} • {a.state || 'Not set'} • {a.referral_code || 'no code'} • {a.commission_pct ?? 'Not set'}% • {a.status}</div>
+                <div style={{ fontSize:11, color: 'var(--muted)' }}>Parent: {a.parent_agent_id ? agents.find(x=>x.id===a.parent_agent_id)?.full_name || a.parent_agent_id.slice(0,8) : 'Not set'}</div>
               </div>
               <div style={{ display:'flex', gap:6, alignItems:'center' }}>
                 <Pill label={a.status} type={a.status==='active'?'green': a.status==='pending'?'amber':'gray'} />
@@ -842,7 +842,7 @@ function TeamAgentsPanel() {
         {selected && (
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
             <div style={{ fontSize:13, display:'flex', flexDirection:'column', gap:6 }}>
-              {[['Email', selected.email||selected.contact_email], ['Referral code', selected.referral_code||'auto CF-...'], ['Tier', selected.tier], ['State', selected.state||'—'], ['Status', selected.status], ['Commission %', selected.commission_pct ?? '—']].map(([l,v])=>(
+              {[['Email', selected.email||selected.contact_email], ['Referral code', selected.referral_code||'auto CF-...'], ['Tier', selected.tier], ['State', selected.state||'Not set'], ['Status', selected.status], ['Commission %', selected.commission_pct ?? 'Not set']].map(([l,v])=>(
                 <div key={l} style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid var(--hairline)' }}><span style={{ color: 'var(--muted)' }}>{l}</span><span style={{ fontWeight:600, color: 'var(--fg)' }}>{v}</span></div>
               ))}
             </div>
@@ -852,7 +852,7 @@ function TeamAgentsPanel() {
                 <Sel label="Tier" value={tierForm.tier} onChange={v=>setTierForm(s=>({...s,tier:v}))} options={['unplaced','agent','community_coordinator','state_coordinator']} />
                 <Inp label="Commission %" value={tierForm.commission_pct} onChange={v=>setTierForm(s=>({...s,commission_pct:v}))} placeholder="e.g. 10" />
               </div>
-              <Sel label="Parent agent (community coordinator cap 20)" value={tierForm.parent_agent_id} onChange={v=>setTierForm(s=>({...s,parent_agent_id:v}))} options={[{value:'',label:'— No parent —'}, ...parentOptions]} />
+              <Sel label="Parent agent (community coordinator cap 20)" value={tierForm.parent_agent_id} onChange={v=>setTierForm(s=>({...s,parent_agent_id:v}))} options={[{value:'',label:'No parent agent'}, ...parentOptions]} />
               <GhostBtn disabled={busy} onClick={handleTierUpdate} style={{ marginTop:8 }}>Update tier / parent</GhostBtn>
             </div>
             <div style={{ padding:12, border:'1px solid var(--border)', borderRadius:10, background: 'var(--panel)' }}>
@@ -863,11 +863,11 @@ function TeamAgentsPanel() {
             </div>
             <div style={{ padding:12, border:'1px solid var(--border)', borderRadius:10, background: 'var(--panel)' }}>
               <div style={{ fontWeight:800, fontSize:13, marginBottom:8, color: 'var(--fg)' }}>Earnings for this agent</div>
-              {earnings.length===0 ? <div style={{ fontSize:12, color: 'var(--muted)' }}>No earnings yet. Calculated server-side on payment webhook via calculate_agent_earnings — never client-side.</div> : (
+              {earnings.length===0 ? <div style={{ fontSize:12, color: 'var(--muted)' }}>No earnings yet. Earnings appear here after a payment clears.</div> : (
                 <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight: 200, overflowY:'auto' }}>
                   {earnings.map(e=>(
                     <div key={e.id} style={{ display:'flex', justifyContent:'space-between', fontSize:12, padding:'6px 8px', background: 'var(--hairline)', borderRadius:8 }}>
-                      <span style={{ color: 'var(--fg)' }}>{fmtDate(e.created_at)} • {e.status} • {e.payout_period||''} • ref {e.payment_reference||'—'}</span><span style={{ fontWeight:700, color: 'var(--fg)', fontFamily: 'var(--font-mono)' }}>{fmt(e.amount_owed)} (paid {fmt(e.amount_paid)}) @ {e.commission_pct}%</span>
+                      <span style={{ color: 'var(--fg)' }}>{fmtDate(e.created_at)} • {e.status} • {e.payout_period||''} • ref {e.payment_reference||'Not set'}</span><span style={{ fontWeight:700, color: 'var(--fg)', fontFamily: 'var(--font-mono)' }}>{fmt(e.amount_owed)} (paid {fmt(e.amount_paid)}) @ {e.commission_pct}%</span>
                     </div>
                   ))}
                 </div>
@@ -940,15 +940,15 @@ function TeamPlatformPanel() {
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       <Card style={{ padding:14, background: 'var(--panel)', border: '1px solid var(--border)' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
-          <div style={{ fontWeight:800, color: 'var(--fg)' }}>Roles — create first, then hire</div>
+          <div style={{ fontWeight:800, color: 'var(--fg)' }}>Roles</div>
           <TealBtn onClick={()=>setShowRole(true)}>+ Create role</TealBtn>
         </div>
-        {roles.length===0 ? <div style={{ fontSize:13, color: 'var(--muted)', padding:12, textAlign:'center' }}>No roles yet — super admin creates a role with name, description, permission checklist. Independent of hiring.</div> : (
+        {roles.length===0 ? <div style={{ fontSize:13, color: 'var(--muted)', padding:12, textAlign:'center' }}>No roles yet. A super admin creates a role with a name, a description and a permission checklist. Create the role first, then hire people into it.</div> : (
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))', gap:10, marginTop:12 }}>
             {roles.map(r=>(
               <div key={r.id} style={{ padding:12, border:'1px solid var(--border)', borderRadius:10, background: 'var(--panel)' }}>
                 <div style={{ fontWeight:700, fontSize:13, color: 'var(--fg)' }}>{r.name}</div>
-                <div style={{ fontSize:12, color: 'var(--muted)' }}>{r.description || '—'}</div>
+                <div style={{ fontSize:12, color: 'var(--muted)' }}>{r.description || 'Not set'}</div>
                 <div style={{ fontSize:11, marginTop:6, color: 'var(--fg)' }}>{Object.entries(normalizePlatformPermissions(r.permissions)).filter(([,v])=>v).map(([k])=>k).join(', ') || 'No permissions'}</div>
                 <GhostBtn onClick={async()=>{ if(confirm('Delete role?')){ await deleteAdminRole(r.id); load() } }} style={{ marginTop:8, fontSize:11 }}>Delete</GhostBtn>
               </div>
@@ -958,7 +958,7 @@ function TeamPlatformPanel() {
       </Card>
       <Card style={{ padding:14, background: 'var(--panel)', border: '1px solid var(--border)' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
-          <div style={{ fontWeight:800, color: 'var(--fg)' }}>Hiring — select existing role (no inline permission config)</div>
+          <div style={{ fontWeight:800, color: 'var(--fg)' }}>Hiring</div>
           <TealBtn onClick={()=>setShowMember(true)}>+ Hire / Add team member</TealBtn>
         </div>
         {members.length===0 ? <div style={{ fontSize:13, color: 'var(--muted)', padding:12, textAlign:'center' }}>No team members yet</div> : (
@@ -967,10 +967,10 @@ function TeamPlatformPanel() {
               <div key={m.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:10, border:'1px solid var(--border)', borderRadius:10, flexWrap:'wrap', gap:8, background: 'var(--panel)' }}>
                 <div style={{ display:'flex', gap:10, alignItems:'center' }}>
                   <Avatar name={m.full_name} size={36} />
-                  <div><div style={{ fontWeight:700, fontSize:13, color: 'var(--fg)' }}>{m.full_name}</div><div style={{ fontSize:12, color: 'var(--muted)' }}>{m.email} • Role: {m.admin_roles?.name || roles.find(r=>r.id===m.role_id)?.name || '—'} • {m.status}</div></div>
+                  <div><div style={{ fontWeight:700, fontSize:13, color: 'var(--fg)' }}>{m.full_name}</div><div style={{ fontSize:12, color: 'var(--muted)' }}>{m.email} • Role: {m.admin_roles?.name || roles.find(r=>r.id===m.role_id)?.name || 'Not set'} • {m.status}</div></div>
                 </div>
                 <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                  <Pill label={m.admin_roles?.name || '—'} type="gray" />
+                  <Pill label={m.admin_roles?.name || 'Not set'} type="gray" />
                   <button onClick={async()=>{ if(confirm('Remove member?')){ await deleteAdminTeamMember(m.id); load() } }} style={{ padding:'6px 10px', borderRadius:8, border:'none', background: 'var(--red-bg)', color: 'var(--red)', fontWeight:700, fontSize:12, cursor:'pointer' }}>Remove</button>
                 </div>
               </div>
@@ -1001,7 +1001,7 @@ function TeamPlatformPanel() {
           <Inp label="Full name *" value={memberForm.full_name} onChange={v=>setMemberForm(s=>({...s,full_name:v}))} />
           <Inp label="Email *" value={memberForm.email} onChange={v=>setMemberForm(s=>({...s,email:v}))} type="email" />
           <Inp label="Password *" value={memberForm.password} onChange={v=>setMemberForm(s=>({...s,password:v}))} type="password" />
-          <Sel label="Role * (dropdown — role supplies permissions)" value={memberForm.role_id} onChange={v=>setMemberForm(s=>({...s,role_id:v}))} options={[{value:'',label:'Select existing role'}, ...roles.map(r=>({value:r.id,label: r.name}))]} />
+          <Sel label="Role * (permissions come from the role)" value={memberForm.role_id} onChange={v=>setMemberForm(s=>({...s,role_id:v}))} options={[{value:'',label:'Select existing role'}, ...roles.map(r=>({value:r.id,label: r.name}))]} />
           <div style={{ fontSize:11, color: 'var(--muted)' }}>Do not configure permissions inline during hiring; selected role supplies permissions.</div>
           <TealBtn disabled={busy} onClick={handleCreateMember}>Hire / Add</TealBtn>
         </div>
@@ -1062,12 +1062,12 @@ function ApplicationsUnifiedPanel() {
         ))}
         <GhostBtn onClick={load}><RefreshCw size={13} style={{ marginRight:6 }} />Refresh</GhostBtn>
       </div>
-      {filtered.length===0 ? <Empty icon={<FileText size={28} />} message={filter==='all' ? 'No applications' : `No ${filter} applications — all require explicit admin review, none auto-approve.`} /> : (
+      {filtered.length===0 ? <Empty icon={<FileText size={28} />} message={filter==='all' ? 'No applications' : `No ${filter} applications. Every application needs an explicit admin review, nothing is approved automatically.`} /> : (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
           {filtered.map(a=>(
             <Card key={a.id} style={{ padding:14, display:'flex', justifyContent:'space-between', gap:12, alignItems:'center', flexWrap:'wrap', background: 'var(--panel)', border: '1px solid var(--border)' }}>
               <div>
-                <div style={{ fontWeight:800, fontSize:14, textTransform:'capitalize', color: 'var(--fg)' }}>{a.type} • {a.applicant_name || a.applicant_ref || '—'}</div>
+                <div style={{ fontWeight:800, fontSize:14, textTransform:'capitalize', color: 'var(--fg)' }}>{a.type} • {a.applicant_name || a.applicant_ref || 'Not set'}</div>
                 <div style={{ fontSize:12, color: 'var(--muted)' }}>{a.applicant_email || ''} • {fmtDate(a.submitted_at)}</div>
               </div>
               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
@@ -1158,7 +1158,7 @@ function LedgerUnifiedPanel() {
           <div style={{ fontWeight:800, fontSize:13, marginBottom:8, color: 'var(--fg)' }}>Agents ({filteredAgents.length})</div>
           {filteredAgents.length===0 ? <div style={{ fontSize:12, color: 'var(--muted)' }}>No matches</div> : filteredAgents.map(a=>(
             <button key={a.id} onClick={()=>openStatement({type:'agent',id:a.id,name:a.full_name||a.name,email:a.email})} style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 10px', borderRadius:8, border: selected?.id===a.id?'1px solid var(--teal)':'1px solid var(--border)', background: selected?.id===a.id? 'var(--teal-mist)' : 'var(--panel)', marginBottom:6, cursor:'pointer', color: 'var(--fg)' }}>
-              <div style={{ fontWeight:600, fontSize:13 }}>{a.full_name||a.name}</div><div style={{ fontSize:11, color: 'var(--muted)' }}>{a.email} • {a.state||'—'}</div>
+              <div style={{ fontWeight:600, fontSize:13 }}>{a.full_name||a.name}</div><div style={{ fontSize:11, color: 'var(--muted)' }}>{a.email} • {a.state||'Not set'}</div>
             </button>
           ))}
         </Card>
@@ -1166,10 +1166,10 @@ function LedgerUnifiedPanel() {
       {selected && (
         <Card style={{ padding:16, background: 'var(--panel)', border: '1px solid var(--border)' }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
-            <div style={{ fontWeight:800, color: 'var(--fg)' }}>Statement — {selected.name} ({selected.type})</div>
+            <div style={{ fontWeight:800, color: 'var(--fg)' }}>Statement for {selected.name} ({selected.type})</div>
             <GhostBtn onClick={exportSingle}><FileText size={13} style={{ marginRight:6 }} />Export single (PDF print)</GhostBtn>
           </div>
-          {loading ? <Loading /> : lines.length===0 ? <div style={{ fontSize:12, color: 'var(--muted)', padding:12, textAlign:'center' }}>No transactions — underlying sources authoritative.</div> : (
+          {loading ? <Loading /> : lines.length===0 ? <div style={{ fontSize:12, color: 'var(--muted)', padding:12, textAlign:'center' }}>No transactions. The underlying financial sources are authoritative.</div> : (
             <div style={{ overflowX:'auto', marginTop:10 }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
                 <thead><tr style={{ background: 'var(--hairline)' }}><th style={{ textAlign:'left', padding:'8px', border:'1px solid var(--border)', color: 'var(--muted)' }}>Date</th><th style={{ textAlign:'left', padding:'8px', border:'1px solid var(--border)', color: 'var(--muted)' }}>Description</th><th style={{ padding:'8px', border:'1px solid var(--border)', color: 'var(--muted)' }}>Type</th><th style={{ textAlign:'right', padding:'8px', border:'1px solid var(--border)', color: 'var(--muted)' }}>Amount</th><th style={{ textAlign:'right', padding:'8px', border:'1px solid var(--border)', color: 'var(--muted)' }}>Balance</th></tr></thead>
@@ -1217,7 +1217,7 @@ function PayoutsUnifiedPanel() {
     try {
       await markPayoutPaidAtomic(confirmPaid.id, {})
       await updatePayoutRequest(confirmPaid.id, { status: 'paid', processed_at: new Date().toISOString() })
-      showToast('Marked paid — financial source updated atomically server-side', {type:'success'})
+      showToast('Marked paid. The financial source was updated.', {type:'success'})
       setConfirmPaid(null); load()
     } catch(e){ showToast(e.message,{type:'error'}) }
     setBusy(false)
@@ -1239,7 +1239,7 @@ function PayoutsUnifiedPanel() {
             <Card key={r.id} style={{ padding:14, display:'flex', justifyContent:'space-between', gap:12, flexWrap:'wrap', alignItems:'center', background: 'var(--panel)', border: '1px solid var(--border)' }}>
               <div>
                 <div style={{ fontWeight:800, fontSize:14, color: 'var(--fg)' }}>{r.requester_type} • {r.requester_id.slice(0,8)} • {fmt(r.amount)}</div>
-                <div style={{ fontSize:12, color: 'var(--muted)' }}>{r.bank_name || r.bank_details?.bank_name || '—'} • {r.account_number || r.bank_details?.account_number || ''} • {r.account_name || r.bank_details?.account_name || ''} • {fmtDate(r.requested_at)} • method {r.payout_method || r.bank_details?.method || 'bank_transfer'}</div>
+                <div style={{ fontSize:12, color: 'var(--muted)' }}>{r.bank_name || r.bank_details?.bank_name || 'Not set'} • {r.account_number || r.bank_details?.account_number || ''} • {r.account_name || r.bank_details?.account_name || ''} • {fmtDate(r.requested_at)} • method {r.payout_method || r.bank_details?.method || 'bank_transfer'}</div>
               </div>
               <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
                 <Pill label={r.status} type={r.status==='paid'?'green': r.status==='rejected'?'red': r.status==='processing'?'blue':'amber'} />
@@ -1252,7 +1252,7 @@ function PayoutsUnifiedPanel() {
       )}
       <ConfirmDialog show={!!confirmPaid} title="Confirm Mark as Paid?" onClose={()=>setConfirmPaid(null)} onConfirm={doMarkPaid} confirmLabel={busy?'Processing...':'Confirm Paid'} variant="danger" message={
         <div style={{ fontSize:13 }}>
-          <div>This will atomically update payout status and the corresponding financial source server-side.</div>
+          <div>This updates the payout status and its financial source together.</div>
           <div style={{ marginTop:8, color: 'var(--red)', fontWeight:600 }}>Require confirmation for final Mark as Paid. This action is irreversible.</div>
         </div>
       } />
@@ -1314,7 +1314,7 @@ function CmdPalette({ open, setOpen, commands, onSelect, query, setQuery }) {
               <div style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><span className="animate-pulse" style={{ width: 16, height: 16, borderRadius: 9999, background: 'var(--hairline)', display: 'inline-block' }} /> Loading…</div>
             ) : filtered.length===0 ? (
               <Command.Empty style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)', fontSize: 13, minHeight: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Empty icon={<Search size={20} />} message={`No commands — try “pay” or “go to..” for “${debouncedQuery}”`} />
+                <Empty icon={<Search size={20} />} message={`No commands match. Try “pay” or “go to” for “${debouncedQuery}”`} />
               </Command.Empty>
             ) : Object.entries(groups).map(([sec, items])=>(
               <Command.Group key={sec} heading={sec} style={{ marginBottom: 12 }}>
@@ -1620,12 +1620,12 @@ export default function AdminDashboard() {
         window.scrollTo({ top: 0, behavior: 'smooth' })
       } else if (cmd.action==='approveBusiness') {
         await handleStatusChange(cmd.businessId, 'active')
-        showToast(`Approved ${cmd.business.name} — undo?`, { type: 'success', actionLabel: 'Undo', onAction: async()=> { await handleStatusChange(cmd.businessId, cmd.business.status); showToast('Undone',{type:'info'}) }, duration: 5000 })
+        showToast(`Approved ${cmd.business.name}. Undo?`, { type: 'success', actionLabel: 'Undo', onAction: async()=> { await handleStatusChange(cmd.businessId, cmd.business.status); showToast('Undone',{type:'info'}) }, duration: 5000 })
       } else if (cmd.action==='suspendBusiness') {
         await handleStatusChange(cmd.businessId, 'suspended')
         showToast(`Suspended ${cmd.business.name} (temporary)`, { type: 'success', actionLabel: 'Undo', onAction: async()=> { await handleStatusChange(cmd.businessId, cmd.business.status) }, duration: 5000 })
       } else if (cmd.action==='revokeBusiness') {
-        if (confirm('Revoke withdraws approval — must reapply. Continue?')) {
+        if (confirm('Revoke withdraws approval permanently and the business must reapply. Continue?')) {
           await handleStatusChange(cmd.businessId, 'revoked')
           showToast(`Revoked ${cmd.business.name}`, { type: 'success' })
         }
@@ -1689,8 +1689,8 @@ export default function AdminDashboard() {
         {/* header: pulse dot replaces Refresh */}
         <div style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', borderBottom: '1px solid var(--border)', background: 'var(--panel)', position: 'sticky', top: 0, zIndex: 10, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--fg)', textTransform: 'capitalize' }}>{tab.replace('-',' — ')}</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: pulseOnline ? 'var(--muted)' : 'var(--red)', background: pulseOnline ? 'var(--hairline)' : 'var(--red-bg)', padding: '4px 8px', borderRadius: 9999, fontWeight: 600 }} title={pulseOnline ? 'Realtime connected' : 'Offline — reconnecting'}>
+            <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--fg)', textTransform: 'capitalize' }}>{tab.replace('-', ' ')}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: pulseOnline ? 'var(--muted)' : 'var(--red)', background: pulseOnline ? 'var(--hairline)' : 'var(--red-bg)', padding: '4px 8px', borderRadius: 9999, fontWeight: 600 }} title={pulseOnline ? 'Realtime connected' : 'Offline, reconnecting'}>
               <span style={{ width: 8, height: 8, borderRadius: 9999, background: pulseOnline ? 'var(--green)' : 'var(--red)', display: 'inline-block', animation: prefersReducedMotion ? 'none' : (pulseOnline ? 'pulse 1.6s ease-in-out infinite' : 'none'), boxShadow: pulseOnline ? '0 0 0 4px rgba(34,197,94,0.15)' : 'none' }} aria-hidden="true" />
               {pulseOnline ? `live • last synced ${lastSynced}` : `offline • last synced ${lastSynced}`}
             </span>
@@ -1706,7 +1706,7 @@ export default function AdminDashboard() {
           {pendingCount > 0 && tab==='dashboard' && (
             <div style={{ marginBottom: 16, padding:'12px 16px', borderRadius:12, background: 'var(--amber-bg)', border:'1px solid var(--amber)', display:'flex', alignItems:'center', gap:10 }}>
               <Bell size={18} color="var(--amber)" style={{ flexShrink:0 }} />
-              <div style={{ fontWeight:700, color: 'var(--amber)', fontSize:13 }}>{pendingCount} business(es) waiting for approval — review in Businesses</div>
+              <div style={{ fontWeight:700, color: 'var(--amber)', fontSize:13 }}>{pendingCount} business(es) waiting for approval. Review them in Businesses.</div>
             </div>
           )}
 
@@ -1750,7 +1750,7 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        <div style={{ textAlign:'center', fontSize:11, color: 'var(--muted)', padding: 12, borderTop: '1px solid var(--border)' }}>Coverage unchanged • Financial operations are server-side & atomic • RLS enforced at data layer • <span style={{ fontFamily: 'var(--font-mono)' }}>last synced {lastSynced}</span></div>
+        <div style={{ textAlign:'center', fontSize:11, color: 'var(--muted)', padding: 12, borderTop: '1px solid var(--border)' }}>Coverage unchanged. Last synced {lastSynced}</div>
       </div>
 
       <CmdPalette open={cmdOpen} setOpen={setCmdOpen} commands={commands} onSelect={handleCmdSelect} query={cmdQuery} setQuery={setCmdQuery} />

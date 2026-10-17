@@ -165,7 +165,7 @@ export function createOrderRepository({ request = sbFetch, upload = sbUpload, no
           targets,
           'order_update',
           labels[status] || 'Order updated',
-          actorName + ' — ' + order.customer_name + (note ? ' · ' + note : ''),
+          actorName + ' · ' + order.customer_name + (note ? ' · ' + note : ''),
           'orders'
         )
       } catch (e) {}

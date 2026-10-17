@@ -47,7 +47,7 @@ export default function Campaign({ repository = createGrowthRepository() }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <Card style={{ padding: 12, background: 'var(--panel)', border: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 6 }}><Gift size={14} /> Campaign — Referral Links <span style={{ fontSize: 11, background: 'var(--hairline)', padding: '2px 6px', borderRadius: 6, color: 'var(--muted)' }}>CF-code → /register?ref=</span></div>
+        <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 6 }}><Gift size={14} /> Campaign referral links <span style={{ fontSize: 11, background: 'var(--hairline)', padding: '2px 6px', borderRadius: 6, color: 'var(--muted)' }}>CF-code → /register?ref=</span></div>
         <GhostBtn onClick={load}><RefreshCw size={12} style={{ marginRight: 6 }} />Refresh</GhostBtn>
       </Card>
 
@@ -60,7 +60,7 @@ export default function Campaign({ repository = createGrowthRepository() }) {
       </Card>
 
       {filtered.length === 0 ? (
-        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<Gift size={28} />} message="No agents — referral links appear after agent is created." /></Card>
+        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<Gift size={28} />} message="No agents yet. Referral links appear once an agent is created." /></Card>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(a => {
@@ -68,8 +68,8 @@ export default function Campaign({ repository = createGrowthRepository() }) {
             return (
               <Card key={a.id} style={{ padding: 12, background: 'var(--panel)', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg)' }}>{a.full_name || a.name} <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)' }}>• {a.state || '—'} • {a.tier} • {a.referral_code || 'no code'}</span></div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)', background: 'var(--hairline)', padding: '4px 8px', borderRadius: 6, marginTop: 6, display: 'inline-block', maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link || '— no referral code'}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg)' }}>{a.full_name || a.name} <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)' }}>• {a.state || 'Not set'} • {a.tier} • {a.referral_code || 'no code'}</span></div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono)', background: 'var(--hairline)', padding: '4px 8px', borderRadius: 6, marginTop: 6, display: 'inline-block', maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{link || 'No referral code'}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <TealBtn disabled={!a.referral_code} onClick={() => copyLink(a.referral_code)} style={{ padding: '7px 12px', fontSize: 12 }}>{copied === a.referral_code ? <><CheckCircle size={11} style={{ marginRight: 4 }} />Copied</> : <><Copy size={11} style={{ marginRight: 4 }} />Copy link</>}</TealBtn>
@@ -84,11 +84,11 @@ export default function Campaign({ repository = createGrowthRepository() }) {
       {selected && (
         <Card style={{ padding: 16, background: 'var(--panel)', border: '1px solid var(--teal)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--fg)' }}>{selected.full_name || selected.name} — Referral</div>
+            <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--fg)' }}>{selected.full_name || selected.name}. Referral link</div>
             <GhostBtn onClick={() => setSelected(null)}>Close</GhostBtn>
           </div>
           <div style={{ fontSize: 12, color: 'var(--muted)', background: 'var(--hairline)', padding: 10, borderRadius: 8, fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>{selected.referral_code ? repository.generateReferralLink(selected.referral_code) : 'No code'}</div>
-          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>Share this link — `referral_code_used` on `businesses` tracks attribution via `verify-plan-payment.js`, commission via `calculate_agent_earnings` server-side.</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>Share this link. Attribution and commission are recorded automatically when the business signs up and pays.</div>
         </Card>
       )}
 

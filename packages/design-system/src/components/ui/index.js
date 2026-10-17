@@ -9,7 +9,7 @@ export { Modal } from './Modal'
 export { ConfirmDialog } from './ConfirmDialog'
 export { Toast } from './Toast'
 export { useBreakpoint } from './useBreakpoint'
-export { DataTable } from './DataTable'
+export { DataTable, NOT_SET } from './DataTable'
 export { StatCard } from './StatCard'
 
 // Dashboard primitives (components/dashboard/*) — see DASHBOARD_FOUNDATION.md.

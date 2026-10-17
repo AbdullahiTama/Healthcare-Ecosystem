@@ -80,13 +80,13 @@ describe('partitionByOwnerVerification', () => {
 
 describe('summarizeBulkApproval', () => {
   it('reports all approved with no note', () => {
-    expect(summarizeBulkApproval([true, true], 0)).toEqual({ approved: 2, skippedUnverified: 0, failed: 0, message: 'Approved 2 businesses — undo?' })
+    expect(summarizeBulkApproval([true, true], 0)).toEqual({ approved: 2, skippedUnverified: 0, failed: 0, message: 'Approved 2 businesses. Undo?' })
   })
 
   it('separates approved, unverified (pre-skipped plus refused) and failed', () => {
     const r = summarizeBulkApproval([true, 'unverified', false, true], 1, ['No permission'])
     expect(r).toMatchObject({ approved: 2, skippedUnverified: 2, failed: 1 })
-    expect(r.message).toBe('Approved 2 businesses — undo? (Skipped 2: owner has not verified their email; Failed 1: No permission)')
+    expect(r.message).toBe('Approved 2 businesses. Undo? (Skipped 2: owner has not verified their email; Failed 1: No permission)')
   })
 
   it('never labels plain failures as unverified', () => {
@@ -119,7 +119,7 @@ describe('summarizeBulkApproval', () => {
 
   it('shapes the whole sentence for approved + unverified + failed', () => {
     expect(summarizeBulkApproval([true, true, 'unverified', false], 1, ['No permission']).message)
-      .toBe('Approved 2 businesses — undo? (Skipped 2: owner has not verified their email; Failed 1: No permission)')
+      .toBe('Approved 2 businesses. Undo? (Skipped 2: owner has not verified their email; Failed 1: No permission)')
   })
 
   it('reports pre-skipped only', () => {

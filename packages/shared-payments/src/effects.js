@@ -91,8 +91,8 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
           amount: (intent.expected_amount / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }),
           reference: intent.reference,
           purpose: Number(intent.metadata?.fee_kobo) > 0
-            ? `CareCoin top-up (includes ${(Number(intent.metadata.fee_kobo) / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })} processing fee)`
-            : 'CareCoin top-up',
+            ? `CareCoin deposit (includes ${(Number(intent.metadata.fee_kobo) / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })} processing fee)`
+            : 'CareCoin deposit',
         },
         subject: 'CareFind: payment received',
         idempotencyKey: `payment-success:${intent.reference}`,
@@ -114,7 +114,7 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
           businessName: creator?.display_name || creator?.full_name || 'Creator',
           expiryDate: expiresAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         },
-        subject: `You're subscribed - ${creator?.display_name || 'your subscription'} is active`,
+        subject: `You are subscribed: ${creator?.display_name || 'your subscription'} is active`,
         idempotencyKey: `subscription-started:${intent.reference}`,
       })
     },
@@ -145,8 +145,8 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
         staff_id: null,
         is_owner: true,
         kind: 'booking_paid',
-        title: `Payment received — ${appt.client_name}`,
-        body: `${appt.date} at ${appt.time} — ₦${(appt.fee_amount / 100).toLocaleString()}`,
+        title: `Payment received from ${appt.client_name}`,
+        body: `${appt.date} at ${appt.time}. Fee: ₦${(appt.fee_amount / 100).toLocaleString()}`,
         link: '/dashboard/appointments',
         read_at: null,
       })
@@ -240,7 +240,7 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
           staff_id: null,
           is_owner: true,
           kind: 'shop_order_paid',
-          title: `Shop order paid - ${order_ref}`,
+          title: `Shop order paid: ${order_ref}`,
           body: `Order ${order_ref} - ${'\u20a6'}${(total_kobo / 100).toLocaleString()} via Paystack`,
           link: `/dashboard/ecommerce/orders/${order_id}`,
           read_at: null,
@@ -268,7 +268,7 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
             businessName: 'CareFind',
             deliveryAddress: order.delivery_address || '',
           },
-          subject: `Order Confirmed - ${order.order_ref}`,
+          subject: `Order confirmed: ${order.order_ref}`,
           idempotencyKey: `order-confirmation:${order.id}`,
         })
       })
@@ -280,8 +280,8 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
   // through" email, only for the call that closed the intent (it was still created/pending when read), keyed by the reference so
   // the redirect, the sweep and a retry cannot send it twice.
   const PURPOSE_LABELS = {
-    wallet_topup: 'CareCoin top-up', creator_subscription: 'Creator subscription', consultation: 'Consultation', booking: 'Appointment booking',
-    appointment: 'Appointment fee', shop_order: 'Order', plan_renewal: 'Plan renewal', business_wallet_topup: 'Wallet top-up',
+    wallet_topup: 'CareCoin deposit', creator_subscription: 'Creator subscription', consultation: 'Consultation', booking: 'Appointment booking',
+    appointment: 'Appointment fee', shop_order: 'Order', plan_renewal: 'Plan renewal', business_wallet_topup: 'Wallet deposit',
   }
   async function paymentFailed(result) {
     const intent = result?.intent

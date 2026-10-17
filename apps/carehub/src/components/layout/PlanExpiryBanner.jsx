@@ -25,8 +25,8 @@ export default function PlanExpiryBanner({ brand }) {
       }}
     >
       {expired
-        ? `Your plan expired ${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? '' : 's'} ago — renew in Settings to keep your account in good standing.`
-        : `Your plan renews in ${daysLeft} day${daysLeft === 1 ? '' : 's'} — renew now in Settings.`}
+        ? `Your plan expired ${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? '' : 's'} ago. Renew in Settings to keep your account in good standing.`
+        : `Your plan renews in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Renew now in Settings.`}
       {' '}→
     </button>
   )

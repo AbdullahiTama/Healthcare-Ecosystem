@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { esc, t, row, section, sig, brandHeader, printConsultation, printPharmacyConsultation } from '../../modules/consultation/consultationPrint.js'
-describe('esc — HTML escaping', () => {
+import { esc, t, row, section, sig, brandHeader, printConsultation, printPharmacyConsultation, EMPTY } from '../../modules/consultation/consultationPrint.js'
+describe('esc, HTML escaping', () => {
   it('escapes markup that could be injected through user input', () => {
     expect(esc('<script>alert(1)</script>')).toBe('&lt;script&gt;alert(1)&lt;/script&gt;')
     expect(esc('a & b')).toBe('a &amp; b')
@@ -13,12 +13,14 @@ describe('esc — HTML escaping', () => {
   })
 })
 
-describe('t — print value coercion', () => {
-  it('renders empty/missing values as an em dash', () => {
-    expect(t(null)).toBe('—')
-    expect(t(undefined)).toBe('—')
-    expect(t('')).toBe('—')
-    expect(t(0)).toBe('—')
+describe('t, print value coercion', () => {
+  // The printed sheet drops a row entirely when its value is missing, so an
+  // absent value coerces to the EMPTY sentinel rather than to a printed glyph.
+  it('renders empty or missing values as the EMPTY sentinel', () => {
+    expect(t(null)).toBe(EMPTY)
+    expect(t(undefined)).toBe(EMPTY)
+    expect(t('')).toBe(EMPTY)
+    expect(t(0)).toBe(EMPTY)
   })
 
   it('joins arrays and escapes each element', () => {
@@ -137,7 +139,7 @@ describe('printConsultation / printPharmacyConsultation', () => {
       { name: 'Pharm' }
     )
     expect(written).toContain('Pharmacy Consultation Form')
-    expect(written).toContain('<html><head><title>Pharmacy Consultation')
+    expect(written).toContain('<html><head><title>Pharmacy consultation record for Jane')
     expect(written).toContain('Jane')
   })
 

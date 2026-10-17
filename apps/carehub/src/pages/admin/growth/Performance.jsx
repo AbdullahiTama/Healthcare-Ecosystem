@@ -56,7 +56,7 @@ export default function Performance({ repository = createGrowthRepository() }) {
       </Card>
 
       {filtered.length === 0 ? (
-        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<TrendingUp size={28} />} message="No performance data — agents exist but no referrals/earnings yet." /></Card>
+        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<TrendingUp size={28} />} message="No performance data yet. Agents exist but there are no referrals or earnings." /></Card>
       ) : (
         <Card style={{ padding: 0, overflow: 'hidden', background: 'var(--panel)', border: '1px solid var(--border)' }}>
           <div style={{ overflowX: 'auto' }}>
@@ -76,12 +76,12 @@ export default function Performance({ repository = createGrowthRepository() }) {
                 {filtered.slice(0, 50).map(r => (
                   <tr key={r.id} style={{ height: 36, borderBottom: '1px solid var(--hairline)' }}>
                     <td style={{ padding: '0 12px', fontWeight: 700, color: 'var(--fg)' }}>{r.full_name}</td>
-                    <td style={{ padding: '0 12px', color: 'var(--muted)' }}>{r.state || '—'}</td>
+                    <td style={{ padding: '0 12px', color: 'var(--muted)' }}>{r.state || 'Not set'}</td>
                     <td style={{ padding: '0 12px', color: 'var(--muted)' }}>{r.tier}</td>
                     <td style={{ padding: '0 12px', textAlign: 'right', fontWeight: 700, color: 'var(--fg)' }}>{r.referrals}</td>
                     <td style={{ padding: '0 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: r.owed > r.paid ? 'var(--amber)' : 'var(--fg)' }}>{koboToNaira(r.owed)}</td>
                     <td style={{ padding: '0 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>{koboToNaira(r.paid)}</td>
-                    <td style={{ padding: '0 12px', fontSize: 11, color: 'var(--muted)' }}>{r.last_earning_at ? new Date(r.last_earning_at).toLocaleDateString() : '—'}</td>
+                    <td style={{ padding: '0 12px', fontSize: 11, color: 'var(--muted)' }}>{r.last_earning_at ? new Date(r.last_earning_at).toLocaleDateString() : 'Not set'}</td>
                   </tr>
                 ))}
               </tbody>

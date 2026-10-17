@@ -249,7 +249,7 @@ describe('buildProfileMeta', () => {
       { full_name: 'Ada Obi', specialty: 'Pharmacist', bio: 'Community pharmacist in Lagos.', avatar_url: '/a.jpg' },
       { origin: ORIGIN, canonicalUrl: `${ORIGIN}/u/${POST_ID}` }
     )
-    expect(meta.title).toBe('Ada Obi — Pharmacist')
+    expect(meta.title).toBe('Ada Obi, Pharmacist')
     expect(meta.description).toContain('Community pharmacist')
     expect(meta.image).toBe('https://carefind.app/a.jpg')
     expect(meta.type).toBe('profile')

@@ -41,8 +41,8 @@ export default function MigrationTracker({ repository = createHealthRepository()
       // Here we surface guidance + simulate
       const res = await repository.getHealthChecks({ limit: 1 }).catch(() => null)
       setAdvisors([
-        { type: 'security', title: 'RLS enabled no policy on admin_* (intended)', remediation: 'Matches withdrawal_requests pattern — service-role / platform admin only.' },
-        { type: 'performance', title: 'Bundle >1.4MB (carehub)', remediation: 'Route-level code split on Admin health lazy import — already applied.' },
+        { type: 'security', title: 'RLS enabled no policy on admin_* (intended)', remediation: 'Matches the withdrawal_requests pattern. Service role and platform admin only.' },
+        { type: 'performance', title: 'Bundle >1.4MB (carehub)', remediation: 'Admin health is already lazily imported, so the route is code split.' },
       ])
       showToast('Advisors refreshed', { type: 'success' })
     } catch (e) { setAdvisorError(e.message) }

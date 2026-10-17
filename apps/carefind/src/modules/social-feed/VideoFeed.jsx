@@ -141,7 +141,7 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
     <div
       ref={containerRef}
       role="list"
-      aria-label={isFullscreen ? 'Shorts video feed — full-screen vertical' : 'Vertical video feed'}
+      aria-label={isFullscreen ? 'Shorts video feed, full-screen vertical' : 'Vertical video feed'}
       tabIndex={isFullscreen ? 0 : undefined}
       style={{
         display: 'flex', flexDirection: 'column',

@@ -10,7 +10,7 @@ export const DARK = theme.darkGradient
 export const TEALC = theme.tealDeep
 
 export const fmt = (n) => '₦' + Number(n || 0).toLocaleString()
-export const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NG') : '—'
+export const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NG') : 'Not recorded'
 export const todayDate = () => new Date().toISOString().split('T')[0]
 export const nowStr = () => new Date().toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })
 export const currentMonth = () => new Date().toISOString().slice(0, 7)

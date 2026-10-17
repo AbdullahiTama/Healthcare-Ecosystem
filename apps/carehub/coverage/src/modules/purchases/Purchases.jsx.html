@@ -1,0 +1,1321 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/modules/purchases/Purchases.jsx</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">src/modules/purchases</a> Purchases.jsx</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/334</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/334</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a>
+<a name='L290'></a><a href='#L290'>290</a>
+<a name='L291'></a><a href='#L291'>291</a>
+<a name='L292'></a><a href='#L292'>292</a>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a>
+<a name='L334'></a><a href='#L334'>334</a>
+<a name='L335'></a><a href='#L335'>335</a>
+<a name='L336'></a><a href='#L336'>336</a>
+<a name='L337'></a><a href='#L337'>337</a>
+<a name='L338'></a><a href='#L338'>338</a>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a>
+<a name='L342'></a><a href='#L342'>342</a>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a>
+<a name='L348'></a><a href='#L348'>348</a>
+<a name='L349'></a><a href='#L349'>349</a>
+<a name='L350'></a><a href='#L350'>350</a>
+<a name='L351'></a><a href='#L351'>351</a>
+<a name='L352'></a><a href='#L352'>352</a>
+<a name='L353'></a><a href='#L353'>353</a>
+<a name='L354'></a><a href='#L354'>354</a>
+<a name='L355'></a><a href='#L355'>355</a>
+<a name='L356'></a><a href='#L356'>356</a>
+<a name='L357'></a><a href='#L357'>357</a>
+<a name='L358'></a><a href='#L358'>358</a>
+<a name='L359'></a><a href='#L359'>359</a>
+<a name='L360'></a><a href='#L360'>360</a>
+<a name='L361'></a><a href='#L361'>361</a>
+<a name='L362'></a><a href='#L362'>362</a>
+<a name='L363'></a><a href='#L363'>363</a>
+<a name='L364'></a><a href='#L364'>364</a>
+<a name='L365'></a><a href='#L365'>365</a>
+<a name='L366'></a><a href='#L366'>366</a>
+<a name='L367'></a><a href='#L367'>367</a>
+<a name='L368'></a><a href='#L368'>368</a>
+<a name='L369'></a><a href='#L369'>369</a>
+<a name='L370'></a><a href='#L370'>370</a>
+<a name='L371'></a><a href='#L371'>371</a>
+<a name='L372'></a><a href='#L372'>372</a>
+<a name='L373'></a><a href='#L373'>373</a>
+<a name='L374'></a><a href='#L374'>374</a>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a>
+<a name='L379'></a><a href='#L379'>379</a>
+<a name='L380'></a><a href='#L380'>380</a>
+<a name='L381'></a><a href='#L381'>381</a>
+<a name='L382'></a><a href='#L382'>382</a>
+<a name='L383'></a><a href='#L383'>383</a>
+<a name='L384'></a><a href='#L384'>384</a>
+<a name='L385'></a><a href='#L385'>385</a>
+<a name='L386'></a><a href='#L386'>386</a>
+<a name='L387'></a><a href='#L387'>387</a>
+<a name='L388'></a><a href='#L388'>388</a>
+<a name='L389'></a><a href='#L389'>389</a>
+<a name='L390'></a><a href='#L390'>390</a>
+<a name='L391'></a><a href='#L391'>391</a>
+<a name='L392'></a><a href='#L392'>392</a>
+<a name='L393'></a><a href='#L393'>393</a>
+<a name='L394'></a><a href='#L394'>394</a>
+<a name='L395'></a><a href='#L395'>395</a>
+<a name='L396'></a><a href='#L396'>396</a>
+<a name='L397'></a><a href='#L397'>397</a>
+<a name='L398'></a><a href='#L398'>398</a>
+<a name='L399'></a><a href='#L399'>399</a>
+<a name='L400'></a><a href='#L400'>400</a>
+<a name='L401'></a><a href='#L401'>401</a>
+<a name='L402'></a><a href='#L402'>402</a>
+<a name='L403'></a><a href='#L403'>403</a>
+<a name='L404'></a><a href='#L404'>404</a>
+<a name='L405'></a><a href='#L405'>405</a>
+<a name='L406'></a><a href='#L406'>406</a>
+<a name='L407'></a><a href='#L407'>407</a>
+<a name='L408'></a><a href='#L408'>408</a>
+<a name='L409'></a><a href='#L409'>409</a>
+<a name='L410'></a><a href='#L410'>410</a>
+<a name='L411'></a><a href='#L411'>411</a>
+<a name='L412'></a><a href='#L412'>412</a>
+<a name='L413'></a><a href='#L413'>413</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >import { useState, useEffect } from 'react'</span></span></span>
+import { Truck, CreditCard, Hourglass, Search, Plus, X, ChevronDown } from 'lucide-react'
+import { purchaseRepository } from './repositories'
+// Product writes go through the inventory seam: replenishment must be atomic
+// now that sales decrement stock server-side (C5/C12).
+import { productRepository } from '../inventory/repositories'
+// Batch/expiry capture goes through the stock seam: stock_batches is a stock
+// aggregate table, so purchases must not assemble its rows itself.
+import { stockRepository } from '../stock/repositories'
+// Recording a purchase composes three aggregates: the purchase record (above),
+// inventory replenishment, and the debt raised by any shortfall. Each is owned
+// by its own module's repository rather than re-derived here.
+import { debtRepository } from '../debts/repositories'
+import { fmt, fmtDate, todayDate } from '../../lib/utils'
+import { purchaseExpirySummary } from './expirySummary'
+import { findDuplicate } from '../../lib/productMatches'
+import { PRODUCT_CATS } from '../../config/constants'
+import { theme } from '../../styles/theme'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, bg } = theme</span>
+&nbsp;
+// Margin applied to newly created products from a purchase so they are
+// immediately sellable (stock is also set). Existing products keep their
+// own selling price; only stock and cost are updated.
+<span class="cstat-no" title="statement not covered" >const NEW_PRODUCT_MARKUP = 1.5</span>
+<span class="cstat-no" title="statement not covered" >const PAGE_SIZE = 50</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const blankItem = () =&gt; ({ name: '', qty: '', cost: '', sell: '', batch: '', expiry: '', cat: 'Medicines' })</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export default function Purchases({ brand, role, perms }) {</span>
+<span class="cstat-no" title="statement not covered" >  const [purchases, setPurchases] = useState([])</span>
+<span class="cstat-no" title="statement not covered" >  const [inventory, setInventory] = useState([])</span>
+<span class="cstat-no" title="statement not covered" >  const [loading, setLoading] = useState(true)</span>
+<span class="cstat-no" title="statement not covered" >  const [loadingMore, setLoadingMore] = useState(false)</span>
+<span class="cstat-no" title="statement not covered" >  const [hasMore, setHasMore] = useState(true)</span>
+<span class="cstat-no" title="statement not covered" >  const [search, setSearch] = useState('')</span>
+<span class="cstat-no" title="statement not covered" >  const [filterMonth, setFilterMonth] = useState('')</span>
+<span class="cstat-no" title="statement not covered" >  const [filterYear, setFilterYear] = useState('')</span>
+<span class="cstat-no" title="statement not covered" >  const [totals, setTotals] = useState({ purchase_count: 0, total_paid: 0, total_owed: 0 })</span>
+<span class="cstat-no" title="statement not covered" >  const [showAdd, setShowAdd] = useState(false)</span>
+<span class="cstat-no" title="statement not covered" >  const [form, setForm] = useState({ supplyDate: todayDate(), items: [blankItem()] })</span>
+<span class="cstat-no" title="statement not covered" >  const [saving, setSaving] = useState(false)</span>
+<span class="cstat-no" title="statement not covered" >  const { msg, type, actionLabel, onAction, show: showToast } = useToast()</span>
+<span class="cstat-no" title="statement not covered" >  const f = (k, v) =&gt; setForm(p =&gt; ({ ...p, [k]: v }))</span>
+<span class="cstat-no" title="statement not covered" >  const setItem = (i, k, v) =&gt; setForm(p =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    const items = p.items.map((it, idx) =&gt; idx === i ? { ...it, [k]: v } : it)</span>
+<span class="cstat-no" title="statement not covered" >    return { ...p, items }</span>
+<span class="cstat-no" title="statement not covered" >  })</span>
+<span class="cstat-no" title="statement not covered" >  const addItem = () =&gt; setForm(p =&gt; ({ ...p, items: [...p.items, blankItem()] }))</span>
+<span class="cstat-no" title="statement not covered" >  const removeItem = (i) =&gt; setForm(p =&gt; ({ ...p, items: p.items.filter((_, idx) =&gt; idx !== i) }))</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  useEffect(() =&gt; { load() }, [brand?.id, filterMonth, filterYear, search])</span>
+<span class="cstat-no" title="statement not covered" >  useEffect(() =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    let live = true</span>
+<span class="cstat-no" title="statement not covered" >    productRepository.getAll(brand.id).then(p =&gt; { if (live) setInventory(p || []) }).catch(() =&gt; {})</span>
+<span class="cstat-no" title="statement not covered" >    return () =&gt; { live = false }</span>
+<span class="cstat-no" title="statement not covered" >  }, [brand?.id])</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  async function load() {</span>
+<span class="cstat-no" title="statement not covered" >    setLoading(true)</span>
+<span class="cstat-no" title="statement not covered" >    setPurchases([])</span>
+<span class="cstat-no" title="statement not covered" >    setHasMore(true)</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      const [page, totalData] = await Promise.all([</span>
+<span class="cstat-no" title="statement not covered" >        purchaseRepository.getPage(brand.id, { search, month: filterMonth, year: filterYear, offset: 0, limit: PAGE_SIZE }),</span>
+<span class="cstat-no" title="statement not covered" >        purchaseRepository.getTotals(brand.id),</span>
+<span class="cstat-no" title="statement not covered" >      ])</span>
+<span class="cstat-no" title="statement not covered" >      setPurchases(page || [])</span>
+<span class="cstat-no" title="statement not covered" >      setTotals(totalData?.[0] || { purchase_count: 0, total_paid: 0, total_owed: 0 })</span>
+<span class="cstat-no" title="statement not covered" >      setHasMore((page || []).length === PAGE_SIZE)</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) {}</span>
+<span class="cstat-no" title="statement not covered" >    setLoading(false)</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  async function loadMore() {</span>
+<span class="cstat-no" title="statement not covered" >    if (loadingMore || !hasMore) return</span>
+<span class="cstat-no" title="statement not covered" >    setLoadingMore(true)</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      const more = await purchaseRepository.getPage(brand.id, { search, month: filterMonth, year: filterYear, offset: purchases.length, limit: PAGE_SIZE })</span>
+<span class="cstat-no" title="statement not covered" >      setPurchases(p =&gt; [...p, ...(more || [])])</span>
+<span class="cstat-no" title="statement not covered" >      setHasMore((more || []).length === PAGE_SIZE)</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) {}</span>
+<span class="cstat-no" title="statement not covered" >    setLoadingMore(false)</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const validItems = form.items.filter(i =&gt; i.name.trim() &amp;&amp; Number(i.qty) &gt; 0 &amp;&amp; Number(i.cost) &gt; 0)</span>
+  // Quantities must be whole numbers: every stock column is integral, and a
+  // decimal would previously truncate silently via parseInt (2.5 → 2 in stock
+  // while 0.5 dropped the row entirely with a "success" toast).
+<span class="cstat-no" title="statement not covered" >  const badQty = form.items.some(i =&gt; i.name.trim() &amp;&amp; i.qty !== '' &amp;&amp; (!Number.isInteger(Number(i.qty)) || Number(i.qty) &lt;= 0))</span>
+<span class="cstat-no" title="statement not covered" >  const computedTotal = validItems.reduce((s, i) =&gt; s + Number(i.qty) * Number(i.cost), 0)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  async function save() {</span>
+<span class="cstat-no" title="statement not covered" >    if (!form.supplier) { showToast('Please enter the supplier name.', { type: 'warning' }); return }</span>
+<span class="cstat-no" title="statement not covered" >    if (badQty) { showToast('Quantities must be whole numbers (e.g. 2, not 2.5).', { type: 'warning' }); return }</span>
+<span class="cstat-no" title="statement not covered" >    if (validItems.length === 0) { showToast('Enter at least one item with a name, quantity and unit cost.', { type: 'warning' }); return }</span>
+<span class="cstat-no" title="statement not covered" >    setSaving(true)</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      const total = computedTotal</span>
+<span class="cstat-no" title="statement not covered" >      const paid = parseFloat(form.amountPaid) || 0</span>
+      // Clamp at zero: overpaying a supplier must not persist a negative
+      // balance that the list would mis-render as a green "owed" figure.
+<span class="cstat-no" title="statement not covered" >      const balance = Math.max(0, total - paid)</span>
+<span class="cstat-no" title="statement not covered" >      const totalQty = validItems.reduce((s, i) =&gt; s + Number(i.qty), 0)</span>
+<span class="cstat-no" title="statement not covered" >      const productNames = validItems.map(i =&gt; i.name.trim())</span>
+<span class="cstat-no" title="statement not covered" >      const { expiry, batch } = purchaseExpirySummary(validItems)</span>
+<span class="cstat-no" title="statement not covered" >      const purchase = await purchaseRepository.create(brand.id, {</span>
+<span class="cstat-no" title="statement not covered" >        supplier_name: form.supplier,</span>
+<span class="cstat-no" title="statement not covered" >        product_name: productNames.join(', '),</span>
+<span class="cstat-no" title="statement not covered" >        quantity: totalQty,</span>
+<span class="cstat-no" title="statement not covered" >        cost_price: totalQty &gt; 0 ? total / totalQty : 0,</span>
+<span class="cstat-no" title="statement not covered" >        total_cost: total,</span>
+<span class="cstat-no" title="statement not covered" >        amount_paid: paid,</span>
+<span class="cstat-no" title="statement not covered" >        balance: balance,</span>
+<span class="cstat-no" title="statement not covered" >        supply_date: form.supplyDate || todayDate(),</span>
+<span class="cstat-no" title="statement not covered" >        due_date: form.dueDate || '',</span>
+<span class="cstat-no" title="statement not covered" >        status: paid &gt;= total ? 'paid' : 'pending',</span>
+<span class="cstat-no" title="statement not covered" >        notes: form.notes || '',</span>
+<span class="cstat-no" title="statement not covered" >        expiry: expiry,</span>
+<span class="cstat-no" title="statement not covered" >        batch: batch,</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >      const purchaseId = (purchase[0] || {}).id || ''</span>
+&nbsp;
+      // INVENTORY SYNC: every purchased item is added to Inventory instantly.
+      // Existing products get stock added (and the new unit cost recorded);
+      // new products are created with stock and a default sell price.
+      // Rows that name the same product are merged first — otherwise two
+      // "Amoxicillin 500mg" lines would each hit the create branch against the
+      // stale inventory snapshot and produce two duplicate catalog entries.
+<span class="cstat-no" title="statement not covered" >      const synced = new Map()</span>
+<span class="cstat-no" title="statement not covered" >      for (const item of validItems) {</span>
+<span class="cstat-no" title="statement not covered" >        const name = item.name.trim()</span>
+<span class="cstat-no" title="statement not covered" >        const key = name.toLowerCase()</span>
+<span class="cstat-no" title="statement not covered" >        const qty = Number(item.qty)</span>
+<span class="cstat-no" title="statement not covered" >        const cost = Number(item.cost)</span>
+<span class="cstat-no" title="statement not covered" >        const sell = Number(item.sell) &gt; 0 ? Number(item.sell) : null</span>
+<span class="cstat-no" title="statement not covered" >        if (synced.has(key)) { const prev = synced.get(key); prev.qty += qty; prev.cost = cost; if (sell) prev.sell = sell; prev.batch = prev.batch || item.batch; prev.expiry = prev.expiry || item.expiry; continue }</span>
+<span class="cstat-no" title="statement not covered" >        synced.set(key, { name, qty, cost, sell, cat: item.cat || 'Medicines', batch: item.batch, expiry: item.expiry })</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >      let created = 0</span>
+<span class="cstat-no" title="statement not covered" >      let updated = 0</span>
+<span class="cstat-no" title="statement not covered" >      let batchFailures = 0</span>
+<span class="cstat-no" title="statement not covered" >      for (const { name, qty, cost, sell, cat, batch, expiry } of synced.values()) {</span>
+<span class="cstat-no" title="statement not covered" >        const existing = findDuplicate(inventory, name, '', null)</span>
+<span class="cstat-no" title="statement not covered" >        try {</span>
+<span class="cstat-no" title="statement not covered" >          let productId = null</span>
+<span class="cstat-no" title="statement not covered" >          if (existing) {</span>
+            // Stock is incremented in the database, not read-modify-written
+            // here — a till selling this product concurrently must not have its
+            // decrement clobbered. cost_price is a plain overwrite, so it has
+            // no such race and stays a normal scoped update. A selling price
+            // typed on the form is an explicit repricing intent; an empty one
+            // leaves the current price untouched.
+<span class="cstat-no" title="statement not covered" >            const updates = { cost_price: cost }</span>
+<span class="cstat-no" title="statement not covered" >            if (sell &amp;&amp; sell !== existing.price) updates.price = sell</span>
+<span class="cstat-no" title="statement not covered" >            await productRepository.incrementStock(existing.id, brand.id, qty)</span>
+<span class="cstat-no" title="statement not covered" >            await productRepository.update(existing.id, brand.id, updates)</span>
+<span class="cstat-no" title="statement not covered" >            productId = existing.id</span>
+<span class="cstat-no" title="statement not covered" >            updated++</span>
+<span class="cstat-no" title="statement not covered" >          } else {</span>
+<span class="cstat-no" title="statement not covered" >            const createdRow = await productRepository.create(brand.id, {</span>
+<span class="cstat-no" title="statement not covered" >              name,</span>
+<span class="cstat-no" title="statement not covered" >              category: cat,</span>
+<span class="cstat-no" title="statement not covered" >              price: sell || Math.ceil(cost * NEW_PRODUCT_MARKUP),</span>
+<span class="cstat-no" title="statement not covered" >              cost_price: cost,</span>
+<span class="cstat-no" title="statement not covered" >              stock: qty,</span>
+<span class="cstat-no" title="statement not covered" >              reorder_level: 5,</span>
+<span class="cstat-no" title="statement not covered" >              list_on_carefind: true,</span>
+<span class="cstat-no" title="statement not covered" >            })</span>
+<span class="cstat-no" title="statement not covered" >            productId = (Array.isArray(createdRow) ? createdRow[0] : createdRow)?.id || null</span>
+<span class="cstat-no" title="statement not covered" >            created++</span>
+<span class="cstat-no" title="statement not covered" >          }</span>
+          // BATCH/EXPIRY: only when the user supplied either. Non-fatal — a
+          // batch insert must never fail the purchase itself.
+<span class="cstat-no" title="statement not covered" >          if ((batch || expiry) &amp;&amp; productId) {</span>
+<span class="cstat-no" title="statement not covered" >            try {</span>
+<span class="cstat-no" title="statement not covered" >              await stockRepository.createBatch(brand.id, {</span>
+<span class="cstat-no" title="statement not covered" >                location_id: null,</span>
+<span class="cstat-no" title="statement not covered" >                product_id: productId,</span>
+<span class="cstat-no" title="statement not covered" >                product_name: name,</span>
+<span class="cstat-no" title="statement not covered" >                batch_number: batch || null,</span>
+<span class="cstat-no" title="statement not covered" >                quantity: qty,</span>
+<span class="cstat-no" title="statement not covered" >                expiry_date: expiry || null,</span>
+<span class="cstat-no" title="statement not covered" >                date_received: form.supplyDate || todayDate(),</span>
+<span class="cstat-no" title="statement not covered" >                supplier_source: form.supplier || null,</span>
+<span class="cstat-no" title="statement not covered" >                status: 'available',</span>
+<span class="cstat-no" title="statement not covered" >              })</span>
+<span class="cstat-no" title="statement not covered" >            } catch (e) {</span>
+<span class="cstat-no" title="statement not covered" >              batchFailures++</span>
+<span class="cstat-no" title="statement not covered" >              console.error('Batch creation failed for:', name, e.message)</span>
+<span class="cstat-no" title="statement not covered" >            }</span>
+<span class="cstat-no" title="statement not covered" >          }</span>
+<span class="cstat-no" title="statement not covered" >        } catch (e) {</span>
+<span class="cstat-no" title="statement not covered" >          console.error('Inventory sync failed for:', name, e.message)</span>
+<span class="cstat-no" title="statement not covered" >        }</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >      if (created &gt; 0 || updated &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >        productRepository.getAll(brand.id).then(setInventory).catch(() =&gt; {})</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+&nbsp;
+      // AUTO-CREATE DEBT: if there is a balance, create a "We Owe" debt automatically
+<span class="cstat-no" title="statement not covered" >      if (balance &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >        await debtRepository.recordUnderpayment({</span>
+<span class="cstat-no" title="statement not covered" >          businessId: brand.id,</span>
+<span class="cstat-no" title="statement not covered" >          direction: 'we_owe',</span>
+<span class="cstat-no" title="statement not covered" >          partyName: form.supplier,</span>
+<span class="cstat-no" title="statement not covered" >          amount: total,</span>
+<span class="cstat-no" title="statement not covered" >          amountPaid: paid,</span>
+<span class="cstat-no" title="statement not covered" >          dueDate: form.dueDate || '',</span>
+<span class="cstat-no" title="statement not covered" >          description: 'Purchase: ' + (productNames[0] || 'Stock') + (productNames.length &gt; 1 ? ' +' + (productNames.length - 1) + ' more' : '') + ': Due: ' + (form.dueDate || 'Not set'),</span>
+<span class="cstat-no" title="statement not covered" >          source: 'purchase',</span>
+<span class="cstat-no" title="statement not covered" >          sourceRef: purchaseId,</span>
+<span class="cstat-no" title="statement not covered" >        })</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >      const parts = []</span>
+<span class="cstat-no" title="statement not covered" >      parts.push('Purchase recorded!')</span>
+<span class="cstat-no" title="statement not covered" >      if (created &gt; 0 || updated &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >        parts.push(created + ' new product(s) added to Inventory, ' + updated + ' updated')</span>
+<span class="cstat-no" title="statement not covered" >        if (created &gt; 0 &amp;&amp; !form.items.some(i =&gt; Number(i.sell) &gt; 0)) parts.push('new items priced at a ' + Math.round((NEW_PRODUCT_MARKUP - 1) * 100) + '% markup: adjust in Inventory anytime')</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >      if (batchFailures &gt; 0) parts.push(batchFailures + ' batch record(s) could not be saved')</span>
+<span class="cstat-no" title="statement not covered" >      if (balance &gt; 0) parts.push('Debt of ' + fmt(balance) + ' added to Debts automatically')</span>
+<span class="cstat-no" title="statement not covered" >      showToast(parts.join(' · '), { type: 'success' })</span>
+<span class="cstat-no" title="statement not covered" >      setForm({ supplyDate: todayDate(), items: [blankItem()] }); setShowAdd(false); load()</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) { showToast('Could not save purchase. Please try again.', { type: 'error' }) }</span>
+<span class="cstat-no" title="statement not covered" >    setSaving(false)</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  async function markPaid(p) {</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      await purchaseRepository.update(p.id, brand.id, { amount_paid: p.total_cost || 0, balance: 0, status: 'paid' })</span>
+      // AUTO-UPDATE DEBT: settle the debt this purchase raised, if any. The
+      // lookup lives in the debt repository — POS's credit collection needs the
+      // same one, and the two used to scan every debt in the business by hand.
+<span class="cstat-no" title="statement not covered" >      try {</span>
+<span class="cstat-no" title="statement not covered" >        const matchDebt = await debtRepository.findOpenBySource('purchase', p.id, brand.id)</span>
+<span class="cstat-no" title="statement not covered" >        if (matchDebt) {</span>
+<span class="cstat-no" title="statement not covered" >          await debtRepository.update(matchDebt.id, brand.id, { amount_paid: p.total_cost || 0, balance: 0, status: 'paid' })</span>
+<span class="cstat-no" title="statement not covered" >        }</span>
+<span class="cstat-no" title="statement not covered" >      } catch (e) {}</span>
+<span class="cstat-no" title="statement not covered" >      load(); showToast('Marked as paid! Debt updated automatically.', { type: 'success' })</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) { showToast('Could not mark as paid. Please try again.', { type: 'error' }) }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const years = [...new Set(purchases.map(p =&gt; p.created_at?.slice(0, 4)).filter(Boolean))].sort().reverse()</span>
+&nbsp;
+  // Autocomplete suggestions for the product-name inputs: existing catalogue
+  // names, deduplicated, so a purchase line can pick the product it is
+  // replenishing rather than retyping it (and risking a near-miss duplicate).
+<span class="cstat-no" title="statement not covered" >  const nameSuggestions = [...new Set((inventory || []).map(p =&gt; p.name).filter(Boolean))]</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  return (</span>
+<span class="cstat-no" title="statement not covered" >    &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;SectionHead title='Purchases' sub='Record multi-item supplier purchases' btn='+ Record Purchase' onBtn={() =&gt; setShowAdd(true)} /&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      &lt;div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;StatCard icon={&lt;Truck /&gt;} label='Total Purchases' value={totals.purchase_count || 0} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;StatCard icon={&lt;CreditCard /&gt;} label='Total Paid' value={fmt(Number(totals.total_paid) || 0)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;StatCard icon={&lt;Hourglass /&gt;} label='Balance Owed' value={fmt(Number(totals.total_owed) || 0)} alert={(Number(totals.total_owed) || 0) &gt; 0} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/div&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      &lt;div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ flex: 1, minWidth: '180px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Search size={15} color={gray400} style={{ flexShrink: 0 }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;input value={search} onChange={e =&gt; setSearch(e.target.value)} placeholder='Search supplier or product...'</span>
+<span class="cstat-no" title="statement not covered" >            style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;input type='month' value={filterMonth} onChange={e =&gt; { setFilterMonth(e.target.value); setFilterYear('') }}</span>
+<span class="cstat-no" title="statement not covered" >          style={{ padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;select value={filterYear} onChange={e =&gt; { setFilterYear(e.target.value); setFilterMonth('') }}</span>
+<span class="cstat-no" title="statement not covered" >          style={{ padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', background: 'white', color: navy }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;option value=''&gt;All years&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >          {years.map(y =&gt; &lt;option key={y}&gt;{y}&lt;/option&gt;)}</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/select&gt;</span>
+<span class="cstat-no" title="statement not covered" >        {(filterMonth || filterYear) &amp;&amp; &lt;button onClick={() =&gt; { setFilterMonth(''); setFilterYear('') }} style={{ padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}&gt;Clear&lt;/button&gt;}</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/div&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      {loading ? &lt;Loading /&gt; : purchases.length === 0 ? (</span>
+<span class="cstat-no" title="statement not covered" >        &lt;Empty icon={&lt;Truck size={40} /&gt;} message='No purchases recorded' action='+ Record Purchase' onAction={() =&gt; setShowAdd(true)} /&gt;</span>
+      ) : (
+<span class="cstat-no" title="statement not covered" >        &lt;Card&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ overflowX: 'auto' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;table style={{ width: '100%', borderCollapse: 'collapse' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;thead&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;tr style={{ borderBottom: `1px solid ${border}`, background: gray50 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  {['Supplier', 'Product', 'Qty', 'Unit Cost', 'Total', 'Paid', 'Balance', 'Supply Date', 'Due Date', 'Expiry Date', 'Status', 'Action'].map(h =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;th key={h} style={{ padding: '12px 12px', textAlign: 'left', fontSize: '10px', fontWeight: '700', color: gray400, textTransform: 'uppercase', whiteSpace: 'nowrap' }}&gt;{h}&lt;/th&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  ))}</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/tr&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/thead&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;tbody&gt;</span>
+<span class="cstat-no" title="statement not covered" >                {purchases.map(p =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;tr key={p.id} style={{ borderBottom: `1px solid ${gray100}` }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;td style={{ padding: '12px 12px', fontWeight: '700', fontSize: '13px', color: navy }}&gt;{p.supplier_name}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;td style={{ padding: '12px 12px', fontSize: '13px', color: gray600, maxWidth: '260px' }}&gt;{p.product_name || 'Not set'}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;td style={{ padding: '12px 12px', fontSize: '13px', color: navy }}&gt;{p.quantity || 'Not set'}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;td style={{ padding: '12px 12px', fontSize: '13px', color: navy }}&gt;{p.cost_price ? fmt(p.cost_price) : 'Not set'}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: '700', color: navy }}&gt;{fmt(p.total_cost || 0)}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;td style={{ padding: '12px 12px', fontSize: '13px', color: success }}&gt;{fmt(p.amount_paid || 0)}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: '900', color: (p.balance || 0) &gt; 0 ? danger : success }}&gt;{fmt(p.balance || 0)}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}&gt;{p.supply_date || 'Not set'}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;td style={{ padding: '12px 12px', fontSize: '12px', color: gray400 }}&gt;{p.due_date || 'Not set'}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}&gt;{fmtDate(p.expiry)}&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;td style={{ padding: '12px 12px' }}&gt;&lt;Pill label={p.status} type={p.status === 'paid' ? 'green' : 'amber'} /&gt;&lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;td style={{ padding: '12px 12px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      {p.status !== 'paid' &amp;&amp; &lt;button onClick={() =&gt; markPaid(p)} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}&gt;Mark paid&lt;/button&gt;}</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;/td&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;/tr&gt;</span>
+<span class="cstat-no" title="statement not covered" >                ))}</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/tbody&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/table&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          {hasMore &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ padding: '16px', textAlign: 'center' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;button onClick={loadMore} disabled={loadingMore}</span>
+<span class="cstat-no" title="statement not covered" >                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '13px', cursor: loadingMore ? 'wait' : 'pointer' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                {loadingMore ? 'Loading...' : &lt;&gt;&lt;ChevronDown size={14} /&gt; Load more&lt;/&gt;}</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/button&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+          )}
+<span class="cstat-no" title="statement not covered" >        &lt;/Card&gt;</span>
+      )}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      &lt;Modal show={showAdd} onClose={() =&gt; { setShowAdd(false); setForm({ supplyDate: todayDate(), items: [blankItem()] }) }} title='Record Purchase'</span>
+<span class="cstat-no" title="statement not covered" >        footer={&lt;&gt;&lt;GhostBtn onClick={() =&gt; { setShowAdd(false); setForm({ supplyDate: todayDate(), items: [blankItem()] }) }} style={{ flex: 1, padding: '12px' }}&gt;Cancel&lt;/GhostBtn&gt;&lt;TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}&gt;{saving ? 'Saving...' : 'Save Purchase'}&lt;/TealBtn&gt;&lt;/&gt;}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Inp label='Supplier Name *' value={form.supplier} onChange={v =&gt; f('supplier', v)} placeholder='e.g. MedSupply Ltd' required /&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >          &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;span style={{ fontSize: '12px', fontWeight: '700', color: gray500 }}&gt;ITEMS PURCHASED *&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;button onClick={addItem} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealMist, color: tealDeep, fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}&gt;&lt;Plus size={13} /&gt; Add item&lt;/button&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              {form.items.map((item, i) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >                const sub = (Number(item.qty) || 0) * (Number(item.cost) || 0)</span>
+<span class="cstat-no" title="statement not covered" >                return (</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;div key={i} style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${gray100}`, background: bg }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;div style={{ display: 'flex', gap: '8px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;input value={item.name} onChange={e =&gt; setItem(i, 'name', e.target.value)} list='purchase-product-names' placeholder='Product name e.g. Amoxicillin 500mg'</span>
+<span class="cstat-no" title="statement not covered" >                        aria-label='Product name'</span>
+<span class="cstat-no" title="statement not covered" >                        style={{ flex: 1, minWidth: 0, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;input value={item.qty} onChange={e =&gt; setItem(i, 'qty', e.target.value)} type='number' min='1' placeholder='Qty'</span>
+<span class="cstat-no" title="statement not covered" >                        aria-label='Quantity'</span>
+<span class="cstat-no" title="statement not covered" >                        style={{ width: '72px', padding: '9px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;input value={item.cost} onChange={e =&gt; setItem(i, 'cost', e.target.value)} type='number' min='0' placeholder='Unit cost ₦'</span>
+<span class="cstat-no" title="statement not covered" >                        aria-label='Unit cost'</span>
+<span class="cstat-no" title="statement not covered" >                        style={{ width: '110px', padding: '9px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;button onClick={() =&gt; removeItem(i)} aria-label={'Remove ' + (item.name || 'item')}</span>
+<span class="cstat-no" title="statement not covered" >                        style={{ width: '34px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: theme.radius.md, border: 'none', background: 'transparent', color: gray400, cursor: 'pointer' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        &lt;X size={16} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;/button&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', marginTop: '8px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;input value={item.sell} onChange={e =&gt; setItem(i, 'sell', e.target.value)} type='number' min='0' placeholder='Selling price ₦'</span>
+<span class="cstat-no" title="statement not covered" >                        aria-label='Selling price'</span>
+<span class="cstat-no" title="statement not covered" >                        style={{ padding: '8px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', color: navy, background: 'white' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;input value={item.batch} onChange={e =&gt; setItem(i, 'batch', e.target.value)} placeholder='Batch no. (optional)'</span>
+<span class="cstat-no" title="statement not covered" >                        aria-label='Batch number'</span>
+<span class="cstat-no" title="statement not covered" >                        style={{ padding: '8px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', color: navy, background: 'white' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        &lt;label style={{ fontSize: '11px', fontWeight: '700', color: gray500 }}&gt;Expiry Date&lt;/label&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        &lt;input value={item.expiry} onChange={e =&gt; setItem(i, 'expiry', e.target.value)} type='date' aria-label='Expiry date'</span>
+<span class="cstat-no" title="statement not covered" >                          style={{ padding: '7px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', color: navy, background: 'white' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;select value={item.cat} onChange={e =&gt; setItem(i, 'cat', e.target.value)} aria-label='Category'</span>
+<span class="cstat-no" title="statement not covered" >                        style={{ padding: '7px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', background: 'white', color: navy }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        {PRODUCT_CATS.map(c =&gt; &lt;option key={c}&gt;{c}&lt;/option&gt;)}</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;/select&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;span style={{ fontSize: '12px', fontWeight: '700', color: sub &gt; 0 ? tealDeep : gray400 }}&gt;{sub &gt; 0 ? 'Subtotal: ' + fmt(sub) : 'Not set'}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;/div&gt;</span>
+                )
+<span class="cstat-no" title="statement not covered" >              })}</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            {form.items.length === 0 &amp;&amp; &lt;div style={{ fontSize: '12px', color: gray400 }}&gt;No items yet: tap "Add item" to start.&lt;/div&gt;}</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealDeep}`, fontSize: '12px', color: tealDeep, lineHeight: '1.7' }}&gt;</span>
+            Every item you save is added to Inventory instantly: new products are created with stock and your selling price (or a 50% markup if left blank), existing products get more stock. A selling price you type is written to the product so POS charges it immediately. Batch and expiry details create a stock batch for expiry tracking. Adjust prices anytime in Inventory.
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >          &lt;datalist id='purchase-product-names'&gt;</span>
+<span class="cstat-no" title="statement not covered" >            {nameSuggestions.map(n =&gt; &lt;option key={n} value={n} /&gt;)}</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/datalist&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: bg, display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;span style={{ color: gray500 }}&gt;Total Cost (auto)&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;span style={{ fontWeight: '900', color: navy }}&gt;{fmt(computedTotal)}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Inp label='Amount Paid (₦)' value={form.amountPaid} onChange={v =&gt; f('amountPaid', v)} type='number' placeholder='0' /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          {computedTotal &gt; 0 &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: bg, display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;span style={{ color: gray500 }}&gt;Balance remaining&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;span style={{ fontWeight: '900', color: danger }}&gt;{fmt(Math.max(0, computedTotal - (parseFloat(form.amountPaid) || 0)))}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+          )}
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label='Supply Date' value={form.supplyDate} onChange={v =&gt; f('supplyDate', v)} type='date' /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label='Payment Due Date' value={form.dueDate} onChange={v =&gt; f('dueDate', v)} type='date' /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Textarea label='Notes' value={form.notes} onChange={v =&gt; f('notes', v)} placeholder='Invoice number, delivery notes...' rows={2} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/Modal&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      &lt;Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;/div&gt;</span>
+  )
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-10-16T15:21:14.166Z
+            </div>
+        <script src="../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
+    </body>
+</html>
+    

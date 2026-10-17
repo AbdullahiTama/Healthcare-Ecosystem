@@ -263,7 +263,7 @@ export default function LiveActivity({ brand }) {
   async function confirmPending(id) {
     try {
       await confirmRepAddedFacility(id, brand.id)
-      showToast('Facility confirmed — it now appears for everyone near it.', { type: 'success' })
+      showToast('Facility confirmed. It now appears for everyone near it.', { type: 'success' })
       loadPending()
     } catch (e) {
       showToast('Could not confirm: ' + e.message, { type: 'error' })
@@ -339,7 +339,7 @@ export default function LiveActivity({ brand }) {
         return { viewer_staff_id: id, viewer_name: nameFor(id) }
       })
       await liveActivityRepository.setDefaultViewers(brand.id, meStaffId, viewers)
-      showToast('Saved — these people see your activity by default', { type: 'success' })
+      showToast('Saved. These people now see your activity by default.', { type: 'success' })
       setPickingViewers(false)
       load()
     } catch (e) {
@@ -758,7 +758,7 @@ export default function LiveActivity({ brand }) {
             LIVE
           </span>
         )}</>}
-        description="Reps log what happens in the field. Tagged managers see it the moment it lands — and can reply."
+        description="Reps log what happens in the field. Tagged managers see it the moment it lands, and can reply."
         secondaryActions={[
           ...(isOwner ? [{ label: 'Set up fields', variant: 'ghost', onClick: function () { setSettingUp(true) } }] : []),
           ...(!isOwner ? [{ label: 'Who sees my activity', variant: 'ghost', onClick: openViewerPicker }] : []),
@@ -894,7 +894,7 @@ export default function LiveActivity({ brand }) {
         </div>
 
         <div style={{ fontSize: '11.5px', color: gray400, marginTop: '10px' }}>
-          Showing <strong style={{ color: navy }}>{visible.length}</strong> record{visible.length !== 1 ? 's' : ''} — {rangeLabel()}
+          Showing <strong style={{ color: navy }}>{visible.length}</strong> record{visible.length !== 1 ? 's' : ''} · {rangeLabel()}
           {filterRep !== 'all' ? ' · ' + nameFor(filterRep) : ''}
           . Export downloads exactly what you see here, as a spreadsheet.
         </div>
@@ -954,7 +954,7 @@ export default function LiveActivity({ brand }) {
                         }
                         return (
                           <td key={c.key} style={{ padding: '10px 14px', borderBottom: `1px solid ${gray100}`, color: navy, verticalAlign: 'top' }}>
-                            {val || <span style={{ color: gray400 }}>—</span>}
+                            {val || <span style={{ color: gray400 }}>Not set</span>}
                           </td>
                         )
                       })}
@@ -1003,7 +1003,7 @@ export default function LiveActivity({ brand }) {
                           </span>
                         )}
                         {/* Three states. A pending row is awaiting review, not a
-                            failed distance check — don't flag the rep amber for
+                            failed distance check. Do not flag the rep amber for
                             it. facility_pending_review is stored at log time so
                             the feed never has to guess (a CONFIRMED rep-added
                             facility logged from 180 m away is genuinely
@@ -1023,7 +1023,7 @@ export default function LiveActivity({ brand }) {
                         )}
                         {/* A pending place sits at the rep's own GPS, so "0 m
                             from GPS" is an artefact of how it was created, not
-                            evidence — only show the distance for a facility
+                            evidence. Only show the distance for a facility
                             positioned independently of this fix. */}
                         {a.facility_distance_m != null && !a.facility_pending_review && (
                           <span style={{ fontSize: '10px', fontWeight: '700', color: gray400 }}>
@@ -1188,7 +1188,7 @@ export default function LiveActivity({ brand }) {
 
             <div>
               <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>
-                Facility visited <span style={{ fontWeight: '500', color: gray400 }}>(auto-detected from your GPS)</span>
+                Facility visited <span style={{ fontWeight: '500', color: gray400 }}>(detected from your GPS)</span>
               </div>
               {!gps && !findingPlace && (
                 <div style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${border}`, background: bg, fontSize: '12.5px', color: gray500 }}>
@@ -1266,7 +1266,7 @@ export default function LiveActivity({ brand }) {
               <div>
                 <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '2px' }}>Voice note</div>
                 <div style={{ fontSize: '11px', color: gray400, marginBottom: '8px' }}>
-                  Faster than typing. Say what happened — your managers can play it back.
+                  Faster than typing. Say what happened and your managers can play it back.
                 </div>
 
                 {!voicePreview && !recording && (
@@ -1279,7 +1279,7 @@ export default function LiveActivity({ brand }) {
                 {recording && (
                   <button type='button' onClick={stopRecording}
                     style={{ width: '100%', border: 'none', background: danger, color: 'white', borderRadius: '10px', padding: '14px', fontSize: '13px', fontWeight: '800', cursor: 'pointer' }}>
-                    ● Recording — tap to stop
+                    ● Recording. Tap to stop
                   </button>
                 )}
 
@@ -1302,7 +1302,7 @@ export default function LiveActivity({ brand }) {
                       <div style={{ fontSize: '12px', color: gray500 }}>
                         {myViewers.length > 0
                           ? myViewers.map(function (v) { return v.viewer_name }).join(', ')
-                          : 'Nobody — set your default viewers first.'}
+                          : 'Nobody yet. Set your default viewers first.'}
                       </div>
                       {people.length > 0 && (
                         <button type='button'
@@ -1368,7 +1368,7 @@ export default function LiveActivity({ brand }) {
                           {f.label}{f.required ? ' *' : ''}
                         </div>
                         <div style={{ fontSize: '11px', color: gray400, textTransform: 'capitalize' }}>
-                          {f.field_type}{f.options ? ' — ' + f.options : ''}
+                          {f.field_type}{f.options ? ': ' + f.options : ''}
                         </div>
                       </div>
                       <button onClick={function () { askRemoveField(f) }}
@@ -1387,7 +1387,7 @@ export default function LiveActivity({ brand }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <input value={newField.label}
                   onChange={function (e) { setNewField({ ...newField, label: e.target.value }) }}
-                  placeholder='Field name — e.g. Customer, Products discussed, Outcome'
+                  placeholder='Field name, for example Customer, Products discussed or Outcome'
                   style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box' }} />
 
                 <select value={newField.field_type}
@@ -1399,14 +1399,14 @@ export default function LiveActivity({ brand }) {
                 {newField.field_type === 'choice' && (
                   <input value={newField.options}
                     onChange={function (e) { setNewField({ ...newField, options: e.target.value }) }}
-                    placeholder='Options, separated by commas — e.g. Sold, Follow-up, No interest'
+                    placeholder='Options separated by commas, for example Sold, Follow-up or No interest'
                     style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box' }} />
                 )}
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer' }}>
                   <input type='checkbox' checked={newField.required}
                     onChange={function (e) { setNewField({ ...newField, required: e.target.checked }) }} />
-                  <span style={{ fontSize: '12.5px', color: gray600, fontWeight: '600' }}>Required — the rep must fill this in</span>
+                  <span style={{ fontSize: '12.5px', color: gray600, fontWeight: '600' }}>Required. The rep must fill this in.</span>
                 </label>
 
                 <TealBtn onClick={saveField} style={{ width: '100%', padding: '12px' }}>Add Field</TealBtn>

@@ -72,7 +72,7 @@ export default function Doctor({ brand, products }) {
   async function sendToPharmacy() {
     if (!consult.dx1) { showToast('Please enter at least a primary diagnosis.', { type: 'warning' }); return }
     if (!destinations.pharmacy && !destinations.lab && !destinations.imaging) {
-      showToast('Please select at least one destination — Pharmacy, Lab or Imaging.', { type: 'warning' }); return
+      showToast('Please select at least one destination: Pharmacy, Lab or Imaging.', { type: 'warning' }); return
     }
     setSaving(true)
     try {
@@ -184,12 +184,12 @@ export default function Doctor({ brand, products }) {
     <div>
 <DetailHeader onBack={() => setSelected(null)} title='Doctor Consultation' sub={`${selected.full_name} · ${selected.reg_no}`} />
       <div style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '10px 14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealMist}`, fontSize: '12px', color: tealDeep, fontWeight: '600', marginBottom: '14px' }}>
-        <Stethoscope size={14} /> Patient info auto-filled from Reception and Triage
+        <Stethoscope size={14} /> Patient details are filled in from Reception and Triage
       </div>
       <Card style={{ padding: '14px', marginBottom: '14px', background: bg }}>
         <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '10px' }}>Patient Summary</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '10px' }}>
-          {[['Name', selected.full_name], ['Reg No.', selected.reg_no], ['Gender', selected.gender || '—'], ['DOB', selected.date_of_birth || '—'], ['Department', selected.department || '—'], ['Doctor', selected.assigned_doctor || '—'], ['Insurance', selected.insurance || '—']].map(([l, v]) => (
+          {[['Name', selected.full_name], ['Reg No.', selected.reg_no], ['Gender', selected.gender || 'Not set'], ['DOB', selected.date_of_birth || 'Not set'], ['Department', selected.department || 'Not set'], ['Doctor', selected.assigned_doctor || 'Not set'], ['Insurance', selected.insurance || 'Not set']].map(([l, v]) => (
             <div key={l}><div style={{ fontSize: '10px', color: gray400, fontWeight: '700' }}>{l}</div><div style={{ fontSize: '12px', fontWeight: '600', color: navy }}>{v}</div></div>
           ))}
         </div>
@@ -223,7 +223,7 @@ export default function Doctor({ brand, products }) {
         </div>
       </Card>
       <Card style={{ padding: '20px', marginBottom: '14px' }}>
-        <div style={{ fontSize: '15px', fontWeight: '800', marginBottom: '14px', color: navy }}>Prescription — Sends to Pharmacy</div>
+        <div style={{ fontSize: '15px', fontWeight: '800', marginBottom: '14px', color: navy }}>Prescription. Sends to Pharmacy</div>
         <div style={{ position: 'relative', marginBottom: '12px' }}>
           <input value={medSearch} onChange={e => setMedSearch(e.target.value)} placeholder='Search medicines from inventory...'
             style={{ width: '100%', padding: '10px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: navy }} />
@@ -282,7 +282,7 @@ export default function Doctor({ brand, products }) {
       {/* Destination Selection */}
       <Card style={{ padding: '20px', marginBottom: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '15px', fontWeight: '800', marginBottom: '14px', color: navy }}><Send size={16} color={tealDeep} /> Send Patient To</div>
-        <div style={{ fontSize: '12px', color: gray500, marginBottom: '12px' }}>Select all that apply — patient will be sent to each selected department</div>
+        <div style={{ fontSize: '12px', color: gray500, marginBottom: '12px' }}>Select all that apply. The patient is sent to each department you select.</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {/* Pharmacy */}
           <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', borderRadius: theme.radius.md, border: `2px solid ${destinations.pharmacy ? tealDeep : border}`, background: destinations.pharmacy ? tealMist : 'white', cursor: 'pointer' }}>
@@ -362,7 +362,7 @@ export default function Doctor({ brand, products }) {
             {messages.map(m => { const isDoctor = m.sender_role === 'Doctor'; return (
               <div key={m.id} style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: isDoctor ? infoBg : tealMist, border: `1px solid ${isDoctor ? infoBg : tealMist}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: '700', color: isDoctor ? info : tealDeep }}>{m.sender_name} — {m.sender_role} ({m.department})</span>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: isDoctor ? info : tealDeep }}>{m.sender_name}, {m.sender_role} ({m.department})</span>
                   <span style={{ fontSize: '10px', color: gray400 }}>{m.created_at?.replace('T', ' ').slice(0, 16)}</span>
                 </div>
                 <div style={{ fontSize: '13px', color: navy }}>{m.message}</div>
@@ -401,7 +401,7 @@ export default function Doctor({ brand, products }) {
       <SectionHead title='Doctor Consultation' sub='Patients waiting to see doctor' />
       <div style={{ position: 'relative', marginBottom: '16px' }}>
         <SearchIcon size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: gray400 }} />
-        <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder='Search any patient across all departments — name, reg no, phone…'
+        <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder='Search any patient across all departments by name, reg number or phone number.'
           style={{ width: '100%', padding: '11px 12px 11px 34px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: navy, fontFamily: theme.fontFamily }} />
       </div>
       {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : patients.length === 0 ? (

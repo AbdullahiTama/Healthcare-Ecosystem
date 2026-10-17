@@ -60,7 +60,7 @@ export default function CoverageHeatmap({ repository = createGrowthRepository() 
       </Card>
 
       {filtered.length === 0 ? (
-        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<MapPin size={28} />} message="No states match — seed businesses.agents." /></Card>
+        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<MapPin size={28} />} message="No states match yet. Seed some businesses and agents first." /></Card>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(r => {

@@ -49,7 +49,7 @@ export default function AgentEarnings({ agentId = null }) {
     setTriggering(true)
     try {
       await agentRepository.calculateAgentEarnings({ businessId: businessId.trim(), planValue: Number(planValue), paymentReference: paymentRef.trim() })
-      setTriggerSuccess(`Earnings calculated for ${paymentRef.trim()} (idempotent — retry will not duplicate)`)
+      setTriggerSuccess(`Earnings calculated for ${paymentRef.trim()}. Duplicates are ignored.`)
       // reload list
       await load()
     } catch (err) {
@@ -107,7 +107,7 @@ export default function AgentEarnings({ agentId = null }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             <Input label="Business ID" value={businessId} onChange={setBusinessId} placeholder="business uuid" required id="earn-business-id" />
             <Input label="Plan value (NGN)" type="number" value={planValue} onChange={setPlanValue} placeholder="e.g. 10000" required id="earn-plan-value" helperText="plan_value × pct per tier" />
-            <Input label="Payment reference" value={paymentRef} onChange={setPaymentRef} placeholder="e.g. PAY_123" required id="earn-payment-ref" helperText="Idempotency key — retry safe" />
+            <Input label="Payment reference" value={paymentRef} onChange={setPaymentRef} placeholder="e.g. PAY_123" required id="earn-payment-ref" helperText="This is an idempotency key, so retrying is safe." />
           </div>
           {triggerError && <div data-testid="earn-trigger-error" role="alert" style={{ background: theme.dangerBg, border: `1px solid ${theme.danger}`, color: theme.danger, borderRadius: theme.radius.md, padding: '10px 12px', fontSize: 13 }}>{triggerError}</div>}
           {triggerSuccess && <div data-testid="earn-trigger-success" role="status" aria-live="polite" style={{ background: theme.successBg, border: `1px solid ${theme.success}`, color: theme.success, borderRadius: theme.radius.md, padding: '10px 12px', fontSize: 13 }}>{triggerSuccess}</div>}
@@ -146,7 +146,7 @@ export default function AgentEarnings({ agentId = null }) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: 220 }}>
                     <div style={{ fontWeight: 800, fontSize: 13, color: theme.navy }}>{agent ? (agent.full_name || agent.email) : e.agent_id.slice(0,8)} <span style={{ fontWeight: 400, color: theme.textLight, fontSize: 11 }}>{agent?.tier ? `· ${agent.tier}` : ''} {e.commission_pct ? `· ${e.commission_pct}%` : ''}</span></div>
-                    <div style={{ fontSize: 11, color: theme.textLight, fontFamily: theme.fontMono, marginTop: 2 }}>ref: {e.payment_reference || '—'} · business: {String(e.business_id).slice(0,8)} · {e.payout_period || ''}</div>
+                    <div style={{ fontSize: 11, color: theme.textLight, fontFamily: theme.fontMono, marginTop: 2 }}>ref: {e.payment_reference || 'Not set'} · business: {String(e.business_id).slice(0,8)} · {e.payout_period || ''}</div>
                     <div style={{ fontSize: 11, color: theme.textLight, marginTop: 2 }}>{e.created_at ? new Date(e.created_at).toLocaleString() : ''} · plan {e.plan_value != null ? `₦${Number(e.plan_value).toLocaleString()}` : ''}</div>
                   </div>
                   <div style={{ textAlign: 'right', minWidth: 140 }}>

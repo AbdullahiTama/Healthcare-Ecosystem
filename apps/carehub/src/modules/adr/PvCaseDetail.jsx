@@ -9,7 +9,7 @@ import { theme } from '../../styles/theme'
 import { Card, Loading, ErrorState, Button, useToast } from '../../components/ui'
 
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return 'Not recorded'
   return new Date(d).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
@@ -30,7 +30,7 @@ export function SignalEscalation({ active }) {
   if (!active) return null
   return (
     <p role="alert" style={{ fontSize: 13, fontWeight: 700, color: '#b45309', background: '#fffbeb', border: '1px solid #d97706', borderRadius: 10, padding: '8px 12px' }}>
-      Flagged as a new safety signal — internal review within 3 days. This flag prioritizes internal review; it is not a regulatory submission.
+      Flagged as a new safety signal. Internal review within 3 days. This flag prioritises internal review. It is not a regulatory submission.
     </p>
   )
 }
@@ -41,7 +41,7 @@ export function DeadlineLine({ deadline, createdAt, ruleVersion }) {
   return (
     <p style={{ fontSize: 12, color: theme.textLight }}>
       Due {fmtDate(deadline)} ({getDeadlineStatus(deadline, createdAt).replace('_', ' ')}) ·
-      Rule: {ruleVersion || 'not recorded'} · Internal platform deadline — not a regulator-confirmed submission deadline.
+      Rule: {ruleVersion || 'not recorded'} · Internal platform deadline. This is not a regulator confirmed submission deadline.
     </p>
   )
 }
@@ -57,7 +57,7 @@ function Section({ title, children }) {
 
 const line = (label, value) => (
   <p key={label} style={{ fontSize: 13, color: theme.textLight, margin: '2px 0' }}>
-    <span style={{ fontWeight: 700, color: theme.textDark }}>{label}:</span> {value || '—'}
+    <span style={{ fontWeight: 700, color: theme.textDark }}>{label}:</span> {value || 'Not recorded'}
   </p>
 )
 
@@ -204,7 +204,7 @@ export default function PvCaseDetail({ brand, reportId }) {
                     ? `Routed to your organisation (verified${route.status === 'verified' ? ', awaiting final routing' : ''}).`
                     : route.selection_kind === 'unknown'
                       ? 'Reporter did not know the responsible company.'
-                      : `Reporter-typed candidate: ${route.candidate_name || '—'} (unverified, informative only).`
+                      : `Reporter-typed candidate: ${route.candidate_name || 'Not recorded'} (unverified, informative only).`
                   : 'No company selection recorded for this product.'}
                 {p.batch_lot_number ? ` Batch: ${p.batch_lot_number}.` : ''}
               </p>
@@ -218,7 +218,7 @@ export default function PvCaseDetail({ brand, reportId }) {
           <div key={r.reaction_id} style={{ marginBottom: 6 }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: theme.textDark, margin: 0 }}>{r.reaction_description}</p>
             <p style={{ fontSize: 12.5, color: theme.textLight, margin: 0 }}>
-              Severity: {r.severity || '—'} · Outcome: {r.outcome || '—'} ·
+              Severity: {r.severity || 'Not recorded'} · Outcome: {r.outcome || 'Not recorded'} ·
               Serious: {['seriousness_death', 'seriousness_life_threatening', 'seriousness_hospitalization', 'seriousness_disability', 'seriousness_congenital_anomaly', 'seriousness_other_medically_important'].some((k) => r[k]) ? 'yes' : 'no'}
               {(r.seriousness_unknown || []).length > 0 ? ` (unknown: ${r.seriousness_unknown.join(', ')})` : ''}
             </p>
@@ -236,7 +236,7 @@ export default function PvCaseDetail({ brand, reportId }) {
 
       <Section title="Reporter (masked)">
         {line('Qualification', kase.reporter_qualification)}
-        {line('Follow-up consent', kase.reporter_consent_followup === true ? 'Yes' : kase.reporter_consent_followup === false ? 'No' : '—')}
+        {line('Follow-up consent', kase.reporter_consent_followup === true ? 'Yes' : kase.reporter_consent_followup === false ? 'No' : 'Unknown')}
         {line('Name / contact', kase.reporter_name || kase.reporter_phone || kase.reporter_email || 'Masked under the interim privacy policy')}
       </Section>
 
@@ -248,7 +248,7 @@ export default function PvCaseDetail({ brand, reportId }) {
             {String(a.evidence_photo_file || '').startsWith('http') ? (
               <a href={a.evidence_photo_file} target="_blank" rel="noreferrer">View</a>
             ) : (
-              <span style={{ color: theme.textLight }}>Stored confidentially — full file via platform support.</span>
+              <span style={{ color: theme.textLight }}>Stored confidentially. Request the full file from platform support.</span>
             )}
           </p>
         ))}
@@ -291,7 +291,7 @@ export default function PvCaseDetail({ brand, reportId }) {
       <Section title="Timeline">
         {(kase.events || []).map((e) => (
           <p key={e.event_id} style={{ fontSize: 12.5, color: theme.textLight, margin: '2px 0' }}>
-            {fmtDate(e.created_at)} — {e.event_type} ({e.actor_name || e.actor_type})
+            {fmtDate(e.created_at)} · {e.event_type} ({e.actor_name || e.actor_type})
           </p>
         ))}
         {(kase.events || []).length === 0 && <p style={{ fontSize: 13, color: theme.textLight }}>No events yet.</p>}
@@ -299,7 +299,7 @@ export default function PvCaseDetail({ brand, reportId }) {
 
       <Section title="Export (masked case data)">
         <CaseExportBar onCsv={exportCsv} onPrint={exportNafdac} onE2b={exportE2b} />
-        <p style={{ fontSize: 12.5, color: theme.textLight }}>Exports contain only data your role may access and are audit-logged. The E2B file is preparation only — not a regulatory submission.</p>
+        <p style={{ fontSize: 12.5, color: theme.textLight }}>Exports contain only the data your role may access, and every export is recorded in the audit log. The E2B file is preparation only and is not a regulatory submission.</p>
       </Section>
     </div>
   )

@@ -110,7 +110,7 @@ export function useInventory(businessId, brand) {
         barcode: incoming.barcode || existing.barcode,
         list_on_carefind: incoming.list_on_carefind,
       })
-      toast.show('Existing product updated — stock combined!', { type: 'success' })
+      toast.show('Existing product updated. Stock combined.', { type: 'success' })
       setDuplicateWarning(null)
       setShowAdd(false)
       setEditItem(null)
@@ -155,10 +155,10 @@ export function useInventory(businessId, brand) {
       }
 
       await reload()
-      toast.show('Cleaned up ' + duplicateGroups.length + ' duplicate group(s) — removed ' + idsToDelete.length + ' duplicate item(s)', { type: 'success' })
+      toast.show('Cleaned up ' + duplicateGroups.length + ' duplicate group(s). Removed ' + idsToDelete.length + ' duplicate item(s)', { type: 'success' })
     } catch (e) {
       console.error('Error during cleanup:', e)
-      toast.show('Could not finish cleanup — please try again. (' + (e.message || 'unknown error') + ')', { type: 'error' })
+      toast.show('Could not finish cleanup. Please try again. (' + (e.message || 'unknown error') + ')', { type: 'error' })
     }
     setCleaningUp(false)
     setShowCleanup(false)

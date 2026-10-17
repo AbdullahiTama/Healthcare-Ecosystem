@@ -28,7 +28,7 @@ export default function FinalCTA() {
       <div style={{ maxWidth: 660, margin: '0 auto', textAlign: 'center' }}>
         <div data-reveal>
           <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <Eyebrow tone="dark">Get started</Eyebrow>
+            <Eyebrow tone="dark">Create your account</Eyebrow>
           </div>
           <h2
             style={{

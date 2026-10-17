@@ -97,10 +97,10 @@ export function buildInvoiceHtml(order) {
   <div class="section">
     <h3>Customer</h3>
     <dl>
-      <dt>Name</dt><dd>${esc(order.customer_name || '—')}</dd>
-      <dt>Email</dt><dd>${esc(order.delivery_email || '—')}</dd>
-      <dt>Phone</dt><dd>${esc(order.delivery_phone || '—')}</dd>
-      <dt>Address</dt><dd>${esc(address || '—')}</dd>
+      <dt>Name</dt><dd>${esc(order.customer_name || 'Not set')}</dd>
+      <dt>Email</dt><dd>${esc(order.delivery_email || 'Not set')}</dd>
+      <dt>Phone</dt><dd>${esc(order.delivery_phone || 'Not set')}</dd>
+      <dt>Address</dt><dd>${esc(address || 'Not set')}</dd>
     </dl>
   </div>
 

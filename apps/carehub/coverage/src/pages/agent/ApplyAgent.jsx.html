@@ -1,0 +1,412 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/pages/agent/ApplyAgent.jsx</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">src/pages/agent</a> ApplyAgent.jsx</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/90</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/90</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >import { useState } from 'react'</span></span></span>
+import { useNavigate, Link } from 'react-router-dom'
+import { CheckCircle, ChevronLeft, ArrowRight, MapPin, Percent, Repeat } from 'lucide-react'
+import { submitAgentApplication } from '../../services/supabase'
+import { Card, Inp, Sel, TealBtn, GhostBtn, useToast, Toast, Logo } from '../../components/ui/index'
+import { NIG_STATES } from '../../config/constants'
+import { theme } from '../../styles/theme'
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const { tealDeep, fontDisplay, bg, navy, gray600, gray400, border } = theme</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const CInp = (props) =&gt; &lt;Inp fill={bg} {...props} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >const CSel = (props) =&gt; &lt;Sel fill={bg} {...props} /&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export default function ApplyAgent() {</span>
+<span class="cstat-no" title="statement not covered" >  const [form, setForm] = useState({})</span>
+<span class="cstat-no" title="statement not covered" >  const [submitting, setSubmitting] = useState(false)</span>
+<span class="cstat-no" title="statement not covered" >  const [done, setDone] = useState(false)</span>
+<span class="cstat-no" title="statement not covered" >  const navigate = useNavigate()</span>
+<span class="cstat-no" title="statement not covered" >  const { msg, type, show: showToast } = useToast()</span>
+<span class="cstat-no" title="statement not covered" >  const f = (k, v) =&gt; setForm(p =&gt; ({ ...p, [k]: v }))</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const canSubmit = () =&gt; form.name &amp;&amp; form.email &amp;&amp; form.city &amp;&amp; form.area</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const submit = async () =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    if (!canSubmit()) { showToast('Please fill in the required fields.', { type: 'warning' }); return }</span>
+<span class="cstat-no" title="statement not covered" >    setSubmitting(true)</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      await submitAgentApplication({</span>
+<span class="cstat-no" title="statement not covered" >        applicant_name: form.name,</span>
+<span class="cstat-no" title="statement not covered" >        contact_email: form.email.toLowerCase(),</span>
+<span class="cstat-no" title="statement not covered" >        contact_phone: form.phone || '',</span>
+<span class="cstat-no" title="statement not covered" >        requested_city: form.city,</span>
+<span class="cstat-no" title="statement not covered" >        requested_area: form.area,</span>
+<span class="cstat-no" title="statement not covered" >        applicant_details: {</span>
+<span class="cstat-no" title="statement not covered" >          motivation: form.motivation || '',</span>
+<span class="cstat-no" title="statement not covered" >          experience: form.experience || '',</span>
+<span class="cstat-no" title="statement not covered" >        },</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >      setDone(true)</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) {</span>
+<span class="cstat-no" title="statement not covered" >      showToast('Could not submit — please try again or email support@carehub.ng.', { type: 'error' })</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    setSubmitting(false)</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  if (done) return (</span>
+<span class="cstat-no" title="statement not covered" >    &lt;div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: '20px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;Card style={{ maxWidth: '460px', width: '100%', padding: '40px', textAlign: 'center', borderRadius: theme.radius.xl, border: 'none', boxShadow: theme.elevation[3] }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}&gt;&lt;CheckCircle size={48} color={tealDeep} /&gt;&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ fontFamily: fontDisplay, fontSize: '26px', fontWeight: '700', color: navy, marginBottom: '8px' }}&gt;Application submitted&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ fontSize: '14px', color: gray600, lineHeight: '1.8', marginBottom: '24px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          Thanks &lt;strong&gt;{form.name}&lt;/strong&gt;! We'll review your request to cover{' '}</span>
+<span class="cstat-no" title="statement not covered" >          &lt;strong&gt;{form.area}, {form.city}&lt;/strong&gt; and be in touch. If approved, you'll complete a short</span>
+          onboarding before your area goes live.
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;TealBtn onClick={() =&gt; navigate('/')} style={{ width: '100%', padding: '15px', borderRadius: theme.radius.full, background: tealDeep, fontSize: '15px', fontWeight: '800' }}&gt;Back to home&lt;/TealBtn&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/Card&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;/div&gt;</span>
+  )
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  return (</span>
+<span class="cstat-no" title="statement not covered" >    &lt;div style={{ minHeight: '100vh', background: bg, padding: '24px 20px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;div style={{ maxWidth: '540px', margin: '0 auto' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ textAlign: 'center', marginBottom: '24px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Link to='/agent/login' style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: gray400, fontSize: 13, fontWeight: 600, textDecoration: 'none', marginBottom: '18px' }}&gt;&lt;ChevronLeft size={15} /&gt; Agent sign in&lt;/Link&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ margin: '0 auto 12px', display: 'flex', justifyContent: 'center' }}&gt;&lt;Logo size={56} /&gt;&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ fontFamily: fontDisplay, fontSize: '28px', fontWeight: '700', color: navy }}&gt;Become a CareHub Referral Agent&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ fontSize: '14px', color: gray600, marginTop: '8px', lineHeight: '1.7' }}&gt;Own the growth of healthcare businesses in your area — onboarding them onto CareHub and supporting them long-term.&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '18px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          {[['40%', 'of a business\'s first payment', Percent], ['5%', 'of every renewal after that', Repeat]].map(([v, l, Icon]) =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div key={l} style={{ display: 'flex', gap: '10px', padding: '14px', borderRadius: theme.radius.lg, background: theme.tealMist, alignItems: 'center' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Icon size={20} color={tealDeep} style={{ flexShrink: 0 }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontSize: '18px', fontWeight: '900', color: tealDeep }}&gt;{v}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontSize: '11.5px', color: gray600 }}&gt;{l}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          ))}</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >        &lt;Card style={{ padding: '28px', borderRadius: theme.radius.xl, border: 'none', boxShadow: theme.elevation[3] }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '15px', fontWeight: '800', color: navy }}&gt;&lt;MapPin size={16} color={tealDeep} /&gt; Your territory&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;CSel label='City / State *' value={form.city} onChange={v =&gt; f('city', v)} options={NIG_STATES} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;CInp label='Specific area / zone *' value={form.area} onChange={v =&gt; f('area', v)} placeholder='e.g. Surulere, Ikeja, Yaba…' required /&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ borderTop: `1px solid ${border}`, margin: '4px 0', paddingTop: '14px', display: 'flex', alignItems: 'center', gap: 6, fontSize: '15px', fontWeight: '800', color: navy }}&gt;Your details&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;CInp label='Full name *' value={form.name} onChange={v =&gt; f('name', v)} placeholder='e.g. Chidinma Eze' required /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;CInp label='Email *' value={form.email} onChange={v =&gt; f('email', v)} type='email' placeholder='you@example.com' required /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;CInp label='Phone' value={form.phone} onChange={v =&gt; f('phone', v)} type='tel' placeholder='08012345678' /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;CInp label='Experience (optional)' value={form.experience} onChange={v =&gt; f('experience', v)} placeholder='Healthcare, sales, or community experience' /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;CInp label='Why this area? (optional)' value={form.motivation} onChange={v =&gt; f('motivation', v)} placeholder='A few sentences about your plan for the area' /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/Card&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;GhostBtn onClick={() =&gt; navigate('/')} style={{ flex: 1, padding: '15px', borderRadius: theme.radius.full }}&gt;Cancel&lt;/GhostBtn&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;TealBtn onClick={submit} disabled={submitting} style={{ flex: 1, padding: '15px', borderRadius: theme.radius.full, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            {submitting ? 'Submitting…' : &lt;&gt;Submit application &lt;ArrowRight size={14} /&gt;&lt;/&gt;}</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/TealBtn&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;Toast msg={msg} type={type} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;/div&gt;</span>
+  )
+<span class="cstat-no" title="statement not covered" >}</span></pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-10-16T15:21:14.166Z
+            </div>
+        <script src="../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
+    </body>
+</html>
+    

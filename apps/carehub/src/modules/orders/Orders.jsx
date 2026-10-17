@@ -231,7 +231,7 @@ export default function Orders({ brand }) {
       const uploaded = []
       for (let i = 0; i < attachments.length; i++) {
         const file = attachments[i]
-        setUploadStatus('Uploading ' + (i + 1) + ' of ' + attachments.length + ' — ' + file.name)
+        setUploadStatus('Uploading ' + (i + 1) + ' of ' + attachments.length + ': ' + file.name)
         const url = await orderRepository.uploadFile(file)
         uploaded.push({
           file_name: file.name,
@@ -496,7 +496,7 @@ export default function Orders({ brand }) {
                     )
                   })}
                 </div>
-                {people.length === 0 && <div style={{ fontSize: '11.5px', color: gray400, marginTop: '4px' }}>No one to tag yet — add staff first.</div>}
+                {people.length === 0 && <div style={{ fontSize: '11.5px', color: gray400, marginTop: '4px' }}>No one to tag yet. Add staff first.</div>}
               </div>
 
               <div>
@@ -674,7 +674,7 @@ export default function Orders({ brand }) {
               </div>
 
               <div style={{ background: 'white', border: `1px solid ${border}`, borderRadius: '10px', padding: '14px', marginBottom: '12px' }}>
-                <div style={{ fontSize: '10.5px', fontWeight: '800', color: gray500, letterSpacing: '0.04em', marginBottom: '10px' }}>LINE ITEMS</div>
+                <div style={{ fontSize: '10.5px', fontWeight: '800', color: gray500, letterSpacing: '0.04em', marginBottom: '10px' }}>Items on this order</div>
                 {(itemsByOrder[openOrder.id] || []).map(function (i) {
                   return (
                     <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '9px 0', borderBottom: `1px solid ${gray100}` }}>
@@ -725,7 +725,7 @@ export default function Orders({ brand }) {
 
               {events.length > 0 && (
                 <div style={{ background: 'white', border: `1px solid ${border}`, borderRadius: '10px', padding: '14px', marginBottom: '12px' }}>
-                  <div style={{ fontSize: '10.5px', fontWeight: '800', color: gray500, letterSpacing: '0.04em', marginBottom: '10px' }}>AUDIT TRAIL</div>
+                  <div style={{ fontSize: '10.5px', fontWeight: '800', color: gray500, letterSpacing: '0.04em', marginBottom: '10px' }}>Order history</div>
                   {events.map(function (ev) {
                     return (
                       <div key={ev.id} style={{ padding: '8px 0', borderBottom: `1px solid ${gray100}` }}>

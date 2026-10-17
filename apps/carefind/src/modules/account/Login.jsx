@@ -148,7 +148,7 @@ function Login() {
     <>
       <div
         role="group"
-        aria-label="Sign-in method"
+        aria-label="Sign in method"
         style={{ display: 'flex', gap: 4, padding: 4, marginBottom: 20, borderRadius: theme.radius.full, background: theme.tealMist }}
       >
         <MethodButton active={authMethod === 'email'} onClick={() => setAuthMethod('email')}>Email</MethodButton>

@@ -141,7 +141,7 @@ describe('Wallet top-up flow', () => {
 
     expect(window.location.pathname).toBe('/dashboard/wallet')   // query string gone
     expect(walletRepository.getWallet).toHaveBeenCalledTimes(2)   // initial load + post-verify reload
-    expect(host.textContent).toContain('Top-up received')
+    expect(host.textContent).toContain('Deposit received')
     expect(host.textContent).toContain('₦6,500')
   })
 
@@ -171,7 +171,7 @@ describe('Wallet withdraw: a dead OTP is cleared on otp_superseded', () => {
       if (String(url).includes('/api/withdrawal-pin/draft')) return reply(200, { draft: null })
       if (String(url).includes('/api/withdrawal-pin/otp')) return reply(200, { ok: true, expiresInSeconds: 300 })
       if (String(url).includes('/api/resolve-account')) return reply(200, { accountName: 'TEST USER' })
-      if (String(url).includes('/api/initiate-business-withdrawal')) return reply(400, { code: 'otp_superseded', error: 'A newer code was issued — please use the latest email.' })
+      if (String(url).includes('/api/initiate-business-withdrawal')) return reply(400, { code: 'otp_superseded', error: 'A newer code was issued. Please use the code in the latest email.' })
       return reply(404, {})
     })
     await mount()

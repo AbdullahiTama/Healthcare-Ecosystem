@@ -192,7 +192,7 @@ export default function WithdrawalOtpField({
         // code's issue time and expiry, so adopt the live draft instead of blanking the
         // countdown - otherwise the cooldown read 0 and "Send a new code" was live
         // immediately, and one tap voided the code already in the inbox.
-        setError(data.error || 'A code is already on its way — check your email.')
+        setError(data.error || 'A code is already on its way. Check your email.')
         const issuedAt = Number.isFinite(data.otpIssuedAt) ? data.otpIssuedAt : null
         const expiresAt = issuedAt && Number.isFinite(data.expiresInSeconds)
           ? issuedAt + data.expiresInSeconds * 1000
@@ -228,7 +228,7 @@ export default function WithdrawalOtpField({
   async function pasteFromClipboard() {
     setPasteError('')
     const code = await readClipboardOtp()
-    if (!code) { setPasteError('No 6-digit code found on the clipboard — type it instead.'); return }
+    if (!code) { setPasteError('No 6-digit code found on the clipboard. Type it instead.'); return }
     onChange(code)
   }
 
@@ -282,7 +282,7 @@ export default function WithdrawalOtpField({
       />
       <span id="otp-withdrawal-status" role="status" style={{ fontSize: 11, color: theme.textLight }}>
         {expiresIn == null
-          ? 'Code sent — check your email. It expires in 5 minutes.'
+          ? 'Code sent. Check your email. It expires in 5 minutes.'
           : `Code sent · expires in ${expiresIn} · resend in ${resendIn} s`}
       </span>
       <span style={{ fontSize: 11, color: theme.textLight }}>

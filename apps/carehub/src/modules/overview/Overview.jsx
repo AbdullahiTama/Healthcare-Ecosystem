@@ -14,7 +14,7 @@ import { Card, Avatar, Loading, StatCard } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray500, gray400, gray100, border, danger, dangerBg, warning, warningBg, success, bg, cardBg } = theme
 
-// Cross-branch overview dashboard for the business owner. Aggregates stats
+// Overview across branches dashboard for the business owner. Aggregates stats
 // across every branch the owner can reach (parent + all descendants via the
 // recursive current_business_ids()). Read-only: clicking a stat drills into the
 // relevant module for the active branch.
@@ -89,7 +89,7 @@ export default function Overview({ brand, role, perms }) {
         padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
       }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 12, color: gray400 }}>Cross-branch overview</div>
+          <div style={{ fontSize: 12, color: gray400 }}>Overview across branches</div>
           <div style={{ fontSize: 18, fontWeight: 900, color: navy, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {branches.length} branch{branches.length === 1 ? '' : 'es'}
           </div>

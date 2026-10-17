@@ -39,10 +39,10 @@ function PreviewCard({ card }) {
       style={{
         flex: '0 0 auto',
         background: '#fff',
-        borderRadius: theme.radius.xl,
+        borderRadius: theme.radius.md,
         border: `1px solid rgba(255,255,255,0.7)`,
         boxShadow: '0 18px 40px rgba(7, 32, 26, 0.35)',
-        padding: '13px 15px',
+        padding: '12px 14px',
         color: theme.textDark,
       }}
     >
@@ -99,17 +99,18 @@ function PreviewCard({ card }) {
           )}
         </div>
 
+        {/* Status marker, not a badge to earn: flat text on a tinted square,
+            sentence case, no pill. A capsule here reads as a prize badge. */}
         <span
           style={{
             flexShrink: 0,
-            fontSize: 10,
-            fontWeight: 800,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
+            fontSize: 11,
+            fontWeight: 700,
             color: theme.tealDeep,
             background: theme.tealMist,
-            borderRadius: theme.radius.full,
-            padding: '4px 8px',
+            borderRadius: theme.radius.sm,
+            padding: '3px 7px',
+            alignSelf: 'flex-start',
           }}
         >
           {card.badge}

@@ -11,8 +11,8 @@ export const BASE_COMMANDS = [
   // Nav — 8
   { id: 'go-dashboard', label: 'Go to Dashboard', keywords: ['dashboard','home','overview'], section: 'Navigation', perm: 'Dashboard', shortcut: 'G D', action: 'navigate', target: 'dashboard' },
   { id: 'go-businesses', label: 'Go to Businesses', keywords: ['businesses','vendors','companies'], section: 'Navigation', perm: 'Businesses', shortcut: 'G B', action: 'navigate', target: 'businesses' },
-  { id: 'go-team-agents', label: 'Go to Team — Agents', keywords: ['team agents','agents'], section: 'Navigation', perm: 'Team-Agents', shortcut: 'G A', action: 'navigate', target: 'team-agents' },
-  { id: 'go-team-platform', label: 'Go to Team — Platform', keywords: ['platform team','roles'], section: 'Navigation', perm: 'Team-Platform', shortcut: 'G P', action: 'navigate', target: 'team-platform' },
+  { id: 'go-team-agents', label: 'Go to Team: Agents', keywords: ['team agents','agents'], section: 'Navigation', perm: 'Team-Agents', shortcut: 'G A', action: 'navigate', target: 'team-agents' },
+  { id: 'go-team-platform', label: 'Go to Team: Platform', keywords: ['platform team','roles'], section: 'Navigation', perm: 'Team-Platform', shortcut: 'G P', action: 'navigate', target: 'team-platform' },
   { id: 'go-applications', label: 'Go to Applications', keywords: ['applications','queue'], section: 'Navigation', perm: 'Applications', shortcut: 'G Q', action: 'navigate', target: 'applications' },
   { id: 'go-ledger', label: 'Go to Ledger', keywords: ['ledger','statement','finance'], section: 'Navigation', perm: 'Ledger', shortcut: 'G L', action: 'navigate', target: 'ledger' },
   { id: 'go-payouts', label: 'Go to Payouts', keywords: ['payouts','pay'], section: 'Navigation', perm: 'Payouts', shortcut: 'G O', action: 'navigate', target: 'payouts' },
@@ -127,7 +127,7 @@ export function buildCommandList({ businesses, payouts, perms = null, recentIds 
     for (const p of processing) {
       list.push({
         id: `pay-${p.id}`,
-        label: `Mark Paid ${p.requester_id?.slice(0,6) || p.id.slice(0,6)} — ${p.amount || ''}`,
+        label: `Mark Paid ${p.requester_id?.slice(0,6) || p.id.slice(0,6)} (${p.amount || ''})`,
         keywords: ['pay','paid','mark paid', p.requester_id || ''],
         section: 'Payouts',
         perm: 'Payouts',

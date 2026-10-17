@@ -93,7 +93,7 @@ export default function AgentTransfer() {
         reason,
       })
 
-      setSaveSuccess(`Transferred ownership — audit ${audit.id}. New owner ${confirm.toAgentId}.`)
+      setSaveSuccess(`Transferred ownership. Audit ${audit.id}. New owner ${confirm.toAgentId}.`)
       setConfirm(null)
       // clear fields
       setBusinessId('')
@@ -115,7 +115,7 @@ export default function AgentTransfer() {
   if (loading) return <div data-testid="transfer-loading"><Loading text="Loading agents..." /></div>
   if (error) return <div data-testid="transfer-error"><ErrorState message={error} onRetry={load} /></div>
 
-  const agentOptions = agents.map((a) => ({ value: a.id, label: `${a.full_name || a.email || a.id} (${a.tier || 'unplaced'}) — ${a.referral_code || ''} ${a.state ? `· ${a.state}` : ''}` }))
+  const agentOptions = agents.map((a) => ({ value: a.id, label: `${a.full_name || a.email || a.id} (${a.tier || 'unplaced'}) · ${a.referral_code || ''}${a.state ? ` · ${a.state}` : ''}` }))
 
   return (
     <div data-testid="agent-transfer" style={{ fontFamily: theme.fontFamily, maxWidth: 720, margin: '0 auto', padding: 16 }}>
@@ -150,7 +150,7 @@ export default function AgentTransfer() {
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-            <Input label="Business ID (optional)" value={businessId} onChange={setBusinessId} placeholder="business uuid — narrows to one business" id="transfer-business-id" helperText="If set, only referrals/earnings for this business are moved" />
+            <Input label="Business ID (optional)" value={businessId} onChange={setBusinessId} placeholder="Business UUID. Narrows the list to one business." id="transfer-business-id" helperText="If set, only referrals and earnings for this business are moved" />
             <Input label="Agent referral ID (optional)" value={referralId} onChange={setReferralId} placeholder="agent_referrals id" id="transfer-referral-id" helperText="Precise row to transfer; overrides business filter" />
           </div>
 

@@ -51,7 +51,7 @@ class POSErrorBoundary extends Component {
       return (
         <div style={{ padding: 20, fontFamily: 'monospace' }}>
           <div style={{ fontWeight: 800, fontSize: 16, color: theme.danger, marginBottom: 10 }}>
-            POS page crashed — screenshot this and send it:
+            The POS page crashed. Screenshot this and send it to support:
           </div>
           <div style={{ padding: 12, background: theme.dangerBg, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, color: theme.danger, fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {String(this.state.error?.message || this.state.error)}
@@ -270,7 +270,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
       throw e
     }
     if (result.queued && result.reason === 'offline') {
-      showToast('Sale saved offline — will sync when connected', { type: 'info' })
+      showToast('Sale saved on this device. It will sync when you reconnect.', { type: 'info' })
     }
     return result
   }
@@ -339,11 +339,11 @@ function POSInner({ brand, products, setProducts, role, perms }) {
         businessId: brand.id,
         direction: 'owes_us',
         clientId,
-        partyName: isWalkIn ? 'Walk-in — ' + txnNo : clientName,
+        partyName: isWalkIn ? 'Walk-in · ' + txnNo : clientName,
         amount: total,
         amountPaid: amtPaid,
         description: (isShortfall && !isWalkIn ? 'Shortfall on sale' : isWalkIn ? 'Sale shortfall' : 'Credit sale')
-          + ' — TXN: ' + txnNo + ' | Items: ' + cart.map(i => i.name + ' x' + i.qty).join(', '),
+          + ' · TXN: ' + txnNo + ' | Items: ' + cart.map(i => i.name + ' x' + i.qty).join(', '),
         source: 'credit_sale',
         sourceRef: txnNo,
       })
@@ -399,7 +399,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
         partyName: clientName,
         amount: total,
         amountPaid: amtPaid,
-        description: 'Credit sale — TXN: ' + txnNo,
+        description: 'Credit sale · TXN: ' + txnNo,
         source: 'credit_sale',
         sourceRef: txnNo,
       })
@@ -432,7 +432,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     } catch (e) {
       return
     }
-    showToast('Sale held — resume it from Held Sales', { type: 'success' })
+    showToast('Sale held. Resume it from Held Sales.', { type: 'success' })
     setShowHoldModal(false)
     setCart([])
     setClient('Walk-in')
@@ -490,7 +490,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   // printers print softer than with raw commands.
   async function legacyPrint(r) {
     const w = window.open('', '_blank', 'width=400,height=700')
-    if (!w) { showToast('Pop-up blocked — allow pop-ups to print this receipt.', { type: 'warning' }); return }
+    if (!w) { showToast('The pop-up was blocked. Allow pop-ups for this site, then print the receipt again.', { type: 'warning' }); return }
     const qrDataUrl = await buildReceiptQrDataUrl(r, settings || {})
     w.document.write(buildReceiptHtml({ receipt: r, business: brand || {}, settings: settings || {}, qrDataUrl }))
     w.document.close()
@@ -516,9 +516,9 @@ function POSInner({ brand, products, setProducts, role, perms }) {
       } catch (e) {
         console.error('ESC/POS print failed:', e)
         if (e instanceof EscposTransferError || e?.sent) {
-          showToast('The printer accepted the job but failed mid-print. Check the printer and try again.', { type: 'error' })
+          showToast('The printer accepted the job but stopped partway through printing it. Check the printer and try again.', { type: 'error' })
         } else {
-          showToast('Direct printing unavailable — opening the browser print dialog.', { type: 'warning' })
+          showToast('Direct printing is unavailable, so the browser print dialog is opening instead.', { type: 'warning' })
           legacyPrint(r)
         }
       } finally {
@@ -975,7 +975,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           {/* Summary */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: gray600 }}><span>Subtotal</span><span>{fmt(sub)}</span></div>
-            {discAmt > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: danger }}><span>Discount</span><span>−{fmt(discAmt)}</span></div>}
+            {discAmt > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: danger }}><span>Discount applied</span><span>{fmt(discAmt)} off</span></div>}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 2 }}>
               <span style={{ fontSize: 14, fontWeight: 800, color: navy }}>Total</span>
               <span style={{ fontSize: 21, fontWeight: 900, color: navy }}>{fmt(total)}</span>

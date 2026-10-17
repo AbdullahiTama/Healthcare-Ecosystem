@@ -333,7 +333,7 @@ export default function AdminPanel() {
   function cancelScheduledShow(showId) {
     askConfirm({
       title: 'Cancel this scheduled show?',
-      consequence: 'This cancels the scheduled show and removes its countdown from the audience view. Invited guests will need to be re-added if you reschedule it.',
+      consequence: 'This cancels the scheduled show and removes its countdown from the audience view. Invited guests will need to be added again if you reschedule it.',
       confirmLabel: 'Cancel Show',
       action: () => reallyCancelScheduledShow(showId),
     })

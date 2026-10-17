@@ -1,0 +1,949 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/lib/nigeriaGeo.js</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/lib</a> nigeriaGeo.js</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/288</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/288</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >// Nigeria geography — 37 states (36 + FCT) + 774 LGAs</span></span></span>
+<span class="cstat-no" title="statement not covered" >// Single source of truth for state/LGA data. Used by FacilityDiscovery filters</span>
+<span class="cstat-no" title="statement not covered" >// and by resolveLocation to centre searches.</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >export const NIGERIA_STATES = [</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Abia', lgas: ['Aba North','Aba South','Arochukwu','Bende','Ikwuano','Isiala Ngwa North','Isiala Ngwa South','Isuikwuato','Obi Ngwa','Ohafia','Osisioma Ngwa','Ugwunagbo','Ukwa East','Ukwa West','Umuahia North','Umuahia South','Umu Nneochi'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Adamawa', lgas: ['Demsa','Fufore','Ganye','Girei','Gombi','Guyuk','Hong','Jada','Lamurde','Madagali','Maiha','Mayo-Belwa','Michika','Mubi North','Mubi South','Numan','Shelleng','Song','Toungo','Yola North','Yola South'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Akwa Ibom', lgas: ['Abak','Eastern Obolo','Eket','Esit Eket','Essien Udim','Etim Ekpo','Etinan','Ibeno','Ibesikpo Asutan','Ibiono-Ibom','Ika','Ikono','Ikot Abasi','Ikot Ekpene','Ini','Itu','Mbo','Mkpat-Enin','Nsit-Atai','Nsit-Ibom','Nsit-Ubium','Obot Akara','Okobo','Onna','Oron','Oruk Anam','Udung-Uko','Ukanafun','Uruan','Urue-Offong/Oruko','Uyo'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Anambra', lgas: ['Aguata','Anambra East','Anambra West','Anaocha','Awka North','Awka South','Ayamelum','Dunukofia','Ekwusigo','Idemili North','Idemili South','Ihiala','Njikoka','Nnewi North','Nnewi South','Ogbaru','Onitsha North','Onitsha South','Orumba North','Orumba South','Oyi'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Bauchi', lgas: ['Alkaleri','Bauchi','Bogoro','Damban','Darazo','Dass','Gamawa','Ganjuwa','Giade','Itas/Gadau','Jama\'are','Katagum','Kirfi','Misau','Ningi','Shira','Tafawa Balewa','Toro','Warji','Zaki'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Bayelsa', lgas: ['Brass','Ekeremor','Kolokuma/Opokuma','Nembe','Ogbia','Sagbama','Southern Ijaw','Yenagoa'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Benue', lgas: ['Ado','Agatu','Apa','Buruku','Gboko','Guma','Gwer East','Gwer West','Katsina-Ala','Konshisha','Kwande','Logo','Makurdi','Obi','Ogbadibo','Ohimini','Oju','Okpokwu','Otukpo','Tarka','Ukum','Ushongo','Vandeikya'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Borno', lgas: ['Abadam','Askira/Uba','Bama','Bayo','Biu','Chibok','Damboa','Dikwa','Gubio','Guzamala','Gwoza','Hawul','Jere','Kaga','Kala/Balge','Konduga','Kukawa','Kwaya Kusar','Mafa','Magumeri','Maiduguri','Marte','Mobbar','Monguno','Ngala','Nganzai','Shani'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Cross River', lgas: ['Abi','Akamkpa','Akpabuyo','Bakassi','Bekwarra','Biase','Boki','Calabar Municipal','Calabar South','Etung','Ikom','Obanliku','Obubra','Obudu','Odukpani','Ogoja','Yakurr','Yala'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Delta', lgas: ['Aniocha North','Aniocha South','Bomadi','Burutu','Ethiope East','Ethiope West','Ika North East','Ika South','Isoko North','Isoko South','Ndokwa East','Ndokwa West','Okpe','Oshimili North','Oshimili South','Patani','Sapele','Udu','Ughelli North','Ughelli South','Ukwuani','Uvwie','Warri North','Warri South','Warri South West'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Ebonyi', lgas: ['Abakaliki','Afikpo North','Afikpo South','Ebonyi','Ezza North','Ezza South','Ikwo','Ishielu','Ivo','Izzi','Ohaozara','Ohaukwu','Onicha'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Edo', lgas: ['Akoko-Edo','Egor','Esan Central','Esan North-East','Esan South-East','Esan West','Etsako Central','Etsako East','Etsako West','Igueben','Ikpoba Okha','Orhionmwon','Oredo','Ovia North-East','Ovia South-West','Owan East','Owan West','Uhunmwonde'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Ekiti', lgas: ['Ado Ekiti','Efon','Ekiti East','Ekiti South-West','Ekiti West','Emure','Gbonyin','Ido Osi','Ijero','Ikere','Ikole','Ilejemeje','Irepodun/Ifelodun','Ise/Orun','Moba','Oye'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Enugu', lgas: ['Aninri','Awgu','Enugu East','Enugu North','Enugu South','Ezeagu','Igbo Etiti','Igbo Eze North','Igbo Eze South','Isi Uzo','Nkanu East','Nkanu West','Nsukka','Oji River','Udenu','Udi','Uzo Uwani'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'FCT', lgas: ['Abaji','Abuja Municipal Area Council','Bwari','Gwagwalada','Kuje','Kwali'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Gombe', lgas: ['Akko','Balanga','Billiri','Dukku','Funakaye','Gombe','Kaltungo','Kwami','Nafada','Shongom','Yamaltu/Deba'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Imo', lgas: ['Aboh Mbaise','Ahiazu Mbaise','Ehime Mbano','Ezinihitte','Ideato North','Ideato South','Ihitte/Uboma','Ikeduru','Isiala Mbano','Isu','Mbaitoli','Ngor Okpala','Njaba','Nkwerre','Nwangele','Obowo','Oguta','Ohaji/Egbema','Okigwe','Orlu','Orsu','Oru East','Oru West','Owerri Municipal','Owerri North','Owerri West','Unuimo'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Jigawa', lgas: ['Auyo','Babura','Biriniwa','Birnin Kudu','Buji','Dutse','Gagarawa','Garki','Gumel','Guri','Gwaram','Gwiwa','Hadejia','Jahun','Kafin Hausa','Kaugama','Kazaure','Kiri Kasama','Kiyawa','Maigatari','Malam Madori','Miga','Ringim','Roni','Sule Tankarkar','Taura','Yankwashi'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Kaduna', lgas: ['Birnin Gwari','Chikun','Giwa','Igabi','Ikara','Jaba','Jema\'a','Kachia','Kaduna North','Kaduna South','Kagarko','Kajuru','Kaura','Kauru','Kubau','Kudan','Lere','Makarfi','Sabon Gari','Sanga','Soba','Zangon Kataf','Zaria'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Kano', lgas: ['Ajingi','Albasu','Bagwai','Bebeji','Bichi','Bunkure','Dala','Dambatta','Dawakin Kudu','Dawakin Tofa','Doguwa','Fagge','Gabasawa','Garko','Garun Mallam','Gaya','Gezawa','Gwale','Gwarzo','Kabo','Kano Municipal','Karaye','Kibiya','Kiru','Kumbotso','Kunchi','Kura','Madobi','Makoda','Minjibir','Nasarawa','Rano','Rimin Gado','Rogo','Shanono','Sumaila','Takai','Tarauni','Tofa','Tsanyawa','Tudun Wada','Ungogo','Warawa','Wudil'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Katsina', lgas: ['Bakori','Batagarawa','Batsari','Baure','Bindawa','Charanchi','Dan Musa','Dandume','Danja','Daura','Dutsi','Dutsin Ma','Faskari','Funtua','Ingawa','Jibia','Kafur','Kaita','Kankara','Kankia','Katsina','Kurfi','Kusada','Mai\'Adua','Malumfashi','Mani','Mashi','Matazu','Musawa','Rimi','Sabuwa','Safana','Sandamu','Zango'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Kebbi', lgas: ['Aleiro','Arewa Dandi','Argungu','Augie','Bagudo','Birnin Kebbi','Bunza','Dandi','Fakai','Gwandu','Jega','Kalgo','Koko/Besse','Maiyama','Ngaski','Sakaba','Shanga','Suru','Wasagu/Danko','Yauri','Zuru'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Kogi', lgas: ['Adavi','Ajaokuta','Ankpa','Bassa','Dekina','Ibaji','Idah','Igalamela Odolu','Ijumu','Kabba/Bunu','Kogi','Lokoja','Mopa Muro','Ofu','Ogori/Magongo','Okehi','Okene','Olamaboro','Omala','Yagba East','Yagba West'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Kwara', lgas: ['Asa','Baruten','Edu','Ekiti','Ifelodun','Ilorin East','Ilorin South','Ilorin West','Irepodun','Isin','Kaiama','Moro','Offa','Oke Ero','Oyun','Pategi'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Lagos', lgas: ['Agege','Ajeromi-Ifelodun','Alimosho','Amuwo-Odofin','Apapa','Badagry','Epe','Eti Osa','Ibeju-Lekki','Ifako-Ijaiye','Ikeja','Ikorodu','Kosofe','Lagos Island','Lagos Mainland','Mushin','Ojo','Oshodi-Isolo','Shomolu','Surulere'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Nasarawa', lgas: ['Akwanga','Awe','Doma','Karu','Keana','Keffi','Kokona','Lafia','Nasarawa','Nasarawa Egon','Obi','Toto','Wamba'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Niger', lgas: ['Agaie','Agwara','Bida','Borgu','Bosso','Chanchaga','Edati','Gbako','Gurara','Katcha','Kontagora','Lapai','Lavun','Magama','Mariga','Mashegu','Mokwa','Munya','Paikoro','Rafi','Rijau','Shiroro','Suleja','Tafa','Wushishi'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Ogun', lgas: ['Abeokuta North','Abeokuta South','Ado-Odo/Ota','Ewekoro','Ifo','Ijebu East','Ijebu North','Ijebu North East','Ijebu Ode','Ikenne','Imeko Afon','Ipokia','Obafemi Owode','Odogbolu','Odeda','Ogun Waterside','Remo North','Sagamu','Yewa North','Yewa South'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Ondo', lgas: ['Akoko North-East','Akoko North-West','Akoko South-West','Akoko South-East','Akure North','Akure South','Ese Odo','Idanre','Ifedore','Ilaje','Ile Oluji/Okeigbo','Irele','Odigbo','Okitipupa','Ondo East','Ondo West','Ose','Owo'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Osun', lgas: ['Atakunmosa East','Atakunmosa West','Aiyedaade','Aiyedire','Boluwaduro','Boripe','Ede North','Ede South','Egbedore','Ejigbo','Ife Central','Ife East','Ife North','Ife South','Ifedayo','Ifelodun','Ila','Ilesa East','Ilesa West','Irepodun','Irewole','Isokan','Iwo','Obokun','Odo Otin','Ola Oluwa','Olorunda','Oriade','Orolu','Osogbo'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Oyo', lgas: ['Afijio','Akinyele','Atiba','Atisbo','Egbeda','Ibadan North','Ibadan North-East','Ibadan North-West','Ibadan South-East','Ibadan South-West','Ibarapa Central','Ibarapa East','Ibarapa North','Ido','Irepo','Iseyin','Itesiwaju','Iwajowa','Kajola','Lagelu','Ogbomosho North','Ogbomosho South','Ogo Oluwa','Olorunsogo','Oluyole','Ona Ara','Orelope','Ori Ire','Oyo East','Oyo West','Saki East','Saki West','Surulere'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Plateau', lgas: ['Barkin Ladi','Bassa','Bokkos','Jos East','Jos North','Jos South','Kanam','Kanke','Langtang North','Langtang South','Mangu','Mikang','Pankshin','Qua\'an Pan','Riyom','Shendam','Wase'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Rivers', lgas: ['Abua/Odual','Ahoada East','Ahoada West','Akuku-Toru','Andoni','Asari-Toru','Bonny','Degema','Eleme','Emohua','Etche','Gokana','Ikwerre','Khana','Obio/Akpor','Ogba/Egbema/Ndoni','Ogu/Bolo','Okrika','Omuma','Opobo/Nkoro','Oyigbo','Port Harcourt','Tai'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Sokoto', lgas: ['Binji','Bodinga','Dange Shuni','Gada','Goronyo','Gudu','Gwadabawa','Illela','Isa','Kebbe','Kware','Rabah','Sabon Birni','Shagari','Silame','Sokoto North','Sokoto South','Tambuwal','Tangaza','Tureta','Wamako','Wurno','Yabo'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Taraba', lgas: ['Ardo Kola','Bali','Donga','Gashaka','Gassol','Ibi','Jalingo','Karim Lamido','Kurmi','Lau','Sardauna','Takum','Ussa','Wukari','Yorro','Zing'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Yobe', lgas: ['Bade','Bursari','Damaturu','Fika','Fune','Geidam','Gujba','Gulani','Jakusko','Karasuwa','Machina','Nangere','Nguru','Potiskum','Tarmuwa','Yunusari','Yusufari'] },</span>
+<span class="cstat-no" title="statement not covered" >  { name: 'Zamfara', lgas: ['Anka','Bakura','Birnin Magaji/Kaura Namoda','Bukkuyum','Bungudu','Chafe','Gummi','Gusau','Kaura Namoda','Maradun','Maru','Shinkafi','Talata Mafara','Zurmi'] },</span>
+<span class="cstat-no" title="statement not covered" >]</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >// FCT variants — treat "FCT", "FCT Abuja", "FCT - Abuja", "Federal Capital Territory" as same</span>
+<span class="cstat-no" title="statement not covered" >const STATE_ALIASES = {</span>
+<span class="cstat-no" title="statement not covered" >  'fct': 'FCT',</span>
+<span class="cstat-no" title="statement not covered" >  'fct abuja': 'FCT',</span>
+<span class="cstat-no" title="statement not covered" >  'fct - abuja': 'FCT',</span>
+<span class="cstat-no" title="statement not covered" >  'federal capital territory': 'FCT',</span>
+<span class="cstat-no" title="statement not covered" >  'abuja': 'FCT',</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >const stateMap = new Map(NIGERIA_STATES.map(s =&gt; [s.name.toLowerCase(), s.name]))</span>
+<span class="cstat-no" title="statement not covered" >// Fill alias map</span>
+<span class="cstat-no" title="statement not covered" >for (const [k,v] of Object.entries(STATE_ALIASES)) stateMap.set(k, v)</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >// Optional centre coordinates for states (approx capital centroids) for fallback when Nominatim fails or offline</span>
+<span class="cstat-no" title="statement not covered" >export const STATE_CENTRES = {</span>
+<span class="cstat-no" title="statement not covered" >  'Abia': { lat: 5.4527, lng: 7.5248 },</span>
+<span class="cstat-no" title="statement not covered" >  'Adamawa': { lat: 9.3265, lng: 12.3984 },</span>
+<span class="cstat-no" title="statement not covered" >  'Akwa Ibom': { lat: 5.0077, lng: 7.8537 },</span>
+<span class="cstat-no" title="statement not covered" >  'Anambra': { lat: 6.2209, lng: 7.0677 },</span>
+<span class="cstat-no" title="statement not covered" >  'Bauchi': { lat: 10.7761, lng: 9.8228 },</span>
+<span class="cstat-no" title="statement not covered" >  'Bayelsa': { lat: 4.7719, lng: 6.0699 },</span>
+<span class="cstat-no" title="statement not covered" >  'Benue': { lat: 7.3369, lng: 8.7404 },</span>
+<span class="cstat-no" title="statement not covered" >  'Borno': { lat: 11.8848, lng: 13.1517 },</span>
+<span class="cstat-no" title="statement not covered" >  'Cross River': { lat: 5.8702, lng: 8.5988 },</span>
+<span class="cstat-no" title="statement not covered" >  'Delta': { lat: 5.5324, lng: 5.8987 },</span>
+<span class="cstat-no" title="statement not covered" >  'Ebonyi': { lat: 6.2649, lng: 8.0137 },</span>
+<span class="cstat-no" title="statement not covered" >  'Edo': { lat: 6.6342, lng: 5.9303 },</span>
+<span class="cstat-no" title="statement not covered" >  'Ekiti': { lat: 7.719, lng: 5.311 },</span>
+<span class="cstat-no" title="statement not covered" >  'Enugu': { lat: 6.4584, lng: 7.5464 },</span>
+<span class="cstat-no" title="statement not covered" >  'FCT': { lat: 9.0765, lng: 7.3986 },</span>
+<span class="cstat-no" title="statement not covered" >  'Gombe': { lat: 10.2897, lng: 11.1671 },</span>
+<span class="cstat-no" title="statement not covered" >  'Imo': { lat: 5.572, lng: 7.0588 },</span>
+<span class="cstat-no" title="statement not covered" >  'Jigawa': { lat: 12.228, lng: 9.561 },</span>
+<span class="cstat-no" title="statement not covered" >  'Kaduna': { lat: 10.5105, lng: 7.4165 },</span>
+<span class="cstat-no" title="statement not covered" >  'Kano': { lat: 12.0022, lng: 8.592 },</span>
+<span class="cstat-no" title="statement not covered" >  'Katsina': { lat: 12.3796, lng: 7.6302 },</span>
+<span class="cstat-no" title="statement not covered" >  'Kebbi': { lat: 12.4504, lng: 4.1997 },</span>
+<span class="cstat-no" title="statement not covered" >  'Kogi': { lat: 7.8004, lng: 6.7405 },</span>
+<span class="cstat-no" title="statement not covered" >  'Kwara': { lat: 8.9669, lng: 4.3874 },</span>
+<span class="cstat-no" title="statement not covered" >  'Lagos': { lat: 6.5244, lng: 3.3792 },</span>
+<span class="cstat-no" title="statement not covered" >  'Nasarawa': { lat: 8.5378, lng: 8.3206 },</span>
+<span class="cstat-no" title="statement not covered" >  'Niger': { lat: 9.9309, lng: 5.5983 },</span>
+<span class="cstat-no" title="statement not covered" >  'Ogun': { lat: 7.1604, lng: 3.3483 },</span>
+<span class="cstat-no" title="statement not covered" >  'Ondo': { lat: 7.2571, lng: 5.2058 },</span>
+<span class="cstat-no" title="statement not covered" >  'Osun': { lat: 7.5629, lng: 4.520 },</span>
+<span class="cstat-no" title="statement not covered" >  'Oyo': { lat: 8.119, lng: 3.4192 },</span>
+<span class="cstat-no" title="statement not covered" >  'Plateau': { lat: 9.2182, lng: 9.5179 },</span>
+<span class="cstat-no" title="statement not covered" >  'Rivers': { lat: 4.8582, lng: 6.9209 },</span>
+<span class="cstat-no" title="statement not covered" >  'Sokoto': { lat: 13.0667, lng: 5.2339 },</span>
+<span class="cstat-no" title="statement not covered" >  'Taraba': { lat: 8.8937, lng: 11.3608 },</span>
+<span class="cstat-no" title="statement not covered" >  'Yobe': { lat: 12.2939, lng: 11.4397 },</span>
+<span class="cstat-no" title="statement not covered" >  'Zamfara': { lat: 12.122, lng: 6.2236 },</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >export function normalizeState(input) {</span>
+<span class="cstat-no" title="statement not covered" >  if (!input) return null</span>
+<span class="cstat-no" title="statement not covered" >  const raw = String(input).trim().toLowerCase()</span>
+<span class="cstat-no" title="statement not covered" >  if (!raw) return null</span>
+<span class="cstat-no" title="statement not covered" >  // Direct alias</span>
+<span class="cstat-no" title="statement not covered" >  if (stateMap.has(raw)) return stateMap.get(raw)</span>
+<span class="cstat-no" title="statement not covered" >  // normalize dashes/spaces</span>
+<span class="cstat-no" title="statement not covered" >  const cleaned = raw.replace(/-/g, ' ').replace(/\s+/g, ' ').trim()</span>
+<span class="cstat-no" title="statement not covered" >  if (stateMap.has(cleaned)) return stateMap.get(cleaned)</span>
+<span class="cstat-no" title="statement not covered" >  return null</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >export function getLgasForState(state) {</span>
+<span class="cstat-no" title="statement not covered" >  const canon = normalizeState(state)</span>
+<span class="cstat-no" title="statement not covered" >  if (!canon) return []</span>
+<span class="cstat-no" title="statement not covered" >  const entry = NIGERIA_STATES.find(s =&gt; s.name === canon)</span>
+<span class="cstat-no" title="statement not covered" >  return entry ? [...entry.lgas] : []</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >export function allStates() {</span>
+<span class="cstat-no" title="statement not covered" >  return NIGERIA_STATES.map(s =&gt; s.name)</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >// Resolve a location request into { centre, boundary, state, lga, city, label }</span>
+<span class="cstat-no" title="statement not covered" >// - mode: 'current' | 'selected' | 'state' | 'lga' | 'city' | 'area' | 'nigeria'</span>
+<span class="cstat-no" title="statement not covered" >// - For point modes (current/selected), centre is coords.</span>
+<span class="cstat-no" title="statement not covered" >// - For boundary modes (state/lga/city/area), we attempt Nominatim geocode for bbox/centre.</span>
+<span class="cstat-no" title="statement not covered" >// - For nigeria, centre is national centroid, boundary is null (partitioned search)</span>
+<span class="cstat-no" title="statement not covered" >export async function resolveLocation({ mode, state, lga, city, area, coords } = {}) {</span>
+<span class="cstat-no" title="statement not covered" >  const m = (mode || 'current').toLowerCase()</span>
+<span class="cstat-no" title="statement not covered" >  // Nigeria-wide</span>
+<span class="cstat-no" title="statement not covered" >  if (m === 'nigeria') {</span>
+<span class="cstat-no" title="statement not covered" >    return {</span>
+<span class="cstat-no" title="statement not covered" >      centre: { lat: 9.082, lng: 8.6753 },</span>
+<span class="cstat-no" title="statement not covered" >      boundary: null,</span>
+<span class="cstat-no" title="statement not covered" >      state: null,</span>
+<span class="cstat-no" title="statement not covered" >      lga: null,</span>
+<span class="cstat-no" title="statement not covered" >      city: null,</span>
+<span class="cstat-no" title="statement not covered" >      label: 'Nigeria',</span>
+<span class="cstat-no" title="statement not covered" >      mode: 'nigeria',</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  // State / LGA / City / Area need centre via geocode</span>
+<span class="cstat-no" title="statement not covered" >  if (['state','lga','city','area','selected'].includes(m)) {</span>
+<span class="cstat-no" title="statement not covered" >    const canonState = normalizeState(state)</span>
+<span class="cstat-no" title="statement not covered" >    let query = ''</span>
+<span class="cstat-no" title="statement not covered" >    let label = ''</span>
+<span class="cstat-no" title="statement not covered" >    if (m === 'state' &amp;&amp; canonState) {</span>
+<span class="cstat-no" title="statement not covered" >      query = canonState + ', Nigeria'</span>
+<span class="cstat-no" title="statement not covered" >      label = canonState</span>
+<span class="cstat-no" title="statement not covered" >    } else if (m === 'lga' &amp;&amp; lga &amp;&amp; canonState) {</span>
+<span class="cstat-no" title="statement not covered" >      query = lga + ', ' + canonState + ', Nigeria'</span>
+<span class="cstat-no" title="statement not covered" >      label = lga + ', ' + canonState</span>
+<span class="cstat-no" title="statement not covered" >    } else if (m === 'lga' &amp;&amp; lga) {</span>
+<span class="cstat-no" title="statement not covered" >      query = lga + ', Nigeria'</span>
+<span class="cstat-no" title="statement not covered" >      label = lga</span>
+<span class="cstat-no" title="statement not covered" >    } else if ((m === 'city' || m === 'area') &amp;&amp; (city || area)) {</span>
+<span class="cstat-no" title="statement not covered" >      const place = city || area</span>
+<span class="cstat-no" title="statement not covered" >      query = place + (canonState ? ', ' + canonState : '') + ', Nigeria'</span>
+<span class="cstat-no" title="statement not covered" >      label = place + (canonState ? ', ' + canonState : '')</span>
+<span class="cstat-no" title="statement not covered" >    } else if (m === 'selected' &amp;&amp; coords) {</span>
+<span class="cstat-no" title="statement not covered" >      return {</span>
+<span class="cstat-no" title="statement not covered" >        centre: { lat: Number(coords.lat), lng: Number(coords.lng) },</span>
+<span class="cstat-no" title="statement not covered" >        boundary: null,</span>
+<span class="cstat-no" title="statement not covered" >        state: canonState || null,</span>
+<span class="cstat-no" title="statement not covered" >        lga: lga || null,</span>
+<span class="cstat-no" title="statement not covered" >        city: city || area || null,</span>
+<span class="cstat-no" title="statement not covered" >        label: label || (canonState || 'Selected location'),</span>
+<span class="cstat-no" title="statement not covered" >        mode: m,</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    // Fallback to state centre if we have one</span>
+<span class="cstat-no" title="statement not covered" >    if (canonState &amp;&amp; !query) {</span>
+<span class="cstat-no" title="statement not covered" >      query = canonState + ', Nigeria'</span>
+<span class="cstat-no" title="statement not covered" >      label = canonState</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    if (query) {</span>
+<span class="cstat-no" title="statement not covered" >      try {</span>
+<span class="cstat-no" title="statement not covered" >        const geocoded = await geocodeLocation(query)</span>
+<span class="cstat-no" title="statement not covered" >        if (geocoded) return { ...geocoded, state: canonState || geocoded.state || null, lga: lga || null, city: city || area || geocoded.city || null, label: geocoded.label || label, mode: m }</span>
+<span class="cstat-no" title="statement not covered" >      } catch (e) {</span>
+<span class="cstat-no" title="statement not covered" >        // fallback to centre</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >      if (canonState &amp;&amp; STATE_CENTRES[canonState]) {</span>
+<span class="cstat-no" title="statement not covered" >        return {</span>
+<span class="cstat-no" title="statement not covered" >          centre: { ...STATE_CENTRES[canonState] },</span>
+<span class="cstat-no" title="statement not covered" >          boundary: null,</span>
+<span class="cstat-no" title="statement not covered" >          state: canonState,</span>
+<span class="cstat-no" title="statement not covered" >          lga: lga || null,</span>
+<span class="cstat-no" title="statement not covered" >          city: city || area || null,</span>
+<span class="cstat-no" title="statement not covered" >          label,</span>
+<span class="cstat-no" title="statement not covered" >          mode: m,</span>
+<span class="cstat-no" title="statement not covered" >        }</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    // If we have coords, use them</span>
+<span class="cstat-no" title="statement not covered" >    if (coords &amp;&amp; Number.isFinite(coords.lat) &amp;&amp; Number.isFinite(coords.lng)) {</span>
+<span class="cstat-no" title="statement not covered" >      return {</span>
+<span class="cstat-no" title="statement not covered" >        centre: { lat: Number(coords.lat), lng: Number(coords.lng) },</span>
+<span class="cstat-no" title="statement not covered" >        boundary: null,</span>
+<span class="cstat-no" title="statement not covered" >        state: canonState || null,</span>
+<span class="cstat-no" title="statement not covered" >        lga: lga || null,</span>
+<span class="cstat-no" title="statement not covered" >        city: city || area || null,</span>
+<span class="cstat-no" title="statement not covered" >        label: label || 'Selected area',</span>
+<span class="cstat-no" title="statement not covered" >        mode: m,</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    return { centre: null, boundary: null, state: canonState || null, lga: lga || null, city: city || area || null, label: label || null, mode: m }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  // Current / Nearby / default — GPS centred</span>
+<span class="cstat-no" title="statement not covered" >  if (coords &amp;&amp; Number.isFinite(coords.lat) &amp;&amp; Number.isFinite(coords.lng)) {</span>
+<span class="cstat-no" title="statement not covered" >    const label = null</span>
+<span class="cstat-no" title="statement not covered" >    // Do not block — attempt reverse but return quickly</span>
+<span class="cstat-no" title="statement not covered" >    // Caller can use label if resolved; if not, fallback to coordinates string</span>
+<span class="cstat-no" title="statement not covered" >    return {</span>
+<span class="cstat-no" title="statement not covered" >      centre: { lat: Number(coords.lat), lng: Number(coords.lng) },</span>
+<span class="cstat-no" title="statement not covered" >      boundary: null,</span>
+<span class="cstat-no" title="statement not covered" >      state: normalizeState(state) || null,</span>
+<span class="cstat-no" title="statement not covered" >      lga: lga || null,</span>
+<span class="cstat-no" title="statement not covered" >      city: city || null,</span>
+<span class="cstat-no" title="statement not covered" >      label: label || (state ? normalizeState(state) : null),</span>
+<span class="cstat-no" title="statement not covered" >      mode: m,</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  // No coords — try to geocode state if provided</span>
+<span class="cstat-no" title="statement not covered" >  if (state) {</span>
+<span class="cstat-no" title="statement not covered" >    const canon = normalizeState(state)</span>
+<span class="cstat-no" title="statement not covered" >    if (canon &amp;&amp; STATE_CENTRES[canon]) {</span>
+<span class="cstat-no" title="statement not covered" >      return { centre: { ...STATE_CENTRES[canon] }, boundary: null, state: canon, lga: lga || null, city: city || null, label: canon, mode: m }</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  return { centre: null, boundary: null, state: normalizeState(state) || null, lga: lga || null, city: city || null, label: null, mode: m }</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >// Nominatim forward geocode for location centre/boundary</span>
+<span class="cstat-no" title="statement not covered" >async function geocodeLocation(query) {</span>
+<span class="cstat-no" title="statement not covered" >  if (!query) return null</span>
+<span class="cstat-no" title="statement not covered" >  const url = 'https://nominatim.openstreetmap.org/search?format=json&amp;limit=1&amp;addressdetails=1&amp;polygon_geojson=0&amp;q=' + encodeURIComponent(query)</span>
+<span class="cstat-no" title="statement not covered" >  const ctrl = new AbortController()</span>
+<span class="cstat-no" title="statement not covered" >  const timer = setTimeout(function () { ctrl.abort() }, 8000)</span>
+<span class="cstat-no" title="statement not covered" >  try {</span>
+<span class="cstat-no" title="statement not covered" >    const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'CareHub/1.0 (HealthCare-Ecosystem)' }, signal: ctrl.signal })</span>
+<span class="cstat-no" title="statement not covered" >    if (!res.ok) return null</span>
+<span class="cstat-no" title="statement not covered" >    const data = await res.json()</span>
+<span class="cstat-no" title="statement not covered" >    if (!Array.isArray(data) || data.length === 0) return null</span>
+<span class="cstat-no" title="statement not covered" >    const item = data[0]</span>
+<span class="cstat-no" title="statement not covered" >    const lat = parseFloat(item.lat)</span>
+<span class="cstat-no" title="statement not covered" >    const lon = parseFloat(item.lon)</span>
+<span class="cstat-no" title="statement not covered" >    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null</span>
+<span class="cstat-no" title="statement not covered" >    let boundary = null</span>
+<span class="cstat-no" title="statement not covered" >    if (Array.isArray(item.boundingbox) &amp;&amp; item.boundingbox.length === 4) {</span>
+<span class="cstat-no" title="statement not covered" >      const south = parseFloat(item.boundingbox[0])</span>
+<span class="cstat-no" title="statement not covered" >      const north = parseFloat(item.boundingbox[1])</span>
+<span class="cstat-no" title="statement not covered" >      const west = parseFloat(item.boundingbox[2])</span>
+<span class="cstat-no" title="statement not covered" >      const east = parseFloat(item.boundingbox[3])</span>
+<span class="cstat-no" title="statement not covered" >      if ([south,north,west,east].every(Number.isFinite)) {</span>
+<span class="cstat-no" title="statement not covered" >        boundary = { south, north, west, east }</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    const addr = (item.address &amp;&amp; typeof item.address === 'object') ? item.address : {}</span>
+<span class="cstat-no" title="statement not covered" >    const state = addr.state || null</span>
+<span class="cstat-no" title="statement not covered" >    const city = addr.city || addr.town || addr.village || addr.county || null</span>
+<span class="cstat-no" title="statement not covered" >    return {</span>
+<span class="cstat-no" title="statement not covered" >      centre: { lat, lng: lon },</span>
+<span class="cstat-no" title="statement not covered" >      boundary,</span>
+<span class="cstat-no" title="statement not covered" >      state: normalizeState(state) || state || null,</span>
+<span class="cstat-no" title="statement not covered" >      city,</span>
+<span class="cstat-no" title="statement not covered" >      lga: null,</span>
+<span class="cstat-no" title="statement not covered" >      label: item.display_name || query,</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >  } catch (e) {</span>
+<span class="cstat-no" title="statement not covered" >    return null</span>
+<span class="cstat-no" title="statement not covered" >  } finally {</span>
+<span class="cstat-no" title="statement not covered" >    clearTimeout(timer)</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >// Quick synchronous centre lookup without network — for pagination/partitioning hints</span>
+<span class="cstat-no" title="statement not covered" >export function centreForState(state) {</span>
+<span class="cstat-no" title="statement not covered" >  const canon = normalizeState(state)</span>
+<span class="cstat-no" title="statement not covered" >  if (!canon) return null</span>
+<span class="cstat-no" title="statement not covered" >  return STATE_CENTRES[canon] || null</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >export function centreForLga(state, lga) {</span>
+<span class="cstat-no" title="statement not covered" >  // NOTE: Returns state capital centre as approximation. True LGA centres require</span>
+<span class="cstat-no" title="statement not covered" >  // per-LGA geocoding or a static dataset. Distance calculations in LGA mode are</span>
+<span class="cstat-no" title="statement not covered" >  // approximate — acceptable for ranking, not for precise proximity.</span>
+<span class="cstat-no" title="statement not covered" >  return centreForState(state)</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-10-16T15:21:14.166Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

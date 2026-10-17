@@ -5,10 +5,10 @@ import { createHealthRepository } from '../../../modules/health/repositories'
 
 export default function AbuseStorage({ repository = createHealthRepository() }) {
   const [storageInfo, setStorageInfo] = useState([
-    { bucket: 'credentials', used: '—', limit: '5 MB', visibility: 'private', note: 'Hardened 20260822 — MIME whitelist + folder-scoped policies' },
-    { bucket: 'live-media', used: '—', limit: '—', visibility: 'public', note: 'Trailers + live items' },
-    { bucket: 'promo-images', used: '—', limit: '—', visibility: 'public', note: 'Promotions' },
-    { bucket: 'adr-evidence', used: '—', limit: '—', visibility: '—', note: 'ADR photos + hospital attachments' },
+    { bucket: 'credentials', used: 'Not tracked', limit: '5 MB', visibility: 'private', note: 'Hardened 20260822. MIME whitelist and folder scoped policies.' },
+    { bucket: 'live-media', used: 'Not tracked', limit: 'Not tracked', visibility: 'public', note: 'Trailers + live items' },
+    { bucket: 'promo-images', used: 'Not tracked', limit: 'Not tracked', visibility: 'public', note: 'Promotions' },
+    { bucket: 'adr-evidence', used: 'Not tracked', limit: 'Not tracked', visibility: 'Not tracked', note: 'ADR photos + hospital attachments' },
   ])
   const [loading, setLoading] = useState(false)
   const { msg, type, show: showToast } = useToast()
@@ -36,7 +36,7 @@ export default function AbuseStorage({ repository = createHealthRepository() }) 
 
       <Card style={{ padding: 14, background: 'var(--panel)', border: '1px solid var(--border)' }}>
         <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--fg)', marginBottom: 8 }}>Rate limits (next)</div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', padding: 10, border: '1px dashed var(--border)', borderRadius: 10, textAlign: 'center' }}>Top 10 RPM last hour from <code>postgres_logs</code> + Throttle/Block — ships after H2/H3; audit-only for now.</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', padding: 10, border: '1px dashed var(--border)', borderRadius: 10, textAlign: 'center' }}>Top 10 RPM last hour from <code>postgres_logs</code> + Throttle and Block arrive in a later release. This is audit only for now.</div>
       </Card>
       <Toast msg={msg} type={type} />
     </div>

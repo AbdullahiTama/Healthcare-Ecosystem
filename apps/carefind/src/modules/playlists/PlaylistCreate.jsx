@@ -269,7 +269,7 @@ function PlaylistCreate() {
               <button onClick={() => navigate(`/playlist/${playlistId}`)} disabled={parts.length === 0} style={{ width: '100%', padding: 14, background: parts.length === 0 ? theme.border : theme.tealDeep, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 15 }}>
                 {parts.length === 0
                   ? 'Add at least one part'
-                  : <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}><Check size={15} strokeWidth={3} aria-hidden="true" /> Done — view playlist</span>}
+                  : <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}><Check size={15} strokeWidth={3} aria-hidden="true" /> Done. View playlist</span>}
               </button>
             )}
           </div>

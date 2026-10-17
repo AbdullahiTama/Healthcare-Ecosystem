@@ -155,7 +155,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         barcode: incoming.barcode || existing.barcode,
         list_on_carefind: incoming.list_on_carefind,
       })
-      showToast('Existing product updated — stock combined!', { type: 'success' })
+      showToast('Existing product updated. Stock was combined.', { type: 'success' })
       setDuplicateWarning(null)
       setShowAdd(false)
       setEditItem(null)
@@ -206,10 +206,10 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       }
 
       await reload()
-      showToast('Cleaned up ' + duplicateGroups.length + ' duplicate group(s) — removed ' + idsToDelete.length + ' duplicate item(s)', { type: 'success' })
+      showToast('Cleaned up ' + duplicateGroups.length + ' duplicate group(s). Removed ' + idsToDelete.length + ' duplicate item(s)', { type: 'success' })
     } catch (e) {
       console.error('Error during cleanup:', e)
-      showToast('Could not finish cleanup — please try again. (' + (e.message || 'unknown error') + ')', { type: 'error' })
+      showToast('Could not finish the cleanup. Try again. (' + (e.message || 'unknown error') + ')', { type: 'error' })
     }
     setCleaningUp(false)
     setShowCleanup(false)
@@ -312,7 +312,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       }
       if (fresh.length > remaining) {
         fresh.splice(remaining)
-        showToast(`Basic plan allows ${importLimit.maxProducts.toLocaleString()} products — importing first ${remaining} of ${fresh.length + (fresh.length - remaining)} new products. Upgrade for more.`, { type: 'warning' })
+        showToast(`Basic plan allows ${importLimit.maxProducts.toLocaleString()} products. Importing the first ${remaining} of ${fresh.length + (fresh.length - remaining)} new products. Upgrade for more.`, { type: 'warning' })
       }
     }
     const BATCH = 20
@@ -402,10 +402,10 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         <StatCard
           icon={<TrendingUp />} label='Total Profit' value={(profit < 0 ? '-' : '') + fmt(Math.abs(profit))}
           tone={profit < 0 ? 'danger' : undefined}
-          sub={missingCost > 0 ? missingCost + ' item(s) have no cost price' : 'Stock Value − Cost'}
+          sub={missingCost > 0 ? missingCost + ' item(s) have no cost price' : 'Stock value at cost'}
         />
         <StatCard
-          icon={<Percent />} label='Profit Margin' value={margin === null ? '—' : Math.round(margin) + '%'}
+          icon={<Percent />} label='Profit Margin' value={margin === null ? 'Not set' : Math.round(margin) + '%'}
           tone={margin !== null && margin < 0 ? 'danger' : undefined}
           sub={margin === null ? 'No stock on hand' : 'Of stock value'}
         />
@@ -479,11 +479,11 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             },
             {
               key: 'shelf_label', label: 'Shelf', sortable: true,
-              render: p => <span style={{ fontSize: '12px', color: gray500 }}>{p.shelf_label || '—'}</span>
+              render: p => <span style={{ fontSize: '12px', color: gray500 }}>{p.shelf_label || 'Not set'}</span>
             },
             {
               key: 'generic_name', label: 'Generic Name', sortable: true,
-              render: p => <span style={{ fontSize: '12px', color: gray500 }}>{p.generic_name || p.genericName || '—'}</span>,
+              render: p => <span style={{ fontSize: '12px', color: gray500 }}>{p.generic_name || p.genericName || 'Not set'}</span>,
             },
             {
               key: 'cat', label: 'Cat', sortable: true,
@@ -496,7 +496,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             },
             {
               key: 'cost_price', label: 'Cost Price', sortable: true, align: 'right',
-              render: p => <span style={{ fontSize: '13px', color: gray500 }}>{p.cost_price ? fmt(p.cost_price) : '—'}</span>,
+              render: p => <span style={{ fontSize: '13px', color: gray500 }}>{p.cost_price ? fmt(p.cost_price) : 'Not set'}</span>,
             },
             {
               key: 'margin', label: 'Margin', sortable: true, align: 'right',
@@ -504,7 +504,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               render: p => {
                 const margin = p.price && p.cost_price ? Math.round(((p.price - p.cost_price) / p.price) * 100) : null
                 return <span style={{ fontSize: '12px', fontWeight: '700', color: margin !== null ? (margin > 30 ? success : warning) : gray400 }}>
-                  {margin !== null ? margin + '%' : '—'}
+                  {margin !== null ? margin + '%' : 'Not set'}
                 </span>
               },
             },
@@ -548,7 +548,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                   const now = new Date()
                   return Math.ceil((d - now) / (1000 * 60 * 60 * 24))
                 })()
-                if (!p.expiry_date) return <span style={{ color: gray500 }}>—</span>
+                if (!p.expiry_date) return <span style={{ color: gray500 }}>Not set</span>
                 if (days < 0) return <span style={{ color: danger, fontWeight: '700' }}>EXPIRED</span>
                 if (days <= 60) return <span style={{ color: warning, fontWeight: '700' }}>{days} days left</span>
                 return <span style={{ color: navy, fontWeight: '700' }}>Exp {new Date(p.expiry_date).toLocaleDateString('en-NG', { month: 'short', year: 'numeric' })}</span>
@@ -599,7 +599,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             1. Tap <strong>Download Template</strong><br />
             2. Open in <strong>Microsoft Excel</strong> or Google Sheets<br />
             3. Fill in your products row by row<br />
-            4. Set <strong>Expiry Date</strong> as YYYY-MM-DD (e.g. 2027-06-30) — leave blank if none<br />
+            4. Set <strong>Expiry Date</strong> as YYYY-MM-DD (for example 2027-06-30). Leave blank if there is none<br />
             5. Save as <strong>CSV</strong><br />
             6. Upload here
           </div>
@@ -651,7 +651,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       <Modal show={showCleanup} onClose={() => setShowCleanup(false)} title='Clean Up Duplicate Products'>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ padding: '14px', borderRadius: '12px', background: warningBg, border: `1px solid ${warning}`, fontSize: '13px', color: theme.amberText, lineHeight: '1.7' }}>
-            Found <strong>{duplicateGroups.length}</strong> group(s) of duplicate products already in your inventory — products matching by brand name or generic name. Merging will combine the stock of each group into one product and remove the rest.
+            Found <strong>{duplicateGroups.length}</strong> group(s) of duplicate products already in your inventory. These match on brand name or generic name. Merging will combine the stock of each group into one product and remove the rest.
           </div>
 
           <div style={{ maxHeight: '320px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -660,7 +660,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               return (
                 <div key={gi} style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${warning}`, background: warningBg }}>
                   <div style={{ fontSize: '11px', fontWeight: '700', color: warning, marginBottom: '8px' }}>
-                    GROUP {gi + 1} — {group.length} duplicates · will combine to {totalStock} units
+                    GROUP {gi + 1}: {group.length} duplicates · will combine to {totalStock} units
                   </div>
                   {group.map(p => (
                     <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '6px', background: theme.gray50, marginBottom: '4px', fontSize: '12px' }}>
@@ -697,7 +697,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <div style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `1px solid ${border}`, background: bg }}>
-                <div style={{ fontSize: '10px', fontWeight: '700', color: gray400, marginBottom: '6px' }}>EXISTING IN INVENTORY</div>
+                <div style={{ fontSize: '10px', fontWeight: '700', color: gray400, marginBottom: '6px' }}>Already in your inventory</div>
                 <div style={{ fontWeight: '700', fontSize: '14px' }}>{duplicateWarning.existing.name}</div>
                 {(duplicateWarning.existing.generic_name || duplicateWarning.existing.genericName) && (
                   <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{duplicateWarning.existing.generic_name || duplicateWarning.existing.genericName}</div>
@@ -802,7 +802,7 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
         {isEdit && !form.expiry_date && form.cat !== 'Services' && (
           <div role="status" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, fontSize: '13px', color: warning, lineHeight: 1.6 }}>
             <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span>No expiry date set — add one to enable expiry alerts and reports.</span>
+            <span>No expiry date set. Add one to turn on expiry alerts and reports.</span>
           </div>
         )}
         {form.cat !== 'Services' && (

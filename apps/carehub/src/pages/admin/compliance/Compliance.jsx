@@ -73,12 +73,12 @@ export default function Compliance({ repository = createComplianceRepository() }
       </Card>
 
       <Card style={{ padding: 12, background: 'var(--hairline)', border: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
-        <div style={{ fontSize: 12, color: 'var(--muted)' }}><b>Retention:</b> `admin_audit_log` 90d → 1yr (view 1yr sample via `since`), `export_logs` watermark+reason required, `moderation_actions` append-only. Purge job keeps hash.</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)' }}><b>Retention:</b> admin audit logs are kept for 90 days and then up to a year. Exports need a watermark and a reason. Moderation actions cannot be edited or deleted.</div>
         <span style={{ fontSize: 11, background: 'var(--panel)', padding: '4px 8px', borderRadius: 6, color: 'var(--muted)', border: '1px solid var(--border)' }}>NDPR / GDPR</span>
       </Card>
 
       {rows.length === 0 ? (
-        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<Shield size={28} />} message="No compliance requests — export/delete on request." /></Card>
+        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<Shield size={28} />} message="No compliance requests. Export and delete are handled on request." /></Card>
       ) : (
         <Card style={{ padding: 0, overflow: 'hidden', background: 'var(--panel)', border: '1px solid var(--border)' }}>
           <div style={{ overflowX: 'auto' }}>

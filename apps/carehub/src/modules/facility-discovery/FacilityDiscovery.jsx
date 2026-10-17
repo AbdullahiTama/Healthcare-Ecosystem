@@ -16,7 +16,7 @@ const MODE_OPTIONS = [
   { value: 'state', label: 'State' },
   { value: 'lga', label: 'LGA' },
   { value: 'city', label: 'City / Area' },
-  { value: 'nigeria', label: 'Nigeria-wide' },
+  { value: 'nigeria', label: 'Nationwide' },
 ]
 
 const VERIFICATION_OPTIONS = [
@@ -177,7 +177,7 @@ export default function FacilityDiscovery({ brand }) {
     <>
       <PageHeader
         title="Facility Discovery"
-        description="Find health facilities across Nigeria — by State, LGA, city or Nigeria-wide. MERGED, DEDUPED, RANKED."
+        description="Find health facilities across Nigeria by state, local government area, city or nationwide. Results from every source are merged, duplicates removed and ranked."
         primaryAction={{ label: 'Search', onClick: () => doSearch(true) }}
       />
       <div style={{ padding: '20px', maxWidth: '1100px' }}>
@@ -312,7 +312,7 @@ export default function FacilityDiscovery({ brand }) {
         {error && (
           <Card style={{ padding: '16px', background: '#fef2f2', border: '1px solid #fecaca', marginBottom: '16px' }}>
             <div style={{ fontSize: '13px', fontWeight: '700', color: danger }}>Error: {error}</div>
-            <div style={{ fontSize: '12px', color: gray600, marginTop: '4px' }}>Provider may be temporarily unavailable — degraded to cache + internal.</div>
+            <div style={{ fontSize: '12px', color: gray600, marginTop: '4px' }}>The map provider may be temporarily unavailable, so results are coming from the cache and our own records.</div>
           </Card>
         )}
 
@@ -321,7 +321,7 @@ export default function FacilityDiscovery({ brand }) {
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}><Building2 size={36} color={gray400} /></div>
             <div style={{ fontWeight: '800', color: navy, marginBottom: '6px' }}>No facilities found</div>
             <div style={{ fontSize: '13px', color: gray500, marginBottom: '12px' }}>Try a different State, LGA or category, or broaden your filters.</div>
-            <div style={{ fontSize: '12px', color: gray400 }}>Add this facility if you know it exists — it will be queued for manager review.</div>
+            <div style={{ fontSize: '12px', color: gray400 }}>Add this facility if you know it exists. A manager will review it before it is published.</div>
           </Card>
         )}
 

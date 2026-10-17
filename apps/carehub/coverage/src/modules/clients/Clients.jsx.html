@@ -1,0 +1,2011 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/modules/clients/Clients.jsx</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">src/modules/clients</a> Clients.jsx</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/558</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/558</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a>
+<a name='L290'></a><a href='#L290'>290</a>
+<a name='L291'></a><a href='#L291'>291</a>
+<a name='L292'></a><a href='#L292'>292</a>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a>
+<a name='L334'></a><a href='#L334'>334</a>
+<a name='L335'></a><a href='#L335'>335</a>
+<a name='L336'></a><a href='#L336'>336</a>
+<a name='L337'></a><a href='#L337'>337</a>
+<a name='L338'></a><a href='#L338'>338</a>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a>
+<a name='L342'></a><a href='#L342'>342</a>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a>
+<a name='L348'></a><a href='#L348'>348</a>
+<a name='L349'></a><a href='#L349'>349</a>
+<a name='L350'></a><a href='#L350'>350</a>
+<a name='L351'></a><a href='#L351'>351</a>
+<a name='L352'></a><a href='#L352'>352</a>
+<a name='L353'></a><a href='#L353'>353</a>
+<a name='L354'></a><a href='#L354'>354</a>
+<a name='L355'></a><a href='#L355'>355</a>
+<a name='L356'></a><a href='#L356'>356</a>
+<a name='L357'></a><a href='#L357'>357</a>
+<a name='L358'></a><a href='#L358'>358</a>
+<a name='L359'></a><a href='#L359'>359</a>
+<a name='L360'></a><a href='#L360'>360</a>
+<a name='L361'></a><a href='#L361'>361</a>
+<a name='L362'></a><a href='#L362'>362</a>
+<a name='L363'></a><a href='#L363'>363</a>
+<a name='L364'></a><a href='#L364'>364</a>
+<a name='L365'></a><a href='#L365'>365</a>
+<a name='L366'></a><a href='#L366'>366</a>
+<a name='L367'></a><a href='#L367'>367</a>
+<a name='L368'></a><a href='#L368'>368</a>
+<a name='L369'></a><a href='#L369'>369</a>
+<a name='L370'></a><a href='#L370'>370</a>
+<a name='L371'></a><a href='#L371'>371</a>
+<a name='L372'></a><a href='#L372'>372</a>
+<a name='L373'></a><a href='#L373'>373</a>
+<a name='L374'></a><a href='#L374'>374</a>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a>
+<a name='L379'></a><a href='#L379'>379</a>
+<a name='L380'></a><a href='#L380'>380</a>
+<a name='L381'></a><a href='#L381'>381</a>
+<a name='L382'></a><a href='#L382'>382</a>
+<a name='L383'></a><a href='#L383'>383</a>
+<a name='L384'></a><a href='#L384'>384</a>
+<a name='L385'></a><a href='#L385'>385</a>
+<a name='L386'></a><a href='#L386'>386</a>
+<a name='L387'></a><a href='#L387'>387</a>
+<a name='L388'></a><a href='#L388'>388</a>
+<a name='L389'></a><a href='#L389'>389</a>
+<a name='L390'></a><a href='#L390'>390</a>
+<a name='L391'></a><a href='#L391'>391</a>
+<a name='L392'></a><a href='#L392'>392</a>
+<a name='L393'></a><a href='#L393'>393</a>
+<a name='L394'></a><a href='#L394'>394</a>
+<a name='L395'></a><a href='#L395'>395</a>
+<a name='L396'></a><a href='#L396'>396</a>
+<a name='L397'></a><a href='#L397'>397</a>
+<a name='L398'></a><a href='#L398'>398</a>
+<a name='L399'></a><a href='#L399'>399</a>
+<a name='L400'></a><a href='#L400'>400</a>
+<a name='L401'></a><a href='#L401'>401</a>
+<a name='L402'></a><a href='#L402'>402</a>
+<a name='L403'></a><a href='#L403'>403</a>
+<a name='L404'></a><a href='#L404'>404</a>
+<a name='L405'></a><a href='#L405'>405</a>
+<a name='L406'></a><a href='#L406'>406</a>
+<a name='L407'></a><a href='#L407'>407</a>
+<a name='L408'></a><a href='#L408'>408</a>
+<a name='L409'></a><a href='#L409'>409</a>
+<a name='L410'></a><a href='#L410'>410</a>
+<a name='L411'></a><a href='#L411'>411</a>
+<a name='L412'></a><a href='#L412'>412</a>
+<a name='L413'></a><a href='#L413'>413</a>
+<a name='L414'></a><a href='#L414'>414</a>
+<a name='L415'></a><a href='#L415'>415</a>
+<a name='L416'></a><a href='#L416'>416</a>
+<a name='L417'></a><a href='#L417'>417</a>
+<a name='L418'></a><a href='#L418'>418</a>
+<a name='L419'></a><a href='#L419'>419</a>
+<a name='L420'></a><a href='#L420'>420</a>
+<a name='L421'></a><a href='#L421'>421</a>
+<a name='L422'></a><a href='#L422'>422</a>
+<a name='L423'></a><a href='#L423'>423</a>
+<a name='L424'></a><a href='#L424'>424</a>
+<a name='L425'></a><a href='#L425'>425</a>
+<a name='L426'></a><a href='#L426'>426</a>
+<a name='L427'></a><a href='#L427'>427</a>
+<a name='L428'></a><a href='#L428'>428</a>
+<a name='L429'></a><a href='#L429'>429</a>
+<a name='L430'></a><a href='#L430'>430</a>
+<a name='L431'></a><a href='#L431'>431</a>
+<a name='L432'></a><a href='#L432'>432</a>
+<a name='L433'></a><a href='#L433'>433</a>
+<a name='L434'></a><a href='#L434'>434</a>
+<a name='L435'></a><a href='#L435'>435</a>
+<a name='L436'></a><a href='#L436'>436</a>
+<a name='L437'></a><a href='#L437'>437</a>
+<a name='L438'></a><a href='#L438'>438</a>
+<a name='L439'></a><a href='#L439'>439</a>
+<a name='L440'></a><a href='#L440'>440</a>
+<a name='L441'></a><a href='#L441'>441</a>
+<a name='L442'></a><a href='#L442'>442</a>
+<a name='L443'></a><a href='#L443'>443</a>
+<a name='L444'></a><a href='#L444'>444</a>
+<a name='L445'></a><a href='#L445'>445</a>
+<a name='L446'></a><a href='#L446'>446</a>
+<a name='L447'></a><a href='#L447'>447</a>
+<a name='L448'></a><a href='#L448'>448</a>
+<a name='L449'></a><a href='#L449'>449</a>
+<a name='L450'></a><a href='#L450'>450</a>
+<a name='L451'></a><a href='#L451'>451</a>
+<a name='L452'></a><a href='#L452'>452</a>
+<a name='L453'></a><a href='#L453'>453</a>
+<a name='L454'></a><a href='#L454'>454</a>
+<a name='L455'></a><a href='#L455'>455</a>
+<a name='L456'></a><a href='#L456'>456</a>
+<a name='L457'></a><a href='#L457'>457</a>
+<a name='L458'></a><a href='#L458'>458</a>
+<a name='L459'></a><a href='#L459'>459</a>
+<a name='L460'></a><a href='#L460'>460</a>
+<a name='L461'></a><a href='#L461'>461</a>
+<a name='L462'></a><a href='#L462'>462</a>
+<a name='L463'></a><a href='#L463'>463</a>
+<a name='L464'></a><a href='#L464'>464</a>
+<a name='L465'></a><a href='#L465'>465</a>
+<a name='L466'></a><a href='#L466'>466</a>
+<a name='L467'></a><a href='#L467'>467</a>
+<a name='L468'></a><a href='#L468'>468</a>
+<a name='L469'></a><a href='#L469'>469</a>
+<a name='L470'></a><a href='#L470'>470</a>
+<a name='L471'></a><a href='#L471'>471</a>
+<a name='L472'></a><a href='#L472'>472</a>
+<a name='L473'></a><a href='#L473'>473</a>
+<a name='L474'></a><a href='#L474'>474</a>
+<a name='L475'></a><a href='#L475'>475</a>
+<a name='L476'></a><a href='#L476'>476</a>
+<a name='L477'></a><a href='#L477'>477</a>
+<a name='L478'></a><a href='#L478'>478</a>
+<a name='L479'></a><a href='#L479'>479</a>
+<a name='L480'></a><a href='#L480'>480</a>
+<a name='L481'></a><a href='#L481'>481</a>
+<a name='L482'></a><a href='#L482'>482</a>
+<a name='L483'></a><a href='#L483'>483</a>
+<a name='L484'></a><a href='#L484'>484</a>
+<a name='L485'></a><a href='#L485'>485</a>
+<a name='L486'></a><a href='#L486'>486</a>
+<a name='L487'></a><a href='#L487'>487</a>
+<a name='L488'></a><a href='#L488'>488</a>
+<a name='L489'></a><a href='#L489'>489</a>
+<a name='L490'></a><a href='#L490'>490</a>
+<a name='L491'></a><a href='#L491'>491</a>
+<a name='L492'></a><a href='#L492'>492</a>
+<a name='L493'></a><a href='#L493'>493</a>
+<a name='L494'></a><a href='#L494'>494</a>
+<a name='L495'></a><a href='#L495'>495</a>
+<a name='L496'></a><a href='#L496'>496</a>
+<a name='L497'></a><a href='#L497'>497</a>
+<a name='L498'></a><a href='#L498'>498</a>
+<a name='L499'></a><a href='#L499'>499</a>
+<a name='L500'></a><a href='#L500'>500</a>
+<a name='L501'></a><a href='#L501'>501</a>
+<a name='L502'></a><a href='#L502'>502</a>
+<a name='L503'></a><a href='#L503'>503</a>
+<a name='L504'></a><a href='#L504'>504</a>
+<a name='L505'></a><a href='#L505'>505</a>
+<a name='L506'></a><a href='#L506'>506</a>
+<a name='L507'></a><a href='#L507'>507</a>
+<a name='L508'></a><a href='#L508'>508</a>
+<a name='L509'></a><a href='#L509'>509</a>
+<a name='L510'></a><a href='#L510'>510</a>
+<a name='L511'></a><a href='#L511'>511</a>
+<a name='L512'></a><a href='#L512'>512</a>
+<a name='L513'></a><a href='#L513'>513</a>
+<a name='L514'></a><a href='#L514'>514</a>
+<a name='L515'></a><a href='#L515'>515</a>
+<a name='L516'></a><a href='#L516'>516</a>
+<a name='L517'></a><a href='#L517'>517</a>
+<a name='L518'></a><a href='#L518'>518</a>
+<a name='L519'></a><a href='#L519'>519</a>
+<a name='L520'></a><a href='#L520'>520</a>
+<a name='L521'></a><a href='#L521'>521</a>
+<a name='L522'></a><a href='#L522'>522</a>
+<a name='L523'></a><a href='#L523'>523</a>
+<a name='L524'></a><a href='#L524'>524</a>
+<a name='L525'></a><a href='#L525'>525</a>
+<a name='L526'></a><a href='#L526'>526</a>
+<a name='L527'></a><a href='#L527'>527</a>
+<a name='L528'></a><a href='#L528'>528</a>
+<a name='L529'></a><a href='#L529'>529</a>
+<a name='L530'></a><a href='#L530'>530</a>
+<a name='L531'></a><a href='#L531'>531</a>
+<a name='L532'></a><a href='#L532'>532</a>
+<a name='L533'></a><a href='#L533'>533</a>
+<a name='L534'></a><a href='#L534'>534</a>
+<a name='L535'></a><a href='#L535'>535</a>
+<a name='L536'></a><a href='#L536'>536</a>
+<a name='L537'></a><a href='#L537'>537</a>
+<a name='L538'></a><a href='#L538'>538</a>
+<a name='L539'></a><a href='#L539'>539</a>
+<a name='L540'></a><a href='#L540'>540</a>
+<a name='L541'></a><a href='#L541'>541</a>
+<a name='L542'></a><a href='#L542'>542</a>
+<a name='L543'></a><a href='#L543'>543</a>
+<a name='L544'></a><a href='#L544'>544</a>
+<a name='L545'></a><a href='#L545'>545</a>
+<a name='L546'></a><a href='#L546'>546</a>
+<a name='L547'></a><a href='#L547'>547</a>
+<a name='L548'></a><a href='#L548'>548</a>
+<a name='L549'></a><a href='#L549'>549</a>
+<a name='L550'></a><a href='#L550'>550</a>
+<a name='L551'></a><a href='#L551'>551</a>
+<a name='L552'></a><a href='#L552'>552</a>
+<a name='L553'></a><a href='#L553'>553</a>
+<a name='L554'></a><a href='#L554'>554</a>
+<a name='L555'></a><a href='#L555'>555</a>
+<a name='L556'></a><a href='#L556'>556</a>
+<a name='L557'></a><a href='#L557'>557</a>
+<a name='L558'></a><a href='#L558'>558</a>
+<a name='L559'></a><a href='#L559'>559</a>
+<a name='L560'></a><a href='#L560'>560</a>
+<a name='L561'></a><a href='#L561'>561</a>
+<a name='L562'></a><a href='#L562'>562</a>
+<a name='L563'></a><a href='#L563'>563</a>
+<a name='L564'></a><a href='#L564'>564</a>
+<a name='L565'></a><a href='#L565'>565</a>
+<a name='L566'></a><a href='#L566'>566</a>
+<a name='L567'></a><a href='#L567'>567</a>
+<a name='L568'></a><a href='#L568'>568</a>
+<a name='L569'></a><a href='#L569'>569</a>
+<a name='L570'></a><a href='#L570'>570</a>
+<a name='L571'></a><a href='#L571'>571</a>
+<a name='L572'></a><a href='#L572'>572</a>
+<a name='L573'></a><a href='#L573'>573</a>
+<a name='L574'></a><a href='#L574'>574</a>
+<a name='L575'></a><a href='#L575'>575</a>
+<a name='L576'></a><a href='#L576'>576</a>
+<a name='L577'></a><a href='#L577'>577</a>
+<a name='L578'></a><a href='#L578'>578</a>
+<a name='L579'></a><a href='#L579'>579</a>
+<a name='L580'></a><a href='#L580'>580</a>
+<a name='L581'></a><a href='#L581'>581</a>
+<a name='L582'></a><a href='#L582'>582</a>
+<a name='L583'></a><a href='#L583'>583</a>
+<a name='L584'></a><a href='#L584'>584</a>
+<a name='L585'></a><a href='#L585'>585</a>
+<a name='L586'></a><a href='#L586'>586</a>
+<a name='L587'></a><a href='#L587'>587</a>
+<a name='L588'></a><a href='#L588'>588</a>
+<a name='L589'></a><a href='#L589'>589</a>
+<a name='L590'></a><a href='#L590'>590</a>
+<a name='L591'></a><a href='#L591'>591</a>
+<a name='L592'></a><a href='#L592'>592</a>
+<a name='L593'></a><a href='#L593'>593</a>
+<a name='L594'></a><a href='#L594'>594</a>
+<a name='L595'></a><a href='#L595'>595</a>
+<a name='L596'></a><a href='#L596'>596</a>
+<a name='L597'></a><a href='#L597'>597</a>
+<a name='L598'></a><a href='#L598'>598</a>
+<a name='L599'></a><a href='#L599'>599</a>
+<a name='L600'></a><a href='#L600'>600</a>
+<a name='L601'></a><a href='#L601'>601</a>
+<a name='L602'></a><a href='#L602'>602</a>
+<a name='L603'></a><a href='#L603'>603</a>
+<a name='L604'></a><a href='#L604'>604</a>
+<a name='L605'></a><a href='#L605'>605</a>
+<a name='L606'></a><a href='#L606'>606</a>
+<a name='L607'></a><a href='#L607'>607</a>
+<a name='L608'></a><a href='#L608'>608</a>
+<a name='L609'></a><a href='#L609'>609</a>
+<a name='L610'></a><a href='#L610'>610</a>
+<a name='L611'></a><a href='#L611'>611</a>
+<a name='L612'></a><a href='#L612'>612</a>
+<a name='L613'></a><a href='#L613'>613</a>
+<a name='L614'></a><a href='#L614'>614</a>
+<a name='L615'></a><a href='#L615'>615</a>
+<a name='L616'></a><a href='#L616'>616</a>
+<a name='L617'></a><a href='#L617'>617</a>
+<a name='L618'></a><a href='#L618'>618</a>
+<a name='L619'></a><a href='#L619'>619</a>
+<a name='L620'></a><a href='#L620'>620</a>
+<a name='L621'></a><a href='#L621'>621</a>
+<a name='L622'></a><a href='#L622'>622</a>
+<a name='L623'></a><a href='#L623'>623</a>
+<a name='L624'></a><a href='#L624'>624</a>
+<a name='L625'></a><a href='#L625'>625</a>
+<a name='L626'></a><a href='#L626'>626</a>
+<a name='L627'></a><a href='#L627'>627</a>
+<a name='L628'></a><a href='#L628'>628</a>
+<a name='L629'></a><a href='#L629'>629</a>
+<a name='L630'></a><a href='#L630'>630</a>
+<a name='L631'></a><a href='#L631'>631</a>
+<a name='L632'></a><a href='#L632'>632</a>
+<a name='L633'></a><a href='#L633'>633</a>
+<a name='L634'></a><a href='#L634'>634</a>
+<a name='L635'></a><a href='#L635'>635</a>
+<a name='L636'></a><a href='#L636'>636</a>
+<a name='L637'></a><a href='#L637'>637</a>
+<a name='L638'></a><a href='#L638'>638</a>
+<a name='L639'></a><a href='#L639'>639</a>
+<a name='L640'></a><a href='#L640'>640</a>
+<a name='L641'></a><a href='#L641'>641</a>
+<a name='L642'></a><a href='#L642'>642</a>
+<a name='L643'></a><a href='#L643'>643</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >import { useState, useEffect, useMemo } from 'react'</span></span></span>
+import { Users, UserPlus, DollarSign, Search, Download, Upload, ShoppingCart, Calendar, Landmark, Clipboard, History, FileUp, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { clientRepository, isDuplicateError } from './repositories'
+import { PHARMACY_TYPE_LABEL } from '../consultation/PharmacyForm'
+import { fmt, todayDate } from '../../lib/utils'
+import { theme } from '../../styles/theme'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
+import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients } from '../../hooks/queries'
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, bg, danger, dangerBg, warning, warningBg, success } = theme</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const HISTORY_TABS = [</span>
+<span class="cstat-no" title="statement not covered" >  ['timeline', History, 'Timeline'],</span>
+<span class="cstat-no" title="statement not covered" >  ['sales', ShoppingCart, 'Sales'],</span>
+<span class="cstat-no" title="statement not covered" >  ['appointments', Calendar, 'Appointments'],</span>
+<span class="cstat-no" title="statement not covered" >  ['consultations', Clipboard, 'Consultations'],</span>
+<span class="cstat-no" title="statement not covered" >  ['debts', Landmark, 'Debts'],</span>
+<span class="cstat-no" title="statement not covered" >]</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const parseC = (c) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >  try { return typeof c.data === 'string' ? JSON.parse(c.data) : (c.data || {}) } catch (e) { return {} }</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const saleItems = (s) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >  try { return JSON.parse(s.items || '[]') } catch (e) { return [] }</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >function SourcePill({ source }) {</span>
+<span class="cstat-no" title="statement not covered" >  if (source === 'recommended') return &lt;Pill label='rec' type='purple' style={{ fontSize: 9 }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >  if (source === 'dispensed') return &lt;Pill label='dispensed' type='blue' style={{ fontSize: 9 }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >  return null</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >function SaleRow({ s }) {</span>
+<span class="cstat-no" title="statement not covered" >  const items = saleItems(s)</span>
+<span class="cstat-no" title="statement not covered" >  return (</span>
+<span class="cstat-no" title="statement not covered" >    &lt;div style={{ padding: '12px 14px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;span style={{ fontWeight: '700', fontSize: '12px', color: navy }}&gt;{s.txn_no || 'Not set'}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;span style={{ fontSize: '12px', fontWeight: '700', color: tealDeep }}&gt;{fmt(s.total || 0)}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;div style={{ fontSize: '11px', color: gray500, marginTop: '3px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        {s.created_at?.slice(0, 16).replace('T', ' ') || 'Not set'} · {s.payment_method || 'Not set'}{s.balance &gt; 0 ? ' · Balance: ' + fmt(s.balance) : ''}</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      {items.length &gt; 0 &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: '11px', color: gray400, marginTop: '3px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          {items.map(i =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >            &lt;span key={i.id || i.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              {i.name + ' x' + i.qty}</span>
+<span class="cstat-no" title="statement not covered" >              &lt;SourcePill source={i.source} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >          ))}</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+      )}
+<span class="cstat-no" title="statement not covered" >    &lt;/div&gt;</span>
+  )
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >function ConsultationRow({ c }) {</span>
+<span class="cstat-no" title="statement not covered" >  const d = parseC(c)</span>
+<span class="cstat-no" title="statement not covered" >  const subTypes = (d.type_of_consultation?.selected || []).map(k =&gt; PHARMACY_TYPE_LABEL[k]).filter(Boolean)</span>
+<span class="cstat-no" title="statement not covered" >  const skinType = d.assessment?.skin_type || ''</span>
+<span class="cstat-no" title="statement not covered" >  const prods = c.recommended_products || []</span>
+<span class="cstat-no" title="statement not covered" >  const isPh = c.consultation_type === 'pharmacy'</span>
+<span class="cstat-no" title="statement not covered" >  return (</span>
+<span class="cstat-no" title="statement not covered" >    &lt;div style={{ padding: '12px 14px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;span style={{ fontWeight: '700', fontSize: '12px', color: navy }}&gt;{c.consultation_date || 'Not set'}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ display: 'flex', gap: 5 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Pill label={isPh ? 'Pharmacy' : 'Skincare'} type={isPh ? 'blue' : 'green'} style={{ fontSize: 9 }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          {isPh ? subTypes.map(s =&gt; &lt;Pill key={s} label={s} type='teal' style={{ fontSize: 9 }} /&gt;) : skinType &amp;&amp; &lt;Pill label={skinType} type='teal' style={{ fontSize: 9 }} /&gt;}</span>
+<span class="cstat-no" title="statement not covered" >          {prods.length &gt; 0 &amp;&amp; &lt;Pill label={prods.length + ' rec'} type='purple' style={{ fontSize: 9 }} /&gt;}</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      {c.provider_name &amp;&amp; &lt;div style={{ fontSize: '11px', color: gray500, marginTop: '3px' }}&gt;{isPh ? 'Pharmacist: ' : 'Therapist: '}{c.provider_name}&lt;/div&gt;}</span>
+<span class="cstat-no" title="statement not covered" >      {prods.length &gt; 0 &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: '11px', color: gray400, marginTop: '3px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          {prods.map(p =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >            &lt;span key={p.id || p.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              {p.name + (p.qty &gt; 1 ? ' x' + p.qty : '')}</span>
+<span class="cstat-no" title="statement not covered" >              &lt;SourcePill source={p.source} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >          ))}</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+      )}
+<span class="cstat-no" title="statement not covered" >    &lt;/div&gt;</span>
+  )
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >function TimelineRow({ e }) {</span>
+<span class="cstat-no" title="statement not covered" >  if (e.kind === 'sale') return &lt;SaleRow s={e} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >  return &lt;ConsultationRow c={e} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export default function Clients({ brand, role, perms }) {</span>
+<span class="cstat-no" title="statement not covered" >  const navigate = useNavigate()</span>
+<span class="cstat-no" title="statement not covered" >  const canConsult = brand?.business_type === 'skincare' || brand?.business_type === 'pharmacy'</span>
+<span class="cstat-no" title="statement not covered" >  const [search, setSearch] = useState('')</span>
+<span class="cstat-no" title="statement not covered" >  const [page, setPage] = useState(0)</span>
+<span class="cstat-no" title="statement not covered" >  const [saving, setSaving] = useState(false)</span>
+<span class="cstat-no" title="statement not covered" >  const [showAdd, setShowAdd] = useState(false)</span>
+<span class="cstat-no" title="statement not covered" >  const [selected, setSelected] = useState(null)</span>
+<span class="cstat-no" title="statement not covered" >  const [form, setForm] = useState({})</span>
+<span class="cstat-no" title="statement not covered" >  const [historyTab, setHistoryTab] = useState('timeline')</span>
+<span class="cstat-no" title="statement not covered" >  const [filters, setFilters] = useState({ dateFrom: '', dateTo: '', source: '', product: '', type: '' })</span>
+<span class="cstat-no" title="statement not covered" >  const setF = (k, v) =&gt; setFilters(p =&gt; ({ ...p, [k]: v }))</span>
+<span class="cstat-no" title="statement not covered" >  const { msg, type, actionLabel, onAction, show: showToast } = useToast()</span>
+<span class="cstat-no" title="statement not covered" >  const f = (k, v) =&gt; setForm(p =&gt; ({ ...p, [k]: v }))</span>
+  // Bulk upload state — mirrors the Inventory CSV flow (download template,
+  // fill in Excel, save as CSV, upload here).
+<span class="cstat-no" title="statement not covered" >  const [showUpload, setShowUpload] = useState(false)</span>
+<span class="cstat-no" title="statement not covered" >  const [uploadData, setUploadData] = useState([])</span>
+<span class="cstat-no" title="statement not covered" >  const [uploadError, setUploadError] = useState('')</span>
+&nbsp;
+  // React Query hooks
+<span class="cstat-no" title="statement not covered" >  const { data: clients = [], isLoading: loading } = useClients(brand?.id)</span>
+<span class="cstat-no" title="statement not covered" >  const createClient = useCreateClient(brand?.id)</span>
+<span class="cstat-no" title="statement not covered" >  const createManyClients = useCreateManyClients(brand?.id)</span>
+<span class="cstat-no" title="statement not covered" >  const importing = createManyClients.isPending</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  useEffect(() =&gt; { setPage(0) }, [search, clients.length])</span>
+&nbsp;
+  // React Query hooks for client detail
+<span class="cstat-no" title="statement not covered" >  const { data: clientSales = [] } = useClientSales(selected?.id, brand?.id)</span>
+<span class="cstat-no" title="statement not covered" >  const { data: clientConsults = [] } = useClientConsults(selected?.id, brand?.id)</span>
+<span class="cstat-no" title="statement not covered" >  const { data: history = [], isLoading: historyLoading } = useClientHistory(</span>
+<span class="cstat-no" title="statement not covered" >    selected?.id, brand?.id, historyTab, clientSales, clientConsults</span>
+<span class="cstat-no" title="statement not covered" >  )</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  async function save() {</span>
+<span class="cstat-no" title="statement not covered" >    if (!form.firstName || !form.lastName || !form.phone) { showToast('Please enter client first name, surname and phone number.', { type: 'warning' }); return }</span>
+<span class="cstat-no" title="statement not covered" >    setSaving(true)</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      await createClient.mutateAsync({</span>
+<span class="cstat-no" title="statement not covered" >        full_name: [form.firstName, form.lastName].filter(Boolean).map(s =&gt; s.trim()).join(' '),</span>
+<span class="cstat-no" title="statement not covered" >        phone: form.phone,</span>
+<span class="cstat-no" title="statement not covered" >        email: form.email || '',</span>
+<span class="cstat-no" title="statement not covered" >        address: form.address || '',</span>
+<span class="cstat-no" title="statement not covered" >        date_of_birth: form.dob || '',</span>
+<span class="cstat-no" title="statement not covered" >        gender: form.gender || '',</span>
+<span class="cstat-no" title="statement not covered" >        notes: form.notes || '',</span>
+<span class="cstat-no" title="statement not covered" >        total_spend: 0,</span>
+<span class="cstat-no" title="statement not covered" >        visit_count: 0,</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >      showToast('Client added!', { type: 'success' })</span>
+<span class="cstat-no" title="statement not covered" >      setForm({}); setShowAdd(false)</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) { showToast(isDuplicateError(e) ? 'A client with this phone number already exists.' : 'Could not save client. Please try again.', { type: 'error' }) }</span>
+<span class="cstat-no" title="statement not covered" >    finally { setSaving(false) }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  function exportCsv() {</span>
+<span class="cstat-no" title="statement not covered" >    const rows = [['Name', 'Phone', 'Email', 'Gender', 'Date of Birth', 'Address', 'Total Spend', 'Visits', 'Joined']]</span>
+<span class="cstat-no" title="statement not covered" >    clients.forEach(c =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >      rows.push([c.full_name || '', c.phone || '', c.email || '', c.gender || '', c.date_of_birth || '', c.address || '', c.total_spend || 0, c.visit_count || 0, c.created_at?.split('T')[0] || ''])</span>
+<span class="cstat-no" title="statement not covered" >    })</span>
+<span class="cstat-no" title="statement not covered" >    const csv = rows.map(r =&gt; r.map(v =&gt; '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n')</span>
+<span class="cstat-no" title="statement not covered" >    const blob = new Blob([csv], { type: 'text/csv' })</span>
+<span class="cstat-no" title="statement not covered" >    const url = URL.createObjectURL(blob)</span>
+<span class="cstat-no" title="statement not covered" >    const a = document.createElement('a'); a.href = url; a.download = 'CareHub_Clients.csv'; a.click()</span>
+<span class="cstat-no" title="statement not covered" >    URL.revokeObjectURL(url)</span>
+<span class="cstat-no" title="statement not covered" >    showToast('Clients exported as CSV!', { type: 'success' })</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+  // ── Bulk upload (CSV) ───────────────────────────────────────────────────────
+  // Mirrors the Inventory product upload: download a template, fill it in
+  // Excel, save as CSV, upload here. Phone number is the dedupe key — the
+  // point of the feature is importing an existing customer/patient database
+  // without creating duplicates.
+<span class="cstat-no" title="statement not covered" >  const normPhone = (p) =&gt; String(p || '').replace(/[^0-9]/g, '')</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  function downloadClientTemplate() {</span>
+<span class="cstat-no" title="statement not covered" >    const rows = [</span>
+<span class="cstat-no" title="statement not covered" >      ['First Name', 'Last Name', 'Phone', 'Email', 'Gender', 'Date of Birth', 'Address', 'Notes'],</span>
+<span class="cstat-no" title="statement not covered" >      ['Ada', 'Okafor', '08012345678', 'ada@email.com', 'Female', '1990-05-12', '12 Broad Street, Lagos', 'VIP customer'],</span>
+<span class="cstat-no" title="statement not covered" >      ['Musa', 'Bello', '08098765432', '', 'Male', '1985-01-30', '', ''],</span>
+<span class="cstat-no" title="statement not covered" >    ]</span>
+<span class="cstat-no" title="statement not covered" >    const csv = rows.map(r =&gt; r.map(v =&gt; '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n')</span>
+<span class="cstat-no" title="statement not covered" >    const blob = new Blob([csv], { type: 'text/csv' })</span>
+<span class="cstat-no" title="statement not covered" >    const url = URL.createObjectURL(blob)</span>
+<span class="cstat-no" title="statement not covered" >    const a = document.createElement('a'); a.href = url; a.download = 'CareHub_Clients_Template.csv'; a.click()</span>
+<span class="cstat-no" title="statement not covered" >    URL.revokeObjectURL(url)</span>
+<span class="cstat-no" title="statement not covered" >    showToast('Template downloaded! Fill in Excel, save as CSV, then upload.', { type: 'success' })</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  function handleClientFileUpload(e) {</span>
+<span class="cstat-no" title="statement not covered" >    const file = e.target.files[0]; if (!file) return</span>
+<span class="cstat-no" title="statement not covered" >    setUploadError(''); setUploadData([])</span>
+<span class="cstat-no" title="statement not covered" >    const reader = new FileReader()</span>
+<span class="cstat-no" title="statement not covered" >    reader.onload = ev =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >      try {</span>
+<span class="cstat-no" title="statement not covered" >        const lines = ev.target.result.split('\n').filter(l =&gt; l.trim())</span>
+<span class="cstat-no" title="statement not covered" >        if (lines.length &lt; 2) { setUploadError('File is empty or has no clients.'); return }</span>
+<span class="cstat-no" title="statement not covered" >        const parsed = lines.slice(1).map(line =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >          const cols = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c =&gt; c.replace(/^"|"$/g, '').trim())</span>
+<span class="cstat-no" title="statement not covered" >          if (!cols[0] &amp;&amp; !cols[1] &amp;&amp; !cols[2]) return null</span>
+<span class="cstat-no" title="statement not covered" >          const firstName = cols[0] || ''</span>
+<span class="cstat-no" title="statement not covered" >          const lastName = cols[1] || ''</span>
+<span class="cstat-no" title="statement not covered" >          return {</span>
+<span class="cstat-no" title="statement not covered" >            full_name: [firstName, lastName].filter(Boolean).join(' '),</span>
+<span class="cstat-no" title="statement not covered" >            phone: cols[2] || '',</span>
+<span class="cstat-no" title="statement not covered" >            email: cols[3] || '',</span>
+<span class="cstat-no" title="statement not covered" >            gender: cols[4] || '',</span>
+<span class="cstat-no" title="statement not covered" >            date_of_birth: cols[5] || '',</span>
+<span class="cstat-no" title="statement not covered" >            address: cols[6] || '',</span>
+<span class="cstat-no" title="statement not covered" >            notes: cols[7] || '',</span>
+<span class="cstat-no" title="statement not covered" >          }</span>
+<span class="cstat-no" title="statement not covered" >        }).filter(Boolean)</span>
+<span class="cstat-no" title="statement not covered" >        if (parsed.length === 0) { setUploadError('No valid clients found.'); return }</span>
+<span class="cstat-no" title="statement not covered" >        setUploadData(parsed)</span>
+<span class="cstat-no" title="statement not covered" >      } catch (err) { setUploadError('Error reading file. Use the downloaded template.') }</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    reader.readAsText(file); e.target.value = ''</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  async function importClients() {</span>
+<span class="cstat-no" title="statement not covered" >    if (uploadData.length === 0) return</span>
+<span class="cstat-no" title="statement not covered" >    showToast('Importing ' + uploadData.length + ' clients…', { type: 'info' })</span>
+<span class="cstat-no" title="statement not covered" >    const existingPhones = new Set(clients.map(c =&gt; normPhone(c.phone)))</span>
+<span class="cstat-no" title="statement not covered" >    const fresh = []</span>
+<span class="cstat-no" title="statement not covered" >    let skipped = 0</span>
+<span class="cstat-no" title="statement not covered" >    let invalid = 0</span>
+<span class="cstat-no" title="statement not covered" >    const invalidNames = []</span>
+<span class="cstat-no" title="statement not covered" >    for (const c of uploadData) {</span>
+<span class="cstat-no" title="statement not covered" >      if (!normPhone(c.phone)) {</span>
+<span class="cstat-no" title="statement not covered" >        invalid++</span>
+<span class="cstat-no" title="statement not covered" >        if (invalidNames.length &lt; 5) invalidNames.push((c.full_name || 'Unknown') + ' (no phone)')</span>
+<span class="cstat-no" title="statement not covered" >        continue</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >      if (existingPhones.has(normPhone(c.phone))) { skipped++; continue }</span>
+<span class="cstat-no" title="statement not covered" >      existingPhones.add(normPhone(c.phone))</span>
+<span class="cstat-no" title="statement not covered" >      fresh.push({</span>
+<span class="cstat-no" title="statement not covered" >        full_name: c.full_name || c.phone,</span>
+<span class="cstat-no" title="statement not covered" >        phone: c.phone,</span>
+<span class="cstat-no" title="statement not covered" >        email: c.email || '',</span>
+<span class="cstat-no" title="statement not covered" >        address: c.address || '',</span>
+<span class="cstat-no" title="statement not covered" >        date_of_birth: c.date_of_birth || '',</span>
+<span class="cstat-no" title="statement not covered" >        gender: c.gender || '',</span>
+<span class="cstat-no" title="statement not covered" >        notes: c.notes || '',</span>
+<span class="cstat-no" title="statement not covered" >        total_spend: 0,</span>
+<span class="cstat-no" title="statement not covered" >        visit_count: 0,</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+    // Server-side duplicates (a phone added after the list loaded — concurrent
+    // upload, a single add, a direct API write) are rejected by the unique
+    // index and counted as skipped here, not as failures.
+<span class="cstat-no" title="statement not covered" >    const { added, skipped: serverSkipped, failed } = await createManyClients.mutateAsync(fresh)</span>
+<span class="cstat-no" title="statement not covered" >    setUploadData([])</span>
+<span class="cstat-no" title="statement not covered" >    setShowUpload(false)</span>
+<span class="cstat-no" title="statement not covered" >    skipped += serverSkipped</span>
+<span class="cstat-no" title="statement not covered" >    const parts = [added + ' imported']</span>
+<span class="cstat-no" title="statement not covered" >    if (skipped &gt; 0) parts.push(skipped + ' skipped (already exist)')</span>
+<span class="cstat-no" title="statement not covered" >    if (invalid &gt; 0) parts.push(invalid + ' invalid')</span>
+<span class="cstat-no" title="statement not covered" >    if (failed.length &gt; 0) parts.push(failed.length + ' failed')</span>
+<span class="cstat-no" title="statement not covered" >    const summary = parts.join(' · ')</span>
+<span class="cstat-no" title="statement not covered" >    if (failed.length &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >      showToast(summary + ': ' + failed.slice(0, 3).map(x =&gt; x.full_name + ' (' + x.message + ')').join(', '), { type: 'warning' })</span>
+<span class="cstat-no" title="statement not covered" >    } else if (invalid &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >      showToast(summary + ': ' + invalidNames.join(', '), { type: 'warning' })</span>
+<span class="cstat-no" title="statement not covered" >    } else {</span>
+<span class="cstat-no" title="statement not covered" >      showToast(summary + '!', { type: 'success' })</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+  // Exports whatever the client-detail History tab is currently showing
+  // (timeline / sales / appointments / consultations / debts) as a flat CSV.
+<span class="cstat-no" title="statement not covered" >  function exportHistoryCsv() {</span>
+<span class="cstat-no" title="statement not covered" >    const rowsFor = (historyTab === 'timeline' || historyTab === 'consultations') ? filteredHistory : history</span>
+<span class="cstat-no" title="statement not covered" >    if (!rowsFor.length) { showToast('Nothing to export yet.', { type: 'warning' }); return }</span>
+<span class="cstat-no" title="statement not covered" >    let rows</span>
+<span class="cstat-no" title="statement not covered" >    if (historyTab === 'timeline') {</span>
+<span class="cstat-no" title="statement not covered" >      rows = [['Date', 'Event', 'Type', 'Provider', 'Source', 'Products', 'Amount']]</span>
+<span class="cstat-no" title="statement not covered" >      rowsFor.forEach(e =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >        if (e.kind === 'sale') {</span>
+<span class="cstat-no" title="statement not covered" >          const items = saleItems(e)</span>
+<span class="cstat-no" title="statement not covered" >          const srcs = [...new Set(items.map(i =&gt; i.source).filter(Boolean))].join('/') || 'walk-in'</span>
+<span class="cstat-no" title="statement not covered" >          rows.push([e.created_at?.slice(0, 16).replace('T', ' ') || '', e.txn_no || '', 'Sale', '', srcs, items.map(i =&gt; (i.name + ' x' + i.qty) + (i.source ? ' [' + i.source + ']' : '')).join('; '), e.total || 0])</span>
+<span class="cstat-no" title="statement not covered" >        } else {</span>
+<span class="cstat-no" title="statement not covered" >          const srcs = [...new Set((e.recommended_products || []).map(p =&gt; p.source).filter(Boolean))].join('/') || 'walk-in'</span>
+<span class="cstat-no" title="statement not covered" >          rows.push([(e.consultation_date || '') + ' ' + (e.created_at?.split('T')[1]?.slice(0, 5) || ''), 'Consultation', e.consultation_type || 'skincare', e.provider_name || '', srcs, (e.recommended_products || []).map(p =&gt; p.name).join(', '), ''])</span>
+<span class="cstat-no" title="statement not covered" >        }</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >    } else if (historyTab === 'sales') {</span>
+<span class="cstat-no" title="statement not covered" >      rows = [['Txn No', 'Date', 'Payment', 'Total', 'Balance', 'Items']]</span>
+<span class="cstat-no" title="statement not covered" >      rowsFor.forEach(s =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >        const items = saleItems(s)</span>
+<span class="cstat-no" title="statement not covered" >        rows.push([s.txn_no || '', s.created_at?.slice(0, 16).replace('T', ' ') || '', s.payment_method || '', s.total || 0, s.balance || 0, items.map(i =&gt; (i.name + ' x' + i.qty) + (i.source ? ' [' + i.source + ']' : '')).join('; ')])</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >    } else if (historyTab === 'appointments') {</span>
+<span class="cstat-no" title="statement not covered" >      rows = [['Service', 'Date', 'Time', 'Staff', 'Status']]</span>
+<span class="cstat-no" title="statement not covered" >      rowsFor.forEach(a =&gt; rows.push([a.service || '', a.date || '', a.time || '', a.staff_name || '', a.status || '']))</span>
+<span class="cstat-no" title="statement not covered" >    } else if (historyTab === 'consultations') {</span>
+<span class="cstat-no" title="statement not covered" >      rows = [['Date', 'Type', 'Provider', 'Sub Type', 'Recommended Products', 'Source']]</span>
+<span class="cstat-no" title="statement not covered" >      rowsFor.forEach(c =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >        const d = parseC(c)</span>
+<span class="cstat-no" title="statement not covered" >        const subTypes = (d.type_of_consultation?.selected || []).map(k =&gt; PHARMACY_TYPE_LABEL[k]).filter(Boolean)</span>
+<span class="cstat-no" title="statement not covered" >        const srcs = [...new Set((c.recommended_products || []).map(p =&gt; p.source).filter(Boolean))].join('/') || 'walk-in'</span>
+<span class="cstat-no" title="statement not covered" >        rows.push([c.consultation_date || '', c.consultation_type || 'skincare', c.provider_name || '', subTypes.join(', ') || d.assessment?.skin_type || '', (c.recommended_products || []).map(p =&gt; p.name).join(', '), srcs])</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >    } else {</span>
+<span class="cstat-no" title="statement not covered" >      rows = [['Date', 'Direction', 'Description', 'Balance']]</span>
+<span class="cstat-no" title="statement not covered" >      rowsFor.forEach(d =&gt; rows.push([d.created_at?.slice(0, 10) || '', d.direction === 'owes_us' ? 'Owes us' : 'We owe', d.description || d.party_name || '', d.balance || 0]))</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    const csv = rows.map(r =&gt; r.map(v =&gt; '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n')</span>
+<span class="cstat-no" title="statement not covered" >    const blob = new Blob([csv], { type: 'text/csv' })</span>
+<span class="cstat-no" title="statement not covered" >    const url = URL.createObjectURL(blob)</span>
+<span class="cstat-no" title="statement not covered" >    const a = document.createElement('a'); a.href = url; a.download = 'CareHub_' + selected?.full_name + '_' + historyTab + '.csv'; a.click()</span>
+<span class="cstat-no" title="statement not covered" >    URL.revokeObjectURL(url)</span>
+<span class="cstat-no" title="statement not covered" >    showToast('History exported as CSV!', { type: 'success' })</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const filtered = clients.filter(c =&gt;</span>
+<span class="cstat-no" title="statement not covered" >    c.full_name.toLowerCase().includes(search.toLowerCase()) ||</span>
+<span class="cstat-no" title="statement not covered" >    (c.phone &amp;&amp; c.phone.includes(search)) ||</span>
+<span class="cstat-no" title="statement not covered" >    (c.email &amp;&amp; c.email.toLowerCase().includes(search.toLowerCase()))</span>
+<span class="cstat-no" title="statement not covered" >  )</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const matchesFilters = (entry) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    const date = entry.kind === 'consultation' ? (entry.consultation_date || '') : (entry.created_at?.slice(0, 10) || '')</span>
+<span class="cstat-no" title="statement not covered" >    if (filters.dateFrom &amp;&amp; date &lt; filters.dateFrom) return false</span>
+<span class="cstat-no" title="statement not covered" >    if (filters.dateTo &amp;&amp; date &gt; filters.dateTo) return false</span>
+<span class="cstat-no" title="statement not covered" >    if (entry.kind === 'consultation') {</span>
+<span class="cstat-no" title="statement not covered" >      if (filters.type &amp;&amp; entry.consultation_type !== filters.type) return false</span>
+<span class="cstat-no" title="statement not covered" >      const prods = entry.recommended_products || []</span>
+<span class="cstat-no" title="statement not covered" >      if (filters.product &amp;&amp; !prods.some(p =&gt; (p.name || '').toLowerCase().includes(filters.product.toLowerCase()))) return false</span>
+<span class="cstat-no" title="statement not covered" >      const srcs = prods.map(p =&gt; p.source).filter(Boolean)</span>
+<span class="cstat-no" title="statement not covered" >      if (filters.source) {</span>
+<span class="cstat-no" title="statement not covered" >        if (filters.source === 'walk-in' ? srcs.length &gt; 0 : !srcs.includes(filters.source)) return false</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >    } else {</span>
+<span class="cstat-no" title="statement not covered" >      if (filters.type) return false</span>
+<span class="cstat-no" title="statement not covered" >      const items = saleItems(entry)</span>
+<span class="cstat-no" title="statement not covered" >      if (filters.product &amp;&amp; !items.some(i =&gt; (i.name || '').toLowerCase().includes(filters.product.toLowerCase()))) return false</span>
+<span class="cstat-no" title="statement not covered" >      if (filters.source) {</span>
+<span class="cstat-no" title="statement not covered" >        const srcs = items.map(i =&gt; i.source).filter(Boolean)</span>
+<span class="cstat-no" title="statement not covered" >        if (filters.source === 'walk-in' ? srcs.length &gt; 0 : !srcs.includes(filters.source)) return false</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    return true</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const filteredHistory = useMemo(() =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    if (historyTab !== 'timeline' &amp;&amp; historyTab !== 'consultations') return history</span>
+<span class="cstat-no" title="statement not covered" >    return history.filter(matchesFilters)</span>
+<span class="cstat-no" title="statement not covered" >  }, [history, historyTab, filters])</span>
+&nbsp;
+  // Products the client is "currently on": latest consultation products plus
+  // anything sold in the last 30 days, deduped by name (latest source wins).
+<span class="cstat-no" title="statement not covered" >  const currentOn = useMemo(() =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    const map = new Map()</span>
+<span class="cstat-no" title="statement not covered" >    const add = (name, source, date) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >      const k = (name || '').toLowerCase()</span>
+<span class="cstat-no" title="statement not covered" >      if (!k) return</span>
+<span class="cstat-no" title="statement not covered" >      const prev = map.get(k)</span>
+<span class="cstat-no" title="statement not covered" >      if (!prev || (date || '') &gt;= (prev.date || '')) map.set(k, { name, source: source || 'walk-in', date: date || '' })</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    const latest = clientConsults[0]</span>
+<span class="cstat-no" title="statement not covered" >    ;(latest?.recommended_products || []).forEach(p =&gt; add(p.name, p.source, latest.consultation_date))</span>
+<span class="cstat-no" title="statement not covered" >    const cutoff = Date.now() - 30 * 864e5</span>
+<span class="cstat-no" title="statement not covered" >    clientSales.forEach(s =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >      if (new Date(s.created_at || 0).getTime() &lt; cutoff) return</span>
+<span class="cstat-no" title="statement not covered" >      saleItems(s).forEach(i =&gt; add(i.name, i.source, s.created_at?.slice(0, 10)))</span>
+<span class="cstat-no" title="statement not covered" >    })</span>
+<span class="cstat-no" title="statement not covered" >    return [...map.values()].slice(0, 12)</span>
+<span class="cstat-no" title="statement not covered" >  }, [clientSales, clientConsults])</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const thisMonth = new Date().toISOString().slice(0, 7)</span>
+<span class="cstat-no" title="statement not covered" >  const newThisMonth = clients.filter(c =&gt; c.created_at?.startsWith(thisMonth)).length</span>
+<span class="cstat-no" title="statement not covered" >  const totalSpend = clients.reduce((s, c) =&gt; s + (c.total_spend || 0), 0)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  return (</span>
+<span class="cstat-no" title="statement not covered" >    &lt;&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;style&gt;{`.spin{animation:spin 0.8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}&lt;/style&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;SectionHead title='Clients' sub='All your client and patient records' btn='+ Add Client' onBtn={() =&gt; setShowAdd(true)}</span>
+<span class="cstat-no" title="statement not covered" >        extraBtns={[</span>
+<span class="cstat-no" title="statement not covered" >          { label: 'Upload CSV', icon: &lt;Upload size={14} /&gt;, onClick: () =&gt; setShowUpload(true) },</span>
+<span class="cstat-no" title="statement not covered" >          { label: 'Export CSV', icon: &lt;Download size={14} /&gt;, onClick: exportCsv },</span>
+<span class="cstat-no" title="statement not covered" >        ]} /&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      &lt;div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;StatCard icon={&lt;Users /&gt;} label='Total Clients' value={clients.length} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;StatCard icon={&lt;UserPlus /&gt;} label='New This Month' value={newThisMonth} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;StatCard icon={&lt;DollarSign /&gt;} label='Total Lifetime Spend' value={fmt(totalSpend)} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/div&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      &lt;div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;Search size={15} color={gray400} style={{ flexShrink: 0 }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;input value={search} onChange={e =&gt; setSearch(e.target.value)} placeholder='Search by name, phone or email...'</span>
+<span class="cstat-no" title="statement not covered" >          style={{ flex: 1, padding: '12px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/div&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      &lt;DataTable</span>
+<span class="cstat-no" title="statement not covered" >        variant="cards"</span>
+<span class="cstat-no" title="statement not covered" >        rows={filtered}</span>
+<span class="cstat-no" title="statement not covered" >        page={page}</span>
+<span class="cstat-no" title="statement not covered" >        setPage={setPage}</span>
+<span class="cstat-no" title="statement not covered" >        pageSize={25}</span>
+<span class="cstat-no" title="statement not covered" >        total={filtered.length}</span>
+<span class="cstat-no" title="statement not covered" >        loading={loading}</span>
+<span class="cstat-no" title="statement not covered" >        onRowClick={c =&gt; setSelected(c)}</span>
+<span class="cstat-no" title="statement not covered" >        empty={&lt;Empty icon={&lt;Users size={40} /&gt;} message={search ? 'No clients match your search' : 'No clients yet. Add your first client!'} action='+ Add Client' onAction={() =&gt; setShowAdd(true)} cause={search ? 'filtered' : 'none'} /&gt;}</span>
+<span class="cstat-no" title="statement not covered" >        count={`${filtered.length} client${filtered.length !== 1 ? 's' : ''}`}</span>
+<span class="cstat-no" title="statement not covered" >        renderCard={c =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Avatar name={c.full_name} size={44} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ minWidth: 0 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontWeight: '800', fontSize: '15px', color: navy }}&gt;{c.full_name}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}&gt;{c.phone || 'No phone'}{c.email ? ' · ' + c.email : ''}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontSize: '12px', color: gray400, marginTop: '2px' }}&gt;{c.gender || ''}{c.date_of_birth ? ' · DOB: ' + c.date_of_birth : ''}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ textAlign: 'right', flexShrink: 0 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ fontSize: '16px', fontWeight: '900', color: navy }}&gt;{fmt(c.total_spend || 0)}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}&gt;{c.visit_count || 0} visit(s)&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+        )}
+<span class="cstat-no" title="statement not covered" >      /&gt;</span>
+&nbsp;
+      {/* Add Client Modal */}
+<span class="cstat-no" title="statement not covered" >      &lt;Modal show={showAdd} onClose={() =&gt; { setShowAdd(false); setForm({}) }} title='Add New Client'</span>
+<span class="cstat-no" title="statement not covered" >        footer={&lt;&gt;&lt;GhostBtn onClick={() =&gt; { setShowAdd(false); setForm({}) }} style={{ flex: 1, padding: '12px' }}&gt;Cancel&lt;/GhostBtn&gt;&lt;TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}&gt;{saving ? 'Saving...' : 'Add Client'}&lt;/TealBtn&gt;&lt;/&gt;}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label='First Name *' value={form.firstName} onChange={v =&gt; f('firstName', v)} placeholder='e.g. Ada' required /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label='Surname *' value={form.lastName} onChange={v =&gt; f('lastName', v)} placeholder='e.g. Okafor' required /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Inp label='Phone Number *' value={form.phone} onChange={v =&gt; f('phone', v)} placeholder='08012345678' required /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Inp label='Email' value={form.email} onChange={v =&gt; f('email', v)} type='email' placeholder='client@email.com' /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Inp label='Date of Birth' value={form.dob} onChange={v =&gt; f('dob', v)} type='date' /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Sel label='Gender' value={form.gender} onChange={v =&gt; f('gender', v)} options={['Male', 'Female', 'Other']} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Inp label='Address' value={form.address} onChange={v =&gt; f('address', v)} placeholder='Home address' /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Textarea label='Notes' value={form.notes} onChange={v =&gt; f('notes', v)} placeholder='Any notes about this client...' rows={2} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/Modal&gt;</span>
+&nbsp;
+      {/* Client Detail Modal */}
+<span class="cstat-no" title="statement not covered" >      &lt;Modal show={!!selected} onClose={() =&gt; setSelected(null)} title='Client Details'&gt;</span>
+<span class="cstat-no" title="statement not covered" >        {selected &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px', padding: '16px', borderRadius: theme.radius.lg, background: bg }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;Avatar name={selected.full_name} size={56} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontSize: '20px', fontWeight: '900', color: navy }}&gt;{selected.full_name}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontSize: '13px', color: gray500, marginTop: '4px' }}&gt;{selected.phone}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ display: 'flex', gap: '16px', marginTop: '10px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;div&gt;&lt;div style={{ fontSize: '18px', fontWeight: '900', color: tealDeep }}&gt;{fmt(selected.total_spend || 0)}&lt;/div&gt;&lt;div style={{ fontSize: '11px', color: gray400 }}&gt;Total spent&lt;/div&gt;&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;div&gt;&lt;div style={{ fontSize: '18px', fontWeight: '900', color: navy }}&gt;{selected.visit_count || 0}&lt;/div&gt;&lt;div style={{ fontSize: '11px', color: gray400 }}&gt;Visits&lt;/div&gt;&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              {canConsult &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >                &lt;button onClick={() =&gt; navigate('/dashboard/consultation?client=' + selected.id)} title='Start a new consultation for this client'</span>
+<span class="cstat-no" title="statement not covered" >                  style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: theme.radius.md, background: tealDeep, color: 'white', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '700', whiteSpace: 'nowrap' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;Clipboard size={13} /&gt; New Consultation</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/button&gt;</span>
+              )}
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            {[['Email', selected.email || 'Not set'], ['Gender', selected.gender || 'Not set'], ['Date of Birth', selected.date_of_birth || 'Not set'], ['Address', selected.address || 'Not set'], ['Notes', selected.notes || 'Not set'], ['Joined', selected.created_at?.split('T')[0] || 'Not set']].map(([l, v]) =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${gray100}`, fontSize: '13px', gap: 16 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;span style={{ color: gray500, fontWeight: '600' }}&gt;{l}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;span style={{ color: navy, textAlign: 'right', maxWidth: '240px' }}&gt;{v}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            ))}</span>
+&nbsp;
+            {/* "Currently on" traceability: latest consultation products + last 30 days of sales */}
+<span class="cstat-no" title="statement not covered" >            {currentOn.length &gt; 0 &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ marginTop: '18px', padding: '12px 14px', borderRadius: '10px', background: gray100, border: `1px solid ${gray100}` }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontSize: '11px', fontWeight: '700', color: gray500, textTransform: 'uppercase', marginBottom: '8px' }}&gt;Currently On&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: '12px', color: navy }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  {currentOn.map(p =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;span key={p.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: theme.radius.full, background: 'white', border: `1px solid ${border}` }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      {p.name}</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;SourcePill source={p.source} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  ))}</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+            )}
+&nbsp;
+            {/* Full history across POS, appointments, consultations and debts */}
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ marginTop: '24px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontSize: '11px', fontWeight: '700', color: gray400, textTransform: 'uppercase' }}&gt;History&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;button onClick={() =&gt; exportHistoryCsv()} title='Export this history as CSV'</span>
+<span class="cstat-no" title="statement not covered" >                  style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: gray600 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;Download size={12} /&gt; Export</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/button&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                {HISTORY_TABS.map(([key, Icon, label]) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >                  const on = historyTab === key</span>
+<span class="cstat-no" title="statement not covered" >                  return (</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;button key={key} onClick={() =&gt; setHistoryTab(key)} aria-pressed={on}</span>
+<span class="cstat-no" title="statement not covered" >                      style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 13px', borderRadius: theme.radius.full, border: `1px solid ${on ? tealDeep : border}`, cursor: 'pointer', fontSize: '12px', fontWeight: '700', background: on ? tealDeep : 'white', color: on ? 'white' : gray600 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;Icon size={13} /&gt; {label}</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;/button&gt;</span>
+                  )
+<span class="cstat-no" title="statement not covered" >                })}</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >              {(historyTab === 'timeline' || historyTab === 'consultations') &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px', alignItems: 'center' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;input type='date' value={filters.dateFrom} onChange={e =&gt; setF('dateFrom', e.target.value)} aria-label='From date'</span>
+<span class="cstat-no" title="statement not covered" >                    style={{ padding: '6px 8px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '11px', color: navy, background: 'white' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;input type='date' value={filters.dateTo} onChange={e =&gt; setF('dateTo', e.target.value)} aria-label='To date'</span>
+<span class="cstat-no" title="statement not covered" >                    style={{ padding: '6px 8px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '11px', color: navy, background: 'white' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;select value={filters.source} onChange={e =&gt; setF('source', e.target.value)} aria-label='Filter by source'</span>
+<span class="cstat-no" title="statement not covered" >                    style={{ padding: '6px 8px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '11px', color: navy, background: 'white' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;option value=''&gt;All sources&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;option value='recommended'&gt;Recommended&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;option value='dispensed'&gt;Dispensed&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;option value='walk-in'&gt;Walk-in&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;/select&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;input value={filters.product} onChange={e =&gt; setF('product', e.target.value)} placeholder='Filter by product...' aria-label='Filter by product'</span>
+<span class="cstat-no" title="statement not covered" >                    style={{ padding: '6px 8px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '11px', color: navy, background: 'white', width: '150px' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  {historyTab === 'consultations' &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;select value={filters.type} onChange={e =&gt; setF('type', e.target.value)} aria-label='Filter by consultation type'</span>
+<span class="cstat-no" title="statement not covered" >                      style={{ padding: '6px 8px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '11px', color: navy, background: 'white' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;option value=''&gt;All types&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;option value='skincare'&gt;Skincare&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;option value='pharmacy'&gt;Pharmacy&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;/select&gt;</span>
+                  )}
+<span class="cstat-no" title="statement not covered" >                  {(filters.dateFrom || filters.dateTo || filters.source || filters.product || filters.type) &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;button onClick={() =&gt; setFilters({ dateFrom: '', dateTo: '', source: '', product: '', type: '' })} style={{ fontSize: '11px', fontWeight: '700', color: tealDeep, background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}&gt;Clear&lt;/button&gt;</span>
+                  )}
+<span class="cstat-no" title="statement not covered" >                &lt;/div&gt;</span>
+              )}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >              {historyLoading ? &lt;Loading /&gt; : filteredHistory.length === 0 ? (</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ padding: '24px 14px', borderRadius: '10px', background: bg, textAlign: 'center', fontSize: '12px', color: gray500 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  {history.length &gt; 0 ? 'No history matches your filters.' : historyTab === 'timeline' ? 'No activity yet. Sales and consultations for this client will appear here.' : historyTab === 'sales' ? 'No sales recorded for this client yet. Charge them at the POS and link their name to build history.' : historyTab === 'appointments' ? 'No appointments yet. Book one from Appointments and pick this client.' : historyTab === 'consultations' ? 'No consultations yet. Start one from the Consultations page for this client.' : 'No debts for this client yet. Credit sales and manual debts will appear here.'}</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              ) : historyTab === 'sales' ? (</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  {filteredHistory.map(s =&gt; &lt;SaleRow key={s.id} s={s} /&gt;)}</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              ) : historyTab === 'appointments' ? (</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  {history.map(a =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        &lt;div style={{ fontWeight: '700', fontSize: '12px', color: navy }}&gt;{a.service || 'Appointment'}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        &lt;div style={{ fontSize: '11px', color: gray500, marginTop: '2px' }}&gt;{a.date || 'Not set'} at {a.time || 'Not set'}{a.staff_name ? ' · ' + a.staff_name : ''}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;Pill label={a.status} type={a.status === 'confirmed' ? 'green' : a.status === 'completed' ? 'teal' : a.status === 'cancelled' ? 'red' : 'amber'} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  ))}</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              ) : historyTab === 'consultations' ? (</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  {filteredHistory.map(c =&gt; &lt;ConsultationRow key={c.id} c={c} /&gt;)}</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              ) : historyTab === 'timeline' ? (</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  {filteredHistory.map(e =&gt; &lt;TimelineRow key={e.id} e={e} /&gt;)}</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/div&gt;</span>
+              ) : (
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  {history.map(d =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;div style={{ minWidth: 0 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        &lt;div style={{ fontSize: '11px', color: gray500 }}&gt;{d.created_at?.slice(0, 10) || 'Not set'} · {d.direction === 'owes_us' ? 'Owes us' : 'We owe'}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        &lt;div style={{ fontWeight: '700', fontSize: '12px', color: navy, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }}&gt;{d.description || d.party_name || 'Not set'}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;div style={{ textAlign: 'right' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        &lt;div style={{ fontWeight: '900', fontSize: '13px', color: (d.balance || 0) &gt; 0 ? danger : success }}&gt;{fmt(d.balance || 0)}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        &lt;div style={{ fontSize: '10px', color: gray400 }}&gt;balance&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  ))}</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/div&gt;</span>
+              )}
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+        )}
+<span class="cstat-no" title="statement not covered" >      &lt;/Modal&gt;</span>
+&nbsp;
+      {/* Upload Clients from Excel / CSV — same flow as the Inventory upload */}
+<span class="cstat-no" title="statement not covered" >      &lt;Modal show={showUpload} onClose={() =&gt; { setShowUpload(false); setUploadData([]); setUploadError('') }} title='Upload Clients from Excel / CSV'&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ padding: '14px', borderRadius: '12px', background: tealMist, border: `1px solid ${tealDeep}`, fontSize: '13px', color: tealDeep, lineHeight: '1.9' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            1. Tap &lt;strong&gt;Download Template&lt;/strong&gt;&lt;br /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            2. Open in &lt;strong&gt;Microsoft Excel&lt;/strong&gt; or Google Sheets&lt;br /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            3. Fill in your existing clients / patients row by row&lt;br /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            4. Save as &lt;strong&gt;CSV&lt;/strong&gt;&lt;br /&gt;</span>
+<span class="cstat-no" title="statement not covered" >            5. Upload here — clients are matched by &lt;strong&gt;phone number&lt;/strong&gt;, so repeat customers from the file are skipped, not duplicated</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;label style={{ display: 'block', padding: '24px', borderRadius: '12px', border: `2px dashed ${border}`, textAlign: 'center', cursor: 'pointer', background: bg }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', color: gray500 }}&gt;&lt;FileUp size={36} /&gt;&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div style={{ fontWeight: '700', color: gray600, fontSize: '14px' }}&gt;Tap to select CSV file&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;input type='file' accept='.csv,.xlsx,.xls,.txt' onChange={handleClientFileUpload} style={{ display: 'none' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/label&gt;</span>
+<span class="cstat-no" title="statement not covered" >          {uploadError &amp;&amp; &lt;div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px', borderRadius: '10px', background: dangerBg, border: `1px solid ${danger}`, fontSize: '13px', color: danger }}&gt;&lt;AlertTriangle size={15} /&gt; {uploadError}&lt;/div&gt;}</span>
+<span class="cstat-no" title="statement not covered" >          {uploadData.length &gt; 0 &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >            &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: success, fontSize: '13px', marginBottom: '8px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;CheckCircle size={15} /&gt; {uploadData.length} clients in file</span>
+<span class="cstat-no" title="statement not covered" >                {uploadData.filter(c =&gt; !normPhone(c.phone)).length &gt; 0 &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;span style={{ color: warning, fontWeight: '600' }}&gt; · {uploadData.filter(c =&gt; !normPhone(c.phone)).length} missing a phone (will be skipped)&lt;/span&gt;</span>
+                )}
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div style={{ maxHeight: '180px', overflowY: 'auto', borderRadius: '10px', border: `1px solid ${gray100}` }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                {uploadData.map((c, i) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >                  const missingPhone = !normPhone(c.phone)</span>
+<span class="cstat-no" title="statement not covered" >                  const isDupe = clients.some(x =&gt; normPhone(x.phone) === normPhone(c.phone))</span>
+<span class="cstat-no" title="statement not covered" >                  return (</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 12px', borderBottom: `1px solid ${gray100}`, fontSize: '12px', background: missingPhone || isDupe ? warningBg : 'transparent' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600', color: missingPhone || isDupe ? warning : navy }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        {(missingPhone || isDupe) &amp;&amp; &lt;AlertTriangle size={12} /&gt;}{c.full_name || '(no name)'}</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;span style={{ color: missingPhone || isDupe ? warning : gray500 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                        {missingPhone ? 'No phone' : isDupe ? 'Already exists' : c.phone + (c.gender ? ' · ' + c.gender : '')}</span>
+<span class="cstat-no" title="statement not covered" >                      &lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >                    &lt;/div&gt;</span>
+                  )
+<span class="cstat-no" title="statement not covered" >                })}</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;/div&gt;</span>
+          )}
+<span class="cstat-no" title="statement not covered" >          &lt;div style={{ display: 'flex', gap: '10px' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;GhostBtn onClick={downloadClientTemplate} style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}&gt;&lt;Download size={14} /&gt; Download Template&lt;/GhostBtn&gt;</span>
+<span class="cstat-no" title="statement not covered" >            {uploadData.length &gt; 0 &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >              &lt;button onClick={importClients} disabled={importing} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.7 : 1 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                {importing</span>
+<span class="cstat-no" title="statement not covered" >                  ? &lt;span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}&gt;&lt;Loader2 size={16} className="spin" aria-hidden="true" /&gt; Importing…&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  : 'Import ' + uploadData.length + ' Clients'}</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/button&gt;</span>
+            )}
+<span class="cstat-no" title="statement not covered" >          &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/Modal&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      &lt;Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;/&gt;</span>
+  )
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-10-16T15:21:14.166Z
+            </div>
+        <script src="../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
+    </body>
+</html>
+    

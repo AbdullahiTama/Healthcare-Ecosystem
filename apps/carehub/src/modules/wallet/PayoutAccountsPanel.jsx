@@ -64,7 +64,7 @@ export default function PayoutAccountsPanel({ manager, selectedId, onSelect, ban
         <div style={{ ...box, display: 'flex', alignItems: 'center', gap: 10, background: theme.tealMist }}>
           <ShieldCheck size={18} color={theme.tealDeep} aria-hidden="true" />
           <div style={{ fontSize: 12.5, color: theme.tealDeep }}>
-            <strong>Identity verified</strong> — {s.kyc.legalName}
+            <strong>Identity verified</strong> for {s.kyc.legalName}
             <span style={{ opacity: 0.75 }}> · BVN ••••{s.kyc.bvnLast4}</span>
           </div>
         </div>

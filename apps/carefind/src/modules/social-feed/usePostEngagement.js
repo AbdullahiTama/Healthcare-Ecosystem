@@ -597,7 +597,7 @@ export function usePostEngagement({
 
   async function sharePost(post) {
     const author = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
-    const text = author ? `“${toShareText(post.content)}” — ${author} on CareFind` : toShareText(post.content)
+    const text = author ? `“${toShareText(post.content)}” · ${author} on CareFind` : toShareText(post.content)
     // Attach the post's media (image/video) to the share where the browser
     // supports it; the URL is still appended to the clipboard fallback so
     // WhatsApp recipients always get the media, never just the caption.

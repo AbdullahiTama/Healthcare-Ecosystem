@@ -18,7 +18,7 @@ export default function ProductsStep({ value, onChange, searchCompanies }) {
   return (
     <section aria-labelledby="sr-products-h">
       <h2 id="sr-products-h" style={s.h2}>Medicine or product</h2>
-      <p style={s.muted}>Which medicine or product do you suspect? Add each suspect product separately — at least one is required.</p>
+      <p style={s.muted}>Which medicine or product do you suspect? Add each suspect product separately. At least one is required.</p>
 
       {list.map((p, i) => (
         <div key={p.product_id || `new-${i}`} style={s.card}>

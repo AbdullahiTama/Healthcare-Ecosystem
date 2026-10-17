@@ -38,7 +38,7 @@ export default function ApplyAgent() {
       })
       setDone(true)
     } catch (e) {
-      showToast('Could not submit — please try again or email support@carehub.ng.', { type: 'error' })
+      showToast('Could not submit. Try again, or email support@carehub.ng.', { type: 'error' })
     }
     setSubmitting(false)
   }
@@ -65,7 +65,7 @@ export default function ApplyAgent() {
           <Link to='/agent/login' style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: gray400, fontSize: 13, fontWeight: 600, textDecoration: 'none', marginBottom: '18px' }}><ChevronLeft size={15} /> Agent sign in</Link>
           <div style={{ margin: '0 auto 12px', display: 'flex', justifyContent: 'center' }}><Logo size={56} /></div>
           <div style={{ fontFamily: fontDisplay, fontSize: '28px', fontWeight: '700', color: navy }}>Become a CareHub Referral Agent</div>
-          <div style={{ fontSize: '14px', color: gray600, marginTop: '8px', lineHeight: '1.7' }}>Own the growth of healthcare businesses in your area — onboarding them onto CareHub and supporting them long-term.</div>
+          <div style={{ fontSize: '14px', color: gray600, marginTop: '8px', lineHeight: '1.7' }}>Help healthcare businesses in your area grow. Onboard them onto CareHub and support them for the long term.</div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '18px' }}>

@@ -122,7 +122,7 @@ export default function Consultation({ brand, products, staffName }) {
 
   return (
     <div>
-      <SectionHead title='Consultations' sub={isPharmacy ? 'Pharmacy consultations — OTC advice & medication reviews' : 'Skin & aesthetic consultation forms'} btn='+ New Consultation' onBtn={() => { setFormClient(null); setShowForm(true) }} />
+      <SectionHead title='Consultations' sub={isPharmacy ? 'Pharmacy consultations: OTC advice & medication reviews' : 'Skin & aesthetic consultation forms'} btn='+ New Consultation' onBtn={() => { setFormClient(null); setShowForm(true) }} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Clipboard />} label='Total Consultations' value={stats.total} />
@@ -166,7 +166,7 @@ export default function Consultation({ brand, products, staffName }) {
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{r.client_name}</div>
                       <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>
-                        {r.consultation_date || '—'}{r.provider_name ? ' · ' + r.provider_name : ''}
+                        {r.consultation_date || 'Not set'}{r.provider_name ? ' · ' + r.provider_name : ''}
                       </div>
                       <div style={{ display: 'flex', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
                         <Pill label={r.consultation_type === 'pharmacy' ? 'Pharmacy' : 'Skincare'} type={r.consultation_type === 'pharmacy' ? 'blue' : 'green'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />
@@ -200,7 +200,7 @@ export default function Consultation({ brand, products, staffName }) {
       </Modal>
 
       {/* Consultation detail */}
-      <Modal show={!!selected} onClose={() => setSelected(null)} title={selected ? 'Consultation — ' + selected.client_name : ''} wide
+      <Modal show={!!selected} onClose={() => setSelected(null)} title={selected ? 'Consultation: ' + selected.client_name : ''} wide
         footer={selected ? (
           <>
             <GhostBtn onClick={() => openNewVisit()} style={{ flex: 1, padding: '12px' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Repeat size={14} /> New visit</span></GhostBtn>
@@ -381,7 +381,7 @@ function PharmacyDetail({ d, g, recProducts }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 0' }}>
             {medRows.map((r, i) => (
               <div key={i} style={{ padding: 12, borderRadius: 10, border: `1px solid ${theme.gray100}`, background: bg, fontSize: 12.5 }}>
-                <div style={{ fontWeight: 800, color: navy }}>{r.drug || '—'}{r.dose ? ' · ' + r.dose : ''}{r.frequency ? ' · ' + r.frequency : ''}</div>
+                <div style={{ fontWeight: 800, color: navy }}>{r.drug || 'Not set'}{r.dose ? ' · ' + r.dose : ''}{r.frequency ? ' · ' + r.frequency : ''}</div>
                 <div style={{ color: gray500, marginTop: 3 }}>
                   {[r.prescriber && 'Rx: ' + r.prescriber, r.indication, r.start_date && 'since ' + r.start_date, r.adherence].filter(Boolean).join(' · ')}
                 </div>
@@ -420,15 +420,15 @@ function PharmacyDetail({ d, g, recProducts }) {
         <DRow label='Assessment / problem' value={as.problem} />
         <DRow label='Recommendation type' value={as.recommendation_type} />
         <DRow label='Counseling points' value={as.counseling} />
-        <DRow label='Referral' value={as.referral_yesno === 'yes' ? 'Yes — ' + (as.referral_reason || '') : as.referral_yesno === 'no' ? 'No' : ''} />
-        <DRow label='Follow-up' value={as.followup_yesno === 'yes' ? 'Yes — ' + (as.followup_date || '') : as.followup_yesno === 'no' ? 'No' : ''} />
+        <DRow label='Referral' value={as.referral_yesno === 'yes' ? 'Yes: ' + (as.referral_reason || '') : as.referral_yesno === 'no' ? 'No' : ''} />
+        <DRow label='Follow-up' value={as.followup_yesno === 'yes' ? 'Yes: ' + (as.followup_date || '') : as.followup_yesno === 'no' ? 'No' : ''} />
       </DSec>
 
       <ProductSection recProducts={recProducts} />
 
       {ch.enabled && (
         <DSec title='Charges'>
-          <DRow label='Consultation fee' value={ch.fee_product_name ? ch.fee_product_name + ' — ₦' + Number(ch.fee_amount || 0).toLocaleString() : ''} />
+          <DRow label='Consultation fee' value={ch.fee_product_name ? ch.fee_product_name + ' · ₦' + Number(ch.fee_amount || 0).toLocaleString() : ''} />
           <DRow label='Sale total' value={ch.sale_total ? '₦' + Number(ch.sale_total).toLocaleString() : ''} />
         </DSec>
       )}

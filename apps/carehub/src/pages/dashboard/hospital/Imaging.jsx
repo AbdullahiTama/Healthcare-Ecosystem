@@ -89,7 +89,7 @@ export default function Imaging({ brand }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
         <button onClick={() => setSelected(null)} aria-label='Back' style={{ width: '38px', height: '38px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: navy, flexShrink: 0 }}><ArrowLeft size={16} /></button>
         <div>
-          <div style={{ fontWeight: '900', fontSize: '18px', color: navy }}>Imaging Request — {selected.patient_name || 'Patient'}</div>
+          <div style={{ fontWeight: '900', fontSize: '18px', color: navy }}>Imaging Request: {selected.patient_name || 'Patient'}</div>
           <div style={{ fontSize: '12px', color: gray400 }}>Requested by: {selected.requested_by} · {selected.created_at?.split('T')[0]}</div>
         </div>
       </div>
@@ -101,7 +101,7 @@ export default function Imaging({ brand }) {
       <Card style={{ padding: '16px', marginBottom: '14px', background: bg }}>
         <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '10px' }}>Request Details</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          {[['Scan Type', selected.scan_type || '—'], ['Body Part', selected.body_part || '—'], ['Requested By', selected.requested_by || '—'], ['Priority', selected.priority || 'Routine'], ['Date', selected.created_at?.split('T')[0] || '—'], ['Status', selected.status]].map(([l, v]) => (
+          {[['Scan Type', selected.scan_type || 'Not set'], ['Body Part', selected.body_part || 'Not set'], ['Requested By', selected.requested_by || 'Not set'], ['Priority', selected.priority || 'Routine'], ['Date', selected.created_at?.split('T')[0] || 'Not set'], ['Status', selected.status]].map(([l, v]) => (
             <div key={l}><div style={{ fontSize: '10px', color: gray400, fontWeight: '700' }}>{l}</div><div style={{ fontSize: '12px', fontWeight: '600', color: navy }}>{v}</div></div>
           ))}
         </div>
@@ -148,7 +148,7 @@ export default function Imaging({ brand }) {
           ) : messages.map(m => { const isImaging = m.department === 'Imaging'; return (
             <div key={m.id} style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: isImaging ? tealMist : infoBg, border: `1px solid ${isImaging ? tealMist : infoBg}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span style={{ fontSize: '11px', fontWeight: '700', color: isImaging ? tealDeep : info }}>{m.sender_name} — {m.sender_role}</span>
+                <span style={{ fontSize: '11px', fontWeight: '700', color: isImaging ? tealDeep : info }}>{m.sender_name}, {m.sender_role}</span>
                 <span style={{ fontSize: '10px', color: gray400 }}>{m.created_at?.replace('T', ' ').slice(0, 16)}</span>
               </div>
               <div style={{ fontSize: '13px', color: navy }}>{m.message}</div>
@@ -205,7 +205,7 @@ export default function Imaging({ brand }) {
                   <div style={{ width: '44px', height: '44px', borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Scan size={20} /></div>
                   <div>
                     <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>{req.patient_name || 'Patient'}</div>
-                    <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{req.scan_type} — {req.body_part}</div>
+                    <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{req.scan_type} on {req.body_part}</div>
                     <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>Requested by: {req.requested_by} · {req.created_at?.split('T')[0]}</div>
                   </div>
                 </div>

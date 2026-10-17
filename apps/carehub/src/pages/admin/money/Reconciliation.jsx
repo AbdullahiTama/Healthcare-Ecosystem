@@ -51,7 +51,7 @@ export default function Reconciliation({ repository = createMoneyRepository() })
       </Card>
 
       {filtered.length === 0 ? (
-        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<CheckCircle size={24} />} message="All matched — Paystack ↔ plan_payments in sync. Wire webhook to paystack_events to populate." /></Card>
+        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<CheckCircle size={24} />} message="All matched. Paystack and plan payments are in sync." /></Card>
       ) : (
         <>
           <Card style={{ padding: 12, background: 'var(--panel)', border: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -76,8 +76,8 @@ export default function Reconciliation({ repository = createMoneyRepository() })
                     <tr key={m.reference} style={{ height: 36, borderBottom: '1px solid var(--hairline)' }}>
                       <td style={{ padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg)' }}>{m.reference}</td>
                       <td style={{ padding: '0 12px' }}><span style={{ padding: '3px 7px', borderRadius: 6, background: m.type === 'missing_in_db' ? 'var(--amber-bg)' : m.type === 'amount_mismatch' ? 'var(--red-bg)' : 'var(--hairline)', color: m.type === 'missing_in_db' ? 'var(--amber)' : m.type === 'amount_mismatch' ? 'var(--red)' : 'var(--muted)', fontWeight: 700, fontSize: 11 }}>{m.type}</span></td>
-                      <td style={{ padding: '0 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--fg)' }}>{m.paystack ? `₦${(m.paystack.amount_kobo / 100).toLocaleString()}` : '—'}</td>
-                      <td style={{ padding: '0 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--fg)' }}>{m.db ? `₦${Number(m.db.naira_amount != null ? m.db.naira_amount : (m.db.amount_kobo / 100)).toLocaleString()}` : '—'}</td>
+                      <td style={{ padding: '0 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--fg)' }}>{m.paystack ? `₦${(m.paystack.amount_kobo / 100).toLocaleString()}` : 'Not set'}</td>
+                      <td style={{ padding: '0 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--fg)' }}>{m.db ? `₦${Number(m.db.naira_amount != null ? m.db.naira_amount : (m.db.amount_kobo / 100)).toLocaleString()}` : 'Not set'}</td>
                       <td style={{ padding: '0 12px', textAlign: 'right' }}>
                         {m.type === 'missing_in_db' && <button disabled={busyRef === m.reference} onClick={() => handleResolveMissing(m)} style={{ padding: '5px 10px', borderRadius: 8, border: 'none', background: 'var(--teal)', color: 'white', fontWeight: 700, fontSize: 11, cursor: busyRef ? 'not-allowed' : 'pointer' }}>{busyRef === m.reference ? 'Creating...' : 'Create missing'}</button>}
                         {m.type === 'amount_mismatch' && <span style={{ fontSize: 11, color: 'var(--muted)' }}>PS {m.psAmt} vs DB {m.dbAmt}</span>}
@@ -91,7 +91,7 @@ export default function Reconciliation({ repository = createMoneyRepository() })
           </Card>
         </>
       )}
-      <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>Webhook → <code>paystack_events.reference UNIQUE</code> → triple-match here. “Create missing” is idempotent — duplicate 23505 is success.</div>
+      <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>Webhook → <code>paystack_events.reference UNIQUE</code> → triple match here. “Create missing” is idempotent, so a duplicate is treated as success.</div>
       <Toast msg={msg} type={type} />
     </div>
   )

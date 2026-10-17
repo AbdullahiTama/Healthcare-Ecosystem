@@ -7,6 +7,20 @@ import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
 import { postRepository } from './repositories'
 
+// "What viewers can do" list. Each row is a real list item so a screen reader
+// announces how many capabilities there are, instead of running the four
+// sentences together inside one paragraph.
+const featureRow = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 8,
+  fontSize: 12.5,
+  color: theme.navy,
+  lineHeight: 1.5,
+}
+
+const featureIcon = { flexShrink: 0, marginTop: 2, color: theme.tealDeep }
+
 export default function GoLive({ onClose }) {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -67,13 +81,28 @@ export default function GoLive({ onClose }) {
           </div>
         </div>
 
-        <div style={{ background: theme.tealMist, borderRadius: 12, padding: 12, marginBottom: 16 }}>
-          <p style={{ margin: 0, fontSize: 12, color: theme.tealDeep, lineHeight: 1.5 }}>
-            <Palette size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} /><strong>Shared drawing board</strong> — viewers see you draw in real time<br/>
-            <Mic size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} /><strong>Voice notes</strong> — record and send audio messages<br/>
-            <Gift size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} /><strong>Gifts</strong> — viewers can send CareCoins during your session<br/>
-            <MessageSquare size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} /><strong>Live chat</strong> — questions and answers in real time
+        <div style={{ background: theme.tealMist, borderRadius: 12, padding: '12px 14px', marginBottom: 16 }}>
+          <p style={{ margin: '0 0 8px 0', fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            What viewers can do
           </p>
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 6 }}>
+            <li style={featureRow}>
+              <Palette size={14} aria-hidden="true" style={featureIcon} />
+              <span><strong>Shared drawing board.</strong> Viewers see you draw as you go.</span>
+            </li>
+            <li style={featureRow}>
+              <Mic size={14} aria-hidden="true" style={featureIcon} />
+              <span><strong>Voice notes.</strong> Record and send audio messages.</span>
+            </li>
+            <li style={featureRow}>
+              <Gift size={14} aria-hidden="true" style={featureIcon} />
+              <span><strong>Gifts.</strong> Viewers can send CareCoins during your session.</span>
+            </li>
+            <li style={featureRow}>
+              <MessageSquare size={14} aria-hidden="true" style={featureIcon} />
+              <span><strong>Live chat.</strong> Viewers ask questions while you are live.</span>
+            </li>
+          </ul>
         </div>
 
         <button onClick={startLive} disabled={!topic.trim() || starting}

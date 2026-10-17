@@ -72,7 +72,7 @@ describe('createSettlementEffects: a payment the provider declined', () => {
       templateKey: 'payment_failed', toEmail: 'ada@example.com', app: 'carefind', sourceId: 'i1',
       subject: 'CareFind: your payment did not go through', idempotencyKey: 'payment-failed:cf_topup_1',
     })
-    expect(sent[0].payload).toMatchObject({ fullName: 'Ada Obi', reference: 'cf_topup_1', purpose: 'CareCoin top-up' })
+    expect(sent[0].payload).toMatchObject({ fullName: 'Ada Obi', reference: 'cf_topup_1', purpose: 'CareCoin deposit' })
     expect(sent[0].payload.amount).toContain('220')
   })
 
@@ -90,7 +90,7 @@ describe('createSettlementEffects: a payment the provider declined', () => {
     const { run, sent } = setup({ biz: { name: 'Sunrise Clinic', owner_name: 'Ada', owner_email: 'owner@clinic.com', email: 'biz@clinic.com' } })
     await run({ outcome: 'not_paid', providerStatus: 'failed', purpose: 'business_wallet_topup', intent: intent({ purpose: 'business_wallet_topup', application: 'carehub', customer_id: null, business_id: 'b1', reference: 'ch_topup_1' }) })
     expect(sent[0]).toMatchObject({ templateKey: 'payment_failed', toEmail: 'owner@clinic.com', app: 'carehub', subject: 'CareHub: your payment did not go through' })
-    expect(sent[0].payload.purpose).toBe('Wallet top-up')
+    expect(sent[0].payload.purpose).toBe('Wallet deposit')
   })
 
   it('a guest booking goes to the address on the appointment', async () => {

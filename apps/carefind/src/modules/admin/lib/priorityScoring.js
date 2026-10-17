@@ -108,7 +108,7 @@ export function getModerationItems({ reports = [], posts = [], verifications = [
         target_type: 'user',
         target_id: v.user_id,
         title: `Verification: ${v.full_name}`,
-        description: `${v.profession} — ${v.workplace || 'No workplace'}`,
+        description: `${v.profession} at ${v.workplace || 'no workplace listed'}`,
         status: v.status,
         created_at: v.created_at,
         score,

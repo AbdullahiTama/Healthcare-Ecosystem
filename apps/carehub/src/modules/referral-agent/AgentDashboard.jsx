@@ -53,7 +53,7 @@ export default function AgentDashboard() {
 
   const bizName = (id) => {
     const b = portfolio.find(x => x.id === id)
-    return b ? b.name : '—'
+    return b ? b.name : 'Not set'
   }
 
   const earned = commissions.filter(c => c.status !== 'void')
@@ -104,7 +104,7 @@ export default function AgentDashboard() {
           <div style={{ fontSize: '20px' }}>🤝</div>
           <div>
             <div style={{ fontWeight: '800', fontSize: '14px' }}>CareHub Referral Agent</div>
-            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>{agent?.city ? agent.city + ' · ' : ''}{agent?.area || ''} — {agent?.name || ''}</div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>{agent?.city ? agent.city + ' · ' : ''}{agent?.area || ''} · {agent?.name || ''}</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -144,19 +144,19 @@ export default function AgentDashboard() {
                 <Card style={{ padding: '18px' }}>
                   <div style={{ fontWeight: '800', color: navy, marginBottom: '12px' }}>Territory overview</div>
                   <div style={{ fontSize: '13px', color: gray500, lineHeight: 1.9 }}>
-                    You cover <strong style={{ color: navy }}>{agent?.area}, {agent?.city}</strong>. Keep these businesses supported so they stay subscribed — that's what earns you the recurring 5% on every renewal.
+                    You cover <strong style={{ color: navy }}>{agent?.area}, {agent?.city}</strong>. Keep these businesses supported so they stay subscribed. That is what earns you the recurring 5% on every renewal.
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
                     {Object.entries(typeCounts).map(([t, n]) => (
-                      <span key={t} style={{ fontSize: '12px', fontWeight: '700', padding: '6px 12px', borderRadius: theme.radius.full, background: tealMist, color: theme.tealDeep }}>{businessName(t)} — {n}</span>
+                      <span key={t} style={{ fontSize: '12px', fontWeight: '700', padding: '6px 12px', borderRadius: theme.radius.full, background: tealMist, color: theme.tealDeep }}>{businessName(t)}: {n}</span>
                     ))}
-                    {Object.keys(typeCounts).length === 0 && <span style={{ fontSize: '12px', color: gray400 }}>No businesses yet — share your referral code to onboard your first clinic or pharmacy.</span>}
+                    {Object.keys(typeCounts).length === 0 && <span style={{ fontSize: '12px', color: gray400 }}>No businesses yet. Share your referral code to onboard your first clinic or pharmacy.</span>}
                   </div>
                 </Card>
 
                 <Card style={{ padding: '18px', marginTop: '12px' }}>
                   <div style={{ fontWeight: 800, color: navy, marginBottom: '12px' }}>Your referral link</div>
-                  <div style={{ fontSize: '12px', color: gray500, marginBottom: '8px' }}>Send businesses this link — they sign up with it and you're credited as their referring agent.</div>
+                  <div style={{ fontSize: '12px', color: gray500, marginBottom: '8px' }}>Send businesses this link. They sign up with it and you're credited as their referring agent.</div>
                   <code style={{ display: 'block', fontSize: '13px', padding: '12px 14px', borderRadius: theme.radius.md, background: theme.gray50, border: `1px dashed ${theme.tealDeep}`, color: theme.tealDeep, fontWeight: 700 }}>{agent?.referral_code ? window.location.origin + '/register?ref=' + agent.referral_code : 'Code unlocks once your account is active.'}</code>
                 </Card>
               </>
@@ -227,7 +227,7 @@ function ReferralList({ portfolio }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{b.name}</div>
-                <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{businessName(b.business_type)} · {b.state || '—'} · joined {fmtDate(b.created_at)}</div>
+                <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{businessName(b.business_type)} · {b.state || 'Not set'} · joined {fmtDate(b.created_at)}</div>
               </div>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <Pill label={b.plan || 'basic'} type='gray' />
@@ -269,7 +269,7 @@ function PayoutsView({ payouts }) {
       {payouts.map(p => (
         <Card key={p.id} style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>Payout — {fmtDate(p.created_at)}</div>
+            <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>Payout on {fmtDate(p.created_at)}</div>
             <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{p.method || 'bank transfer'} · {Array.isArray(p.commission_ids) ? p.commission_ids.length : 0} commissions</div>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -311,7 +311,7 @@ function ActivityFeed({ activity }) {
         return (
           <Card key={i} style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>{isAtRisk ? '⚠ ' + a.business + ' near expiry' : 'Business signed up — ' + a.business}</div>
+              <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>{isAtRisk ? '⚠ ' + a.business + ' near expiry' : 'Business signed up: ' + a.business}</div>
               <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{fmtDate(a.date)}</div>
             </div>
             {!isAtRisk && <Pill label={(a.type === 'referral_bonus' ? '40% bonus' : '5% residual') + ' · ₦' + Number(a.amount || 0).toLocaleString()} type={a.type === 'referral_bonus' ? 'green' : 'teal'} />}

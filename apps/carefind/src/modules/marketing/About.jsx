@@ -15,35 +15,35 @@ gsap.registerPlugin(ScrollTrigger)
 const { tealDeep, navy, navySoft, bg, cardBg, border, textDark, textMid, textLight } = theme
 
 const PILLARS = [
-  { icon: Compass, title: 'Discovery', desc: 'Hospitals, pharmacies, laboratories, professionals, products and services — without navigating a maze of disconnected platforms.' },
-  { icon: Newspaper, title: 'Information', desc: 'Healthcare news, education and credible voices — so useful information is easier to find than noise.' },
-  { icon: Star, title: 'Experience', desc: 'Real experiences shared by real users, giving future patients real-world context before they choose.' },
-  { icon: HeartHandshake, title: 'Connection', desc: 'People with questions, professionals with knowledge, organizations with services — brought closer together.' },
-  { icon: Building2, title: 'Business', desc: 'Smart business tools, so healthcare businesses can operate well and serve the communities around them.' },
+  { icon: Compass, title: 'Discovery', desc: 'Search hospitals, pharmacies, laboratories, professionals, products and services in one place, instead of moving between separate apps.' },
+  { icon: Newspaper, title: 'Information', desc: 'Healthcare news, explainers and guidance from verified professionals, published by people who work in healthcare.' },
+  { icon: Star, title: 'Experience', desc: 'Reviews and reports from patients who used a product, facility or professional, so you can read how it actually went.' },
+  { icon: HeartHandshake, title: 'Connection', desc: 'Ask a question and get an answer from a verified professional. Follow the accounts you find useful.' },
+  { icon: Building2, title: 'Business', desc: 'Listings, storefronts, stock and sales tools for pharmacies, hospitals and other healthcare businesses.' },
 ]
 
 const OFFERINGS = [
-  { icon: Star, title: 'Better-informed choices', body: 'Users share their experiences with products, facilities, professionals and services. Over time those experiences gather around each option, giving future patients a broader, real-world picture to consider. Transparency, layered on top of discovery.' },
-  { icon: MessageCircle, title: 'More than a search', body: 'CareFind is a healthcare social platform, not simply a directory. People have questions, professionals have knowledge, organizations have services — all brought into one healthcare-focused social environment.' },
-  { icon: Newspaper, title: 'Reliable healthcare information', body: 'A dedicated space for healthcare news and information, plus opportunities to learn from credible voices — helping useful information become easier to discover, not adding to the noise.' },
-  { icon: Users, title: 'Empowering people behind healthcare', body: 'Doctors, pharmacists, nurses, hospitals, laboratories, wellness providers and healthcare businesses gain a digital presence where their expertise and services can reach the people who need them.' },
+  { icon: Star, title: 'Reviews that reflect real visits', body: 'People write about the product, facility, professional or service they actually used. Over time those reviews build up around each option, so you can see how it has worked for others before you choose.' },
+  { icon: MessageCircle, title: 'A place to ask questions', body: 'Not every healthcare question needs a search result. CareFind also works as a social platform, where patients post questions and verified professionals answer them in public, so the next person with the same question finds the answer too.' },
+  { icon: Newspaper, title: 'Healthcare news and explainers', body: 'A separate section for healthcare news and health information. We publish what is useful to a Nigerian reader and leave out what is only there to fill a feed.' },
+  { icon: Users, title: 'A presence for healthcare providers', body: 'Doctors, pharmacists, nurses, hospitals, laboratories, wellness providers and healthcare businesses can set up a verified profile and reach the people who need them.' },
 ]
 
 const MILESTONES = [
   {
     year: '2020',
     title: 'The WhatsApp group',
-    body: 'In Nigeria, in the middle of the COVID-19 pandemic, Pharmacist Haruna Abdullahi Tama created a WhatsApp group alongside Pharmacist Maryam Abdul Aziz, Pharmacist John Joseph and Rahanat Yusuf — dedicated to answering people\u2019s healthcare questions when they had nowhere else to turn. It grew to over 500 members: doctors, pharmacists, nurses, medical laboratory scientists and university lecturers, giving their time and knowledge freely, hosting webinars and bringing clarity to a moment full of uncertainty.',
+    body: 'During the COVID-19 pandemic, Pharmacist Haruna Abdullahi Tama started a WhatsApp group with Pharmacist Maryam Abdul Aziz, Pharmacist John Joseph and Rahanat Yusuf to answer people who had healthcare questions and nowhere else to go. The group grew past 500 members, mostly doctors, pharmacists, nurses, medical laboratory scientists and university lecturers, who gave their time freely and ran webinars.',
   },
   {
     year: '2024',
     title: 'HATMA Brandtech Limited',
-    body: 'Goodwill alone could not scale. Haruna Abdullahi Tama founded HATMA Brandtech, beginning a journey into building real, lasting solutions. A team came together to learn, build and refine what would become CareFind — shaped by experience on the frontlines of hospital, community pharmacy, skincare and pharmaceutical marketing work.',
+    body: 'A WhatsApp group cannot run a pharmacy or manage stock. Haruna Abdullahi Tama founded HATMA Brandtech to build software that could. The team drew on its own experience in hospitals, community pharmacy, skincare and pharmaceutical marketing.',
   },
   {
     year: '2026',
     title: 'CareFind arrives',
-    body: 'Now, in 2026, that journey arrives at CareFind: the solution a small WhatsApp group in the middle of a pandemic first set out, in its own way, to build.',
+    body: 'CareFind is the result. It is the same group of pharmacists, doctors and engineers, with the questions and the services now on one platform.',
   },
 ]
 
@@ -199,7 +199,7 @@ export default function About() {
             background: '#fff', color: navy, fontWeight: 700, fontSize: 13,
             cursor: 'pointer', fontFamily: 'inherit',
           }}>
-            Get started
+            Create an account
           </button>
         </div>
       </nav>
@@ -284,16 +284,16 @@ A healthcare social platform by HATMA Brandtech Limited
           Finding healthcare should not be difficult.
         </h2>
         <ProseParagraph lead>
-          Healthcare is one of the most essential parts of human life. Yet accessing the right healthcare product, service, professional, facility, information or support can be extremely difficult.
+          Finding the right healthcare product, service, professional or facility is harder than it should be. In Nigeria it usually means asking around, trying a number, and hoping for the best.
         </ProseParagraph>
         <ProseParagraph>
-          Whether someone is looking for a hospital, pharmacy, laboratory, diagnostic centre, medical professional, skincare and cosmetic provider, healthcare product, wellness service or another healthcare resource, the challenge is often the same: knowing what is available, where to find it, who to trust, and how to connect with it.
+          Whether you need a hospital, pharmacy, laboratory, diagnostic centre, medical professional, skincare or cosmetic provider, a healthcare product or a wellness service, the questions are the same. What is available, where it is, and whether you can trust it.
         </ProseParagraph>
         <ProseParagraph>
-          For healthcare professionals, businesses and organizations, the challenge is just as significant — valuable expertise, products and services may exist within a community without ever being discoverable by the people who need them.
+          Healthcare professionals and businesses have the opposite problem. Good expertise, good products and good services often exist in a community, and the people who need them never hear about it.
         </ProseParagraph>
         <ProseParagraph>
-          This is the gap CareFind was created to help bridge. Our purpose is one simple idea: <strong style={{ color: textDark }}>connecting people to better healthcare.</strong>
+          CareFind exists to close that gap. Our purpose is one simple idea: <strong style={{ color: textDark }}>connecting people to better healthcare.</strong>
         </ProseParagraph>
       </div>
 
@@ -302,7 +302,7 @@ A healthcare social platform by HATMA Brandtech Limited
         <SectionHead
           eyebrow="Mission & vision"
           title="CareFind was created for one reason"
-          intro="To make it simple for everyone — patients, professionals, businesses — to find, understand and connect with the right healthcare."
+          intro="To make it simple for patients, professionals and businesses to find and connect with the right healthcare."
         />
       </div>
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: '0 24px 90px' }}>
@@ -313,7 +313,7 @@ A healthcare social platform by HATMA Brandtech Limited
             </div>
             <h3 style={{ fontFamily: theme.fontDisplay, fontWeight: 800, fontSize: 18, color: textDark, margin: '0 0 10px' }}>Our mission</h3>
             <p style={{ fontSize: 14, color: textMid, lineHeight: 1.7, margin: 0 }}>
-              To connect every person to healthcare they can trust — making it simple to discover the right product, service, professional or information, wherever they are, and to give healthcare professionals and businesses the visibility and tools they need to serve their communities well.
+              To connect every person to healthcare they can trust. We make it simple to find the right product, service, professional or information, wherever you are, and we give healthcare professionals and businesses the visibility and tools to serve their communities properly.
             </p>
           </div>
           <div style={{ background: `linear-gradient(135deg, ${navy} 0%, ${navySoft} 100%)`, borderRadius: theme.radius.xl, padding: 32 }}>
@@ -322,7 +322,7 @@ A healthcare social platform by HATMA Brandtech Limited
             </div>
             <h3 style={{ fontFamily: theme.fontDisplay, fontWeight: 800, fontSize: 18, color: '#fff', margin: '0 0 10px' }}>Our vision</h3>
             <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', lineHeight: 1.7, margin: 0 }}>
-              A future where healthcare is never out of reach — where finding the right care is as simple as asking a question, where trust is built on real experience rather than guesswork, and where every healthcare professional, business and organization is as discoverable as the people who need them.
+              A Nigeria where finding the right care is as easy as asking a question, where trust comes from real experience rather than guesswork, and where every healthcare professional and business is as easy to find as the people looking for them.
             </p>
           </div>
         </div>
@@ -332,7 +332,7 @@ A healthcare social platform by HATMA Brandtech Limited
         }}>
           <p style={{ fontSize: 14.5, lineHeight: 1.8, margin: 0, color: textMid }}>
             <strong style={{ color: tealDeep, fontWeight: 800 }}>Our goal: </strong>
-            to grow CareFind into one of the most trusted and reputable healthcare platforms in the world — not the biggest for its own sake, but the one people turn to first, wherever in the world they are standing.
+            to become the first place a Nigerian checks when they need a pharmacy, a doctor, a laboratory or an answer to a health question.
           </p>
         </div>
       </div>
@@ -342,8 +342,8 @@ A healthcare social platform by HATMA Brandtech Limited
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
           <SectionHead
             eyebrow="What CareFind does"
-            title="A healthcare social platform, not just a directory"
-            intro="CareFind brings discovery, information, experience, connection and business together around the people who need them."
+            title="Find care, ask questions, and follow the people who answer"
+            intro="CareFind covers discovery, health information, patient experience and the tools healthcare businesses need to run."
           />
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 18 }}>
             {OFFERINGS.map((f) => (
@@ -361,8 +361,8 @@ A healthcare social platform by HATMA Brandtech Limited
             border: `1px dashed ${border}`, textAlign: 'center',
           }}>
             <p style={{ fontSize: 14.5, color: textMid, lineHeight: 1.8, margin: 0 }}>
-              <strong style={{ color: tealDeep, fontWeight: 800 }}>Smart business management. </strong>
-              Beyond visibility, CareFind incorporates smart business and inventory management software — because a pharmacy or healthcare business may manage hundreds or thousands of products while dealing with stock, sales and day-to-day operations. CareFind doesn't only help people find healthcare; it helps healthcare businesses operate, connect and serve more effectively.
+              <strong style={{ color: tealDeep, fontWeight: 800 }}>Running the business. </strong>
+              A pharmacy or healthcare business can hold thousands of products and still need to track stock, record sales and handle the day to day. CareHub handles that side. CareFind handles the customer facing side, so the same business can sell through CareFind and keep its books in CareHub.
             </p>
           </div>
         </div>

@@ -25,8 +25,8 @@ export const PLATFORM_PERMISSIONS = [
 export const PLATFORM_NAV = [
   { id: 'dashboard', label: 'Dashboard', perm: 'Dashboard' },
   { id: 'businesses', label: 'Businesses', perm: 'Businesses' },
-  { id: 'team-agents', label: 'Team – Agents', perm: 'Team-Agents' },
-  { id: 'team-platform', label: 'Team – Platform', perm: 'Team-Platform' },
+  { id: 'team-agents', label: 'Team: Agents', perm: 'Team-Agents' },
+  { id: 'team-platform', label: 'Team: Platform', perm: 'Team-Platform' },
   { id: 'applications', label: 'Applications', perm: 'Applications' },
   { id: 'ledger', label: 'Ledger', perm: 'Ledger' },
   { id: 'payouts', label: 'Payouts', perm: 'Payouts' },

@@ -161,7 +161,7 @@ function GiftPanel({ postId, recipientId, onClose }) {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: theme.slate, borderRadius: 12, padding: '10px 14px', marginBottom: 16 }}>
           <div>
-            <p style={{ margin: 0, fontSize: 10.5, color: '#64748b', fontWeight: 700 }}>YOUR CARECOINS</p>
+            <p style={{ margin: 0, fontSize: 10.5, color: '#64748b', fontWeight: 700 }}>CareCoins balance</p>
             <p style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.tealBright }}>🪙 {wallet?.balance || 0}</p>
           </div>
           <Link to="/wallet" onClick={onClose} style={{ background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
@@ -198,7 +198,7 @@ function GiftPanel({ postId, recipientId, onClose }) {
             boxShadow: (wallet?.balance || 0) >= selected.coins ? '0 4px 16px rgba(219,39,119,0.4)' : 'none',
           }}
         >
-          {sending ? 'Sending...' : (wallet?.balance || 0) < selected.coins ? 'Not enough CareCoins' : `Send ${selected.emoji} ${selected.name} — ${selected.coins} 🪙`}
+          {sending ? 'Sending...' : (wallet?.balance || 0) < selected.coins ? 'Not enough CareCoins' : `Send ${selected.emoji} ${selected.name} · ${selected.coins} 🪙`}
         </button>
 
         <button onClick={onClose} style={{ display: 'block', margin: '12px auto 0', background: 'none', border: 'none', color: '#64748b', fontSize: 13, fontWeight: 600 }}>

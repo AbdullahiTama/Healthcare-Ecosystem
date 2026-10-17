@@ -65,9 +65,9 @@ export function buildOrderRequest({ items, subtotalKobo, fees, form, deliveryPre
 // create_shop_order's refusals, in words a customer can act on.
 export function orderErrorMessage(err) {
   const msg = String(err?.message || '')
-  if (msg.includes('INSUFFICIENT_STOCK')) return 'Some items are now out of stock — please review your cart. Inventory was updated after you added items.'
-  if (msg.includes('PRICE_CHANGED')) return 'A product price changed while you were checking out — please review your cart and try again.'
+  if (msg.includes('INSUFFICIENT_STOCK')) return 'Some items are now out of stock. Review your cart. Inventory was updated after you added items.'
+  if (msg.includes('PRICE_CHANGED')) return 'A product price changed while you were checking out. Review your cart and try again.'
   if (msg.includes('Vendor not approved')) return 'This vendor is not currently approved for Shop sales.'
-  if (/mismatch/i.test(msg)) return 'Your order total is out of date — please refresh the page and check out again.'
+  if (/mismatch/i.test(msg)) return 'Your order total is out of date. Refresh the page and check out again.'
   return msg || 'Failed to create order. Please try again.'
 }

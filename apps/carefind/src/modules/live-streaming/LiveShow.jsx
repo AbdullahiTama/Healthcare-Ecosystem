@@ -334,7 +334,7 @@ function LiveShow() {
           {/* Trailer */}
           {show.trailer_url && (
             <div style={{ marginBottom: 24 }}>
-              <p style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}><Film size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />WATCH THE TRAILER</p>
+              <p style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.7)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Film size={13} aria-hidden="true" />Watch the trailer</p>
               <video src={show.trailer_url} controls playsInline style={{ width: '100%', borderRadius: 14, display: 'block' }} />
             </div>
           )}

@@ -92,7 +92,7 @@ function tag(name, content) {
 // submission workflow with the PV/regulatory lead before representing any
 // file as a valid submission.
 export const E2B_FORMAT_NOTE =
-  'ICH E2B(R3)-flavoured XML for regulatory preparation only — not schema-validated and not a submission to NAFDAC or any authority.'
+  'ICH E2B(R3)-flavoured XML for regulatory preparation only. It has not been validated against the schema, and it is not a submission to NAFDAC or any authority.'
 
 /**
  * Builds an ICH E2B-flavoured XML message for an ICSR. Never throws on missing
@@ -444,7 +444,7 @@ export function buildBulkPdfHtml({ cases, filtersLabel = 'All', orgName = '', ca
   const shown = list.slice(0, Math.max(cap, 0))
   const truncated = list.length - shown.length
   const cover =
-    `<h1>ADR case export — ${orgName || 'CareHub'}</h1>` +
+    `<h1>ADR case export: ${orgName || 'CareHub'}</h1>` +
     `<div class="meta">Generated ${generatedAt.toLocaleString('en-NG')} · ` +
     `${shown.length} of ${list.length} cases selected · Filters: ${filtersLabel}</div>` +
     (list.length === 0
@@ -452,7 +452,7 @@ export function buildBulkPdfHtml({ cases, filtersLabel = 'All', orgName = '', ca
       : '') +
     (truncated > 0
       ? `<div class="section"><p><strong>Note:</strong> this document is truncated to the first ${shown.length} cases ` +
-        `(${truncated} further case${truncated === 1 ? ' is' : 's are'} available — export as CSV for the full set).</p></div>`
+        `(${truncated} further case${truncated === 1 ? ' is' : 's are'} available. Export as CSV for the full set).</p></div>`
       : '')
   const body = shown.map(({ report, products = [], meds = [], reactions = [], reactionExpected = null }) => (
     `<h1>${ADR_FORM.formatReportNumber(report.report_number)}</h1>` +
@@ -486,7 +486,7 @@ export function buildAnalyticsHtml({ figures, filtersLabel = 'All', periodLabel 
     `table { width: 100%; border-collapse: collapse; font-size: 13px; }` +
     `th { text-align: left; color: #5B6B63; font-weight: 600; padding: 3px 0; }` +
     `td { padding: 3px 0; }</style></head><body>` +
-    `<h1>PV analytics report — ${orgName || 'CareHub'}</h1>` +
+    `<h1>PV analytics report: ${orgName || 'CareHub'}</h1>` +
     `<div class="meta">Generated ${generatedAt.toLocaleString('en-NG')} · ${periodLabel} · Filters: ${filtersLabel} · n = ${f.total ?? 0} authorized cases</div>` +
     `<p>These figures describe <strong>reports of suspected reactions</strong>. They do not establish that any product caused any outcome. ` +
     `Small groups are suppressed for privacy; unknown values are never imputed.</p>` +

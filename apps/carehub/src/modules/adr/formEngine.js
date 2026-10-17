@@ -206,23 +206,23 @@ export const ADR_FORM = {
     return {
       [ADR_MODULE_TYPES.COMMUNITY_PHARMACY]: {
         format: 'pdf',
-        title: 'NAFDAC ADR Export - Community Pharmacy',
+        title: 'NAFDAC ADR Export (Community Pharmacy)',
         include: ['reporter', 'patient', 'products', 'reactions', 'seriousness', 'outcome', 'action', 'causality'],
       },
       [ADR_MODULE_TYPES.HOSPITAL]: {
         format: 'pdf',
-        title: 'NAFDAC ADR Export - Hospital',
+        title: 'NAFDAC ADR Export (Hospital)',
         include: ['reporter', 'patient', 'products', 'concomitant', 'reactions', 'seriousness', 'outcome', 'action', 'causality', 'hospitalDetails'],
       },
       [ADR_MODULE_TYPES.INDUSTRY]: {
         format: 'xml',
-        title: 'E2B XML Export - Industry',
+        title: 'E2B XML Export (Industry)',
         include: ['allFields'],
         e2bVersion: 'configurable',
       },
       [ADR_MODULE_TYPES.SKINCARE]: {
         format: 'pdf',
-        title: 'NAFDAC Cosmetic Event Export - Skincare',
+        title: 'NAFDAC Cosmetic Event Export (Skincare)',
         include: ['reporter', 'patient', 'products', 'reactions', 'seriousness', 'outcome', 'action', 'causality', 'cosmeticDetails'],
       },
     }[moduleType] || this.getExportConfig(ADR_MODULE_TYPES.COMMUNITY_PHARMACY)
@@ -398,7 +398,7 @@ export const ADR_FORM = {
    * Format a report number human-readably.
    */
   formatReportNumber(reportNumber) {
-    if (!reportNumber) return '—'
+    if (!reportNumber) return 'Not set'
     // Expected format: ADR-2026-000123
     const match = reportNumber.match(/^ADR-(\d{4})-(\d{6})$/)
     if (match) {

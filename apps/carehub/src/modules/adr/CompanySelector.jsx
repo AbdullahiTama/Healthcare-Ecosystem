@@ -14,10 +14,10 @@ import { PUBLIC_COMPANY_LABEL, ROUTE_SELECTION_KINDS } from './routing'
 export function describeRoute(route, businessName) {
   if (!route) return 'Not set'
   if (route.selection_kind === 'verified') {
-    return `${businessName || 'Verified company'} — ${route.status || 'pending'}`
+    return `${businessName || 'Verified company'} (${route.status || 'pending'})`
   }
   if (route.selection_kind === 'unverified_candidate') {
-    return `${route.candidate_name || 'Typed name'} (unverified — no access granted)`
+    return `${route.candidate_name || 'Typed name'} (unverified, no access granted)`
   }
   return 'Unknown company'
 }
@@ -107,7 +107,7 @@ export default function CompanySelector({ value, onChange, searchCompanies, disa
                       style={{ display: 'block', width: '100%', textAlign: 'left', fontSize: 13.5, padding: '8px 10px', cursor: 'pointer', background: value.businessId === c.business_id ? theme.tealMist || '#e6f4ef' : '#fff', border: 'none', borderBottom: `1px solid ${theme.gray100}` }}
                     >
                       {c.business_name}
-                      {c.matched_alias && <span style={{ fontSize: 12, color: theme.textLight }}> — also known as “{c.matched_alias}”</span>}
+                      {c.matched_alias && <span style={{ fontSize: 12, color: theme.textLight }}> also known as “{c.matched_alias}”</span>}
                       {(c.city || c.state) && <span style={{ display: 'block', fontSize: 12, color: theme.textLight }}>{[c.city, c.state].filter(Boolean).join(', ')}</span>}
                     </button>
                   </li>

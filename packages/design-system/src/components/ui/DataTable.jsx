@@ -7,6 +7,13 @@ import { CardSkeleton } from './State'
 import { Empty } from './State'
 import { ErrorState } from './State'
 
+// The single place the ecosystem decides what an absent cell says. Both apps
+// import this rather than writing their own placeholder, so a table rendered in
+// CareHub and the same table rendered in CareFind read identically.
+// Clinical and regulatory screens use "Not recorded" instead, because there the
+// absence of a value is itself the finding.
+export const NOT_SET = 'Not set'
+
 // DataTable (Stage 3 / Slice 6). Promoted from CareHub's table/card list into
 // the shared package so CareFind can use the same table. One column model
 // renders as either a desktop <table> (with an automatic mobile → card-list
@@ -110,7 +117,7 @@ export function DataTable({ rows = [], columns = [], actions, onRowClick, rowSty
       {columns.map(c => (
         <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '6px 0', borderBottom: `1px solid ${theme.gray100}` }}>
           <span style={labelStyle}>{c.label}</span>
-          <span style={valueStyle}>{c.render ? c.render(row) : String(row[c.key] ?? '—')}</span>
+          <span style={valueStyle}>{c.render ? c.render(row) : String(row[c.key] ?? NOT_SET)}</span>
         </div>
       ))}
     </div>
@@ -122,7 +129,7 @@ export function DataTable({ rows = [], columns = [], actions, onRowClick, rowSty
 
   const pagination = (inside) => hasPagination && pageCount > 1 && (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...(inside ? { padding: '12px 14px', borderTop: `1px solid ${theme.border}` } : { padding: '12px 4px' }), fontSize: 12, color: theme.gray500 }}>
-      <span>{safePage * pageSize + 1}–{Math.min((safePage + 1) * pageSize, shown)} of {shown}</span>
+      <span>{safePage * pageSize + 1} to {Math.min((safePage + 1) * pageSize, shown)} of {shown}</span>
       <div style={{ display: 'flex', gap: 6 }}>
         <button onClick={() => setPage(Math.max(0, page - 1))} disabled={safePage === 0} aria-label="Previous page" style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}`, background: safePage === 0 ? theme.gray100 : 'white', color: safePage === 0 ? theme.gray400 : theme.navy, fontWeight: 700, fontSize: 12, cursor: safePage === 0 ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ChevronLeft size={13} /> {inside ? 'Previous' : 'Prev'}</button>
         <button onClick={() => setPage(Math.min(pageCount - 1, page + 1))} disabled={safePage >= pageCount - 1} aria-label="Next page" style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}`, background: safePage >= pageCount - 1 ? theme.gray100 : 'white', color: safePage >= pageCount - 1 ? theme.gray400 : theme.navy, fontWeight: 700, fontSize: 12, cursor: safePage >= pageCount - 1 ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>Next <ChevronRight size={13} /></button>
@@ -202,7 +209,7 @@ export function DataTable({ rows = [], columns = [], actions, onRowClick, rowSty
                 <tr key={row.id} className="ds-data-row" onClick={onRowClick ? () => onRowClick(row) : undefined}
                   style={{ borderBottom: `1px solid ${theme.gray100}`, cursor: onRowClick ? 'pointer' : 'default', transition: 'background 0.12s ease', ...(rowStyle ? rowStyle(row) : {}) }}>
                   {columns.map(c => (
-                    <td key={c.key} style={{ ...cellStyle, textAlign: c.align || 'left' }}>{c.render ? c.render(row) : String(row[c.key] ?? '—')}</td>
+                    <td key={c.key} style={{ ...cellStyle, textAlign: c.align || 'left' }}>{c.render ? c.render(row) : String(row[c.key] ?? NOT_SET)}</td>
                   ))}
                   {actions && <td style={cellStyle}>{actions(row)}</td>}
                 </tr>

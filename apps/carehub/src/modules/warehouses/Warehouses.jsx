@@ -92,7 +92,7 @@ export default function Warehouses({ brand }) {
   const askRemove = (loc) => {
     const children = locations.filter(l => l.parent_location_id === loc.id)
     if (children.length > 0) {
-      showToast('Cannot delete "' + loc.name + '" — it has ' + children.length + ' location(s) under it. Reassign or delete those first.', { type: 'warning' })
+      showToast('Cannot delete "' + loc.name + '". It has ' + children.length + ' location(s) under it. Reassign or delete those first.', { type: 'warning' })
       return
     }
     setLocationToDelete(loc)
@@ -120,7 +120,7 @@ export default function Warehouses({ brand }) {
     <>
       <PageHeader
         title="Warehouses & Branches"
-        description="Structure this however your company works — headquarters, regional offices, warehouses, whatever you call them."
+        description="Structure this however your company works: headquarters, regional offices, warehouses, or whatever you call them."
         primaryAction={{ label: 'Add location', leftIcon: <Plus size={15} />, onClick: openNew }}
       />
       <div style={{ padding: '24px', maxWidth: '760px' }}>
@@ -211,10 +211,10 @@ export default function Warehouses({ brand }) {
                   style={{ width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', background: 'white', color: navy }}>
                   <option value=''>No manager assigned</option>
                   {staff.map(s => (
-                    <option key={s.id} value={s.id}>{s.full_name || s.name} — {s.role}</option>
+                    <option key={s.id} value={s.id}>{s.full_name || s.name} ({s.role})</option>
                   ))}
                 </select>
-                {staff.length === 0 && <div style={{ fontSize: '11px', color: gray400, marginTop: '4px' }}>No staff added yet — add staff first to assign a manager.</div>}
+                {staff.length === 0 && <div style={{ fontSize: '11px', color: gray400, marginTop: '4px' }}>No staff added yet. Add staff first to assign a manager.</div>}
               </div>
 
               <Inp label='Notes (optional)' value={form.notes} onChange={v => f('notes', v)} placeholder='Anything else worth noting' />

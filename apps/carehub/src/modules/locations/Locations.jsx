@@ -71,7 +71,7 @@ export default function Locations({ brand, role }) {
     setSaving(true)
     try {
       const created = await locationsRepository.addBranch({
-        name: brand.name + ' — ' + form.name,
+        name: brand.name + ' · ' + form.name,
         branch_name: form.name,
         parent_business_id: mainId,
         owner: brand.owner,
@@ -119,7 +119,7 @@ export default function Locations({ brand, role }) {
   if (!isOwner) return (
     <div style={{ padding: '32px', textAlign: 'center', color: gray400 }}>
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}><Lock size={40} /></div>
-      <div style={{ fontSize: '16px', fontWeight: '700', color: gray600 }}>Multi-location management is restricted to the business Owner</div>
+      <div style={{ fontSize: '16px', fontWeight: '700', color: gray600 }}>Managing multiple locations is restricted to the business Owner</div>
     </div>
   )
 
@@ -129,7 +129,7 @@ export default function Locations({ brand, role }) {
 
       {/* Combined stats across all locations */}
       <div style={{ marginBottom: '20px', padding: '20px', borderRadius: theme.radius.lg, background: navy, color: 'white' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', opacity: 0.6, marginBottom: '12px' }}><BarChart2 size={14} /> Combined performance — all locations today</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', opacity: 0.6, marginBottom: '12px' }}><BarChart2 size={14} /> Combined performance across every location today</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: '16px' }}>
           <div>
             <div style={{ fontSize: '24px', fontWeight: '900', color: tealBright }}>{fmt(totalRevenue)}</div>

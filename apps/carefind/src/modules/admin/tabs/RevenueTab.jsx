@@ -37,7 +37,7 @@ export default function RevenueTab({ transactions }) {
         />
         <StatCard
           icon={<TrendingUp size={20} />}
-          label="Top-ups"
+          label="Deposits"
           value={topupCount}
           sub="Transactions"
           tone="green"

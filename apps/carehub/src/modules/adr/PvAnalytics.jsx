@@ -94,7 +94,7 @@ export default function PvAnalytics({ cases, periodLabel = 'Last 6 months', acti
         </p>
         {sparse && (
           <p style={{ fontSize: 12.5, color: theme.textLight, margin: '6px 0 0' }} role="status">
-            Limited data: {n} authorized cases — figures below are indicative. Small groups are
+            Limited data: {n} authorized cases. The figures below are indicative. Small groups are
             suppressed for privacy until at least {SMALL_GROUP_THRESHOLD} cases accumulate.
           </p>
         )}
@@ -150,7 +150,7 @@ export default function PvAnalytics({ cases, periodLabel = 'Last 6 months', acti
       </Section>
 
       <Section title="By report source" n={n} periodLabel={periodLabel} activeFilters={activeFilters}
-        limitation="Recorded submission channel only — never inferred.">
+        limitation="Recorded submission channel only. This value is never inferred.">
         {Object.entries(sources).map(([s, c]) => (
           <BarRow key={s} label={sourceBadge(s).label} count={c} total={n}
             drill={() => onDrill({ source: s })} drillLabel={sourceBadge(s).label} />
@@ -158,7 +158,7 @@ export default function PvAnalytics({ cases, periodLabel = 'Last 6 months', acti
       </Section>
 
       <Section title="By reporter type" n={n} periodLabel={periodLabel} activeFilters={activeFilters}
-        limitation="Reporter qualification as recorded. Geographic breakdown is unavailable — location is not collected on safety reports, so none is estimated.">
+        limitation="Reporter qualification as recorded. Geographic breakdown is unavailable because location is not collected on safety reports, so none is estimated.">
         {Object.entries(qualifications).sort((a, b) => b[1] - a[1]).map(([q, c]) => (
           <BarRow key={q} label={q} count={c} total={n} />
         ))}

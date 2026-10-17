@@ -13,7 +13,7 @@ import { Card, Loading, Empty, ErrorState, Pill, useToast, Toast, Button } from 
 const { tealDeep, navy, gray600, gray500, gray400, border } = theme
 
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return 'Not recorded'
   return new Date(d).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
@@ -99,7 +99,7 @@ export default function AdrReportsList({ brand, embedded = false }) {
 
   async function handleNewReport() {
     if (!brand?.id) {
-      showToast('Business not loaded yet — try again', { type: 'warning' })
+      showToast('The business has not loaded yet. Try again', { type: 'warning' })
       return
     }
     setCreating(true)
@@ -115,7 +115,7 @@ export default function AdrReportsList({ brand, embedded = false }) {
       if (id) {
         navigate(`/dashboard/adr-reports/${id}/detail`)
       } else {
-        showToast('Could not start a new ADR report — no ID returned', { type: 'warning' })
+        showToast('Could not start a new ADR report. The server returned no ID', { type: 'warning' })
         setCreating(false)
       }
     } catch (e) {

@@ -63,7 +63,7 @@ export default function Subscriptions({ repository = createMoneyRepository() }) 
       </Card>
 
       {filtered.length === 0 ? (
-        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<Calendar size={24} />} message={statusFilter || planFilter ? 'No subscriptions match filters.' : 'No subscriptions yet — upsert via plan. Next: wire businesses.plan sync on payment.'} /></Card>
+        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<Calendar size={24} />} message={statusFilter || planFilter ? 'No subscriptions match filters.' : 'No subscriptions yet.'} /></Card>
       ) : (
         <>
           <Card style={{ padding: 0, overflow: 'hidden', background: 'var(--panel)', border: '1px solid var(--border)' }}>
@@ -85,7 +85,7 @@ export default function Subscriptions({ repository = createMoneyRepository() }) 
                       <td style={{ padding: '0 12px', fontWeight: 700, color: 'var(--fg)' }}>{r.plan_key}</td>
                       <td style={{ padding: '0 12px' }}><span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontWeight: 700, fontSize: 12, color: r.status === 'past_due' ? 'var(--amber)' : r.status === 'suspended' ? 'var(--red)' : r.status === 'active' ? 'var(--green)' : 'var(--muted)' }}><StatusDot status={r.status} /> {r.status}</span></td>
                       <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{r.current_period_start} → {r.current_period_end}</td>
-                      <td style={{ padding: '0 12px', textAlign: 'right', fontSize: 12, color: 'var(--muted)' }}>{r.grace_until || '—'}{r.renew_attempts ? ` • ${r.renew_attempts} attempts` : ''}</td>
+                      <td style={{ padding: '0 12px', textAlign: 'right', fontSize: 12, color: 'var(--muted)' }}>{r.grace_until || 'Not set'}{r.renew_attempts ? ` • ${r.renew_attempts} attempts` : ''}</td>
                     </tr>
                   ))}
                 </tbody>

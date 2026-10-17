@@ -38,7 +38,7 @@ export const FEATURES = [
     title: 'Inventory',
     dc: '4 / 7',
     dr: '1 / 2',
-    body: 'Stock levels, cost prices, reorder points and product movement — across every location you run, with the low-stock list telling you what to reorder and when.',
+    body: 'Stock levels, cost prices, reorder points and product movement across every location you run, with the low stock list telling you what to reorder and when.',
     embed: 'stock',
   },
   {
@@ -55,7 +55,7 @@ export const FEATURES = [
     title: 'Staff & roles',
     dc: '2 / 3',
     dr: '3 / 4',
-    body: 'Eight built-in roles plus your own, with permissions per person.',
+    body: 'Eight ready made roles plus your own, with permissions per person.',
   },
   {
     id: 'carefind',
@@ -68,7 +68,7 @@ export const FEATURES = [
   {
     id: 'locations',
     icon: MapPin,
-    title: 'Multi-location',
+    title: 'Multiple locations',
     dc: '4 / 5',
     dr: '3 / 4',
     body: 'Centralised stock, staff and reporting across branches.',

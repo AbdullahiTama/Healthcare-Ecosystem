@@ -130,7 +130,7 @@ export default function MasterCatalog({ brand, role }) {
         showToast(`Deactivated at ${branchName(loc)}. Stock stays with the branch.`, { type: 'success' })
       } else {
         await masterCatalogRepository.activate(loc.id, master.id, overrideText ? Number(overrideText) : null)
-        showToast(`Activated at ${branchName(loc)} with stock 0 — add stock in Inventory.`, { type: 'success' })
+        showToast(`Activated at ${branchName(loc)} with stock 0. Add stock in Inventory.`, { type: 'success' })
       }
       load()
     } catch (e) { showToast('Could not update this branch. Please try again.', { type: 'error' }) }
@@ -164,7 +164,7 @@ export default function MasterCatalog({ brand, role }) {
 
   return (
     <div>
-      <SectionHead title='Master Catalog' sub='One canonical product list — choose which branches carry each product' btn='+ Add Product' onBtn={openAdd} />
+      <SectionHead title='Master Catalog' sub='One canonical product list. Choose which branches carry each product' btn='+ Add Product' onBtn={openAdd} />
 
       <div style={{ marginBottom: '20px', padding: '20px', borderRadius: theme.radius.lg, background: navy, color: 'white' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: '16px' }}>
@@ -263,7 +263,7 @@ export default function MasterCatalog({ brand, role }) {
         footer={<GhostBtn onClick={() => { setManageTarget(null) }} style={{ flex: 1, padding: '12px' }}>Done</GhostBtn>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep }}>
-            Activating a branch creates its sellable product at stock 0 — add stock in that branch's Inventory. Set a price to override the default; leave it blank to inherit.
+            Activating a branch creates its sellable product at stock 0. Add stock in that branch's Inventory. Set a price to override the default; leave it blank to inherit.
           </div>
           {(locs || []).map(loc => {
             const link = links[loc.id]?.[manageMaster?.id]
@@ -299,7 +299,7 @@ export default function MasterCatalog({ brand, role }) {
 
       <ConfirmDialog show={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={deleteMaster}
         title='Delete this master product?'
-        consequence={`Removes "${deleteTarget?.name}" from the master catalog and its links at every branch. Branches keep existing stock — they just stop receiving pushes.`} />
+        consequence={`Removes "${deleteTarget?.name}" from the master catalog and its links at every branch. Branches keep existing stock. They just stop receiving pushes.`} />
 
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
     </div>

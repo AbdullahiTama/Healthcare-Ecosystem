@@ -1,0 +1,295 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/lib/ecommerceSegments.js</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/lib</a> ecommerceSegments.js</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/60</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/60</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >// E-commerce segment resolution and commission config — single source for segment→rate.</span></span></span>
+<span class="cstat-no" title="statement not covered" >// Canonical rates from apps/carefind/src/modules/shop/pricing.js COMMISSION_RATES — kept in sync manually</span>
+<span class="cstat-no" title="statement not covered" >// with compile-time assertion below. No manufacturer/importer rate exists by design.</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >// Owner decision 2026-10-05: 20% flat for every segment (replaces 10% / 5% / 2.5%). Must equal financial_config.shop_commission_rate</span>
+<span class="cstat-no" title="statement not covered" >// (the database refuses an order whose commission differs) and the active ecommerce_terms version.</span>
+<span class="cstat-no" title="statement not covered" >export const SEGMENT_RATES = {</span>
+<span class="cstat-no" title="statement not covered" >  retail: 0.20,</span>
+<span class="cstat-no" title="statement not covered" >  wholesale: 0.20,</span>
+<span class="cstat-no" title="statement not covered" >  distributor: 0.20,</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export const SEGMENT_LABELS = {</span>
+<span class="cstat-no" title="statement not covered" >  retail: 'Retail',</span>
+<span class="cstat-no" title="statement not covered" >  wholesale: 'Wholesale',</span>
+<span class="cstat-no" title="statement not covered" >  distributor: 'Distributor',</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export const SEGMENT_COMMISSION_LABELS = {</span>
+<span class="cstat-no" title="statement not covered" >  retail: '20% of sale (vendor-paid, deducted from vendor payout)',</span>
+<span class="cstat-no" title="statement not covered" >  wholesale: '20% of sale (vendor-paid, deducted from vendor payout)',</span>
+<span class="cstat-no" title="statement not covered" >  distributor: '20% of sale (vendor-paid, deducted from vendor payout)',</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export const SEGMENT_CHECKBOX_LABELS = {</span>
+<span class="cstat-no" title="statement not covered" >  retail: 'I have read and agree to the Retail E-commerce Terms &amp; Conditions.',</span>
+<span class="cstat-no" title="statement not covered" >  wholesale: 'I have read and agree to the Wholesale E-commerce Terms &amp; Conditions.',</span>
+<span class="cstat-no" title="statement not covered" >  distributor: 'I have read and agree to the Distributor E-commerce Terms &amp; Conditions.',</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const VALID_SEGMENTS = new Set(Object.keys(SEGMENT_RATES))</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export function assertValidSegment(segment) {</span>
+<span class="cstat-no" title="statement not covered" >  if (!VALID_SEGMENTS.has(segment)) {</span>
+<span class="cstat-no" title="statement not covered" >    throw new Error(`Invalid e-commerce segment: ${segment}. Must be one of: ${[...VALID_SEGMENTS].join(', ')}`)</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export function getCommissionRate(segment) {</span>
+<span class="cstat-no" title="statement not covered" >  assertValidSegment(segment)</span>
+<span class="cstat-no" title="statement not covered" >  return SEGMENT_RATES[segment]</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >/**</span>
+<span class="cstat-no" title="statement not covered" > * Resolve CareHub business_type → e-commerce segment.</span>
+<span class="cstat-no" title="statement not covered" > * - wholesale → wholesale</span>
+<span class="cstat-no" title="statement not covered" > * - manufacturer_importer → distributor</span>
+<span class="cstat-no" title="statement not covered" > * - all others (pharmacy, hospital, skincare, dental, optical, wellness, clinic, laboratory, other, null) → retail</span>
+<span class="cstat-no" title="statement not covered" > * - if business carries explicit ecommerce_segment (ops override), it takes precedence when valid</span>
+<span class="cstat-no" title="statement not covered" > * @param {string} businessType</span>
+<span class="cstat-no" title="statement not covered" > * @param {string} [overrideSegment] optional explicit per-business override column</span>
+<span class="cstat-no" title="statement not covered" > * @returns {'retail'|'wholesale'|'distributor'}</span>
+<span class="cstat-no" title="statement not covered" > */</span>
+<span class="cstat-no" title="statement not covered" >export function resolveEcommerceSegment(businessType, overrideSegment) {</span>
+<span class="cstat-no" title="statement not covered" >  if (overrideSegment &amp;&amp; VALID_SEGMENTS.has(overrideSegment)) return overrideSegment</span>
+<span class="cstat-no" title="statement not covered" >  const t = String(businessType || '').toLowerCase().trim()</span>
+<span class="cstat-no" title="statement not covered" >  if (t === 'wholesale') return 'wholesale'</span>
+<span class="cstat-no" title="statement not covered" >  if (t === 'manufacturer_importer') return 'distributor'</span>
+<span class="cstat-no" title="statement not covered" >  return 'retail'</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export function commissionExample(segment) {</span>
+<span class="cstat-no" title="statement not covered" >  assertValidSegment(segment)</span>
+<span class="cstat-no" title="statement not covered" >  if (segment === 'retail') return { saleKobo: 500000, commissionKobo: 100000, payoutKobo: 400000, label: '₦5,000 sale → ₦1,000 commission → ₦4,000 vendor payout before other adjustments' }</span>
+<span class="cstat-no" title="statement not covered" >  if (segment === 'wholesale') return { saleKobo: 1000000, commissionKobo: 200000, payoutKobo: 800000, label: '₦10,000 sale → ₦2,000 commission → ₦8,000 vendor payout' }</span>
+<span class="cstat-no" title="statement not covered" >  return { saleKobo: 2000000, commissionKobo: 400000, payoutKobo: 1600000, label: '₦20,000 sale → ₦4,000 commission → ₦16,000 vendor payout' }</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >// Compile-time sync guard: if pricing.js diverges, tests will catch it via cross-import.</span>
+<span class="cstat-no" title="statement not covered" >export const COMMISSION_RATES = SEGMENT_RATES</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-10-16T15:21:14.166Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

@@ -207,7 +207,7 @@ export default function Expenses({ brand, role, perms }) {
           )}
           {nearLimit && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '12px', padding: '10px 14px', borderRadius: theme.radius.md, background: warningBg, border: `1px solid ${warning}`, fontSize: '13px', color: warning, fontWeight: '700' }}>
-              <AlertTriangle size={14} /> {pctUsed}% of budget used — only {fmt(remaining)} remaining this month.
+              <AlertTriangle size={14} /> {pctUsed}% of the budget used. Only {fmt(remaining)} is left this month.
             </div>
           )}
         </Card>
@@ -269,10 +269,10 @@ export default function Expenses({ brand, role, perms }) {
                 {expenses.map(e => (
                   <tr key={e.id} style={{ borderBottom: `1px solid ${gray100}` }}>
                     <td style={{ padding: '12px 16px' }}><Pill label={e.category} type='teal' /></td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>{e.description || '—'}</td>
+                    <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>{e.description || 'Not set'}</td>
                     <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '900', color: danger }}>{fmt(e.amount)}</td>
                     <td style={{ padding: '12px 16px', fontSize: '12px', color: gray400 }}>{e.date || e.created_at?.split('T')[0]}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', color: gray500 }}>{e.staff_name || '—'}</td>
+                    <td style={{ padding: '12px 16px', fontSize: '13px', color: gray500 }}>{e.staff_name || 'Not set'}</td>
                     <td style={{ padding: '12px 16px' }}>
                       {perms?.canDelete && <RedBtn onClick={() => askDelete(e)} style={{ padding: '4px 9px', fontSize: '11px' }}>Delete</RedBtn>}
                     </td>
@@ -293,7 +293,7 @@ export default function Expenses({ brand, role, perms }) {
       )}
 
       {/* Set Budget Modal */}
-      <Modal show={showBudget} onClose={() => setShowBudget(false)} title={'Set Expense Budget — ' + filterMonth}
+      <Modal show={showBudget} onClose={() => setShowBudget(false)} title={'Set Expense Budget: ' + filterMonth}
         footer={<><GhostBtn onClick={() => setShowBudget(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveBudgetAmount} style={{ flex: 1, padding: '12px' }}>Save Budget</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ padding: '14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealMist}`, fontSize: '13px', color: tealDeep, lineHeight: '1.7' }}>

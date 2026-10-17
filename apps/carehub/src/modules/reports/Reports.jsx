@@ -102,11 +102,11 @@ export default function Reports({ brand, role, perms, embedded = false }) {
       ['ADR REPORTS DETAIL'],
       ['Report No', 'Module', 'Status', 'Created', 'Reporter'],
       ...fAdrReports.map(r => [
-        r.report_number || '—',
-        r.module_type || '—',
-        r.status || '—',
-        r.created_at ? new Date(r.created_at).toLocaleDateString('en-NG') : '—',
-        r.reporter_name || '—',
+        r.report_number || 'Not set',
+        r.module_type || 'Not set',
+        r.status || 'Not set',
+        r.created_at ? new Date(r.created_at).toLocaleDateString('en-NG') : 'Not set',
+        r.reporter_name || 'Not set',
       ]),
     ]
     const csv = rows.map(r => (Array.isArray(r) ? r : [r]).map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n')

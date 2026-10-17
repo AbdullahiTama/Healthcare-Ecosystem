@@ -185,7 +185,7 @@ export default function WithdrawalOtpField({
         // A code is already on its way and NO new one was sent. The body now carries that code's issue time and expiry, so
         // adopt the live draft instead of blanking the countdown - otherwise the cooldown read 0 and "Send a new code" was
         // live immediately, and one tap voided the code already in the inbox.
-        setError(data.error || 'A code is already on its way — check your email.')
+        setError(data.error || 'A code is already on its way. Check your email.')
         const issuedAt = Number.isFinite(data.otpIssuedAt) ? data.otpIssuedAt : null
         const expiresAt = issuedAt && Number.isFinite(data.expiresInSeconds)
           ? issuedAt + data.expiresInSeconds * 1000

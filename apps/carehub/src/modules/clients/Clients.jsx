@@ -37,11 +37,11 @@ function SaleRow({ s }) {
   return (
     <div style={{ padding: '12px 14px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: '700', fontSize: '12px', color: navy }}>{s.txn_no || '—'}</span>
+        <span style={{ fontWeight: '700', fontSize: '12px', color: navy }}>{s.txn_no || 'Not set'}</span>
         <span style={{ fontSize: '12px', fontWeight: '700', color: tealDeep }}>{fmt(s.total || 0)}</span>
       </div>
       <div style={{ fontSize: '11px', color: gray500, marginTop: '3px' }}>
-        {s.created_at?.slice(0, 16).replace('T', ' ') || '—'} · {s.payment_method || '—'}{s.balance > 0 ? ' · Balance: ' + fmt(s.balance) : ''}
+        {s.created_at?.slice(0, 16).replace('T', ' ') || 'Not set'} · {s.payment_method || 'Not set'}{s.balance > 0 ? ' · Balance: ' + fmt(s.balance) : ''}
       </div>
       {items.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: '11px', color: gray400, marginTop: '3px' }}>
@@ -66,7 +66,7 @@ function ConsultationRow({ c }) {
   return (
     <div style={{ padding: '12px 14px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: '700', fontSize: '12px', color: navy }}>{c.consultation_date || '—'}</span>
+        <span style={{ fontWeight: '700', fontSize: '12px', color: navy }}>{c.consultation_date || 'Not set'}</span>
         <div style={{ display: 'flex', gap: 5 }}>
           <Pill label={isPh ? 'Pharmacy' : 'Skincare'} type={isPh ? 'blue' : 'green'} style={{ fontSize: 9 }} />
           {isPh ? subTypes.map(s => <Pill key={s} label={s} type='teal' style={{ fontSize: 9 }} />) : skinType && <Pill label={skinType} type='teal' style={{ fontSize: 9 }} />}
@@ -459,7 +459,7 @@ export default function Clients({ brand, role, perms }) {
                 </button>
               )}
             </div>
-            {[['Email', selected.email || '—'], ['Gender', selected.gender || '—'], ['Date of Birth', selected.date_of_birth || '—'], ['Address', selected.address || '—'], ['Notes', selected.notes || '—'], ['Joined', selected.created_at?.split('T')[0] || '—']].map(([l, v]) => (
+            {[['Email', selected.email || 'Not set'], ['Gender', selected.gender || 'Not set'], ['Date of Birth', selected.date_of_birth || 'Not set'], ['Address', selected.address || 'Not set'], ['Notes', selected.notes || 'Not set'], ['Joined', selected.created_at?.split('T')[0] || 'Not set']].map(([l, v]) => (
               <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${gray100}`, fontSize: '13px', gap: 16 }}>
                 <span style={{ color: gray500, fontWeight: '600' }}>{l}</span>
                 <span style={{ color: navy, textAlign: 'right', maxWidth: '240px' }}>{v}</span>
@@ -545,7 +545,7 @@ export default function Clients({ brand, role, perms }) {
                     <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
                       <div>
                         <div style={{ fontWeight: '700', fontSize: '12px', color: navy }}>{a.service || 'Appointment'}</div>
-                        <div style={{ fontSize: '11px', color: gray500, marginTop: '2px' }}>{a.date || '—'} at {a.time || '—'}{a.staff_name ? ' · ' + a.staff_name : ''}</div>
+                        <div style={{ fontSize: '11px', color: gray500, marginTop: '2px' }}>{a.date || 'Not set'} at {a.time || 'Not set'}{a.staff_name ? ' · ' + a.staff_name : ''}</div>
                       </div>
                       <Pill label={a.status} type={a.status === 'confirmed' ? 'green' : a.status === 'completed' ? 'teal' : a.status === 'cancelled' ? 'red' : 'amber'} />
                     </div>
@@ -564,8 +564,8 @@ export default function Clients({ brand, role, perms }) {
                   {history.map(d => (
                     <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: '11px', color: gray500 }}>{d.created_at?.slice(0, 10) || '—'} · {d.direction === 'owes_us' ? 'Owes us' : 'We owe'}</div>
-                        <div style={{ fontWeight: '700', fontSize: '12px', color: navy, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }}>{d.description || d.party_name || '—'}</div>
+                        <div style={{ fontSize: '11px', color: gray500 }}>{d.created_at?.slice(0, 10) || 'Not set'} · {d.direction === 'owes_us' ? 'Owes us' : 'We owe'}</div>
+                        <div style={{ fontWeight: '700', fontSize: '12px', color: navy, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }}>{d.description || d.party_name || 'Not set'}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontWeight: '900', fontSize: '13px', color: (d.balance || 0) > 0 ? danger : success }}>{fmt(d.balance || 0)}</div>
@@ -588,7 +588,7 @@ export default function Clients({ brand, role, perms }) {
             2. Open in <strong>Microsoft Excel</strong> or Google Sheets<br />
             3. Fill in your existing clients / patients row by row<br />
             4. Save as <strong>CSV</strong><br />
-            5. Upload here — clients are matched by <strong>phone number</strong>, so repeat customers from the file are skipped, not duplicated
+            5. Upload here. Clients are matched by <strong>phone number</strong>, so repeat customers from the file are skipped, not duplicated
           </div>
           <label style={{ display: 'block', padding: '24px', borderRadius: '12px', border: `2px dashed ${border}`, textAlign: 'center', cursor: 'pointer', background: bg }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', color: gray500 }}><FileUp size={36} /></div>

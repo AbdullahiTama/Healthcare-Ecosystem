@@ -16,7 +16,8 @@
     "test:finance:pg": "vitest run --no-file-parallelism pg.test",
     "test:mutation": "node src/test/payments/mutation/run.mjs",
     "bench:finance": "node src/test/payments/bench/scale.bench.mjs",
-    "lint:undef": "eslint --no-eslintrc -c eslint.no-undef.json --quiet src api"
+    "lint:undef": "eslint --no-eslintrc -c eslint.no-undef.json --quiet src api",
+    "audit:copy": "node ../../scripts/audit-ui-copy.mjs --app=carefind"
   },
   "dependencies": {
     "@care-ecosystem/shared-email": "file:../../packages/shared-email",

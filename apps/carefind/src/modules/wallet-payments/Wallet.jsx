@@ -30,9 +30,9 @@ const WITHDRAWAL_ERRORS = {
   insufficient: "You don't have enough CareCoins for that amount.",
   // The PLATFORM could not fund the payout. Said as such, so a user never reads a provider-side shortfall as their own
   // wallet being short. Not a claim that their coins are gone: the server refunds and says so separately.
-  provider_balance_low: 'We are temporarily unable to send payouts, so this withdrawal did not go through. Your CareCoins are safe — please try again shortly.',
-  provider_balance_check_failed: 'We could not reach the payment provider to send this withdrawal. Your CareCoins are safe — please try again shortly.',
-  transfer_refused: 'The payment provider declined this payout. Your CareCoins have been returned — please try again shortly.',
+  provider_balance_low: 'We are temporarily unable to send payouts, so this withdrawal did not go through. Your CareCoins are safe. Please try again shortly.',
+  provider_balance_check_failed: 'We could not reach the payment provider to send this withdrawal. Your CareCoins are safe. Please try again shortly.',
+  transfer_refused: 'The payment provider declined this payout. Your CareCoins have been returned to your balance. Please try again shortly.',
   transfer_pending: 'We are still checking this withdrawal. If it did not go through, your balance is corrected automatically.',
 }
 
@@ -536,7 +536,7 @@ function Wallet() {
                   type="number"
                   value={wdAmount}
                   onChange={(v) => { setWdAmount(v); if (v && Number(v) > (wallet?.balance || 0)) { showToast(`Amount exceeds your balance of ${wallet?.balance || 0} CareCoins`, { type: 'warning' }) } }}
-                  placeholder={`5–${wallet.balance}`}
+                  placeholder={`5-${wallet.balance}`}
                   min={5}
                   max={wallet?.balance || 0}
                   required
@@ -553,7 +553,7 @@ function Wallet() {
                 )}
                 {savedAccount && (
                   <div style={{ fontSize: 12.5, color: theme.textMid, padding: '8px 12px', borderRadius: 12, background: theme.tealMist }}>
-                    Paying to <strong>{savedAccount.bankName} ••••{savedAccount.accountLast4}</strong> — {savedAccount.accountName}
+                    Paying to <strong>{savedAccount.bankName} ••••{savedAccount.accountLast4}</strong> in the name of {savedAccount.accountName}
                     {typedAllowed && (
                       <button type="button" onClick={() => setUseTyped((v) => !v)} style={{ marginLeft: 8, background: 'none', border: 'none', padding: 0, color: theme.tealDeep, fontWeight: 800, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
                         {useTyped ? 'Use saved account' : 'Use a different account'}

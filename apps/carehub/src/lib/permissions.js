@@ -20,7 +20,7 @@ export const ROLES = {
     canViewFinance: true,
     canMakeSales: true,
     canViewSettings: true,
-    label: 'Owner — Full Access',
+    label: 'Owner (full access)',
   },
   Manager: {
     nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','adr-reports','pv-tracker','carefind','messages','stock','orders','activity'],
@@ -240,7 +240,7 @@ export const MODULES = {
   reports: { label: 'Financial Reports', icon: BarChart2, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/financial' },
   'adr-reports': { label: 'Pharmacovigilance (ADR)', icon: AlertTriangle, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/adr' },
   'pv-tracker': { label: 'PV Tracker', icon: Factory, types: ENTERPRISE_TYPES, section: 'intelligence', path: '/dashboard/reports/pv-tracker' },
-  ecommerce: { label: 'E-commerce', icon: Store, types: ALL_TYPES, section: 'ecosystem' },
+  ecommerce: { label: 'Online Store', icon: Store, types: ALL_TYPES, section: 'ecosystem' },
   settings: { label: 'Settings', icon: Settings, types: ALL_TYPES, section: 'admin' },
   reception: { label: 'Reception', icon: UserCheck, types: HOSPITAL_TYPES, section: 'clinical' },
   triage: { label: 'Triage', icon: Activity, types: HOSPITAL_TYPES, section: 'clinical' },

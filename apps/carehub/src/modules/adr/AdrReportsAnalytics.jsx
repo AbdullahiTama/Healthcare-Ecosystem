@@ -87,7 +87,7 @@ export default function AdrReportsAnalytics({ brand }) {
         {statCard('Serious', serious, 'any reaction flagged serious', danger)}
         {statCard('Non-serious', nonSerious, 'no seriousness flag', success)}
         {statCard('Overdue', buckets.overdue, 'deadline passed or <20% left', danger)}
-        {statCard('Due soon', buckets.due_soon, '20–50% window remaining', warning)}
+        {statCard('Due soon', buckets.due_soon, '20% to 50% of the window remaining', warning)}
         {statCard('On track', buckets.on_track, '>50% window remaining', success)}
       </div>
 
@@ -132,13 +132,13 @@ export default function AdrReportsAnalytics({ brand }) {
             </div>
           ))}
           <div style={{ fontSize: 11, color: gray400, marginTop: 6 }}>
-            Recorded submission channel only — never inferred. “Source not recorded” covers historical rows without channel evidence.
+            Recorded submission channel only. This value is never inferred. “Source not recorded” covers historical rows without channel evidence.
           </div>
         </Card>
       </div>
 
       <Card style={{ padding: '18px 20px' }}>
-        <div style={{ fontWeight: 800, fontSize: 14, color: navy, marginBottom: 14 }}>Report volume — last 6 months</div>
+        <div style={{ fontWeight: 800, fontSize: 14, color: navy, marginBottom: 14 }}>Report volume, last 6 months</div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 120 }}>
           {volume.map(([month, count]) => (
             <div key={month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>

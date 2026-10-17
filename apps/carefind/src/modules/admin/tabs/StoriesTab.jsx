@@ -44,7 +44,7 @@ export default function StoriesTab({
         subtitle="Manage stories that appear at the top of the feed"
       />
 
-      <AdminSection title="Post a Story" subtitle="Stories auto-expire after 24 hours">
+      <AdminSection title="Post a Story" subtitle="Stories expire after 24 hours">
         <div style={{ display: 'flex', flexDirection: 'column', gap: theme.space[4] }}>
           <Input
             label="Story Title"
@@ -131,7 +131,7 @@ export default function StoriesTab({
                 borderRadius: theme.radius.md,
               }}>
                 <p style={{ margin: 0, fontSize: theme.type.bodySm.size, color: 'var(--color-surface)' }}>
-                  Image selected — text shows over it
+                  Image selected. Your text will appear over it
                 </p>
               </div>
             ) : (

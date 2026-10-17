@@ -21,7 +21,7 @@ export const ROLE_TEMPLATES = {
     },
     {
       name: 'Pharmacy Assistant',
-      description: 'Front-counter staff focused on sales and customer service',
+      description: 'Counter staff focused on sales and customer service',
       permissions: {
         nav: ['dashboard', 'pos', 'clients'],
         canEditPrice: false,

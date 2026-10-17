@@ -160,7 +160,7 @@ export default function Messages({ brand }) {
     const out = []
     for (let i = 0; i < list.length; i++) {
       const f = list[i]
-      setUploadStatus('Uploading ' + (i + 1) + ' of ' + list.length + ' — ' + f.name)
+      setUploadStatus('Uploading ' + (i + 1) + ' of ' + list.length + ' · ' + f.name)
       out.push(await messageRepository.uploadAttachment(f))
     }
     setUploadStatus('')
@@ -343,7 +343,7 @@ export default function Messages({ brand }) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', borderRadius: '8px', background: bg, border: `1px solid ${border}`, marginBottom: '20px' }}>
         <span style={{ fontSize: '11px', fontWeight: '700', color: tealDeep, letterSpacing: '0.04em' }}>SECURE</span>
-        <span style={{ fontSize: '11.5px', color: gray500 }}>Internal to {brand && brand.name ? brand.name : 'this company'} — not visible outside your organisation.</span>
+        <span style={{ fontSize: '11.5px', color: gray500 }}>Internal to {brand && brand.name ? brand.name : 'this company'}. Not visible outside your organisation.</span>
       </div>
 
       {loading && <Loading text="Loading correspondence..." />}
@@ -423,12 +423,12 @@ export default function Messages({ brand }) {
                     )
                   })}
                 </div>
-                {addressBook.length === 0 && <div style={{ fontSize: '11.5px', color: gray400, marginTop: '4px' }}>No one to send to yet — add staff first.</div>}
+                {addressBook.length === 0 && <div style={{ fontSize: '11.5px', color: gray400, marginTop: '4px' }}>No one to send to yet. Add staff first.</div>}
               </div>
 
               <div>
                 <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '2px' }}>Cc</div>
-                <div style={{ fontSize: '11px', color: gray400, marginBottom: '6px' }}>Copied — they are notified and can see the whole thread. Tap as many as you need.</div>
+                <div style={{ fontSize: '11px', color: gray400, marginBottom: '6px' }}>Copied. They are notified and can see the whole thread. Add as many people as you need.</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                   {addressBook.map(function (p) {
                     const on = ccIds.indexOf(p.id) >= 0
@@ -454,7 +454,7 @@ export default function Messages({ brand }) {
 
               <div>
                 <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '2px' }}>Attachments</div>
-                <div style={{ fontSize: '11px', color: gray400, marginBottom: '8px' }}>Photos, PDFs, documents — attach as many as you need. Max 20MB each.</div>
+                <div style={{ fontSize: '11px', color: gray400, marginBottom: '8px' }}>Photos, PDFs and documents. Attach as many as you need, up to 20MB each.</div>
 
                 <label style={{ display: 'block', border: `2px dashed ${border}`, borderRadius: '10px', padding: '14px', textAlign: 'center', cursor: 'pointer', background: bg }}>
                   <div style={{ fontSize: '13px', fontWeight: '700', color: tealDeep }}>+ Attach files</div>

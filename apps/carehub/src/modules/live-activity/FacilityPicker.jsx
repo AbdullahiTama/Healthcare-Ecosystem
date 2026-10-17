@@ -267,7 +267,7 @@ export default function FacilityPicker({
           </div>
           {displayed.length >= 150 && (
             <div style={{ padding: '8px', fontSize: '11px', color: gray400, textAlign: 'center', borderTop: `1px solid ${border}` }}>
-              Showing the 150 nearest — refine the filter to narrow down.
+              Showing the 150 nearest. Narrow the filter to see fewer.
             </div>
           )}
         </div>
@@ -280,7 +280,7 @@ export default function FacilityPicker({
             Add a missing facility
           </div>
           <input value={customName} onChange={function (e) { setCustomName(e.target.value); setCustomError(false) }}
-            placeholder='Facility name only — your GPS is attached automatically'
+            placeholder='Facility name only. Your GPS location is attached automatically'
             aria-label='Facility name'
             style={{ width: '100%', padding: '11px 12px', borderRadius: '8px', border: `1px solid ${customError ? danger : border}`, fontSize: '13px', boxSizing: 'border-box' }} />
           {customError && <div style={{ fontSize: '11px', color: danger, marginTop: '4px' }}>Enter at least 2 characters.</div>}

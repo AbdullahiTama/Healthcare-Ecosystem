@@ -111,7 +111,7 @@ export function ProductForm({ product, onClose, onSubmit, isLoading }) {
       {missingExpiry && (
         <div role="status" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 14px', borderRadius: '10px', background: theme.warningBg, border: `1px solid ${theme.warning}`, fontSize: '13px', color: theme.warning, lineHeight: 1.6 }}>
           <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>No expiry date set — add one below to enable expiry alerts and reports.</span>
+          <span>No expiry date set. Add one below to turn on expiry alerts and reports.</span>
         </div>
       )}
 

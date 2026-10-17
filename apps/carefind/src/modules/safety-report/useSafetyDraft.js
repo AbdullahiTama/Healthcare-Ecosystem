@@ -156,7 +156,7 @@ export function useSafetyDraft(repository, prefill) {
         setError(null)
       } catch (e) {
         setStatus('error')
-        setError('Could not save your draft. Check your connection and retry — your last saved version is kept.')
+        setError('Could not save your draft. Check your connection and try again. Your last saved version is kept.')
       }
     }, AUTOSAVE_MS)
     return () => clearTimeout(timer.current)
@@ -200,7 +200,7 @@ export function useSafetyDraft(repository, prefill) {
       setError(null)
     } catch (e) {
       setStatus('error')
-      setError('Could not save your draft. Check your connection and retry — your last saved version is kept.')
+      setError('Could not save your draft. Check your connection and try again. Your last saved version is kept.')
       throw e
     }
   }, [persistRow])

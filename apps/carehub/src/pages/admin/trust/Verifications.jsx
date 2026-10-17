@@ -4,7 +4,7 @@ import { Card, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast, C
 import { createTrustRepository } from '../../../modules/trust/repositories'
 
 function timeAgo(s) {
-  if (!s) return '—'
+  if (!s) return 'Not set'
   const diff = Math.floor((Date.now() - new Date(s)) / 1000)
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
@@ -143,8 +143,8 @@ export default function Verifications({ repository = createTrustRepository() }) 
                   <tr key={v.id} style={{ height: 40, borderBottom: '1px solid var(--hairline)', background: selected.has(v.id) ? 'var(--teal-mist)' : 'transparent' }}>
                     <td style={{ padding: '0 12px' }}><input type="checkbox" checked={selected.has(v.id)} onChange={() => toggleSelect(v.id)} aria-label={`Select ${v.full_name}`} /></td>
                     <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--fg)' }}>{v.full_name}</td>
-                    <td style={{ padding: '0 12px', color: 'var(--muted)' }}>{v.profession || '—'}</td>
-                    <td style={{ padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg)' }}>{v.phone || '—'}<span style={{ color: 'var(--muted)' }}> • {v.workplace || ''}</span></td>
+                    <td style={{ padding: '0 12px', color: 'var(--muted)' }}>{v.profession || 'Not set'}</td>
+                    <td style={{ padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg)' }}>{v.phone || 'Not set'}<span style={{ color: 'var(--muted)' }}> • {v.workplace || ''}</span></td>
                     <td style={{ padding: '0 12px', fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}><Clock size={11} style={{ marginRight: 4 }} />{timeAgo(v.created_at)}</td>
                     <td style={{ padding: '0 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {v.credential_url && <button disabled={credentialLoadingId === v.id} onClick={() => openCredential(v)} style={{ padding: '5px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--teal)', fontWeight: 700, fontSize: 11, cursor: 'pointer', marginRight: 6 }}><Eye size={11} style={{ marginRight: 4 }} />{credentialLoadingId === v.id ? 'Opening...' : 'View'}</button>}
@@ -162,7 +162,7 @@ export default function Verifications({ repository = createTrustRepository() }) 
           </div>
         </Card>
       )}
-      <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>Bulk approve keeps evidence private — View opens signed URL, not public bucket. Audited to moderation_actions.</div>
+      <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>Bulk approve keeps the evidence private. View opens a signed link rather than a public file, and every action is audited.</div>
       <Toast msg={msg} type={type} />
     </div>
   )

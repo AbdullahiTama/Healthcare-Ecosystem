@@ -32,7 +32,7 @@ describe('ecommerce duplicate activation guard', () => {
 
     await expect(
       repo.upsertEcommerceProduct(A, P1, { description: 'Valid description here', category: 'medicine' })
-    ).rejects.toThrow('Already activated — this product is already live for your store')
+    ).rejects.toThrow('Already activated. This product is already live for your store.')
 
     // No duplicate row should exist
     expect(base.rows('ecommerce_products').length).toBe(0)
@@ -83,7 +83,7 @@ describe('ecommerce duplicate activation guard', () => {
     request.pages = client.pages
     const repo = createEcommerceRepository({ request, upload: async () => 'url' })
 
-    await expect(repo.activate(A, P1)).rejects.toThrow('Already activated — this product is already live for your store')
+    await expect(repo.activate(A, P1)).rejects.toThrow('Already activated. This product is already live for your store.')
 
     const patchCalls = calls.filter(c => c.method === 'PATCH' && c.path.includes('ecommerce_products'))
     expect(patchCalls.length).toBe(0)

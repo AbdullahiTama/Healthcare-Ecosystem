@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   const monthlyPrice = PLAN_MONTHLY_NAIRA[business.plan]
   if (yearlyPrice === null || yearlyPrice === undefined) {
     // Custom or unknown - no fixed Paystack price
-    return res.status(400).json({ error: 'Custom plan — contact support@carehub.ng for a tailored quote' })
+    return res.status(400).json({ error: 'Custom plan. Contact support@carehub.ng for a tailored quote' })
   }
   if (!monthlyPrice || !yearlyPrice) return res.status(400).json({ error: 'Unknown plan' })
 

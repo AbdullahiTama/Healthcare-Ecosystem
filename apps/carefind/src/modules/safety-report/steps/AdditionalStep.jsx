@@ -25,7 +25,7 @@ export default function AdditionalStep({ value, meds, attachments, onExtra, onMe
       try {
         await onUpload(file)
       } catch {
-        setUploadError('Upload failed. Check your connection and retry — your report is still saved.')
+        setUploadError('Upload failed. Check your connection and retry. Your report is still saved.')
       } finally {
         setUploading(false)
       }
@@ -35,7 +35,7 @@ export default function AdditionalStep({ value, meds, attachments, onExtra, onMe
   return (
     <section aria-labelledby="sr-additional-h">
       <h2 id="sr-additional-h" style={s.h2}>Anything else</h2>
-      <p style={s.muted}>This step is optional. A basic report without it is still valid — continue whenever you are ready.</p>
+      <p style={s.muted}>This step is optional. A basic report without it is still valid, so continue whenever you are ready.</p>
 
       <details open={false} style={{ ...s.card, padding: 0 }}>
         <summary style={{ fontSize: 15, fontWeight: 800, cursor: 'pointer', padding: 16 }}>{ADDITIONAL_INFO_LABEL}</summary>
@@ -67,7 +67,7 @@ export default function AdditionalStep({ value, meds, attachments, onExtra, onMe
           </Field>
 
           <h3 style={{ ...s.h2, fontSize: 14 }}>Photos (optional)</h3>
-          <p style={s.help}>A photo of the pack or the effect can help reviewers. Photos stay confidential — they are never published.</p>
+          <p style={s.help}>A photo of the pack or the effect can help reviewers. Photos stay confidential and are never published.</p>
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -105,7 +105,7 @@ function AttachmentItem({ attachment, resolveUrl, onRemove }) {
     <li style={{ ...s.row, justifyContent: 'space-between', border: '1px solid var(--border)', borderRadius: 10, padding: 8 }}>
       <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {url ? <a href={url} target="_blank" rel="noreferrer">View photo</a> : 'Photo attached'}
-        {attachment.caption ? ` — ${attachment.caption}` : ''}
+        {attachment.caption ? ` · ${attachment.caption}` : ''}
       </span>
       <button type="button" onClick={onRemove} style={s.btnGhost} aria-label="Remove photo">Remove</button>
     </li>

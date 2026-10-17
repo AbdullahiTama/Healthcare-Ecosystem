@@ -34,7 +34,7 @@ const STATUS_PILLS = {
 }
 
 export function StatusBadge({ status }) {
-  const s = STATUS_PILLS[status] || { label: status || '—', type: 'gray' }
+  const s = STATUS_PILLS[status] || { label: status || 'Not set', type: 'gray' }
   return <Pill label={s.label} type={s.type} />
 }
 

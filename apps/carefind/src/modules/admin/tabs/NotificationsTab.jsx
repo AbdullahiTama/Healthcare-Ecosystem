@@ -32,7 +32,7 @@ export default function NotificationsTab({ notifications, setTab }) {
       {notifications.length === 0 ? (
         <Empty
           icon={<Bell size={40} strokeWidth={1.5} color={theme.gray300} />}
-          message="All clear — no pending issues"
+          message="Nothing needs your attention"
           cause="positive"
         />
       ) : (

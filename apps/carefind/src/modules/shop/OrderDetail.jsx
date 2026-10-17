@@ -453,9 +453,9 @@ export default function OrderDetail() {
               <div style={{ fontSize: 14, color: theme.navy }}>
                 {order.delivery_preference === 'pickup' ? 'Pickup from Station' : 'Home Delivery'}
               </div>
-              {station && <div style={{ fontSize: 12, color: theme.tealDeep, fontWeight:600 }}>{station.name} — {station.address}, {station.city}</div>}
+              {station && <div style={{ fontSize: 12, color: theme.tealDeep, fontWeight:600 }}>{station.name}, {station.address}, {station.city}</div>}
               {order.distance_km != null && <div style={{ fontSize: 12, color: theme.textMid }}>{order.distance_km} km {order.is_approved_city === false ? '(quote pending)' : ''}</div>}
-              {order.status === 'delivery_quote_pending' && <div style={{ fontSize: 12, color: theme.warning, fontWeight: 600 }}>Delivery quote pending — we will contact you within 24h</div>}
+              {order.status === 'delivery_quote_pending' && <div style={{ fontSize: 12, color: theme.warning, fontWeight: 600 }}>Waiting for the delivery quote. We will contact you within 24 hours.</div>}
               {order.paystack_reference && <div style={{ fontSize: 11, color: theme.textLight }}>Paystack: {order.paystack_reference}</div>}
             </div>
           </div>
@@ -688,8 +688,8 @@ export default function OrderDetail() {
             ) : null}
             {order.discount_kobo > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 8 }}>
-                <span style={{ color: theme.textMid }}>Discount</span>
-                <span style={{ color: theme.success }}>−₦{(order.discount_kobo / 100).toLocaleString()}</span>
+                <span style={{ color: theme.textMid }}>Discount applied</span>
+                <span style={{ color: theme.success }}>₦{(order.discount_kobo / 100).toLocaleString()} off</span>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700, paddingTop: 12, borderTop: `1px solid ${theme.border}` }}>
@@ -742,7 +742,7 @@ export default function OrderDetail() {
               {order.status==='pending_payment' && (
                 <>
                   <Button onClick={handlePayNow} disabled={updating} style={{ flex:1, minWidth: 140 }}>Pay with Paystack</Button>
-                  <Button onClick={handleVerifyPayment} disabled={updating} style={{ flex:1, minWidth: 140 }}>I've Paid — Verify</Button>
+                  <Button onClick={handleVerifyPayment} disabled={updating} style={{ flex:1, minWidth: 140 }}>I have paid. Verify</Button>
                 </>
               )}
               <Button variant="secondary" onClick={() => setShowCancelModal(true)} disabled={updating}>Cancel Order</Button>

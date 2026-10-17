@@ -52,7 +52,7 @@ export default function JobQueue({ repository = createHealthRepository() }) {
           ))}
         </div>
       )}
-      <ConfirmDialog show={!!confirm} title="Retry job?" onClose={() => setConfirm(null)} onConfirm={doRetry} confirmLabel="Retry" message={<div style={{ fontSize: 13 }}>Idempotent via reference-uniqueness.</div>} />
+      <ConfirmDialog show={!!confirm} title="Retry job?" onClose={() => setConfirm(null)} onConfirm={doRetry} confirmLabel="Retry" message={<div style={{ fontSize: 13 }}>Retrying is safe. Running it twice does not repeat the work.</div>} />
       <Toast msg={msg} type={type} />
     </div>
   )

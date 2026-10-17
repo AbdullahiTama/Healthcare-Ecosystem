@@ -60,7 +60,7 @@ export default function QuoteDeliveryForm({ order, onSubmit }) {
         <Truck size={16} aria-hidden="true" /> Quote delivery
       </div>
       <div style={{ fontSize: 12, color: gray600 }}>
-        <div><b>Deliver to:</b> {address || '—'}</div>
+        <div><b>Deliver to:</b> {address || 'Not set'}</div>
         {order.distance_km !== null && order.distance_km !== undefined && <div><b>Distance:</b> {order.distance_km} km</div>}
         <div style={{ marginTop: 4, color: gray500 }}>The fee is added to the order total. The customer is notified and asked to pay.</div>
       </div>
@@ -82,11 +82,11 @@ export default function QuoteDeliveryForm({ order, onSubmit }) {
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: '1fr auto', gap: '4px 12px', fontSize: 12, color: gray600 }}>
         <dt>Items</dt><dd style={{ margin: 0, textAlign: 'right' }}>{naira(order.subtotal_kobo)}</dd>
         <dt>Fulfilment fee</dt><dd style={{ margin: 0, textAlign: 'right' }}>{naira(order.fulfilment_kobo)}</dd>
-        {Number(order.discount_kobo) > 0 && <><dt>Discount</dt><dd style={{ margin: 0, textAlign: 'right' }}>−{naira(order.discount_kobo)}</dd></>}
-        <dt>Delivery</dt><dd style={{ margin: 0, textAlign: 'right' }}>{parsed.kobo ? naira(parsed.kobo) : '—'}</dd>
+        {Number(order.discount_kobo) > 0 && <><dt>Discount applied</dt><dd style={{ margin: 0, textAlign: 'right' }}>{naira(order.discount_kobo)} off</dd></>}
+        <dt>Delivery</dt><dd style={{ margin: 0, textAlign: 'right' }}>{parsed.kobo ? naira(parsed.kobo) : 'Not set'}</dd>
         <dt style={{ fontWeight: 800, color: tealDeep, borderTop: `1px solid ${border}`, paddingTop: 4 }}>Customer pays</dt>
         <dd aria-live="polite" style={{ margin: 0, textAlign: 'right', fontWeight: 800, color: tealDeep, borderTop: `1px solid ${border}`, paddingTop: 4 }}>
-          {parsed.kobo ? naira(quotedTotalKobo(order, parsed.kobo)) : '—'}
+          {parsed.kobo ? naira(quotedTotalKobo(order, parsed.kobo)) : 'Not set'}
         </dd>
       </dl>
 

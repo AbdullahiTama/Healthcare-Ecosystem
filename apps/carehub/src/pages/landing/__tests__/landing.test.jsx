@@ -190,7 +190,7 @@ describe('Landing', () => {
       const body = text(dom)
       expect(body).toContain('32')
       expect(body).toContain('8')
-      expect(body).toContain('Built-in staff roles')
+      expect(body).toContain('Staff roles you get to start with')
     })
 
     it('renders the annual price from planLimits for every paid plan', () => {
@@ -253,7 +253,7 @@ describe('Landing', () => {
           'Reports',
           'Staff & roles',
           'CareFind listing',
-          'Multi-location',
+          'Multiple locations',
         ])
       )
     })

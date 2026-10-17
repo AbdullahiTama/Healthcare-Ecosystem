@@ -205,7 +205,7 @@ function ProfessionalMonetization() {
               { Icon: CalendarDays, title: 'Consultations', desc: `${pendingConsults} pending booking${pendingConsults !== 1 ? 's' : ''}`, action: () => setTab('consultation') },
               { Icon: ClipboardList, title: 'Sponsored Tasks', desc: `${tasks.length} open task${tasks.length !== 1 ? 's' : ''} available`, action: () => setTab('tasks') },
               { Icon: WalletIcon, title: 'Gifts Received', desc: `${wallet?.balance || 0} CareCoins ≈ ₦${((wallet?.balance || 0) * 200).toLocaleString()}`, action: () => {} },
-              { Icon: Radio, title: 'Live Session Earnings', desc: 'Gifts from your live sessions — permanently recorded', action: () => {} },
+              { Icon: Radio, title: 'Live Session Earnings', desc: 'Gifts from your live sessions, recorded permanently', action: () => {} },
             ].map((item) => (
               <button key={item.title} onClick={item.action} style={{
                 border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg,
@@ -328,7 +328,7 @@ function ProfessionalMonetization() {
                 </div>
                 <div>
                   <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>Notes for patients (optional)</label>
-                  <textarea value={consultNotes} onChange={(e) => setConsultNotes(e.target.value)} placeholder="e.g. Available Mon-Fri 9am-5pm. Please describe your symptoms when booking."
+                  <textarea value={consultNotes} onChange={(e) => setConsultNotes(e.target.value)} placeholder="e.g. Available Monday to Friday, 9am to 5pm. Please describe your symptoms when booking."
                     rows={3} style={{ width: '100%', padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 12, fontFamily: 'inherit' }} />
                 </div>
                 <button onClick={submitConsultationSetup} disabled={saving} style={{ padding: 13, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}>

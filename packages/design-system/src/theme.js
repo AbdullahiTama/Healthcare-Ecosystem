@@ -186,10 +186,15 @@ export const theme = {
 
   // ──────────────────────────────────────────────────────────────────────────────
   // COMPONENT DEFAULTS (for reference — not used directly in inline styles)
+  // Heights are the documented minimum touch target and are not reduced for
+  // density. Radius is what tightens: sm/md sit at 6px instead of 10px, so a
+  // 44px button or a table row control stops reading as a padded pill while
+  // still staying tappable.
   // ──────────────────────────────────────────────────────────────────────────────
   button: {
     height: { sm: 40, md: 44, lg: 48 },
     padding: { sm: '8px 16px', md: '10px 20px', lg: '12px 24px' },
+    radius: { sm: 6, md: 6, lg: 10 },
   },
   input: {
     height: 44,

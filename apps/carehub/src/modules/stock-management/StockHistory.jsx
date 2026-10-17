@@ -140,7 +140,7 @@ function SessionDetail({ session, onBack }) {
             )
           },
           { key: 'new_stock', label: 'New', align: 'right', render: i => i.new_stock },
-          { key: 'reason', label: 'Reason', render: i => i.reason || '\u2014' },
+          { key: 'reason', label: 'Reason', render: i => i.reason || 'Not set' },
           { key: 'unit_price', label: 'Unit Price', align: 'right', render: i => fmt(i.unit_price) }
         ]}
       />

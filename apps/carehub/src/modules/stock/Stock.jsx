@@ -319,7 +319,7 @@ export default function Stock({ brand }) {
           locations.length === 0 ? (
             <Card style={{ padding: '32px', textAlign: 'center' }}>
               <div style={{ fontWeight: '800', color: navy, marginBottom: '6px' }}>No warehouses yet</div>
-              <div style={{ fontSize: '13px', color: gray500 }}>Add a warehouse under "Warehouses & Branches" first — stock has to go somewhere.</div>
+              <div style={{ fontSize: '13px', color: gray500 }}>Add a warehouse under "Warehouses & Branches" first. Stock has to go somewhere.</div>
             </Card>
           ) : (
             <Card style={{ padding: '32px', textAlign: 'center' }}>

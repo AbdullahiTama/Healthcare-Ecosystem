@@ -43,7 +43,7 @@ export default function PromotionsTab({
         subtitle="Manage featured promotions in the MedMarket strip"
       />
 
-      <AdminSection title="Add a Promotion" subtitle="Promotions appear in the moving featured strip and auto-expire">
+      <AdminSection title="Add a Promotion" subtitle="Promotions appear in the moving featured strip and expire on their own">
         <div style={{ display: 'flex', flexDirection: 'column', gap: theme.space[4] }}>
           <Input
             label="Promotion Title"

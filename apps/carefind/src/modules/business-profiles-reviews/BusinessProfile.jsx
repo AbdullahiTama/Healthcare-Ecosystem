@@ -89,12 +89,12 @@ function PatientAppointmentLookup({ bizId }) {
               </div>
               <div style={{ fontSize: 12, color: theme.textMid }}>
                 {a.date} at {a.time}
-                {a.fee_amount ? ` — ₦${(a.fee_amount / 100).toLocaleString()}` : ' — Free'}
+                {a.fee_amount ? ` · ₦${(a.fee_amount / 100).toLocaleString()}` : ' · Free'}
               </div>
               <div style={{ fontSize: 11, color: theme.textLight, marginTop: 2 }}>
                 {a.payment_status === 'paid' && <span style={{ color: theme.success }}>Paid</span>}
                 {a.payment_status === 'unpaid' && <span style={{ color: theme.danger }}>Unpaid</span>}
-                {!a.payment_status && <span>—</span>}
+                {!a.payment_status && <span>Not recorded</span>}
               </div>
             </div>
           ))}
@@ -205,7 +205,7 @@ function BookingCard({ biz }) {
           }
           setBookedAppt({ id: data.id, phone: phone || '' })
           setDone(true)
-          toast.show('Payment confirmed — the business will confirm your appointment.', { type: 'success' })
+          toast.show('Payment confirmed. The business will confirm your appointment.', { type: 'success' })
         }
       } catch (err) {
         if (!cancelled) {
@@ -328,7 +328,7 @@ function BookingCard({ biz }) {
         }
         setBookedAppt({ id: data.id, phone: phone.trim() })
         setDone(true)
-        toast.show('Booking paid with your CareCoins — the business will confirm.')
+        toast.show('Booking paid with your CareCoins. The business will confirm.')
         return
       }
       if (data.paymentRequired && payMethod === 'card' && data.authorization_url) {
@@ -338,7 +338,7 @@ function BookingCard({ biz }) {
 
       setBookedAppt({ id: data.id, phone: phone.trim() })
       setDone(true)
-      toast.show('Request sent — the business will confirm your appointment.')
+      toast.show('Request sent. The business will confirm your appointment.')
     } catch (err) {
       console.error('Booking error:', err)
       toast.show('Could not send booking request.')
@@ -369,12 +369,12 @@ function BookingCard({ biz }) {
         Book an Appointment
       </p>
       <p style={{ margin: '0 0 12px 0', fontSize: 12.5, color: theme.textLight }}>
-        Pick a date and time — the business will confirm your request.
+        Choose a date and time. The business will confirm your request.
       </p>
 
       {done ? (
         <div>
-          <p style={{ margin: '0 0 8px', fontSize: 13.5, fontWeight: 700, color: theme.success }}>Request sent — we'll notify you once the business confirms.</p>
+          <p style={{ margin: '0 0 8px', fontSize: 13.5, fontWeight: 700, color: theme.success }}>Request sent. We will let you know when the business confirms.</p>
           {bookedAppt?.id && (
             <button
               onClick={async () => {
@@ -420,7 +420,7 @@ function BookingCard({ biz }) {
               <select value={selectedService} onChange={e => setSelectedService(e.target.value)} required={services.length > 0} style={{ width: '100%', padding: '10px 12px', borderRadius: 12, border: `1px solid ${theme.border}`, background: '#fff', fontSize: 13, color: theme.navy }}>
                 <option value="">Select a service</option>
                 {services.map(s => (
-                  <option key={s.id} value={s.id}>{s.name} {s.price_kobo != null ? `— ₦${(s.price_kobo / 100).toLocaleString()}` : '— Free'} {s.duration_minutes ? `· ${s.duration_minutes} min` : ''}</option>
+                  <option key={s.id} value={s.id}>{s.name} {s.price_kobo != null ? `· ₦${(s.price_kobo / 100).toLocaleString()}` : '· Free'} {s.duration_minutes ? `· ${s.duration_minutes} min` : ''}</option>
                 ))}
               </select>
             </div>
@@ -458,7 +458,7 @@ function BookingCard({ biz }) {
           />
 
           <Inp
-            label="Email (optional — for booking confirmation)"
+            label="Email (optional, for booking confirmation)"
             type="email"
             value={email}
             onChange={setEmail}
@@ -499,7 +499,7 @@ function BookingCard({ biz }) {
                   </button>
                 </>
               ) : (
-                <span style={{ fontSize: 12.5, color: theme.textMid, fontWeight: 600 }}>₦{(feeKobo / 100).toLocaleString()} — you'll pay securely by card after booking.</span>
+                <span style={{ fontSize: 12.5, color: theme.textMid, fontWeight: 600 }}>Booking fee ₦{(feeKobo / 100).toLocaleString()}. You pay securely by card once the business confirms.</span>
               )}
             </div>
           )}
@@ -508,7 +508,7 @@ function BookingCard({ biz }) {
             Preferred time {availLoading && <span style={{ fontWeight: 400, textTransform: 'none', color: theme.textLight }}>(loading...)</span>}
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }} role="group" aria-label="Available time slots">
-            {slots.length === 0 && !availLoading && <span style={{ fontSize: 12.5, color: theme.textLight }}>{hasServiceSpecificSlots ? 'No available times for this service on this date — try another day.' : 'No times left for this date — pick another day.'}</span>}
+            {slots.length === 0 && !availLoading && <span style={{ fontSize: 12.5, color: theme.textLight }}>{hasServiceSpecificSlots ? 'No available times for this service on this date. Try another day.' : 'No times left for this date. Pick another day.'}</span>}
             {availLoading && <span style={{ fontSize: 12.5, color: theme.textLight }}>Loading availability...</span>}
             {slots.map((t) => (
               <button
@@ -551,7 +551,7 @@ function BookingCard({ biz }) {
               <button ref={reviewCancelRef} onClick={() => setShowReview(false)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${theme.border}`, background: '#fff', color: theme.textMid, fontWeight: 700, cursor: 'pointer' }}>Back</button>
               <button onClick={submitBooking} disabled={booking} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: theme.tealDeep, color: '#fff', fontWeight: 800, cursor: booking ? 'wait' : 'pointer', opacity: booking ? 0.7 : 1 }}>{booking ? 'Processing...' : (reviewData.priceKobo > 0 ? 'Pay Now' : 'Confirm Booking')}</button>
             </div>
-            <p style={{ margin: '10px 0 0 0', fontSize: 11, color: theme.textLight, textAlign: 'center' }}>{reviewData.priceKobo > 0 ? 'You will be redirected to secure payment. Your slot is held only after verified payment.' : 'Free booking — no payment needed.'}</p>
+            <p style={{ margin: '10px 0 0 0', fontSize: 11, color: theme.textLight, textAlign: 'center' }}>{reviewData.priceKobo > 0 ? 'You will be redirected to secure payment. Your slot is held only after verified payment.' : 'Free booking. No payment is needed.'}</p>
           </div>
         </div>
       )}
@@ -644,7 +644,7 @@ function BusinessProfile() {
       if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
       setComment('')
       setRating(5)
-      toast.show('Review posted — thank you!')
+      toast.show('Review posted. Thank you!')
       loadAll()
     } catch (error) {
       console.error('Review error:', error)
@@ -710,7 +710,7 @@ function BusinessProfile() {
       <SidebarSection title="At a glance">
         <div style={{ display: 'flex', gap: 8 }}>
           <div style={{ flex: 1, textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: theme.navy }}>{avgRating || '—'}</p>
+            <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: theme.navy }}>{avgRating || 'No rating'}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight, fontWeight: 700 }}>Avg Rating</p>
           </div>
           <div style={{ flex: 1, textAlign: 'center' }}>
@@ -753,7 +753,7 @@ function BusinessProfile() {
 
   const bodyContent = (
     <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 40 } : { fontFamily: theme.fontFamily }}>
-      <div role="img" aria-label={`${biz.name} — Black-owned ${biz.business_type} in ${biz.city}, Nigeria, verified on CareHub`} style={{
+      <div role="img" aria-label={`${biz.name}, Black-owned ${biz.business_type} in ${biz.city}, Nigeria, verified on CareHub`} style={{
         background: `linear-gradient(135deg, ${theme.deepTeal}E6 0%, ${theme.tealDeep}D9 100%), url(${biz.cover_url || 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80&auto=format&fit=crop'}) center/cover`,
         color: '#fff', position: 'relative', overflow: 'hidden',
         ...(isMobile
@@ -776,7 +776,7 @@ function BusinessProfile() {
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden', backdropFilter: 'blur(6px)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)'
             }}>
               {biz.logo_url
-                ? <img src={biz.logo_url} alt={`${biz.name} logo — Black-owned business in Nigeria`} width={52} height={52} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none' }} />
+                ? <img src={biz.logo_url} alt={`${biz.name} logo, Black-owned business in Nigeria`} width={52} height={52} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none' }} />
                 : <TypeIcon size={24} aria-hidden="true" />}
             </span>
             <div style={{ minWidth: 0 }}>
@@ -790,7 +790,7 @@ function BusinessProfile() {
           {isMobile && (
             <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
               <div style={{ flex: 1, background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 16, padding: '12px 12px', textAlign: 'center', backdropFilter: 'blur(6px)' }}>
-                <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{avgRating || '—'}</p>
+                <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{avgRating || 'No rating'}</p>
                 <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.72)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Avg Rating</p>
               </div>
               <div style={{ flex: 1, background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 16, padding: '12px 12px', textAlign: 'center', backdropFilter: 'blur(6px)' }}>

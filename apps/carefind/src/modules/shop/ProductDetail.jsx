@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, ChevronLeft, ChevronRight, Package, ShoppingBag, Heart, Star, ShieldCheck, Truck, RotateCcw, Send, Trash2, MessageCircle, Bell } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Package, ShoppingBag, Heart, Star, ShieldCheck, Truck, RotateCcw, Send, Trash2, MessageCircle, Bell, Minus, Plus } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Card, Pill, Empty, Toast, useToast } from '../../components/ui'
 import { createShopRepository } from './shopRepository'
@@ -196,7 +196,7 @@ export default function ProductDetail() {
           </div>
         ) : (
           <div style={{ position: 'relative' }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} role="region" aria-label={`Product gallery, image ${current + 1} of ${images.length}`} aria-live="polite">
-            <img src={images[current].url} alt={`${p.name} — image ${current + 1} of ${images.length}`} style={{ width: '100%', height: 320, objectFit: 'cover', display: 'block' }} />
+            <img src={images[current].url} alt={`${p.name}, image ${current + 1} of ${images.length}`} style={{ width: '100%', height: 320, objectFit: 'cover', display: 'block' }} />
             {images.length > 1 && (
               <>
                 <button onClick={prev} aria-label="Previous image" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', width: 36, height: 36, borderRadius: '50%', border: `1px solid ${theme.border}`, background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
@@ -237,10 +237,26 @@ export default function ProductDetail() {
         {p.stock != null && <div style={{ fontSize: 12, color: p.stock>5 ? theme.success : theme.warning, fontWeight:600, marginBottom: 12 }}>{p.stock > 0 ? `${p.stock} in stock` : 'Out of stock'} {p.stock>0 && p.stock<=5 && '· Low stock'}</div>}
 
         <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom: 12 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:6, border:`1px solid ${theme.border}`, borderRadius:10, padding:'4px 6px', background:'#fff' }}>
-            <button onClick={()=>setQty(q=>Math.max(1,q-1))} style={{ width:28, height:28, border:`1px solid ${theme.border}`, borderRadius:8, background:'#fff', cursor:'pointer' }}>−</button>
-            <span style={{ minWidth:24, textAlign:'center', fontWeight:800 }}>{qty}</span>
-            <button onClick={()=>setQty(q=> Math.min(p.stock||99, q+1))} disabled={p.stock!=null && qty>=p.stock} style={{ width:28, height:28, border:`1px solid ${theme.border}`, borderRadius:8, background: qty>= (p.stock||99) ? theme.bg : '#fff', cursor:'pointer' }}>+</button>
+          <div style={{ display:'flex', alignItems:'center', border:`1px solid ${theme.border}`, borderRadius:10, overflow:'hidden', background:'#fff' }}>
+            <button
+              type="button"
+              onClick={()=>setQty(q=>Math.max(1,q-1))}
+              disabled={qty <= 1}
+              aria-label="Reduce quantity"
+              style={{ width:32, height:32, display:'flex', alignItems:'center', justifyContent:'center', border:'none', background:'#fff', color:theme.navy, cursor:'pointer', padding:0 }}
+            >
+              <Minus size={15} aria-hidden="true" />
+            </button>
+            <span style={{ minWidth:32, textAlign:'center', fontWeight:800, borderLeft:`1px solid ${theme.border}`, borderRight:`1px solid ${theme.border}`, padding:'0 4px', lineHeight:'32px' }}>{qty}</span>
+            <button
+              type="button"
+              onClick={()=>setQty(q=> Math.min(p.stock||99, q+1))}
+              disabled={p.stock!=null && qty>=p.stock}
+              aria-label="Increase quantity"
+              style={{ width:32, height:32, display:'flex', alignItems:'center', justifyContent:'center', border:'none', background:'#fff', color:theme.navy, cursor:'pointer', padding:0 }}
+            >
+              <Plus size={15} aria-hidden="true" />
+            </button>
           </div>
           <span style={{ fontSize:11, color:theme.textLight }}>{p.sale_type==='wholesale' ? 'Boxes' : p.sale_type==='distributor' ? 'Cartons' : 'Pieces'} · {qty} × ₦{(priceKobo/100).toLocaleString()}</span>
         </div>
@@ -286,7 +302,7 @@ export default function ProductDetail() {
           <b style={{ color:theme.navy }}>Reviews · {avg.count} {avg.count===1?'review':'reviews'} {avg.count>0 && `· ${avg.avg}★`}</b>
           <button onClick={()=>setShowReviewModal(true)} style={{ padding:'6px 10px', borderRadius:8, border:`1px solid ${theme.tealDeep}`, background: theme.tealDeep, color:'#fff', fontWeight:700, fontSize:12, cursor:'pointer' }}>Write a review</button>
         </div>
-        <div style={{ display:'flex', gap:6, marginBottom:8 }}>{[1,2,3,4,5].map(i=> <Star key={i} size={14} fill={avg.avg>=i ? theme.starAmber : avg.avg>=i-0.5 ? theme.starAmber : 'none'} color={theme.starAmber} />)}<span style={{ fontSize:11, color:theme.textLight, marginLeft:6 }}>{avg.count>0 ? `${avg.avg} average` : 'No ratings yet — be the first'}</span></div>
+        <div style={{ display:'flex', gap:6, marginBottom:8 }}>{[1,2,3,4,5].map(i=> <Star key={i} size={14} fill={avg.avg>=i ? theme.starAmber : avg.avg>=i-0.5 ? theme.starAmber : 'none'} color={theme.starAmber} />)}<span style={{ fontSize:11, color:theme.textLight, marginLeft:6 }}>{avg.count>0 ? `${avg.avg} average` : 'No ratings yet. Be the first'}</span></div>
         {reviews.length===0 ? <div style={{ fontSize:12, color:theme.textLight, textAlign:'center', padding:12, border:`1px dashed ${theme.border}`, borderRadius:8 }}>No reviews yet. Your review helps others choose.</div> : (
           <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:8 }}>
             {reviews.map(r=>(
@@ -304,14 +320,14 @@ export default function ProductDetail() {
         {showReviewModal && (
           <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', display:'grid', placeItems:'center', zIndex:70, padding:16 }}>
             <div style={{ background:'#fff', borderRadius:14, padding:16, width:'min(420px, 100%)', border:`1px solid ${theme.border}` }}>
-              <div style={{ fontWeight:800, color:theme.navy, marginBottom:8 }}>Write a review — {p.name}</div>
+              <div style={{ fontWeight:800, color:theme.navy, marginBottom:8 }}>Review {p.name}</div>
               <div style={{ display:'flex', gap:6, marginBottom:10 }}>{[1,2,3,4,5].map(i=> <button key={i} onClick={()=>setRating(i)} style={{ background:'none', border:'none', cursor:'pointer' }}><Star size={24} fill={i<=rating ? theme.starAmber : 'none'} color={theme.starAmber} /></button>)}<span style={{ fontSize:12, color:theme.textLight, marginLeft:6 }}>{rating}★</span></div>
               <textarea value={reviewText} onChange={e=>setReviewText(e.target.value)} placeholder="What did you like? Was it authentic? Delivery?" rows={3} style={{ width:'100%', padding:10, border:`1px solid ${theme.border}`, borderRadius:10, fontFamily:'inherit', fontSize:13, boxSizing:'border-box' }} />
               <div style={{ display:'flex', gap:8, marginTop:10 }}>
                 <button onClick={()=>setShowReviewModal(false)} style={{ flex:1, padding:10, border:`1px solid ${theme.border}`, borderRadius:10, background:'#fff', fontWeight:700, cursor:'pointer' }}>Cancel</button>
                 <button onClick={handleSubmitReview} disabled={reviewSubmitting || !reviewText.trim() || reviewText.trim().length<3} style={{ flex:1, padding:10, border:'none', borderRadius:10, background: reviewText.trim().length>=3 ? theme.tealDeep : theme.gray200, color: reviewText.trim().length>=3 ? '#fff' : theme.textLight, fontWeight:800, cursor:'pointer' }}>{reviewSubmitting ? 'Saving…' : 'Submit review'}</button>
               </div>
-              <div style={{ fontSize:11, color:theme.textLight, marginTop:6 }}>One review per product — submitting again replaces your previous review.</div>
+              <div style={{ fontSize:11, color:theme.textLight, marginTop:6 }}>You can review this product once. Submitting again replaces your previous review.</div>
             </div>
           </div>
         )}
@@ -326,7 +342,7 @@ export default function ProductDetail() {
               {qa.map(q=>(
                 <div key={q.id} style={{ border:`1px solid ${theme.border}`, borderRadius:10, padding:10, background: theme.cardBg }}>
                   <div style={{ fontSize:13, color:theme.navy }}><b>Q:</b> {q.question} <span style={{ fontSize:10, color:theme.textLight }}>· {new Date(q.created_at).toLocaleDateString()}</span></div>
-                  {q.answer ? <div style={{ fontSize:13, color:theme.tealDeep, marginTop:4 }}><b>A:</b> {q.answer} {q.answered_at && <span style={{ fontSize:10, color:theme.textLight }}>· {new Date(q.answered_at).toLocaleDateString()}</span>}</div> : <div style={{ fontSize:11, color:theme.textLight, marginTop:4 }}>Awaiting vendor answer — you’ll be notified.</div>}
+                  {q.answer ? <div style={{ fontSize:13, color:theme.tealDeep, marginTop:4 }}><b>A:</b> {q.answer} {q.answered_at && <span style={{ fontSize:10, color:theme.textLight }}>· {new Date(q.answered_at).toLocaleDateString()}</span>}</div> : <div style={{ fontSize:11, color:theme.textLight, marginTop:4 }}>Waiting for the seller to answer. We will let you know when they reply.</div>}
                 </div>
               ))}
             </div>

@@ -4,7 +4,7 @@ import { Card, GhostBtn, Loading, Empty, ErrorState, useToast, Toast } from '../
 import { createHealthRepository } from '../../../modules/health/repositories'
 
 function fmtDate(s) {
-  if (!s) return '—'
+  if (!s) return 'Not set'
   try { return new Date(s).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }) } catch { return s }
 }
 
@@ -54,7 +54,7 @@ export default function AuditLog({ repository = createHealthRepository() }) {
     setUndoBusy(row.id)
     try {
       await repository.logAudit({ action: `undo_${row.action}`, target_table: row.target_table, target_id: row.target_id, before: row.after, after: row.before, actor_admin_id: row.actor_admin_id }).catch(() => {})
-      showToast('Undo logged — revert business row via Businesses if needed', { type: 'info' })
+      showToast('Undo logged. Revert the business in Businesses if you need to.', { type: 'info' })
     } catch (e) { showToast(e.message, { type: 'error' }) }
     setUndoBusy(null)
   }
@@ -92,9 +92,9 @@ export default function AuditLog({ repository = createHealthRepository() }) {
 
       {/* Export governance strip */}
       <Card style={{ padding: 12, background: 'var(--panel)', border: '1px solid var(--border)' }}>
-        <div style={{ fontWeight: 800, fontSize: 12, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}><Download size={13} /> Recent exports (governed — reason + watermark required)</div>
+        <div style={{ fontWeight: 800, fontSize: 12, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}><Download size={13} /> Recent exports. Every export needs a reason and a watermark.</div>
         {exportsLog.length === 0 ? (
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>No exports yet. Use Businesses “Export filtered” — now asks for reason and watermarks CSV.</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>No exports yet. Use Export filtered in Businesses. It asks for a reason and watermarks the CSV.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 160, overflowY: 'auto' }}>
             {exportsLog.slice(0, 5).map(ex => (
@@ -109,7 +109,7 @@ export default function AuditLog({ repository = createHealthRepository() }) {
 
       {/* Audit feed */}
       {filtered.length === 0 ? (
-        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<Shield size={28} />} message={search || filterAction ? 'No audit entries match filters.' : 'No actions yet — admin writes appear here with 90d retention.'} /></Card>
+        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<Shield size={28} />} message={search || filterAction ? 'No audit entries match filters.' : 'No actions yet. Admin writes appear here with 90d retention.'} /></Card>
       ) : (
         <>
           <Card style={{ padding: 0, overflow: 'hidden', background: 'var(--panel)', border: '1px solid var(--border)' }}>
@@ -129,10 +129,10 @@ export default function AuditLog({ repository = createHealthRepository() }) {
                   {pageRows.map(row => (
                     <tr key={row.id} style={{ height: 36, borderBottom: '1px solid var(--hairline)' }}>
                       <td style={{ padding: '0 12px', whiteSpace: 'nowrap', color: 'var(--muted)', fontSize: 12 }}><Clock size={11} style={{ marginRight: 4 }} />{fmtDate(row.created_at)}</td>
-                      <td style={{ padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg)' }}>{(row.actor_admin_id || '—').slice(0, 8)}</td>
+                      <td style={{ padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg)' }}>{(row.actor_admin_id || 'Not set').slice(0, 8)}</td>
                       <td style={{ padding: '0 12px' }}><span style={{ padding: '3px 7px', borderRadius: 6, background: 'var(--hairline)', color: 'var(--fg)', fontWeight: 700, fontSize: 11 }}>{row.action}</span></td>
                       <td style={{ padding: '0 12px', fontSize: 12, color: 'var(--fg)' }}>{row.target_table}<span style={{ color: 'var(--muted)' }}>/{(row.target_id || '').slice(0, 8)}</span></td>
-                      <td style={{ padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)' }}>{row.ip || '—'}</td>
+                      <td style={{ padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)' }}>{row.ip || 'Not set'}</td>
                       <td style={{ padding: '0 12px', textAlign: 'right' }}>
                         <button disabled={!!undoBusy} onClick={() => handleUndo(row)} style={{ padding: '5px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', fontWeight: 700, fontSize: 11, cursor: undoBusy ? 'not-allowed' : 'pointer' }}><Undo2 size={11} style={{ marginRight: 4 }} />Log undo</button>
                       </td>
@@ -149,7 +149,7 @@ export default function AuditLog({ repository = createHealthRepository() }) {
           </div>
         </>
       )}
-      <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>Append-only • 90d retention • every write audited • watermark on exports</div>
+      <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>Records cannot be edited or deleted. Every change is audited and exports are watermarked.</div>
       <Toast msg={msg} type={type} />
     </div>
   )

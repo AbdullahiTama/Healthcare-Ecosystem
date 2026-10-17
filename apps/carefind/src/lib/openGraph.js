@@ -26,7 +26,7 @@
 
 export const SITE_NAME = 'CareFind'
 export const DEFAULT_TITLE = 'CareFind'
-export const DEFAULT_DESCRIPTION = 'CareFind - Discover healthcare providers, medicines, and services near you'
+export const DEFAULT_DESCRIPTION = 'CareFind. Discover healthcare providers, medicines, and services near you.'
 
 // Preview description length. Below ~150 characters the card looks empty; past
 // ~200 every major platform truncates it anyway.
@@ -234,7 +234,7 @@ export function buildProfileMeta(profile, { origin, canonicalUrl } = {}) {
   const name = profile.full_name || profile.display_name || 'CareFind member'
   const credential = profile.specialty || profile.verification_label
   return {
-    title: credential ? `${name} — ${credential}` : name,
+    title: credential ? `${name}, ${credential}` : name,
     description: truncate(profile.bio || `${name} on CareFind.${credential ? ` ${credential}.` : ''}`),
     image: absoluteUrl(origin, profile.avatar_url),
     url: canonicalUrl,

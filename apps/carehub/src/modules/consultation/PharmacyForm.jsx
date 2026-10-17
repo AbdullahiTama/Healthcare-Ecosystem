@@ -134,7 +134,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
     const feeProduct = charge.enabled && charge.feeProductId ? servicesProducts.find(p => p.id === charge.feeProductId) : null
     if (feeProduct) chargeItems.push({ id: feeProduct.id, name: feeProduct.name, price: feeProduct.price || 0, qty: 1, cat: 'Services', source: 'dispensed' })
     form.assessment.products.forEach(x => chargeItems.push({ id: x.id, name: x.name, price: x.price, qty: x.qty, source: 'dispensed' }))
-    if (charge.enabled && chargeItems.length === 0) { toast.show('Turn the charge on only if you are charging — add a fee product or dispensed products.', { type: 'warning' }); return }
+    if (charge.enabled && chargeItems.length === 0) { toast.show('Turn the charge on only if you are charging: add a fee product or dispensed products.', { type: 'warning' }); return }
 
     setSaving(true)
     try {
@@ -200,7 +200,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
           },
         },
       })
-      toast.show(chargeItems.length ? 'Consultation saved — products logged as a sale!' : 'Consultation saved!', { type: 'success' })
+      toast.show(chargeItems.length ? 'Consultation saved. The products were logged as a sale.' : 'Consultation saved.', { type: 'success' })
       onSaved?.(saved)
     } catch (e) {
       console.error('Pharmacy consultation save error:', e)
@@ -219,17 +219,17 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
   return (
     <div>
       {/* 1. Type of consultation — opens the form */}
-      <SectionCard title='Type of Consultation' hint='Select one or more — sections show/hide based on this.'>
+      <SectionCard title='Type of Consultation' hint='Select one or more. Sections below show or hide based on your selection.'>
         <Chips options={TYPE_OPTIONS.map(([k]) => k)} selected={selectedTypeKeys} onToggle={o => toggle('typeOfConsultation', 'selected', o)}
           customLabel={k => PHARMACY_TYPE_LABEL[k]} />
         {selectedTypeKeys.includes('other') && (
-          <Inp label='Other — specify' value={form.typeOfConsultation.other_text} onChange={v => set('typeOfConsultation', 'other_text', v)} placeholder='Describe...' />
+          <Inp label='Other, please specify' value={form.typeOfConsultation.other_text} onChange={v => set('typeOfConsultation', 'other_text', v)} placeholder='Describe...' />
         )}
       </SectionCard>
 
       {/* 2. Client */}
       {!client ? (
-        <SectionCard title='Client' hint="The consultation is saved inside the client's file — search for an existing client or add a new one.">
+        <SectionCard title='Client' hint="The consultation is saved inside the client's file. Search for an existing client or add a new one.">
           <Inp label='Search clients' value={clientSearch} onChange={setClientSearch} placeholder='Search by name or phone...' />
           {matched.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -310,7 +310,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
 
           {/* 3C. Medication Therapy Review */}
           {showMtr && (
-            <SectionCard title='Medication Therapy Review' hint='Current medications — repeatable rows. Fill one row per medicine.'>
+            <SectionCard title='Medication Therapy Review' hint='Current medications. Use one row per medicine.'>
               {form.medReview.rows.map((r, i) => (
                 <div key={r.id} style={{ padding: 14, borderRadius: 12, border: `1px solid ${border}`, background: bg }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -336,7 +336,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
                 <div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}>Issues reported</div>
                 <Chips options={ISSUE_OPTIONS} selected={form.medReview.issues} onToggle={o => toggle('medReview', 'issues', o)} />
               </div>
-              <Textarea label='Drug interaction / duplication check' value={form.medReview.interactions} onChange={v => set('medReview', 'interactions', v)} rows={2} placeholder='Pharmacist notes — interactions, duplications, dose adjustments...' />
+              <Textarea label='Drug interaction / duplication check' value={form.medReview.interactions} onChange={v => set('medReview', 'interactions', v)} rows={2} placeholder='Pharmacist notes on interactions, duplications and dose adjustments...' />
             </SectionCard>
           )}
 
@@ -353,7 +353,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
             <Toggle label='None on file' value={form.allergies.none_on_file} onChange={v => set('allergies', 'none_on_file', v)} />
             {!form.allergies.none_on_file && (
               <>
-                <Inp label='Drug allergies' value={form.allergies.drug_allergies} onChange={v => set('allergies', 'drug_allergies', v)} placeholder='Drug + reaction, e.g. penicillin — rash' />
+                <Inp label='Drug allergies' value={form.allergies.drug_allergies} onChange={v => set('allergies', 'drug_allergies', v)} placeholder='Drug and reaction, e.g. penicillin causes rash' />
                 <Inp label='Food allergies' value={form.allergies.food_allergies} onChange={v => set('allergies', 'food_allergies', v)} placeholder='e.g. peanuts' />
                 <Inp label='Other allergies' value={form.allergies.other_allergies} onChange={v => set('allergies', 'other_allergies', v)} placeholder='e.g. latex' />
               </>
@@ -369,7 +369,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
           </SectionCard>
 
           {/* 3G. Vitals (optional) */}
-          <SectionCard title='Vitals' hint='Optional — only if checked at the counter'>
+          <SectionCard title='Vitals' hint='Optional. Only fill this in if you took the readings at the counter.'>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Inp label='Blood Pressure' value={form.vitals.bp} onChange={v => set('vitals', 'bp', v)} placeholder='e.g. 120/80' />
               <Inp label='Blood Glucose (RBS/FBS)' value={form.vitals.glucose} onChange={v => set('vitals', 'glucose', v)} placeholder='e.g. RBS 110' />
@@ -380,12 +380,12 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
 
           {/* 3H. Assessment & Outcome */}
           <SectionCard title='Pharmacist Assessment & Outcome'>
-            <Textarea label="Pharmacist's assessment / problem identified" value={form.assessment.problem} onChange={v => set('assessment', 'problem', v)} rows={3} placeholder='e.g. mild viral URTI — suitable for OTC symptomatic relief' />
+            <Textarea label="Pharmacist's assessment / problem identified" value={form.assessment.problem} onChange={v => set('assessment', 'problem', v)} rows={3} placeholder='e.g. mild viral URTI, suitable for OTC symptomatic relief' />
             <Sel label='Recommendation type' value={form.assessment.recommendation_type} onChange={v => set('assessment', 'recommendation_type', v)} options={RECOMMENDATION_TYPES} />
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}>Product(s) recommended or dispensed</div>
               {stockProducts.length === 0 ? (
-                <div style={{ fontSize: 12, color: gray400 }}>No products in your catalog yet — add them in Inventory.</div>
+                <div style={{ fontSize: 12, color: gray400 }}>No products in your catalog yet. Add them in Inventory.</div>
               ) : (
                 <ProductSearchPicker businessId={brand.id} selectedIds={form.assessment.products.map(p => p.id)} onToggle={toggleProduct} placeholder='Search products to dispense or recommend...' />
               )}
@@ -407,7 +407,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
               <div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}>Referral out?</div>
               <YesNo value={form.assessment.referral_yesno} onChange={v => set('assessment', 'referral_yesno', v)} />
               {form.assessment.referral_yesno === 'yes' && (
-                <div style={{ marginTop: 10 }}><Inp label='Reason for referral' value={form.assessment.referral_reason} onChange={v => set('assessment', 'referral_reason', v)} placeholder='e.g. red flags — fever >3 days' /></div>
+                <div style={{ marginTop: 10 }}><Inp label='Reason for referral' value={form.assessment.referral_reason} onChange={v => set('assessment', 'referral_reason', v)} placeholder='e.g. red flags such as a fever lasting over 3 days' /></div>
               )}
             </div>
             <div>
@@ -420,14 +420,14 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
           </SectionCard>
 
           {/* Charges & Dispensing */}
-          <SectionCard title='Charges & Dispensing' hint='Payment is optional — only enable this when the pharmacy charges for the consultation.'>
+          <SectionCard title='Charges & Dispensing' hint='Payment is optional. Only turn this on when the pharmacy charges for the consultation.'>
             <Toggle label='Charge for this consultation' value={charge.enabled} onChange={v => setCharge(p => ({ ...p, enabled: v }))} />
             {charge.enabled && (
               <Sel label='Consultation fee product (Services)' value={charge.feeProductId} onChange={v => setCharge(p => ({ ...p, feeProductId: v }))}
-                options={servicesProducts.map(p => ({ value: p.id, label: p.name + ' — ₦' + Number(p.price || 0).toLocaleString() }))} />
+                options={servicesProducts.map(p => ({ value: p.id, label: p.name + ' (₦' + Number(p.price || 0).toLocaleString() + ')' }))} />
             )}
             {charge.enabled && servicesProducts.length === 0 && (
-              <div style={{ fontSize: 12, color: gray500 }}>No Services products yet — create one named e.g. "Consultation Fee" in Inventory to charge a fee. Dispensed products below can still be charged without one.</div>
+              <div style={{ fontSize: 12, color: gray500 }}>No Services products yet. Create one in Inventory, for example "Consultation Fee", if you want to charge a consultation fee. Dispensed products below can still be charged without one.</div>
             )}
             {charge.enabled && (
               <div style={{ fontSize: 12, color: gray400, lineHeight: 1.6 }}>
@@ -442,12 +442,12 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
               I consent to this pharmacy consultation and counseling and confirm that the information I have provided is accurate to the best of my knowledge.
             </div>
             <Toggle label='I agree to the above statement' value={form.consent.agreed} onChange={v => set('consent', 'agreed', v)} />
-            {form.consent.agreed && <SignaturePad ref={consentPad} label='Client signature — sign with finger or mouse' height={130} />}
+            {form.consent.agreed && <SignaturePad ref={consentPad} label='Client signature. Sign with a finger or the mouse.' height={130} />}
             <Inp label='Consent date' type='date' value={form.consent.date} onChange={v => set('consent', 'date', v)} />
           </SectionCard>
 
           {/* Pharmacist details */}
-          <SectionCard title='Pharmacist Details' hint='Staff section — filled by the pharmacist conducting the consultation'>
+          <SectionCard title='Pharmacist Details' hint='Staff section, filled in by the pharmacist conducting the consultation'>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Inp label='Pharmacist name' value={form.pharmacist.name} onChange={v => set('pharmacist', 'name', v)} placeholder='Your name' />
               <Inp label='PCN License Number' value={form.pharmacist.license} onChange={v => set('pharmacist', 'license', v)} placeholder='e.g. PCN/1234' />

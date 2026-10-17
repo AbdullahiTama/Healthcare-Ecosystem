@@ -82,7 +82,7 @@ export default function RevenueOverview({ repository = createMoneyRepository() }
               </div>
             })}
           </div>
-        ) : <div style={{ fontSize: 12, color: 'var(--muted)' }}>No plans — seed in Plan Catalog.</div>}
+        ) : <div style={{ fontSize: 12, color: 'var(--muted)' }}>No plans yet. Create one in Plan Catalog.</div>}
       </Card>
 
       {churnRisk > 0 && (

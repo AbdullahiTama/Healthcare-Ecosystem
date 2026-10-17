@@ -10,7 +10,7 @@ function ReportRow({ report, onQuarantine, onRestore, onDelete, busy }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 6 }}><Flag size={12} style={{ color: isQuarantined ? 'var(--amber)' : 'var(--muted)' }} /> {report.reason || 'Report'} <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>• {new Date(report.created_at).toLocaleString()} • {isQuarantined ? 'quarantined (hidden from feed/search)' : 'visible'}</span></div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, background: 'var(--hairline)', padding: 8, borderRadius: 8, maxHeight: 80, overflow: 'auto' }}>{report.posts?.content?.slice(0, 300) || report.reason || '—'}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, background: 'var(--hairline)', padding: 8, borderRadius: 8, maxHeight: 80, overflow: 'auto' }}>{report.posts?.content?.slice(0, 300) || report.reason || 'Not set'}</div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{report.posts?.id ? `Post ${report.posts.id.slice(0, 8)}` : `Report ${report.id.slice(0, 8)}`} {report.reporter_id ? `• reporter ${report.reporter_id.slice(0, 6)}` : ''}</div>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
@@ -64,7 +64,7 @@ export default function Moderation({ repository = createTrustRepository() }) {
     setBusy(true)
     try {
       await repository.quarantinePost(postId, report.reason || 'moderation quarantine', null)
-      showToast('Quarantined — hidden from feed/search', { type: 'success' })
+      showToast('Quarantined. It is hidden from the feed and search.', { type: 'success' })
       load()
     } catch (e) { showToast(e.message, { type: 'error' }) }
     setBusy(false)
@@ -78,7 +78,7 @@ export default function Moderation({ repository = createTrustRepository() }) {
       const { sbFetch } = await import('../../../services/supabase.js')
       await sbFetch(`posts?id=eq.${postId}`, { method: 'PATCH', body: JSON.stringify({ is_quarantined: false }), prefer: 'return=minimal' })
       await repository.logModeration({ target_type: 'post', target_id: postId, action: 'restore', reason: 'moderation restore', actor_admin_id: null })
-      showToast('Restored — visible again', { type: 'success' })
+      showToast('Restored. It is visible again.', { type: 'success' })
       load()
     } catch (e) { showToast(e.message, { type: 'error' }) }
     setBusy(false)
@@ -127,7 +127,7 @@ export default function Moderation({ repository = createTrustRepository() }) {
       </Card>
 
       {filtered.length === 0 ? (
-        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<Shield size={28} />} message="No reports — or no quarantined items for filter. Reports appear here when users flag content." /></Card>
+        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<Shield size={28} />} message="No reports for this filter. Reports appear here when users flag content." /></Card>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(r => (
@@ -137,7 +137,7 @@ export default function Moderation({ repository = createTrustRepository() }) {
       )}
 
       <ConfirmDialog show={!!confirmDelete} title="Permanently delete?" onClose={() => setConfirmDelete(null)} onConfirm={handleDelete} confirmLabel={busy ? 'Deleting...' : 'Delete'} variant="danger"
-        message={<div style={{ fontSize: 13 }}><div>This permanently deletes the post + its likes/comments and the report. <b>Quarantine</b> is reversible — delete is not.</div><div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 12 }}>Audited to moderation_actions.</div></div>} />
+        message={<div style={{ fontSize: 13 }}><div>This permanently deletes the post + its likes/comments and the report. <b>Quarantine</b> is reversible, but delete is not.</div><div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 12 }}>Audited to moderation_actions.</div></div>} />
       <Toast msg={msg} type={type} />
     </div>
   )

@@ -63,6 +63,9 @@ const steps = [
   ...APPS.map((a) => ({ id: 'lint', label: `lint: ${a} (errors fail; warnings do not)`, ...sh(`apps/${a}`, 'npm run lint') })),
   ...APPS.map((a) => ({ id: 'builds', label: `build: ${a}`, ...sh(`apps/${a}`, 'npm run build') })),
   ...APPS.map((a) => ({ id: 'audit', label: `audit (production deps, high): ${a}`, ...sh(`apps/${a}`, 'npm audit --omit=dev --audit-level=high') })),
+  // First party UI copy must not contain a dash character. The audit parses the
+  // AST, so it never flags a route path, CSS class, column name or identifier.
+  { id: 'copy', label: 'first party UI copy: no dashes, no unparsed files', run: () => spawnSync(process.execPath, ['scripts/audit-ui-copy.mjs'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).stdout.split('\n').filter((l) => /DASH|parse error/i.test(l)) },
 ]
 
 const rows = []

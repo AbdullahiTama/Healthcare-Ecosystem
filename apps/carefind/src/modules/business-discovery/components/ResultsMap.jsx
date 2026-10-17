@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { X } from 'lucide-react';
 import { theme } from '../../../styles/theme';
 import { businessCoords } from '../../utils/marketplace.js';
 
@@ -170,10 +171,12 @@ export default function ResultsMap({
           <div style={styles.cardHeader}>
             <h4 style={styles.cardTitle}>{selectedBusiness.name}</h4>
             <button
+              type="button"
               onClick={() => setSelectedBusiness(null)}
+              aria-label="Close business details"
               style={styles.closeButton}
             >
-              Ã—
+              <X size={16} aria-hidden="true" />
             </button>
           </div>
           {selectedBusiness.category?.name && (

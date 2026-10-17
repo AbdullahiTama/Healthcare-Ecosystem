@@ -1,0 +1,805 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for api/_handlers/initiate-business-withdrawal.js</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">api/_handlers</a> initiate-business-withdrawal.js</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/240</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/240</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >import { checkOtp, OTP_PURPOSES, checkWithdrawalPin, verifyBankAccount, settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForDestination, sendSecurityAlert, limitMessage, getWithdrawalDraft, destinationFingerprint, voidWithdrawalDraft } from '@care-ecosystem/shared-payments'</span></span></span>
+<span class="cstat-no" title="statement not covered" >import { getSecurityMailer } from '../_lib/securityMailer.js'</span>
+<span class="cstat-no" title="statement not covered" >import { verifyBusiness } from '../_lib/verifyBusiness.js'</span>
+<span class="cstat-no" title="statement not covered" >import { supabase } from '../_lib/supabase.js'</span>
+<span class="cstat-no" title="statement not covered" >import { createTransferRecipient, initiateTransfer, checkBalance, resolveAccount } from '../_lib/paystackTransfer.js'</span>
+<span class="cstat-no" title="statement not covered" >import { reconcileBusinessWithdrawal } from '../_lib/withdrawalRecovery.js'</span>
+<span class="cstat-no" title="statement not covered" >import { applyBusinessWithdrawalResult } from '../_lib/businessWithdrawalEffects.js'</span>
+<span class="cstat-no" title="statement not covered" >import { emailService } from '../../src/lib/emailService.js'</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >const MAX_AMOUNT_KOBO = 2_000_000_000 // business_withdrawal_requests.amount is a 32-bit integer</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >// Business wallet withdrawal (ADR-005), through the withdrawal engine (same architecture as CareFind):</span>
+<span class="cstat-no" title="statement not covered" >//   1. authorise: the verified OWNER, who must also prove the withdrawal PIN (second factor against a stolen</span>
+<span class="cstat-no" title="statement not covered" >//      session, audit F-08), and own the wallet being drained (the parent business or one of its branches);</span>
+<span class="cstat-no" title="statement not covered" >//   2. verify the bank account name BEFORE any money is reserved;</span>
+<span class="cstat-no" title="statement not covered" >//   3. reserve: ONE atomic database step (balance, 24h cap, ledger entry, request row, reference derived from the</span>
+<span class="cstat-no" title="statement not covered" >//      request id - the client cannot supply or reuse one). No Paystack call happens while a lock is held;</span>
+<span class="cstat-no" title="statement not covered" >//   4. send the transfer, link it to the request by id; a failure releases or reconciles the reservation.</span>
+<span class="cstat-no" title="statement not covered" >// There is no fee: the platform's 20% is already taken at booking settlement, the wallet is the business's net.</span>
+<span class="cstat-no" title="statement not covered" >export default async function handler(req, res) {</span>
+<span class="cstat-no" title="statement not covered" >  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  const { business, user, error: authError } = await verifyBusiness(supabase, req)</span>
+<span class="cstat-no" title="statement not covered" >  if (authError) return res.status(401).json({ error: authError })</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  let { bankCode, bankName, accountNumber, accountName } = req.body || {}</span>
+<span class="cstat-no" title="statement not covered" >  const { business_id: businessId, amount, pin, otp, payoutAccountId } = req.body || {}</span>
+<span class="cstat-no" title="statement not covered" >  const amountKobo = Number(amount)</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  // A saved, identity-verified payout account (owned by the parent business) decides WHERE the money goes: its</span>
+<span class="cstat-no" title="statement not covered" >  // details come from the database and any bank details the browser sent are ignored. When the platform requires</span>
+<span class="cstat-no" title="statement not covered" >  // saved accounts (financial_config.payout_account_required) a typed-in destination is refused.</span>
+<span class="cstat-no" title="statement not covered" >  let saved = null</span>
+<span class="cstat-no" title="statement not covered" >  if (payoutAccountId) {</span>
+<span class="cstat-no" title="statement not covered" >    saved = await getPayoutAccountForWithdrawal(supabase, { ownerType: 'business', ownerId: business.id, id: payoutAccountId })</span>
+<span class="cstat-no" title="statement not covered" >    if (!saved) return res.status(400).json({ error: 'That payout account is not available. Choose another or add a new one.', code: 'payout_account_not_found' })</span>
+<span class="cstat-no" title="statement not covered" >    ;({ bank_code: bankCode, bank_name: bankName, account_number: accountNumber, account_name: accountName } = saved)</span>
+<span class="cstat-no" title="statement not covered" >  } else if (await payoutAccountRequired(supabase)) {</span>
+<span class="cstat-no" title="statement not covered" >    return res.status(400).json({ error: 'Add and verify a payout account before withdrawing.', code: 'payout_account_required' })</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  if (!businessId || !Number.isInteger(amountKobo) || amountKobo &lt;= 0 || amountKobo &gt; MAX_AMOUNT_KOBO</span>
+<span class="cstat-no" title="statement not covered" >      || !bankCode || !bankName || !/^\d{10}$/.test(String(accountNumber || '')) || !accountName) {</span>
+<span class="cstat-no" title="statement not covered" >    return res.status(400).json({ error: 'Missing or invalid withdrawal details' })</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  // The requested business must be the owner's parent or one of its branches.</span>
+<span class="cstat-no" title="statement not covered" >  const { data: target } = await supabase</span>
+<span class="cstat-no" title="statement not covered" >    .from('businesses')</span>
+<span class="cstat-no" title="statement not covered" >    .select('id')</span>
+<span class="cstat-no" title="statement not covered" >    .eq('id', businessId)</span>
+<span class="cstat-no" title="statement not covered" >    .or(`id.eq.${business.id},parent_business_id.eq.${business.id}`)</span>
+<span class="cstat-no" title="statement not covered" >    .maybeSingle()</span>
+<span class="cstat-no" title="statement not covered" >  if (!target) return res.status(403).json({ error: 'You do not own this business' })</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  // Second factor. Nothing below runs without it.</span>
+<span class="cstat-no" title="statement not covered" >  const pinCheck = await checkWithdrawalPin(supabase, user.id, pin, {</span>
+<span class="cstat-no" title="statement not covered" >    // the wrong PIN that locks it: tell the owner someone is guessing</span>
+<span class="cstat-no" title="statement not covered" >    onLocked: () =&gt; sendSecurityAlert('pin_locked', async () =&gt; (await getSecurityMailer()).sendPinLocked({ to: user.email })),</span>
+<span class="cstat-no" title="statement not covered" >  })</span>
+<span class="cstat-no" title="statement not covered" >  if (!pinCheck.ok) {</span>
+<span class="cstat-no" title="statement not covered" >    return res.status(pinCheck.status).json({ error: pinCheck.error, code: pinCheck.code, ...(pinCheck.code === 'pin_not_set' ? { needsPin: true } : {}) })</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  // The submit must match the request the code was issued for: a resumed or</span>
+<span class="cstat-no" title="statement not covered" >  // repurposed form forces a fresh code instead of burning this one (Phase 1).</span>
+<span class="cstat-no" title="statement not covered" >  // Amount AND destination are compared: a code issued for one payout account</span>
+<span class="cstat-no" title="statement not covered" >  // must not authorize another.</span>
+<span class="cstat-no" title="statement not covered" >  {</span>
+<span class="cstat-no" title="statement not covered" >    const draft = await getWithdrawalDraft(supabase, { userId: user.id }).catch(() =&gt; null)</span>
+<span class="cstat-no" title="statement not covered" >    let fingerprint = null</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      fingerprint = destinationFingerprint({ userId: user.id, savedId: payoutAccountId, bankCode, accountNumber })</span>
+<span class="cstat-no" title="statement not covered" >    } catch (err) {</span>
+<span class="cstat-no" title="statement not covered" >      return res.status(503).json({ error: 'Withdrawals are temporarily unavailable. Try again shortly.', code: 'draft_unavailable' })</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    if (!draft || Number(draft.amount) !== amountKobo || draft.destination_fp !== fingerprint) {</span>
+<span class="cstat-no" title="statement not covered" >      // Void the stale draft so the owner's next request is NOT answered with `draft_active` for ten minutes. Idempotent</span>
+<span class="cstat-no" title="statement not covered" >      // (it only stamps voided_at) and moves no money, so a void failure is safe to ignore.</span>
+<span class="cstat-no" title="statement not covered" >      await voidWithdrawalDraft(supabase, { userId: user.id, reason: 'submit_mismatch' }).catch(() =&gt; null)</span>
+<span class="cstat-no" title="statement not covered" >      return res.status(400).json({ error: 'Your withdrawal details changed — request a fresh code.', code: 'draft_mismatch' })</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  // Third factor: a fresh code emailed to the owner, checked LAST - after the PIN and before the account is resolved or</span>
+<span class="cstat-no" title="statement not covered" >  // any money is reserved. The PIN alone is a static secret a shoulder-surfer can read; the code proves the person also</span>
+<span class="cstat-no" title="statement not covered" >  // controls the owner's email. Single use (verify_otp consumes it); 5 wrong tries burn it.</span>
+<span class="cstat-no" title="statement not covered" >  const otpCheck = await checkOtp({ supabase, userId: user.id, purpose: OTP_PURPOSES.WITHDRAWAL, code: otp })</span>
+<span class="cstat-no" title="statement not covered" >  if (!otpCheck.ok) return res.status(otpCheck.status).json({ error: otpCheck.error, code: otpCheck.code })</span>
+<span class="cstat-no" title="statement not covered" >  // The code is consumed: void its draft so the next withdrawal starts clean (best-effort — a void failure must not</span>
+<span class="cstat-no" title="statement not covered" >  // fail the withdrawal; the draft expires in 10 min anyway).</span>
+<span class="cstat-no" title="statement not covered" >  await voidWithdrawalDraft(supabase, { userId: user.id, reason: 'consumed' }).catch(() =&gt; null)</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  const account = await verifyBankAccount(resolveAccount, { bankCode, accountNumber, accountName })</span>
+<span class="cstat-no" title="statement not covered" >  if (!account.ok) return res.status(account.status).json({ error: account.error })</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  // A destination this business has not been paid at before (a NEW saved account inside its cooling-off window, a typed-in</span>
+<span class="cstat-no" title="statement not covered" >  // account, or one the bank could not confirm), and the day after the owner's PIN changed, cap the business's rolling-24h</span>
+<span class="cstat-no" title="statement not covered" >  // total at a small amount. It is passed as the engine's own per-call cap (never above the engine's business ceiling), so it</span>
+<span class="cstat-no" title="statement not covered" >  // is enforced atomically; no request shape avoids it (H02).</span>
+<span class="cstat-no" title="statement not covered" >  const extraLimit = await limitsForDestination(supabase, {</span>
+<span class="cstat-no" title="statement not covered" >    ownerType: 'business', userId: user.id, historyOwnerId: businessId,</span>
+<span class="cstat-no" title="statement not covered" >    destination: { bankCode, accountNumber }, saved, unverified: account.unverified === true,</span>
+<span class="cstat-no" title="statement not covered" >  })</span>
+<span class="cstat-no" title="statement not covered" >  if (account.unverified === true) {</span>
+<span class="cstat-no" title="statement not covered" >    console.warn(JSON.stringify({ event: 'withdrawal.unverified_destination', app: 'carehub', bankCode: String(bankCode) }))</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  const { data: created, error: createError } = await supabase.rpc('create_business_withdrawal', {</span>
+<span class="cstat-no" title="statement not covered" >    p_business_id: businessId,</span>
+<span class="cstat-no" title="statement not covered" >    p_amount_kobo: amountKobo,</span>
+<span class="cstat-no" title="statement not covered" >    p_bank_name: bankName,</span>
+<span class="cstat-no" title="statement not covered" >    p_bank_code: bankCode,</span>
+<span class="cstat-no" title="statement not covered" >    p_account_number: accountNumber,</span>
+<span class="cstat-no" title="statement not covered" >    p_account_name: account.accountName,</span>
+<span class="cstat-no" title="statement not covered" >    p_initiated_by: user.id,</span>
+<span class="cstat-no" title="statement not covered" >    ...(extraLimit?.coolingCapKobo != null ? { p_daily_cap_kobo: extraLimit.coolingCapKobo } : {}),</span>
+<span class="cstat-no" title="statement not covered" >  })</span>
+<span class="cstat-no" title="statement not covered" >  if (createError || !created) {</span>
+<span class="cstat-no" title="statement not covered" >    console.error('[initiate-business-withdrawal] create_business_withdrawal failed', createError?.message)</span>
+<span class="cstat-no" title="statement not covered" >    return res.status(500).json({ error: 'Could not process withdrawal request' })</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  if (created.outcome === 'daily_limit') {</span>
+<span class="cstat-no" title="statement not covered" >    return res.status(429).json({ error: 'daily_limit', message: extraLimit?.coolingCapKobo != null ? limitMessage({ reason: extraLimit.coolingReason || 'new_account', capKobo: extraLimit.coolingCapKobo, coolingEndsAt: extraLimit.coolingEndsAt }) : 'Daily withdrawal limit reached for this business. Try again later or contact support.', ...(extraLimit?.coolingCapKobo != null ? { limitReason: extraLimit.coolingReason || 'new_account', coolingEndsAt: extraLimit.coolingEndsAt } : {}) })</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  if (created.outcome === 'below_minimum') {</span>
+<span class="cstat-no" title="statement not covered" >    return res.status(400).json({ error: 'below_minimum', message: 'That is below the minimum withdrawal amount.' })</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  if (created.outcome !== 'ok') {</span>
+<span class="cstat-no" title="statement not covered" >    return res.status(400).json({ error: created.outcome === 'insufficient' || created.outcome === 'no_wallet' ? 'insufficient' : 'Could not process withdrawal request' })</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  const { id: requestId, reference } = created</span>
+<span class="cstat-no" title="statement not covered" >  let transferAttempted = false</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  // Release the reservation for a request whose transfer was never attempted: nothing can have reached the</span>
+<span class="cstat-no" title="statement not covered" >  // bank, so no provider check is needed.</span>
+<span class="cstat-no" title="statement not covered" >  const releaseUnsent = async (detail) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      const r = await settleWithdrawal(supabase, 'carehub', { outcome: 'failed', requestId, detail })</span>
+<span class="cstat-no" title="statement not covered" >      return r.result === 'refunded' || r.result === 'already_refunded'</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) {</span>
+<span class="cstat-no" title="statement not covered" >      console.error('[initiate-business-withdrawal] release of an unsent withdrawal failed; the reconcile cron will settle it', { reference, message: e.message })</span>
+<span class="cstat-no" title="statement not covered" >      return false</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >  try {</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      const available = await checkBalance()</span>
+<span class="cstat-no" title="statement not covered" >      if (available &lt; amountKobo) {</span>
+<span class="cstat-no" title="statement not covered" >        await releaseUnsent('provider_balance_low')</span>
+<span class="cstat-no" title="statement not covered" >        return res.status(503).json({ error: 'Payment provider balance low - try again later', refunded: true })</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >    } catch (err) {</span>
+<span class="cstat-no" title="statement not covered" >      const refunded = await releaseUnsent('provider_balance_check_failed')</span>
+<span class="cstat-no" title="statement not covered" >      return res.status(502).json({ error: 'Could not check payment provider balance', refunded })</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    const recipientCode = await createTransferRecipient({ bankCode, accountNumber, accountName: account.accountName, businessId })</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    // Record that a transfer call is about to be made BEFORE making it, and make no call unless that was recorded (see the</span>
+<span class="cstat-no" title="statement not covered" >    // CareFind handler): "processing" means a call may have created the transfer, and only a provider-confirmed</span>
+<span class="cstat-no" title="statement not covered" >    // non-payment may release the funds. If the mark cannot be written nothing was sent, so the reservation is released.</span>
+<span class="cstat-no" title="statement not covered" >    const marked = await supabase.rpc('mark_business_withdrawal_transfer_attempt', { p_request_id: requestId })</span>
+<span class="cstat-no" title="statement not covered" >    if (marked.error || marked.data !== 'ok') {</span>
+<span class="cstat-no" title="statement not covered" >      const refunded = await releaseUnsent('attempt_not_recorded')</span>
+<span class="cstat-no" title="statement not covered" >      return res.status(503).json({ error: 'Could not start the transfer. Please try again shortly.', refunded })</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    transferAttempted = true</span>
+<span class="cstat-no" title="statement not covered" >    const { transferCode } = await initiateTransfer({</span>
+<span class="cstat-no" title="statement not covered" >      recipientCode,</span>
+<span class="cstat-no" title="statement not covered" >      amountKobo,</span>
+<span class="cstat-no" title="statement not covered" >      reason: `CareHub business withdrawal: NGN ${(amountKobo / 100).toLocaleString()}`,</span>
+<span class="cstat-no" title="statement not covered" >      reference,</span>
+<span class="cstat-no" title="statement not covered" >    })</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    // Link the provider's codes to THIS request by id. Not fatal if it fails: the webhook and the reconcile cron</span>
+<span class="cstat-no" title="statement not covered" >    // settle by the reference, which is already on the request.</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      await supabase.rpc('attach_business_withdrawal_transfer', { p_request_id: requestId, p_transfer_code: transferCode, p_recipient_code: recipientCode })</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) {</span>
+<span class="cstat-no" title="statement not covered" >      console.error('[initiate-business-withdrawal] could not record the transfer linkage', { reference, message: e.message })</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      await emailService.enqueue({</span>
+<span class="cstat-no" title="statement not covered" >        templateKey: 'withdrawal_requested',</span>
+<span class="cstat-no" title="statement not covered" >        toEmail: business.email,</span>
+<span class="cstat-no" title="statement not covered" >        payload: {</span>
+<span class="cstat-no" title="statement not covered" >          businessName: business.name || '',</span>
+<span class="cstat-no" title="statement not covered" >          amount: (amountKobo / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }),</span>
+<span class="cstat-no" title="statement not covered" >          reference,</span>
+<span class="cstat-no" title="statement not covered" >          bankName,</span>
+<span class="cstat-no" title="statement not covered" >          accountNumber: `••••${String(accountNumber).slice(-4)}`,</span>
+<span class="cstat-no" title="statement not covered" >        },</span>
+<span class="cstat-no" title="statement not covered" >        subject: 'CareHub: withdrawal requested',</span>
+<span class="cstat-no" title="statement not covered" >        idempotencyKey: `withdrawal-requested:${reference}`,</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >      emailService.processBatch().catch(() =&gt; {})</span>
+<span class="cstat-no" title="statement not covered" >    } catch (err) {</span>
+<span class="cstat-no" title="statement not covered" >      console.warn('[initiate-business-withdrawal] email enqueue failed:', err.message)</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    return res.status(200).json({ success: true, transferCode, reference, amount: amountKobo })</span>
+<span class="cstat-no" title="statement not covered" >  } catch (err) {</span>
+<span class="cstat-no" title="statement not covered" >    // Before the transfer call nothing was sent: release the reservation at once.</span>
+<span class="cstat-no" title="statement not covered" >    if (!transferAttempted) {</span>
+<span class="cstat-no" title="statement not covered" >      const refunded = await releaseUnsent('recipient_failed')</span>
+<span class="cstat-no" title="statement not covered" >      return res.status(502).json({</span>
+<span class="cstat-no" title="statement not covered" >        error: refunded ? `${err.message || 'Payment provider error'}. The amount has been returned to your wallet.` : `${err.message || 'Payment provider error'}. We are checking this withdrawal; your balance will be corrected automatically if it did not go through.`,</span>
+<span class="cstat-no" title="statement not covered" >        refunded,</span>
+<span class="cstat-no" title="statement not covered" >      })</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" ></span>
+<span class="cstat-no" title="statement not covered" >    // The transfer call itself failed. A definite Paystack refusal is checked immediately; an ambiguous failure</span>
+<span class="cstat-no" title="statement not covered" >    // (timeout, dropped connection) may still have created the transfer, so it is only refunded once Paystack</span>
+<span class="cstat-no" title="statement not covered" >    // confirms it did not (the cron waits out the grace period before believing "not found").</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      const now = new Date().toISOString()</span>
+<span class="cstat-no" title="statement not covered" >      const row = { id: requestId, status: 'processing', paystack_reference: reference, paystack_transfer_code: null, created_at: now, updated_at: now }</span>
+<span class="cstat-no" title="statement not covered" >      // Only a DEFINITE Paystack refusal is confirmed-not-sent; a timeout is not.</span>
+<span class="cstat-no" title="statement not covered" >      const recovery = await reconcileBusinessWithdrawal(supabase, row, err.paystackRejected ? { graceMs: 0, confirmedNotSent: true } : {})</span>
+<span class="cstat-no" title="statement not covered" >      // An outcome the reconciliation actually changed tells the owner; 'waiting' changed nothing and says nothing.</span>
+<span class="cstat-no" title="statement not covered" >      if (recovery.outcome === 'completed' || recovery.outcome === 'refunded') {</span>
+<span class="cstat-no" title="statement not covered" >        await applyBusinessWithdrawalResult(supabase, recovery.result)</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >      if (recovery.outcome === 'refunded') {</span>
+<span class="cstat-no" title="statement not covered" >        return res.status(502).json({ error: `${err.message || 'Payment provider error'}. The amount has been returned to your wallet.`, refunded: true })</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >      console.error('[initiate-business-withdrawal] transfer failed; left for reconciliation', { reference, detail: recovery.detail })</span>
+<span class="cstat-no" title="statement not covered" >    } catch (recoveryErr) {</span>
+<span class="cstat-no" title="statement not covered" >      console.error('[initiate-business-withdrawal] recovery after failed transfer errored', { reference, message: recoveryErr.message })</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    return res.status(502).json({</span>
+<span class="cstat-no" title="statement not covered" >      error: `${err.message || 'Payment provider error'}. We are checking this withdrawal; your balance will be corrected automatically if it did not go through.`,</span>
+<span class="cstat-no" title="statement not covered" >      pending: true,</span>
+<span class="cstat-no" title="statement not covered" >    })</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-10-16T15:21:14.166Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

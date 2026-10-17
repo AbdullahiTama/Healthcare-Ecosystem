@@ -131,7 +131,7 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
       const fresh = await commentRepository.getComments(postId)
       onCommentsChange(fresh)
     } catch (e) {
-      notify('Could not save edit — comment may have been removed', { type: 'error' })
+      notify('Could not save the edit. The comment may have been removed.', { type: 'error' })
     } finally {
       setIsLoading(false)
     }

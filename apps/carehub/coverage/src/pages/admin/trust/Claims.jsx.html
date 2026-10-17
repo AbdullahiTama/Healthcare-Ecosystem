@@ -1,0 +1,472 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/pages/admin/trust/Claims.jsx</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../../prettify.css" />
+    <link rel="stylesheet" href="../../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../../index.html">All files</a> / <a href="index.html">src/pages/admin/trust</a> Claims.jsx</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/112</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/112</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >import { useState, useEffect, useCallback } from 'react'</span></span></span>
+import { Search, RefreshCw, Building2, Users, CheckCircle, XCircle, Clock, ExternalLink } from 'lucide-react'
+import { Card, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast, ConfirmDialog } from '../../../components/ui'
+import { createTrustRepository } from '../../../modules/trust/repositories'
+&nbsp;
+<span class="cstat-no" title="statement not covered" >function timeAgo(s) {</span>
+<span class="cstat-no" title="statement not covered" >  if (!s) return 'Not set'</span>
+<span class="cstat-no" title="statement not covered" >  const diff = Math.floor((Date.now() - new Date(s)) / 1000)</span>
+<span class="cstat-no" title="statement not covered" >  if (diff &lt; 3600) return `${Math.floor(diff / 60)}m ago`</span>
+<span class="cstat-no" title="statement not covered" >  if (diff &lt; 86400) return `${Math.floor(diff / 3600)}h ago`</span>
+<span class="cstat-no" title="statement not covered" >  return `${Math.floor(diff / 86400)}d ago`</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export default function Claims({ repository = createTrustRepository() }) {</span>
+<span class="cstat-no" title="statement not covered" >  const [businessClaims, setBusinessClaims] = useState(null)</span>
+<span class="cstat-no" title="statement not covered" >  const [staffClaims, setStaffClaims] = useState(null)</span>
+<span class="cstat-no" title="statement not covered" >  const [loading, setLoading] = useState(true)</span>
+<span class="cstat-no" title="statement not covered" >  const [error, setError] = useState('')</span>
+<span class="cstat-no" title="statement not covered" >  const [filter, setFilter] = useState('all') // all | business | staff</span>
+<span class="cstat-no" title="statement not covered" >  const [search, setSearch] = useState('')</span>
+<span class="cstat-no" title="statement not covered" >  const [statusFilter, setStatusFilter] = useState('pending')</span>
+<span class="cstat-no" title="statement not covered" >  const [busyId, setBusyId] = useState(null)</span>
+<span class="cstat-no" title="statement not covered" >  const { msg, type, show: showToast } = useToast()</span>
+<span class="cstat-no" title="statement not covered" >  const [confirm, setConfirm] = useState(null) // { id, kind: 'approve'|'reject', type: 'business'|'staff' }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const load = useCallback(async () =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    setLoading(true); setError('')</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      const [b, s] = await Promise.all([</span>
+<span class="cstat-no" title="statement not covered" >        repository.getBusinessClaims({ status: statusFilter || undefined, limit: 50 }),</span>
+<span class="cstat-no" title="statement not covered" >        repository.getStaffClaims({ status: statusFilter || undefined, limit: 50 }),</span>
+<span class="cstat-no" title="statement not covered" >      ])</span>
+<span class="cstat-no" title="statement not covered" >      setBusinessClaims(Array.isArray(b) ? b : [])</span>
+<span class="cstat-no" title="statement not covered" >      setStaffClaims(Array.isArray(s) ? s : [])</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) { setError(e.message) }</span>
+<span class="cstat-no" title="statement not covered" >    setLoading(false)</span>
+<span class="cstat-no" title="statement not covered" >  }, [repository, statusFilter])</span>
+<span class="cstat-no" title="statement not covered" >  useEffect(() =&gt; { load() }, [load])</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const all = (() =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    const b = (businessClaims || []).map(r =&gt; ({ ...r, _type: 'business', _label: r.businesses?.name || r.business_id?.slice(0, 8) || 'Business claim', _who: r.claimant_name || r.email || r.user_id?.slice(0, 8) || 'Not set' }))</span>
+<span class="cstat-no" title="statement not covered" >    const s = (staffClaims || []).map(r =&gt; ({ ...r, _type: 'staff', _label: r.staff_name || r.email || r.staff_id?.slice(0, 8) || 'Staff claim', _who: r.claimant_name || r.email || 'Not set' }))</span>
+<span class="cstat-no" title="statement not covered" >    let list = [...b, ...s].sort((a, b) =&gt; new Date(b.created_at) - new Date(a.created_at))</span>
+<span class="cstat-no" title="statement not covered" >    if (filter !== 'all') list = list.filter(x =&gt; x._type === filter)</span>
+<span class="cstat-no" title="statement not covered" >    if (search.trim()) {</span>
+<span class="cstat-no" title="statement not covered" >      const q = search.trim().toLowerCase()</span>
+<span class="cstat-no" title="statement not covered" >      list = list.filter(x =&gt; `${x._label} ${x._who} ${x.business_id} ${x.staff_id}`.toLowerCase().includes(q))</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    return list</span>
+<span class="cstat-no" title="statement not covered" >  })()</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  const doAction = async () =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    if (!confirm) return</span>
+<span class="cstat-no" title="statement not covered" >    const { id, kind, type } = confirm</span>
+<span class="cstat-no" title="statement not covered" >    setBusyId(id)</span>
+<span class="cstat-no" title="statement not covered" >    try {</span>
+<span class="cstat-no" title="statement not covered" >      const patch = kind === 'approve' ? { status: 'approved' } : { status: 'rejected' }</span>
+<span class="cstat-no" title="statement not covered" >      if (type === 'business') await repository.updateBusinessClaim(id, patch)</span>
+<span class="cstat-no" title="statement not covered" >      else await repository.updateStaffClaim(id, patch)</span>
+<span class="cstat-no" title="statement not covered" >      await repository.logModeration({ target_type: 'claim', target_id: id, action: kind === 'approve' ? 'approve' : 'reject', reason: `${type} claim ${kind}`, actor_admin_id: null }).catch(() =&gt; {})</span>
+<span class="cstat-no" title="statement not covered" >      showToast(`${type} claim ${kind}d`, { type: 'success' })</span>
+<span class="cstat-no" title="statement not covered" >      setConfirm(null)</span>
+<span class="cstat-no" title="statement not covered" >      load()</span>
+<span class="cstat-no" title="statement not covered" >    } catch (e) { showToast(e.message, { type: 'error' }) }</span>
+<span class="cstat-no" title="statement not covered" >    setBusyId(null)</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  if (loading &amp;&amp; businessClaims == null) return &lt;Loading /&gt;</span>
+<span class="cstat-no" title="statement not covered" >  if (error) return &lt;ErrorState message={error} onRetry={load} /&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  return (</span>
+<span class="cstat-no" title="statement not covered" >    &lt;div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;Card style={{ padding: 12, background: 'var(--panel)', border: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          {[</span>
+<span class="cstat-no" title="statement not covered" >            { id: 'all', label: `All (${(businessClaims?.length || 0) + (staffClaims?.length || 0)})` },</span>
+<span class="cstat-no" title="statement not covered" >            { id: 'business', label: `Business (${businessClaims?.length || 0})` },</span>
+<span class="cstat-no" title="statement not covered" >            { id: 'staff', label: `Staff (${staffClaims?.length || 0})` },</span>
+<span class="cstat-no" title="statement not covered" >          ].map(f =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >            &lt;button key={f.id} onClick={() =&gt; setFilter(f.id)} style={{ padding: '7px 12px', borderRadius: 8, border: filter === f.id ? '1px solid var(--teal)' : '1px solid var(--border)', background: filter === f.id ? 'var(--teal-mist)' : 'var(--panel)', color: filter === f.id ? 'var(--teal)' : 'var(--muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}&gt;{f.label}&lt;/button&gt;</span>
+<span class="cstat-no" title="statement not covered" >          ))}</span>
+<span class="cstat-no" title="statement not covered" >          &lt;select value={statusFilter} onChange={e =&gt; setStatusFilter(e.target.value)} aria-label="Filter status" style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', fontSize: 12 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value="pending"&gt;pending&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value="approved"&gt;approved&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value="rejected"&gt;rejected&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >            &lt;option value=""&gt;all&lt;/option&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;/select&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;GhostBtn onClick={load}&gt;&lt;RefreshCw size={12} style={{ marginRight: 6 }} /&gt;Refresh&lt;/GhostBtn&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/Card&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      &lt;Card style={{ padding: 12, background: 'var(--panel)', border: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ position: 'relative', flex: 1, maxWidth: 360 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >          &lt;input value={search} onChange={e =&gt; setSearch(e.target.value)} placeholder="Search claim / business / staff" aria-label="Search claims" style={{ width: '100%', padding: '9px 12px 9px 30px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', fontSize: 13 }} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >        &lt;span style={{ fontSize: 12, color: 'var(--muted)' }}&gt;{all.length} claims&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;/Card&gt;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      {all.length === 0 ? (</span>
+<span class="cstat-no" title="statement not covered" >        &lt;Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}&gt;&lt;Empty icon={filter === 'staff' ? &lt;Users size={28} /&gt; : &lt;Building2 size={28} /&gt;} message={search ? 'No claims match search.' : `No ${statusFilter || 'all'} ${filter} claims.`} /&gt;&lt;/Card&gt;</span>
+      ) : (
+<span class="cstat-no" title="statement not covered" >        &lt;div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >          {all.map(r =&gt; (</span>
+<span class="cstat-no" title="statement not covered" >            &lt;Card key={`${r._type}:${r.id}`} style={{ padding: 12, background: 'var(--panel)', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >              &lt;div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontWeight: 800, fontSize: 13, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 6 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  {r._type === 'business' ? &lt;Building2 size={13} /&gt; : &lt;Users size={13} /&gt;} {r._label} &lt;span style={{ fontWeight: 600, fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', background: 'var(--hairline)', padding: '2px 6px', borderRadius: 6 }}&gt;{r._type}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;span style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}&gt;&lt;Clock size={11} /&gt;{timeAgo(r.created_at)} • {r.status}&lt;/span&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ fontSize: 12, color: 'var(--muted)' }}&gt;{r._who} {r.business_id ? `• biz ${r.business_id.slice(0, 8)}` : ''} {r.staff_id ? `• staff ${r.staff_id.slice(0, 8)}` : ''}&lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >                {r.business_id &amp;&amp; &lt;div style={{ fontSize: 11, color: 'var(--teal)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}&gt;&lt;ExternalLink size={11} /&gt; Business 360: {r.business_id.slice(0, 8)} — open Businesses → select&lt;/div&gt;}</span>
+<span class="cstat-no" title="statement not covered" >              &lt;/div&gt;</span>
+<span class="cstat-no" title="statement not covered" >              {statusFilter === 'pending' &amp;&amp; (</span>
+<span class="cstat-no" title="statement not covered" >                &lt;div style={{ display: 'flex', gap: 6 }}&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;button disabled={busyId === r.id} onClick={() =&gt; setConfirm({ id: r.id, kind: 'approve', type: r._type })} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--green)', color: 'white', fontWeight: 700, fontSize: 12, cursor: busyId ? 'not-allowed' : 'pointer' }}&gt;&lt;CheckCircle size={11} style={{ marginRight: 4 }} /&gt;Approve&lt;/button&gt;</span>
+<span class="cstat-no" title="statement not covered" >                  &lt;button disabled={busyId === r.id} onClick={() =&gt; setConfirm({ id: r.id, kind: 'reject', type: r._type })} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--red)', color: 'white', fontWeight: 700, fontSize: 12, cursor: busyId ? 'not-allowed' : 'pointer' }}&gt;&lt;XCircle size={11} style={{ marginRight: 4 }} /&gt;Reject&lt;/button&gt;</span>
+<span class="cstat-no" title="statement not covered" >                &lt;/div&gt;</span>
+              )}
+<span class="cstat-no" title="statement not covered" >            &lt;/Card&gt;</span>
+<span class="cstat-no" title="statement not covered" >          ))}</span>
+<span class="cstat-no" title="statement not covered" >        &lt;/div&gt;</span>
+      )}
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      &lt;ConfirmDialog show={!!confirm} title={`${confirm?.kind === 'approve' ? 'Approve' : 'Reject'} ${confirm?.type} claim?`} onClose={() =&gt; setConfirm(null)} onConfirm={doAction} confirmLabel={busyId ? 'Saving...' : confirm?.kind === 'approve' ? 'Approve' : 'Reject'} variant={confirm?.kind === 'approve' ? 'default' : 'danger'} message={&lt;div style={{ fontSize: 13 }}&gt;This updates &lt;code&gt;{confirm?.type}_claims.status&lt;/code&gt; and is audited to &lt;code&gt;moderation_actions&lt;/code&gt;. {confirm?.kind === 'approve' &amp;&amp; confirm?.type === 'business' ? 'Business will become visible on CareFind.' : ''}&lt;/div&gt;} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >      &lt;Toast msg={msg} type={type} /&gt;</span>
+<span class="cstat-no" title="statement not covered" >    &lt;/div&gt;</span>
+  )
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-10-16T15:21:14.166Z
+            </div>
+        <script src="../../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../../sorter.js"></script>
+        <script src="../../../../block-navigation.js"></script>
+    </body>
+</html>
+    

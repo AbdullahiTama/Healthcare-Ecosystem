@@ -187,7 +187,7 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
       const msg = String(e.message || '')
       const code = String(e.code || e.status || '')
       if (code === '23505' || msg.includes('23505') || msg.includes('business_id_product_id_key') || msg.includes('duplicate key')) {
-        throw new Error('Already activated — this product is already live for your store')
+        throw new Error('Already activated. This product is already live for your store.')
       }
       throw e
     }
@@ -314,7 +314,7 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
     if (!app || app.status !== 'Approved') throw new Error('Business must be Approved before publishing products')
     const ecom = await getEcommerceProduct(businessId, productId)
     if (!ecom) throw new Error('Complete product information before activation')
-    if (ecom.status === 'Active') throw new Error('Already activated — this product is already live for your store')
+    if (ecom.status === 'Active') throw new Error('Already activated. This product is already live for your store.')
     if (ecom.is_restricted) throw new Error('Product is restricted and cannot be activated')
     if (!ecom.description || String(ecom.description).trim().length < 10) throw new Error('Description is required (min 10 chars)')
     if (!ecom.category || !String(ecom.category).trim()) throw new Error('Category is required')

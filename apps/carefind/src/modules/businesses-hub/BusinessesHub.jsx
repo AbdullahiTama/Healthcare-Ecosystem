@@ -298,14 +298,14 @@ export default function BusinessesHub() {
     if (confirm.type === 'suspend') {
       return {
         title: 'Suspend business?',
-        consequence: 'Suspended — temporary, data retained. The business will lose dashboard access but all data is retained and can be restored.',
+        consequence: 'Suspension is temporary. The business loses dashboard access, but all of its data is retained and can be restored.',
         label: 'Suspend',
       }
     }
     if (confirm.type === 'revoke') {
       return {
         title: 'Revoke business?',
-        consequence: 'Revoked — approval withdrawn, reapplication required. The business must reapply to be reconsidered.',
+        consequence: 'Revocation withdraws approval permanently. The business must reapply to be considered again.',
         label: 'Revoke',
       }
     }
@@ -411,7 +411,7 @@ export default function BusinessesHub() {
                         {b.owner_name ? b.owner_name : ''}{b.owner_name && b.owner_email ? ' · ' : ''}{b.owner_email || ''} {b.owner_name || b.owner_email ? '·' : ''} {b.category || ''} {b.category && b.state ? '·' : ''} {b.state || ''} {b.plan ? `· ${b.plan}` : ''}
                       </div>
                       <div style={{ fontSize: 11, color: theme.textLight, marginTop: 2 }}>
-                        {b.created_at ? new Date(b.created_at).toLocaleDateString() : ''} {b.ecommerce_enabled ? '· E-commerce' : ''}
+                        {b.created_at ? new Date(b.created_at).toLocaleDateString() : ''} {b.ecommerce_enabled ? '· Online store' : ''}
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
@@ -434,7 +434,7 @@ export default function BusinessesHub() {
           {/* Pagination */}
           <div data-testid="pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, padding: '10px 0', fontSize: 12, color: theme.textLight, flexWrap: 'wrap', gap: 8 }}>
             <span data-testid="page-info">
-              {rangeFrom}–{rangeTo} of {total} {total === 1 ? 'business' : 'businesses'} · Page {page + 1} of {pageCount}
+              {rangeFrom} to {rangeTo} of {total} {total === 1 ? 'business' : 'businesses'} · Page {page + 1} of {pageCount}
             </span>
             <div style={{ display: 'flex', gap: 8 }}>
               <Button
@@ -505,7 +505,7 @@ export default function BusinessesHub() {
                       background: detailTab === 'ecommerce' ? theme.tealMist : '#fff', color: detailTab === 'ecommerce' ? theme.tealDeep : theme.textLight, fontWeight: 700, fontSize: 12, cursor: 'pointer',
                     }}
                   >
-                    E-commerce
+                    Online store
                   </button>
                 </div>
 
@@ -523,7 +523,7 @@ export default function BusinessesHub() {
                         ['Plan', selected.plan],
                         ['Status', selected.status],
                         ['Date onboarded', selected.created_at ? new Date(selected.created_at).toLocaleDateString() : ''],
-                        ['E-commerce enabled', selected.ecommerce_enabled ? 'Yes' : 'No'],
+                        ['Online store enabled', selected.ecommerce_enabled ? 'Yes' : 'No'],
                         ['Visible on CareFind', selected.visible_on_carefind ? 'Yes' : 'No'],
                         ['Phone', selected.phone],
                         ['Address', selected.address],
@@ -531,7 +531,7 @@ export default function BusinessesHub() {
                       ].map(([label, value]) => (
                         <div key={label} data-testid={`detail-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '6px 0', borderBottom: `1px solid ${theme.gray100}` }}>
                           <span style={{ fontSize: 11, fontWeight: 700, color: theme.textLight, textTransform: 'uppercase' }}>{label}</span>
-                          <span style={{ fontSize: 12, color: theme.navy, fontWeight: 600, textAlign: 'right', maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? '—'}</span>
+                          <span style={{ fontSize: 12, color: theme.navy, fontWeight: 600, textAlign: 'right', maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value ?? 'Not set'}</span>
                         </div>
                       ))}
                     </div>
@@ -539,12 +539,12 @@ export default function BusinessesHub() {
                     {/* Status-specific hints */}
                     {selected.status === 'suspended' && (
                       <div data-testid="status-hint-suspended" style={{ background: theme.warningBg, color: theme.warning, border: `1px solid ${theme.warning}`, borderRadius: theme.radius.md, padding: '8px 12px', fontSize: 12, marginBottom: 12 }}>
-                        Suspended — temporary, data retained. Dashboard gone.
+                        Suspended. Dashboard access is off and all data is retained.
                       </div>
                     )}
                     {selected.status === 'revoked' && (
                       <div data-testid="status-hint-revoked" style={{ background: theme.dangerBg, color: theme.danger, border: `1px solid ${theme.danger}`, borderRadius: theme.radius.md, padding: '8px 12px', fontSize: 12, marginBottom: 12 }}>
-                        Revoked — approval withdrawn, reapplication required.
+                        Revoked. Approval was withdrawn and the business must reapply.
                       </div>
                     )}
 
@@ -585,7 +585,7 @@ export default function BusinessesHub() {
                       <div style={{ fontSize: 11, color: theme.textLight, marginTop: 6 }}>Suspend only allowed when status is active. Dashboard gone when suspended/revoked.</div>
                     )}
                     {selected.status === 'revoked' && (
-                      <div style={{ fontSize: 11, color: theme.textLight, marginTop: 4 }}>Revoke is not idempotent — already revoked cannot be revoked again.</div>
+                      <div style={{ fontSize: 11, color: theme.textLight, marginTop: 4 }}>Revoke cannot be repeated. A revoked business can only return by applying again.</div>
                     )}
                   </div>
                 )}
@@ -605,10 +605,10 @@ export default function BusinessesHub() {
                         No products yet for this business.
                       </div>
                     ) : (
-                      <div data-testid="ecommerce-list" role="list" aria-label="E-commerce products" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div data-testid="ecommerce-list" role="list" aria-label="Online store products" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {ecommerceProducts.map((p) => {
                           const isLive = p.is_live != null ? Boolean(p.is_live) : p.status === 'Active' || p.status === 'active'
-                          const priceVal = p.price ?? (p.ecommerce_price_kobo != null ? (p.ecommerce_price_kobo / 100).toFixed(2) : null) ?? p.ecommerce_price ?? '—'
+                          const priceVal = p.price ?? (p.ecommerce_price_kobo != null ? (p.ecommerce_price_kobo / 100).toFixed(2) : null) ?? p.ecommerce_price ?? 'Not set'
                           const units = p.units_sold ?? p.unitsSold ?? p.stock ?? 0
                           const name = p.name || p.description || p.category || 'Unnamed product'
                           return (

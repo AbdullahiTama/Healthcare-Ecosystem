@@ -19,14 +19,14 @@ export default async function handler(req, res) {
         templateKey: 'registration_owner',
         toEmail: email,
         payload: { businessName, ownerName },
-        subject: `CareHub — Registration received for ${businessName} (under review)`,
+        subject: `CareHub: Registration received for ${businessName} (under review)`,
         idempotencyKey: `registration-received:${email}`,
       }),
       emailService.enqueue({
         templateKey: 'admin_new_registration',
         toEmail: process.env.CAREHUB_ADMIN_EMAIL || process.env.ADMIN_EMAIL || '',
-        payload: { businessName, ownerName, businessType: businessType || '—', state: state || '—', email },
-        subject: `🔔 New Registration: ${businessName} — Awaiting Approval`,
+        payload: { businessName, ownerName, businessType: businessType || 'Not set', state: state || 'Not set', email },
+        subject: `🔔 New Registration: ${businessName} · Awaiting Approval`,
         idempotencyKey: `admin-new-registration:${businessName}:${email}`,
       }),
     ])

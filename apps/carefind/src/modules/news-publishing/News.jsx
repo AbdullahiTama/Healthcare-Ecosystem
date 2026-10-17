@@ -324,7 +324,7 @@ function News() {
                   <span style={{ fontSize: 18, color: theme.tealDeep, fontWeight: 900 }}>■</span>
                 </div>
                 <button onClick={submitNews} disabled={submitting} style={{ width: '100%', padding: 13, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14, fontFamily: theme.fontFamily }}>
-                  {submitting ? 'Submitting…' : 'Looks good — Submit for review'}
+                  {submitting ? 'Submitting…' : 'Looks good. Submit for review'}
                 </button>
               </div>
             ) : (
@@ -357,7 +357,7 @@ function News() {
                 {/* Contact details (required) */}
                 <div style={{ background: theme.bg, borderRadius: 12, padding: 12, marginBottom: 16 }}>
                   <p style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 800, color: theme.navy }}><Phone size={14} aria-hidden="true" /> Your contact details</p>
-                  <p style={{ margin: '0 0 10px 0', fontSize: 11, color: theme.textLight }}>Required — our team may contact you to verify the story before publishing. Not shown publicly.</p>
+                  <p style={{ margin: '0 0 10px 0', fontSize: 11, color: theme.textLight }}>Required. Our team may contact you to verify the story before publishing. It is not shown publicly.</p>
                   <label style={{ fontSize: 12, fontWeight: 700, color: theme.navy, display: 'block', marginBottom: 5 }}>Phone number *</label>
                   <input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} type="tel" placeholder="e.g. 08012345678" style={{ width: '100%', padding: 12, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box', marginBottom: 10 }} />
                   <label style={{ fontSize: 12, fontWeight: 700, color: theme.navy, display: 'block', marginBottom: 5 }}>Email address *</label>

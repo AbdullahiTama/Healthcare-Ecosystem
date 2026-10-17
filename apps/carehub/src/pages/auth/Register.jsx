@@ -226,7 +226,7 @@ export default function Register() {
               <div style={{ fontSize: '13px', color: gray600, lineHeight: '1.6' }}>We will email you a link to confirm your address and choose your password.</div>
               <div style={{ padding: theme.space[6], borderRadius: theme.radius.md, background: theme.cardBg, border: `1px solid ${theme.border}` }}>
                 <div style={{ fontSize: '11px', color: theme.textFaint }}>Login email:</div>
-                <div style={{ fontSize: '14px', fontWeight: '700', color: theme.slate, marginTop: '2px' }}>{data.ownerEmail || '—'}</div>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: theme.slate, marginTop: '2px' }}>{data.ownerEmail || 'Not set'}</div>
               </div>
               <div style={{ padding: '14px', borderRadius: '12px', background: theme.cardBg, border: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div><div style={{ fontWeight: '800', color: theme.slate }}>CareHub Full Access</div><div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>All features + CareFind listing</div></div>
@@ -238,7 +238,7 @@ export default function Register() {
                 <CInp label="Referrer Code" value={data.referrerCode ?? refCode} onChange={v => f('referrerCode', v)} placeholder="e.g. CH-8F3K2Q" disabled={!!data.noReferrer} />
                 <label style={{ display: 'flex', gap: '8px', cursor: 'pointer', alignItems: 'center', marginTop: '10px' }}>
                   <input type="checkbox" checked={!!data.noReferrer} onChange={e => f('noReferrer', e.target.checked)} style={{ flexShrink: 0 }} />
-                  <span style={{ fontSize: '12px', color: theme.textMid, fontWeight: '600' }}>No Referrer — I was not referred by anyone</span>
+                  <span style={{ fontSize: '12px', color: theme.textMid, fontWeight: '600' }}>No referrer. Nobody referred this account.</span>
                 </label>
               </div>
               <label style={{ display: 'flex', gap: '10px', cursor: 'pointer', alignItems: 'flex-start' }}>
@@ -259,7 +259,7 @@ export default function Register() {
                   ['Business Hours', data.businessHours],
                   ['Owner', (data.firstName || '') + ' ' + (data.lastName || '')],
                   ['Login Email', data.ownerEmail],
-                  ['Plan', data.businessType === 'hospital' ? 'Growth — ₦100,000/year (hospitals start here)' : 'Basic — ₦60,000/year'],
+                  ['Plan', data.businessType === 'hospital' ? 'Growth (₦100,000 a year, where hospitals start)' : 'Basic (₦60,000 a year)'],
                   ['CareFind', data.visibleOnCareFind !== false ? 'Yes - Listed publicly' : 'No'],
                 ].filter(([, v]) => v).map(([l, v], i) => (
                   <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: i % 2 === 0 ? theme.gray50 : '#fff', fontSize: '13px' }}>
@@ -269,7 +269,7 @@ export default function Register() {
               </div>
               {data.businessType === 'hospital' && (
                 <div style={{ marginTop: '12px', padding: '12px 14px', borderRadius: theme.radius.md, background: theme.tealMist, border: `1px solid ${tealDeep}`, fontSize: '12.5px', color: tealDeep, lineHeight: '1.6' }}>
-                  Hospitals start from <strong>Growth</strong> — you’ll be placed on Growth (₦100,000/year, up to 5 locations, unlimited staff/products). Basic is not available for hospitals.
+                  Hospitals start on <strong>Growth</strong>, so you will be placed on Growth (₦100,000 a year, up to 5 locations, unlimited staff and products). Basic is not available for hospitals.
                 </div>
               )}
               <div style={{ marginTop: '16px', padding: '14px', borderRadius: '12px', background: theme.warningBg, border: `1px solid ${theme.amberBorder}`, fontSize: '13px', color: theme.amberText, lineHeight: '1.7' }}>

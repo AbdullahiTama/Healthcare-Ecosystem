@@ -28,7 +28,7 @@ export default function ErrorInbox({ repository = createHealthRepository() }) {
     try {
       await repository.retryDeadLetter(confirm.id)
       await repository.logAudit({ action: 'retry_dead_letter', target_table: 'dead_letters', target_id: confirm.id }).catch(() => {})
-      showToast('Retried — check audit for result', { type: 'success' })
+      showToast('Retried. Check the audit log for the result.', { type: 'success' })
       setConfirm(null); load()
     } catch (e) { showToast(e.message, { type: 'error' }) }
     setBusy(false)
@@ -63,7 +63,7 @@ export default function ErrorInbox({ repository = createHealthRepository() }) {
 
       {rows.length === 0 ? (
         <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}>
-          <Empty icon={<CheckCircle size={24} />} message={filterQueue ? `No open ${filterQueue} errors — last checked just now.` : 'No errors — last checked just now. Dead letters appear here when webhooks/notifications fail.'} />
+          <Empty icon={<CheckCircle size={24} />} message={filterQueue ? `No open ${filterQueue} errors. Last checked just now.` : 'No errors. Last checked just now. Dead letters appear here when webhooks/notifications fail.'} />
         </Card>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -82,7 +82,7 @@ export default function ErrorInbox({ repository = createHealthRepository() }) {
           ))}
         </div>
       )}
-      <ConfirmDialog show={!!confirm} title="Retry this job?" onClose={() => setConfirm(null)} onConfirm={handleRetry} confirmLabel={busy ? 'Retrying...' : 'Retry'} message={<div style={{ fontSize: 13 }}>Retry is idempotent via reference-uniqueness. Audited to admin_audit_log.</div>} />
+      <ConfirmDialog show={!!confirm} title="Retry this job?" onClose={() => setConfirm(null)} onConfirm={handleRetry} confirmLabel={busy ? 'Retrying...' : 'Retry'} message={<div style={{ fontSize: 13 }}>Retrying is safe. Each retry is recorded in the audit log.</div>} />
       <Toast msg={msg} type={type} />
     </div>
   )

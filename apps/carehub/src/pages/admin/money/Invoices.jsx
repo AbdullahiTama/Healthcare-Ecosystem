@@ -3,7 +3,7 @@ import { Search, RefreshCw, Receipt, Undo2 } from 'lucide-react'
 import { Card, GhostBtn, TealBtn, Inp, Loading, Empty, ErrorState, useToast, Toast, ConfirmDialog } from '../../../components/ui'
 import { createMoneyRepository } from '../../../modules/money/repositories'
 
-function fmt(s) { if (!s) return '—'; try { return new Date(s).toLocaleString() } catch { return s } }
+function fmt(s) { if (!s) return 'Not set'; try { return new Date(s).toLocaleString() } catch { return s } }
 
 export default function Invoices({ repository = createMoneyRepository() }) {
   const [rows, setRows] = useState(null)
@@ -72,7 +72,7 @@ export default function Invoices({ repository = createMoneyRepository() }) {
       </Card>
 
       {rows.length === 0 ? (
-        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<Receipt size={24} />} message="No invoices — generate on subscription change or refund. Append-only, never mutate amount." /></Card>
+        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<Receipt size={24} />} message="No invoices yet. One is generated on a subscription change or a refund. Invoices are append only, so an amount is never changed after the fact." /></Card>
       ) : (
         <Card style={{ padding: 0, overflow: 'hidden', background: 'var(--panel)', border: '1px solid var(--border)' }}>
           <div style={{ overflowX: 'auto' }}>
@@ -93,7 +93,7 @@ export default function Invoices({ repository = createMoneyRepository() }) {
                     <td style={{ padding: '0 12px' }}><span style={{ padding: '3px 7px', borderRadius: 6, background: r.type === 'credit_note' ? 'var(--red-bg)' : 'var(--hairline)', color: r.type === 'credit_note' ? 'var(--red)' : 'var(--muted)', fontWeight: 700, fontSize: 11 }}>{r.type}</span></td>
                     <td style={{ padding: '0 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: r.amount_kobo < 0 ? 'var(--red)' : 'var(--fg)', fontWeight: 700 }}>{r.amount_kobo < 0 ? '-' : ''}₦{Math.abs(r.amount_kobo / 100).toLocaleString()}</td>
                     <td style={{ padding: '0 12px', fontSize: 11, color: 'var(--muted)' }}>{fmt(r.created_at)}</td>
-                    <td style={{ padding: '0 12px', textAlign: 'right' }}>{r.type === 'invoice' ? <button onClick={() => setConfirmRefund(r)} style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Refund</button> : '—'}</td>
+                    <td style={{ padding: '0 12px', textAlign: 'right' }}>{r.type === 'invoice' ? <button onClick={() => setConfirmRefund(r)} style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Refund</button> : 'Not set'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -117,7 +117,7 @@ export default function Invoices({ repository = createMoneyRepository() }) {
         </Card>
       )}
 
-      <ConfirmDialog show={!!confirmRefund} title={`Refund ${confirmRefund?.reference}?`} onClose={() => setConfirmRefund(null)} onConfirm={handleRefund} confirmLabel={busy ? 'Refunding...' : 'Refund (credit note)'} variant="danger" message={<div style={{ fontSize: 13 }}>Creates negative <code>credit_note</code> for {confirmRefund?.reference} — append-only, never mutates invoice.</div>} />
+      <ConfirmDialog show={!!confirmRefund} title={`Refund ${confirmRefund?.reference}?`} onClose={() => setConfirmRefund(null)} onConfirm={handleRefund} confirmLabel={busy ? 'Refunding...' : 'Refund (credit note)'} variant="danger" message={<div style={{ fontSize: 13 }}>Creates negative <code>credit_note</code> for {confirmRefund?.reference} . Append only, so it never mutates an invoice.</div>} />
       <Toast msg={msg} type={type} />
     </div>
   )

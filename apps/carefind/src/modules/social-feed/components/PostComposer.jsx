@@ -402,7 +402,7 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
                 </label>
               )}
               {imagePreviews.length >= MAX_POST_IMAGES && (
-                <div style={{ fontSize: 11, color: theme.textLight, marginTop: 6 }}>{MAX_POST_IMAGES}/{MAX_POST_IMAGES} photos — remove one to add more</div>
+                <div style={{ fontSize: 11, color: theme.textLight, marginTop: 6 }}>{MAX_POST_IMAGES} of {MAX_POST_IMAGES} photos used. Remove one to add another.</div>
               )}
             </div>
           )}

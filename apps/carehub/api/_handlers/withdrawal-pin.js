@@ -16,7 +16,7 @@ function subPath(req) {
 // numbers the client had no issue time, so its resend cooldown rendered as 0 and "Send a new code" was live
 // immediately — and one tap voided the code already sitting in the owner's inbox. Mirrors the CareFind handler.
 async function draftActiveResponse(userId) {
-  const base = { error: 'A code is already on its way — check your email.', code: 'draft_active' }
+  const base = { error: 'A code is already on its way. Check your email.', code: 'draft_active' }
   try {
     const draft = describeWithdrawalDraft(await getWithdrawalDraft(supabase, { userId }))
     if (!draft) return { status: 409, body: base }

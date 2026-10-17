@@ -14,7 +14,7 @@ import { Card, Loading, Empty, ErrorState, Button, useToast } from '../../compon
 const { tealDeep, gray500, border } = theme
 
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return 'Not recorded'
   return new Date(d).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
@@ -70,10 +70,10 @@ export function TrackerList({ cases, onOpen }) {
               <SourcePill source={k.report_source} />
             </div>
             <div style={{ fontSize: 13, color: theme.textDark, marginTop: 4 }}>
-              {(k.products || []).map((p) => p.product_brand_name).filter(Boolean).join(', ') || '—'}
+              {(k.products || []).map((p) => p.product_brand_name).filter(Boolean).join(', ') || 'Not listed'}
             </div>
             <div style={{ fontSize: 13, color: theme.textLight }}>
-              {(k.reactions || []).map((r) => r.reaction_description).filter(Boolean).join('; ') || '—'}
+              {(k.reactions || []).map((r) => r.reaction_description).filter(Boolean).join('; ') || 'None reported'}
             </div>
             <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: 12, color: gray500, flexWrap: 'wrap' }}>
               <span>{k.is_serious ? 'Serious' : 'Non-serious'}</span>
@@ -101,7 +101,7 @@ export function CaseHeader({ kase }) {
       </div>
       <p style={{ fontSize: 13, color: theme.textLight, marginTop: 6 }}>
         Reporter identity and contact details are masked for responsible companies under the interim
-        privacy policy — masked fields are hidden by policy, not missing from the case.
+        privacy policy. Masked fields are hidden by policy, not missing from the case.
       </p>
     </div>
   )
@@ -288,7 +288,7 @@ export default function PvTracker({ brand }) {
         <div>
           <div style={{ fontSize: theme.type.h1.size, fontWeight: theme.type.h1.weight, color: theme.textDark }}>PV Tracker</div>
           <div style={{ fontSize: theme.type.body.size, color: theme.textLight, marginTop: 3 }}>
-            Safety cases routed to {brand?.name || 'your organisation'} — confidential, internal use only.
+            Safety cases routed to {brand?.name || 'your organisation'}. Confidential, internal use only.
           </div>
         </div>
       </div>
@@ -309,7 +309,7 @@ export default function PvTracker({ brand }) {
           <select aria-label="Report source" value={filters.source} onChange={(e) => setFilters({ ...filters, source: e.target.value })} style={inputStyle}>
             <option value="">All sources</option>
             <option value="public">Public report</option>
-            <option value="health_facility">Health-facility report</option>
+            <option value="health_facility">Health facility report</option>
             <option value="business_facility">Business report</option>
             <option value="unknown">Source not recorded</option>
           </select>

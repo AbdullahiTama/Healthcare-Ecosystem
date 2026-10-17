@@ -56,12 +56,15 @@ export function createGrowthRepository({ request = sbFetch } = {}) {
       ])
       const agentByState = {}
       for (const a of (agents || [])) {
-        const s = (a.state || '—').trim() || '—'
+        // "Unassigned" is the bucket for agents with no state on record. It is
+        // also rendered as the row label in Coverage, so it has to read as a
+        // value rather than as a placeholder glyph.
+        const s = (a.state || '').trim() || 'Unassigned'
         agentByState[s] = (agentByState[s] || 0) + 1
       }
       const bizByState = {}
       for (const b of (businesses || [])) {
-        const s = (b.state || '—').trim() || '—'
+        const s = (b.state || '').trim() || 'Unassigned'
         bizByState[s] = (bizByState[s] || 0) + 1
       }
       const states = new Set([...Object.keys(agentByState), ...Object.keys(bizByState)])
@@ -82,7 +85,7 @@ export function createGrowthRepository({ request = sbFetch } = {}) {
     buildTree(agents) {
       const byState = {}
       for (const a of (agents || [])) {
-        const state = a.state || '—'
+        const state = a.state || 'Unassigned'
         if (!byState[state]) byState[state] = []
         byState[state].push(a)
       }

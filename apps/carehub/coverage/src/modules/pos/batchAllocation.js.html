@@ -1,0 +1,427 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/modules/pos/batchAllocation.js</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">src/modules/pos</a> batchAllocation.js</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/101</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/101</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js"><span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >// ── FEFO batch allocation ────────────────────────────────────────────────────</span></span></span>
+<span class="cstat-no" title="statement not covered" >// FEFO (First-Expiry, First-Out) is a picking PREFERENCE, not an authorization</span>
+<span class="cstat-no" title="statement not covered" >// boundary: the hard rule — never sell an expired or unavailable batch — is</span>
+<span class="cstat-no" title="statement not covered" >// enforced server-side by guard_sale_batch_expiry</span>
+<span class="cstat-no" title="statement not covered" >// (20260819_sale_batch_attribution.sql), which runs for every sale path (POS</span>
+<span class="cstat-no" title="statement not covered" >// online, offline queue replay, PharmacyForm dispense). This helper lives</span>
+<span class="cstat-no" title="statement not covered" >// client-side so the till can present FEFO-split lines to the database; the</span>
+<span class="cstat-no" title="statement not covered" >// database still decides what a non-owner may sell.</span>
+<span class="cstat-no" title="statement not covered" >//</span>
+<span class="cstat-no" title="statement not covered" >// A line without a product id (a service), a product with no batches, or a</span>
+<span class="cstat-no" title="statement not covered" >// non-positive quantity passes through untouched — products without batches</span>
+<span class="cstat-no" title="statement not covered" >// keep today's behavior exactly.</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const SORT_LATEST = '9999-12-31'</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const todayDate = () =&gt; new Date().toISOString().split('T')[0]</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >// A batch is sellable when it is 'available' and not past its expiry date. A</span>
+<span class="cstat-no" title="statement not covered" >// missing expiry is treated as never-expiring (Purchases only writes one when</span>
+<span class="cstat-no" title="statement not covered" >// the user supplies it). Expiry on today's date is still sellable through the</span>
+<span class="cstat-no" title="statement not covered" >// day. Must match the guard trigger's definition exactly — this is the one</span>
+<span class="cstat-no" title="statement not covered" >// place the two sides are allowed to agree by convention.</span>
+<span class="cstat-no" title="statement not covered" >export function isSellableBatch(batch, date = todayDate()) {</span>
+<span class="cstat-no" title="statement not covered" >  return batch &amp;&amp; batch.status === 'available' &amp;&amp; (!batch.expiry_date || batch.expiry_date &gt;= date)</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >const byExpiryAsc = (a, b) =&gt; ((a.expiry_date || SORT_LATEST) &lt; (b.expiry_date || SORT_LATEST) ? -1 : 1)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >// The sellable batches for a product, sorted FEFO-first (soonest expiry). Used</span>
+<span class="cstat-no" title="statement not covered" >// both by allocateBatches and by POS to preview which batch a cart line will</span>
+<span class="cstat-no" title="statement not covered" >// draw from before charging. A batch with zero quantity is never sellable.</span>
+<span class="cstat-no" title="statement not covered" >export function sellableBatches(batches = [], date = todayDate()) {</span>
+<span class="cstat-no" title="statement not covered" >  return batches</span>
+<span class="cstat-no" title="statement not covered" >    .filter((b) =&gt; isSellableBatch(b, date) &amp;&amp; Number(b.quantity) &gt; 0)</span>
+<span class="cstat-no" title="statement not covered" >    .sort(byExpiryAsc)</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >// Greedily splits `qty` across `batches` (already sorted FEFO-first), emitting</span>
+<span class="cstat-no" title="statement not covered" >// one line per batch used. `override` marks every emitted line as an owner</span>
+<span class="cstat-no" title="statement not covered" >// override — used only for the expired/unavailable fill.</span>
+<span class="cstat-no" title="statement not covered" >function splitAcross(batches, item, qty, override) {</span>
+<span class="cstat-no" title="statement not covered" >  const lines = []</span>
+<span class="cstat-no" title="statement not covered" >  let need = qty</span>
+<span class="cstat-no" title="statement not covered" >  for (const b of batches) {</span>
+<span class="cstat-no" title="statement not covered" >    if (need &lt;= 0) break</span>
+<span class="cstat-no" title="statement not covered" >    const take = Math.min(need, Number(b.quantity) || 0)</span>
+<span class="cstat-no" title="statement not covered" >    if (take &lt;= 0) continue</span>
+<span class="cstat-no" title="statement not covered" >    lines.push({</span>
+<span class="cstat-no" title="statement not covered" >      ...item,</span>
+<span class="cstat-no" title="statement not covered" >      qty: take,</span>
+<span class="cstat-no" title="statement not covered" >      batch_id: b.id,</span>
+<span class="cstat-no" title="statement not covered" >      batch_number: b.batch_number,</span>
+<span class="cstat-no" title="statement not covered" >      batch_expiry: b.expiry_date,</span>
+<span class="cstat-no" title="statement not covered" >      ...(override ? { override_expired: true } : {}),</span>
+<span class="cstat-no" title="statement not covered" >    })</span>
+<span class="cstat-no" title="statement not covered" >    need -= take</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  return { lines, need }</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >// items            — cart lines: { ...product, qty, price?, source? }, where</span>
+<span class="cstat-no" title="statement not covered" >//                    the product id is `id` (POS) or `product_id`</span>
+<span class="cstat-no" title="statement not covered" >// batchesByProduct — map of productId → stock_batches rows, already</span>
+<span class="cstat-no" title="statement not covered" >//                    tenant-scoped (stockRepository.getBatches is business-scoped)</span>
+<span class="cstat-no" title="statement not covered" >// options          — { date, isOwner }; date is the sale day (YYYY-MM-DD),</span>
+<span class="cstat-no" title="statement not covered" >//                    isOwner is `role === 'Owner'`</span>
+<span class="cstat-no" title="statement not covered" >//</span>
+<span class="cstat-no" title="statement not covered" >// Returns a new array of lines. Lines for batched products are split across</span>
+<span class="cstat-no" title="statement not covered" >// FEFO-sorted sellable batches; a line that must dip into expired/unavailable</span>
+<span class="cstat-no" title="statement not covered" >// stock carries `override_expired: true` and is only emitted when `isOwner`.</span>
+<span class="cstat-no" title="statement not covered" >// Throws when a line's qty exceeds what can be sold without an override (the</span>
+<span class="cstat-no" title="statement not covered" >// cashier will see the message as a toast — it is never allowed to reach the</span>
+<span class="cstat-no" title="statement not covered" >// server as a non-owner line).</span>
+<span class="cstat-no" title="statement not covered" >export function allocateBatches(items, batchesByProduct = {}, { date = todayDate(), isOwner = false } = {}) {</span>
+<span class="cstat-no" title="statement not covered" >  return items.flatMap((item) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    const productId = item.id || item.product_id</span>
+<span class="cstat-no" title="statement not covered" >    const batches = productId ? (batchesByProduct[productId] || []) : []</span>
+<span class="cstat-no" title="statement not covered" >    if (!productId || batches.length === 0) return [item]</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    const qty = Number(item.qty) || 0</span>
+<span class="cstat-no" title="statement not covered" >    if (qty &lt;= 0) return [item]</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    const sellable = sellableBatches(batches, date)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    const sellableTotal = sellable.reduce((s, b) =&gt; s + Number(b.quantity), 0)</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    if (qty &gt; sellableTotal &amp;&amp; !isOwner) {</span>
+<span class="cstat-no" title="statement not covered" >      throw new Error(</span>
+<span class="cstat-no" title="statement not covered" >        `Not enough unexpired stock for "${item.name}" — only ${sellableTotal} unit(s) available across sellable batches for ${qty} requested.`</span>
+<span class="cstat-no" title="statement not covered" >      )</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    // Sellable batches first (FEFO); the owner override path only starts where</span>
+<span class="cstat-no" title="statement not covered" >    // they run out.</span>
+<span class="cstat-no" title="statement not covered" >    const fromSellable = splitAcross(sellable, item, Math.min(qty, sellableTotal), false)</span>
+<span class="cstat-no" title="statement not covered" >    if (qty &lt;= sellableTotal) return fromSellable.lines</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    if (!isOwner) return fromSellable.lines</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >    // Owner override: fill the remainder from the non-sellable batches</span>
+<span class="cstat-no" title="statement not covered" >    // (expired / reserved / damaged / returned), oldest-first, each line</span>
+<span class="cstat-no" title="statement not covered" >    // flagged so the database guard lets it through.</span>
+<span class="cstat-no" title="statement not covered" >    const remainingNeed = qty - fromSellable.lines.reduce((s, l) =&gt; s + l.qty, 0)</span>
+<span class="cstat-no" title="statement not covered" >    const rest = batches</span>
+<span class="cstat-no" title="statement not covered" >      .filter((b) =&gt; !sellable.includes(b) &amp;&amp; Number(b.quantity) &gt; 0)</span>
+<span class="cstat-no" title="statement not covered" >      .sort(byExpiryAsc)</span>
+<span class="cstat-no" title="statement not covered" >    const remainder = splitAcross(rest, item, remainingNeed, true)</span>
+<span class="cstat-no" title="statement not covered" >    if (remainder.need &gt; 0) {</span>
+<span class="cstat-no" title="statement not covered" >      throw new Error(</span>
+<span class="cstat-no" title="statement not covered" >        `Not enough stock in ANY batch for "${item.name}" — still ${remainder.need} unit(s) short.`</span>
+<span class="cstat-no" title="statement not covered" >      )</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    return [...fromSellable.lines, ...remainder.lines]</span>
+<span class="cstat-no" title="statement not covered" >  })</span>
+<span class="cstat-no" title="statement not covered" >}</span></pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-10-16T15:21:14.166Z
+            </div>
+        <script src="../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
+    </body>
+</html>
+    

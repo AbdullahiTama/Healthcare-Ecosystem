@@ -132,7 +132,7 @@ export default function StockValidation({ brand, products, loadProducts }) {
   async function confirmSave() {
     if (saving) return
     if (!brand?.id) {
-      showToast('Missing business — please reload and try again', { type: 'error' })
+      showToast('The business could not be loaded. Reload the page and try again.', { type: 'error' })
       return
     }
 
@@ -140,7 +140,7 @@ export default function StockValidation({ brand, products, loadProducts }) {
     const negative = rawItems.find(it => it.new_stock < 0)
     if (negative) {
       setInlineError('Cannot go below 0')
-      showToast('Cannot go below 0 — check adjustment quantities', { type: 'error' })
+      showToast('Stock cannot go below zero. Check the adjustment quantities.', { type: 'error' })
       return
     }
     setInlineError('')
@@ -188,7 +188,7 @@ export default function StockValidation({ brand, products, loadProducts }) {
       const code = String(error?.code || '')
       const isCheckViolation = msg.includes('23514') || code === '23514'
       if (isCheckViolation) {
-        showToast('Quantity cannot be negative — was blocked', { type: 'error' })
+        showToast('Quantity cannot be negative, so the adjustment was blocked.', { type: 'error' })
       } else {
         const isAuthError = msg.includes('42501') || code === '42501' || /permission|not authenticated|JWT|auth|not allowed/i.test(msg)
         if (isAuthError) {

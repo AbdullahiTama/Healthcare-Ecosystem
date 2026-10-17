@@ -180,7 +180,7 @@ export default function SafetyReportPage() {
       if (step === STEPS.ADDITIONAL) await persistMeds(draft)
       setView(STEP_ORDER[idx + 1])
     } catch {
-      setStepError('Could not save. Check your connection and retry — nothing was lost.')
+      setStepError('Could not save. Check your connection and retry. Nothing was lost.')
     }
   }
 
@@ -207,7 +207,7 @@ export default function SafetyReportPage() {
       if (!result || result.valid !== true) {
         const labels = result?.missing || ['Submission was rejected.']
         setServerMissing(labels.map((label) => ({ label, step: SERVER_LABEL_TO_STEP[label] || STEPS.REVIEW })))
-        setSubmitError('The server could not accept this report yet. See the missing items above — your draft is saved.')
+        setSubmitError('The server could not accept this report yet. See the missing items above. Your draft is saved.')
         setSubmitting(false)
         return
       }
@@ -215,7 +215,7 @@ export default function SafetyReportPage() {
       setReference(full?.report_number || full?.report_id || reportId)
       setView(STEPS.SUCCESS)
     } catch (e) {
-      setSubmitError(e.message || 'Submission failed. Your draft is saved — please retry.')
+      setSubmitError(e.message || 'Submission failed. Your draft is saved. Please retry.')
     } finally {
       setSubmitting(false)
     }
@@ -232,7 +232,7 @@ export default function SafetyReportPage() {
       <main style={s.page} aria-labelledby="sr-welcome-h">
         <h1 id="sr-welcome-h" tabIndex={-1} ref={headingRef} style={s.h1}>{WELCOME_HEADING}</h1>
         <div style={s.card}>
-          <p style={s.body}>Have you or someone else had a suspected side effect from a medicine, vaccine or health product? Tell us — your report helps monitor medicine safety for everyone.</p>
+          <p style={s.body}>Have you or someone else had a suspected side effect from a medicine, vaccine or health product? Tell us. Every report helps us monitor medicine safety in Nigeria.</p>
           <p style={s.body}>A report does <strong>not</strong> prove the product caused the reaction. It is the starting point for safety reviewers to look for patterns.</p>
           <p style={s.banner} role="note">This is <strong>not</strong> an emergency service. If someone needs urgent care, contact emergency services or go to the nearest hospital first.</p>
           <button type="button" onClick={() => begin(null)} style={s.btnPrimary} disabled={status === 'loading'}>
@@ -243,13 +243,13 @@ export default function SafetyReportPage() {
           ) : (
             myDrafts.length > 0 && (
               <button type="button" onClick={() => begin(myDrafts[0].report_id)} style={{ ...s.btnGhost, marginTop: 8, width: '100%' }}>
-                Continue draft{myDrafts.length > 1 ? ` (most recent of ${myDrafts.length})` : ''} — started {new Date(myDrafts[0].created_at).toLocaleDateString()}
+                Continue draft{myDrafts.length > 1 ? ` (most recent of ${myDrafts.length})` : ''}, started {new Date(myDrafts[0].created_at).toLocaleDateString()}
               </button>
             )
           )}
           {error && <p style={s.error} role="alert">{error}</p>}
         </div>
-        <p style={s.muted}>Takes about 1–2 minutes for a basic report. Your details stay confidential and are never published.</p>
+        <p style={s.muted}>A basic report takes about a minute or two. Your details stay confidential and are never published.</p>
       </main>
     )
   }
@@ -261,7 +261,7 @@ export default function SafetyReportPage() {
         <div style={s.card}>
           <p style={s.body}>Thank you. Your safety report has been recorded with reference:</p>
           <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--teal)' }} aria-label={`Report reference ${reference}`}>{reference}</p>
-          <p style={s.body}>What happens next: our safety team acknowledges your report inside this platform and may contact you if you agreed to follow-up. Acknowledgement here means <strong>we received it</strong> — it is not a confirmation of any regulatory submission.</p>
+          <p style={s.body}>What happens next: our safety team acknowledges your report inside this platform and may contact you if you agreed to a follow up. An acknowledgement here means <strong>we received it</strong>. It is not a confirmation of any regulatory submission.</p>
           <div style={{ ...s.row, marginTop: 12 }}>
             <Link to="/feed" style={{ ...s.btnPrimary, textDecoration: 'none', textAlign: 'center' }}>Back to feed</Link>
           </div>
@@ -276,7 +276,7 @@ export default function SafetyReportPage() {
   return (
     <main style={s.page} aria-labelledby="sr-step-h">
       <span id="sr-step-h" ref={headingRef} tabIndex={-1} style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
-        {STEP_LABELS[view]} — step {stepIndex + 1} of {STEP_ORDER.length}
+        {STEP_LABELS[view]}, step {stepIndex + 1} of {STEP_ORDER.length}
       </span>
       <ProgressDots steps={STEP_ORDER} current={view} />
       <p style={s.help} role="status" aria-live="polite">{saveLabel}</p>

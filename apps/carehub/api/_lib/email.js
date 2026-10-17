@@ -59,7 +59,7 @@ function logoHeader() {
 function footer() {
   return `
     <div style="text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid #f0f0f0; color: #aaa; font-size: 12px;">
-      <p>CareHub — One Platform for Every Healthcare Business in Nigeria</p>
+      <p>CareHub · One Platform for Every Healthcare Business in Nigeria</p>
       <p style="margin-top: 4px;">${SUPPORT_EMAIL} | ${APP_URL}</p>
     </div>
   `
@@ -108,7 +108,7 @@ export function buildAdminNewRegistrationHtml({ businessName, ownerName, busines
             ].map(([l, v]) => `
               <tr>
                 <td style="padding: 8px 0; color: #888; font-weight: 600; font-size: 13px; width: 40%;">${l}</td>
-                <td style="padding: 8px 0; color: #0f172a; font-size: 13px;">${v || '—'}</td>
+                <td style="padding: 8px 0; color: #0f172a; font-size: 13px;">${v || 'Not set'}</td>
               </tr>
             `).join('')}
           </table>
@@ -189,7 +189,7 @@ export function buildBusinessStatusHtml({ businessName, ownerName, ownerEmail, s
     <div style="${baseStyle}">
       ${logoHeader()}
       <div style="${cardStyle}">
-        <h2 style="color: #0f172a; margin: 0 0 8px;">Application Update — Action Required</h2>
+        <h2 style="color: #0f172a; margin: 0 0 8px;">Application Update: Action Required</h2>
         <p style="color: #888; margin: 0 0 24px;">Dear ${ownerName},</p>
         <p style="color: #555; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">Your application for <strong>${businessName}</strong> requires attention. ${reason ? `<br/><strong>Details:</strong> ${reason}` : ''}</p>
         <p style="color: #555; font-size: 13px; line-height: 1.7;">Please log in or contact ${SUPPORT_EMAIL} for next steps.</p>

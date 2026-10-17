@@ -77,7 +77,7 @@ export default function Wallet({ brand, role }) {
           return
         }
         load()
-        if (!out.data.alreadyProcessed) showToast(`Top-up received! New balance: ${naira(out.data.newAvailable)}`, { type: 'success' })
+        if (!out.data.alreadyProcessed) showToast(`Deposit received. New balance: ${naira(out.data.newAvailable)}`, { type: 'success' })
       } catch {
         window.history.replaceState({}, '', '/dashboard/wallet')
         showToast('Could not confirm payment. If you were charged, contact support with your reference.', { type: 'error' })
@@ -236,7 +236,7 @@ export default function Wallet({ brand, role }) {
       setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false); setShowWithdraw(false); setAccountResolved(false)
       clearWithdrawalOtpMeta()
       load()
-      showToast('Withdrawal started — will arrive shortly.', { type: 'success' })
+      showToast('Withdrawal started. It should arrive shortly.', { type: 'success' })
     } catch (e) { showToast('Network error.', { type: 'error' }) }
     setWithdrawing(false)
   }
@@ -327,7 +327,7 @@ export default function Wallet({ brand, role }) {
           <div style={{ width: 40, height: 40, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PlusCircle size={18} /></div>
           <div>
             <div style={{ fontSize: '13px', fontWeight: '800', color: navy }}>Add funds</div>
-            <div style={{ fontSize: '12px', color: gray500 }}>Top up your wallet by card — min ₦100</div>
+            <div style={{ fontSize: '12px', color: gray500 }}>Top up your wallet by card. Minimum ₦100.</div>
           </div>
         </div>
         <TealBtn onClick={() => { setTopupAmount(''); setShowTopup(true) }}><PlusCircle size={14} style={{ marginRight: 6 }} />Top Up</TealBtn>
@@ -346,10 +346,10 @@ export default function Wallet({ brand, role }) {
         empty={<Empty icon={<WalletIcon size={40} />} message="No transactions yet. Payments from booked appointments will appear here." />}
         count={`${filtered.length} transaction${filtered.length !== 1 ? 's' : ''}`}
         columns={[
-          { key: 'created_at', label: 'Date', sortable: true, render: r => <span style={{ fontSize: '12px', color: gray600 }}>{r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</span> },
+          { key: 'created_at', label: 'Date', sortable: true, render: r => <span style={{ fontSize: '12px', color: gray600 }}>{r.created_at ? new Date(r.created_at).toLocaleDateString() : 'Not set'}</span> },
           { key: 'type', label: 'Type', sortable: true, render: r => <Pill label={TYPE_LABELS[r.type] || r.type} type={r.type === 'booking_credit' || r.type === 'shop_credit' || r.type === 'shop_release' || r.type === 'release' ? 'green' : r.type === 'refund' ? 'red' : r.type === 'withdrawal' ? 'amber' : 'gray'} /> },
           { key: 'amount', label: 'Amount', sortable: true, render: r => <span style={{ fontWeight: '800', fontSize: '13px', color: r.amount < 0 ? danger : success }}>{r.amount < 0 ? '-' : '+'}{naira(Math.abs(r.amount || 0))}</span> },
-          { key: 'reference', label: 'Reference', render: r => <span style={{ fontSize: '11px', color: gray400, fontFamily: theme.fontMono }}>{r.reference || '—'}</span> },
+          { key: 'reference', label: 'Reference', render: r => <span style={{ fontSize: '11px', color: gray400, fontFamily: theme.fontMono }}>{r.reference || 'Not set'}</span> },
         ]}
       />
 
@@ -390,7 +390,7 @@ export default function Wallet({ brand, role }) {
               />
               {savedAccount && (
                 <div style={{ fontSize: '12.5px', color: gray600, padding: '8px 12px', borderRadius: '12px', background: tealMist }}>
-                  Paying to <strong>{savedAccount.bankName} ••••{savedAccount.accountLast4}</strong> — {savedAccount.accountName}
+                  Paying to <strong>{savedAccount.bankName} ••••{savedAccount.accountLast4}</strong> in the name of {savedAccount.accountName}
                   {typedAllowed && (
                     <button type="button" onClick={() => setUseTyped((v) => !v)} style={{ marginLeft: '8px', background: 'none', border: 'none', padding: 0, color: theme.tealDeep, fontWeight: 800, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
                       {useTyped ? 'Use saved account' : 'Use a different account'}

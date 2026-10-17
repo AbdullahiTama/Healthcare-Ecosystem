@@ -153,7 +153,7 @@ export default function Debts({ brand, role, perms }) {
               key: 'description', label: 'Details', sortable: true,
               render: d => (
                 <span style={{ fontSize: '12px', color: gray500, maxWidth: '200px', display: 'block' }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{d.description || '—'}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{d.description || 'Not set'}</span>
                   {d.source && <div style={{ marginTop: '4px' }}><Pill label={sourceLabel(d.source, true)} type={d.source === 'purchase' ? 'amber' : d.source === 'credit_sale' ? 'blue' : 'gray'} /></div>}
                 </span>
               ),
@@ -172,7 +172,7 @@ export default function Debts({ brand, role, perms }) {
             },
             {
               key: 'due_date', label: 'Due Date', sortable: true,
-              render: d => <span style={{ fontSize: '12px', color: gray400 }}>{d.due_date || '—'}</span>,
+              render: d => <span style={{ fontSize: '12px', color: gray400 }}>{d.due_date || 'Not set'}</span>,
             },
             {
               key: 'status', label: 'Status', sortable: true,

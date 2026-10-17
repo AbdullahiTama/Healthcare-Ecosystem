@@ -109,7 +109,7 @@ export default function GoLiveTab({
               </div>
               {s.trailer_url && <video src={s.trailer_url} controls playsInline style={{ maxWidth: 160, borderRadius: 8, display: 'block', marginBottom: theme.space[3] }} />}
               <div style={{ display: 'flex', gap: 8 }}>
-                <Button variant="primary" size="sm" onClick={() => startScheduledShow(s.id)} leftIcon={<Play size={12} />}>Start Now</Button>
+                <Button variant="primary" size="sm" onClick={() => startScheduledShow(s.id)} leftIcon={<Play size={12} />}>Start session</Button>
                 <a href={`/live-show/${s.id}`} style={{ fontSize: 12, fontWeight: 700, color: theme.tealDeep, background: theme.tealMist, padding: '8px 12px', borderRadius: theme.radius.full, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Eye size={12} /> Preview
                 </a>
@@ -125,7 +125,7 @@ export default function GoLiveTab({
           <Input label="Show title" value={liveTitle} onChange={setLiveTitle} placeholder="e.g. Malaria Awareness Live" />
 
           <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: theme.navy, marginBottom: theme.space[2] }}>Invite guests to co-host ({liveGuests.length} selected)</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: theme.navy, marginBottom: theme.space[2] }}>Guests to invite ({liveGuests.length} selected)</div>
             <Input value={guestSearch} onChange={setGuestSearch} placeholder="Search users by name..." style={{ marginBottom: theme.space[3] }} />
             <div style={{ maxHeight: 220, overflowY: 'auto', marginBottom: theme.space[3] }}>
               {users.filter(u => {

@@ -47,7 +47,7 @@ export default function HealthLights({ repository = createHealthRepository() }) 
     try {
       await repository.createIncident({ title: form.title.trim(), message: form.message.trim(), severity: form.severity, is_maintenance: !!form.is_maintenance, pause_signups: !!form.pause_signups })
       await repository.logAudit({ action: 'create_incident', target_table: 'admin_incidents', target_id: form.title.trim(), after: form }).catch(() => {})
-      showToast('Incident posted — banner live', { type: 'success' })
+      showToast('Incident posted. The banner is live.', { type: 'success' })
       setForm({ title: '', message: '', severity: 'amber', is_maintenance: false, pause_signups: false })
       setShowNew(false)
       load()
@@ -115,7 +115,7 @@ export default function HealthLights({ repository = createHealthRepository() }) 
       {/* Active banner preview + controls */}
       <Card style={{ padding: 14, background: hasActive && incidents[0].severity === 'red' ? 'var(--red-bg)' : hasActive ? 'var(--amber-bg)' : 'var(--panel)', border: hasActive ? `1px solid ${incidents[0].severity === 'red' ? 'var(--red)' : 'var(--amber)'}` : '1px solid var(--border)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ fontWeight: 800, fontSize: 13, color: hasActive ? (incidents[0].severity === 'red' ? 'var(--red)' : 'var(--amber)') : 'var(--fg)' }}>{hasActive ? `Active: ${incidents[0].title}` : 'No active incident — all clear'}</div>
+          <div style={{ fontWeight: 800, fontSize: 13, color: hasActive ? (incidents[0].severity === 'red' ? 'var(--red)' : 'var(--amber)') : 'var(--fg)' }}>{hasActive ? `Active: ${incidents[0].title}` : 'No active incident. All clear'}</div>
           <TealBtn onClick={() => setShowNew(true)} style={{ padding: '7px 12px', fontSize: 12 }}>+ New incident / banner</TealBtn>
         </div>
         {hasActive ? (
@@ -130,7 +130,7 @@ export default function HealthLights({ repository = createHealthRepository() }) 
             <button onClick={() => setConfirmDismiss(incidents[0])} style={{ marginTop: 8, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--red)', background: 'var(--panel)', color: 'var(--red)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}><X size={12} style={{ marginRight: 4 }} />Dismiss banner</button>
           </div>
         ) : (
-          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>Create a banner to notify all tenants. Example: “Payouts delayed — investigating” with amber dot. Toggle “Pause signups” blocks <code>registerBusiness</code> with banner.</div>
+          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>Create a banner to notify all tenants. For example “Payouts delayed, investigating” with an amber dot. Toggle “Pause signups” blocks <code>registerBusiness</code> with banner.</div>
         )}
       </Card>
 
@@ -138,7 +138,7 @@ export default function HealthLights({ repository = createHealthRepository() }) 
       <Card style={{ padding: 14, background: 'var(--panel)', border: '1px solid var(--border)' }}>
         <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--fg)', marginBottom: 10 }}>Recent incidents</div>
         {!incidents || incidents.length === 0 ? (
-          <Empty icon={<CheckCircle size={24} />} message="No incidents yet — last 10 shown here when posted." />
+          <Empty icon={<CheckCircle size={24} />} message="No incidents yet. The last 10 appear here once they are posted." />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
             {incidents.map(inc => (
@@ -160,9 +160,9 @@ export default function HealthLights({ repository = createHealthRepository() }) 
         <Card style={{ padding: 16, background: 'var(--panel)', border: '1px solid var(--teal)' }}>
           <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--fg)', marginBottom: 10 }}>New incident / banner</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <Inp label="Title *" value={form.title} onChange={v => setForm(s => ({ ...s, title: v }))} placeholder="e.g. Payouts delayed — investigating" />
+            <Inp label="Title *" value={form.title} onChange={v => setForm(s => ({ ...s, title: v }))} placeholder="e.g. Payouts delayed, investigating" />
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}><span style={{ fontWeight: 600, color: 'var(--fg)' }}>Message *</span><textarea value={form.message} onChange={e => setForm(s => ({ ...s, message: e.target.value }))} placeholder="What tenants see" rows={3} style={{ padding: 10, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', fontSize: 13 }} /></label>
-            <Sel label="Severity" value={form.severity} onChange={v => setForm(s => ({ ...s, severity: v }))} options={[{ value: 'amber', label: 'amber — degraded' }, { value: 'red', label: 'red — down' }]} />
+            <Sel label="Severity" value={form.severity} onChange={v => setForm(s => ({ ...s, severity: v }))} options={[{ value: 'amber', label: 'Amber, degraded' }, { value: 'red', label: 'Red, down' }]} />
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: 'var(--fg)' }}><input type="checkbox" checked={form.is_maintenance} onChange={e => setForm(s => ({ ...s, is_maintenance: e.target.checked }))} /> Maintenance mode</label>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: 'var(--fg)' }}><input type="checkbox" checked={form.pause_signups} onChange={e => setForm(s => ({ ...s, pause_signups: e.target.checked }))} /> Pause new signups (blocks registerBusiness)</label>
             <div style={{ display: 'flex', gap: 8 }}>

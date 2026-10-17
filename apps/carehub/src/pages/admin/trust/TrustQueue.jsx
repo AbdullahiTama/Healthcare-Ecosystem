@@ -4,7 +4,7 @@ import { Card, GhostBtn, Loading, Empty, ErrorState, useToast, Toast } from '../
 import { createTrustRepository, slaLabel, slaTone } from '../../../modules/trust/repositories'
 
 function timeAgo(s) {
-  if (!s) return '—'
+  if (!s) return 'Not set'
   const diff = Math.floor((Date.now() - new Date(s)) / 1000)
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
@@ -86,7 +86,7 @@ export default function TrustQueue({ repository = createTrustRepository() }) {
       </Card>
 
       {filtered.length === 0 ? (
-        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<CheckCircle size={28} />} message={showOverdueOnly ? 'No overdue — all within SLA.' : filter !== 'all' ? `No ${filter} items.` : 'All caught up — no trust queue.'} /></Card>
+        <Card style={{ padding: 32, background: 'var(--panel)', border: '1px solid var(--border)', textAlign: 'center' }}><Empty icon={<CheckCircle size={28} />} message={showOverdueOnly ? 'No overdue items. All within SLA.' : filter !== 'all' ? `No ${filter} items.` : 'All caught up. No trust queue.'} /></Card>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(item => {
@@ -100,7 +100,7 @@ export default function TrustQueue({ repository = createTrustRepository() }) {
                     {item.label}
                     <span style={{ fontSize: 11, color: tone === 'red' ? 'var(--red)' : tone === 'amber' ? 'var(--amber)' : 'var(--muted)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} /> {label} • {timeAgo(item.created_at)}</span>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{item.subtitle || '—'}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{item.subtitle || 'Not set'}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <span style={{ padding: '3px 7px', borderRadius: 6, background: tone === 'red' ? 'var(--red)' : tone === 'amber' ? 'var(--amber)' : 'var(--teal)', color: 'white', fontWeight: 700, fontSize: 11 }}>{item.overdue ? 'OVERDUE' : item.urgent ? 'DUE SOON' : 'ON TRACK'}</span>

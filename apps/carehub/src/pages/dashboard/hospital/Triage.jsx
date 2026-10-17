@@ -49,14 +49,14 @@ export default function Triage({ brand }) {
 
   if (selected && !done) return (
     <div>
-<DetailHeader onBack={() => setSelected(null)} title={`Triage — ${selected.full_name}`} sub={`${selected.reg_no} · ${selected.department || 'General OPD'}`} />
+<DetailHeader onBack={() => setSelected(null)} title={`Triage: ${selected.full_name}`} sub={`${selected.reg_no} · ${selected.department || 'General OPD'}`} />
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: theme.radius.md, background: warningBg, border: `1px solid ${warning}`, fontSize: '12px', color: warning, fontWeight: '600', marginBottom: '16px' }}>
-        <Activity size={14} /> Nurse Module — Vitals saved here go directly to the Doctor
+        <Activity size={14} /> Nurse Module. Vitals saved here go straight to the Doctor
       </div>
       <Card style={{ padding: '16px', marginBottom: '14px', background: tealMist, border: `1px solid ${tealMist}` }}>
-        <div style={{ fontSize: '12px', fontWeight: '700', color: tealDeep, marginBottom: '8px' }}>Patient Info — From Reception</div>
+        <div style={{ fontSize: '12px', fontWeight: '700', color: tealDeep, marginBottom: '8px' }}>Patient Info, from Reception</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          {[['Name', selected.full_name], ['Phone', selected.phone], ['DOB', selected.date_of_birth || '—'], ['Gender', selected.gender || '—'], ['Department', selected.department || '—'], ['Doctor', selected.assigned_doctor || '—'], ['Insurance', selected.insurance || '—'], ['Payment', selected.pay_status || '—']].map(([l, v]) => (
+          {[['Name', selected.full_name], ['Phone', selected.phone], ['DOB', selected.date_of_birth || 'Not set'], ['Gender', selected.gender || 'Not set'], ['Department', selected.department || 'Not set'], ['Doctor', selected.assigned_doctor || 'Not set'], ['Insurance', selected.insurance || 'Not set'], ['Payment', selected.pay_status || 'Not set']].map(([l, v]) => (
             <div key={l}><div style={{ fontSize: '10px', color: gray500, fontWeight: '700' }}>{l}</div><div style={{ fontSize: '12px', fontWeight: '600', color: navy }}>{v}</div></div>
           ))}
         </div>
@@ -94,7 +94,7 @@ export default function Triage({ brand }) {
       <div style={{ fontSize: '22px', fontWeight: '900', marginBottom: '8px', color: navy }}>Triage Complete!</div>
       <div style={{ fontSize: '14px', color: gray500, marginBottom: '12px' }}>Vitals saved for <strong>{selected.full_name}</strong></div>
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: theme.radius.full, background: tealMist, border: `1px solid ${tealMist}`, fontSize: '13px', color: tealDeep, fontWeight: '700', marginBottom: '24px' }}>
-        <Bell size={14} /> Patient sent to Doctor — Doctor can now see full file
+        <Bell size={14} /> Patient sent to Doctor. The doctor can now see the full file.
       </div>
       <div><TealBtn onClick={() => { setSelected(null); setDone(false); setForm({}); load() }}>Back to Patient List</TealBtn></div>
     </div>
@@ -105,7 +105,7 @@ export default function Triage({ brand }) {
       <SectionHead title='Triage' sub='Patients waiting for nurse assessment' />
       <div style={{ position: 'relative', marginBottom: '16px' }}>
         <SearchIcon size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: gray400 }} />
-        <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder='Search any patient across all departments — name, reg no, phone…'
+        <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder='Search any patient across all departments by name, reg number or phone number.'
           style={{ width: '100%', padding: '11px 12px 11px 34px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: navy, fontFamily: theme.fontFamily }} />
       </div>
       {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : patients.length === 0 ? (

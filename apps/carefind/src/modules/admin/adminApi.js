@@ -24,6 +24,6 @@ export async function callAdminAuth(action, payload = {}) {
     return data
   } catch (err) {
     console.error(`[callAdminAuth] ${action} failed:`, err.message)
-    throw new Error(err.message || 'Network error — check if the admin API is reachable')
+    throw new Error(err.message || 'Network error. Check if the admin API is reachable')
   }
 }

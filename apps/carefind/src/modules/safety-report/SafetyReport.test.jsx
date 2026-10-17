@@ -68,7 +68,7 @@ describe('SafetyReportPage welcome', () => {
   it('shows the approved heading, safety explanation and emergency note', async () => {
     renderPage()
     expect(await screen.findByText(WELCOME_HEADING)).toBeTruthy()
-    expect(screen.getByText(/helps monitor medicine safety/i)).toBeTruthy()
+    expect(screen.getByText(/monitor medicine safety/i)).toBeTruthy()
     expect(screen.getByText(/does not prove/i)).toBeTruthy()
     expect(screen.getByText(/not.*an emergency service/i)).toBeTruthy()
     expect(screen.getByRole('button', { name: /start report/i })).toBeTruthy()

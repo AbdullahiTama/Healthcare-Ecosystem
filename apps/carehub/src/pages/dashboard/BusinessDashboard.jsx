@@ -63,7 +63,7 @@ const PAGE_TITLES = {
   expenses: 'Expenses', debts: 'Debts', purchases: 'Purchases', demand: 'Demand',
   staff: 'Staff', reports: 'Financial Reports', settings: 'Settings', carefind: 'CareFind Profile',
   reception: 'Reception', triage: 'Triage', doctor: 'Doctor Consultation', rx_inbox: 'Prescription Inbox',
-  overview: 'Overview', 'adr-reports': 'Pharmacovigilance (ADR)', ecommerce: 'E-commerce',
+  overview: 'Overview', 'adr-reports': 'Pharmacovigilance (ADR)', ecommerce: 'Online Store',
   discovery: 'Facility Discovery', activity: 'Live Field Activity',
 }
 
@@ -201,7 +201,7 @@ export default function BusinessDashboard() {
             )}
             {!online && (
               <div style={{ padding: '8px 20px', background: theme.danger, color: '#fff', fontSize: '13px', fontWeight: '700', textAlign: 'center' }}>
-                No internet — Offline mode. Sales will sync when connected.
+                You are offline. Sales are saved on this device and will sync when you reconnect.
               </div>
             )}
             <PlanExpiryBanner brand={brand} />
@@ -242,9 +242,9 @@ export default function BusinessDashboard() {
               <Route path='carefind' element={guard('carefind', <><TopBar title='CareFind Profile' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><CareFind {...pageProps} /></div></>)} />
               <Route path='locations' element={guard('locations', <><TopBar title='Locations' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Locations {...pageProps} /></div></>)} />
               <Route path='mastercatalog' element={guard('mastercatalog', <><TopBar title='Master Catalog' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><MasterCatalog {...pageProps} /></div></>)} />
-              <Route path='ecommerce' element={guard('ecommerce', <><TopBar title='E-commerce' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Ecommerce {...pageProps} /></div></>)} />
+              <Route path='ecommerce' element={guard('ecommerce', <><TopBar title='Online Store' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Ecommerce {...pageProps} /></div></>)} />
               {/* a shop order opened from a notification: the same page, with that order's drawer open */}
-              <Route path='ecommerce/orders/:orderId' element={guard('ecommerce', <><TopBar title='E-commerce' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Ecommerce {...pageProps} /></div></>)} />
+              <Route path='ecommerce/orders/:orderId' element={guard('ecommerce', <><TopBar title='Online Store' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Ecommerce {...pageProps} /></div></>)} />
               <Route path='warehouses' element={bareGuard('warehouses', <Warehouses {...pageProps} />)} />
               <Route path='territories' element={bareGuard('territories', <Territories {...pageProps} />)} />
               <Route path='messages' element={bareGuard('messages', <Messages {...pageProps} />)} />

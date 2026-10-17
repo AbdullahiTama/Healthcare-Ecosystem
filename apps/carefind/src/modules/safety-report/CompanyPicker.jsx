@@ -86,7 +86,7 @@ export default function CompanyPicker({ value, onChange, searchCompanies }) {
                       }}
                     >
                       {c.business_name}
-                      {c.matched_alias && <span style={s.help}> — also known as “{c.matched_alias}”</span>}
+                      {c.matched_alias && <span style={s.help}> also known as “{c.matched_alias}”</span>}
                       {(c.city || c.state) && <span style={{ ...s.help, display: 'block' }}>{[c.city, c.state].filter(Boolean).join(', ')}</span>}
                     </button>
                   </li>

@@ -35,7 +35,7 @@ export default function DashboardHub() {
           CareFindHub Dashboard
         </h1>
         <p style={{ margin: 0, fontSize: theme.type.body.size, color: theme.textLight }}>
-          Stats-only overview — pending items link to full tabs for management.
+          Counts only. Select a number to open the full tab and act on it.
         </p>
       </div>
 
@@ -90,7 +90,7 @@ export default function DashboardHub() {
           <div role="listitem" data-testid="stat-ecommerce">
             <StatCard
               icon={<ShoppingBag aria-hidden="true" />}
-              label="E-commerce participants"
+              label="Online sellers"
               value={String(stats.ecommerce)}
               sub="ecommerce_enabled = true"
             />

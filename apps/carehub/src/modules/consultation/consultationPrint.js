@@ -7,15 +7,20 @@
 import { esc } from '../../lib/escape.js'
 export { esc }
 
+// Printed value coercion for the consultation sheet. An absent value renders
+// as EMPTY so the row can be dropped entirely rather than printing a blank or
+// a placeholder glyph next to a real clinical label.
+export const EMPTY = ' '
+
 export const t = (v) => {
   if (Array.isArray(v)) return v.filter(Boolean).map(esc).join(', ')
-  if (v === undefined || v === null) return '—'
-  return v ? esc(v) : '—'
+  if (v === undefined || v === null) return EMPTY
+  return v ? esc(v) : EMPTY
 }
 
 export const row = (label, value, valTag = '') => {
   const v = t(value)
-  if (v === '—') return ''
+  if (v === EMPTY) return ''
   return '<tr><td class="k">' + esc(label) + '</td><td ' + valTag + '>' + v + '</td></tr>'
 }
 
@@ -28,7 +33,7 @@ export const section = (title, pairs) => {
 export const sig = (dataUrl, name, date) => {
   if (!dataUrl) return ''
   return '<div class="sig"><img src="' + dataUrl + '" alt="signature" />' +
-    '<div>' + esc(name || '') + (date ? ' — ' + esc(date) : '') + '</div></div>'
+    '<div>' + esc(name || '') + (date ? '<br>' + esc(date) : '') + '</div></div>'
 }
 
 // Business logo + name/address/phone header row, shared by both templates.
@@ -63,6 +68,7 @@ const STYLE =
   'td.k{width:42%;color:#64748b;font-weight:700}' +
   '.prods{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}' +
   '.prod{background:#f1f5f9;border-radius:8px;padding:6px 10px;font-size:12px}' +
+  '.none{margin:8px 0 0;font-size:12px;color:#94a3b8;font-style:italic}' +
   '.sig{margin-top:18px}' +
   '.sig img{height:60px;border-bottom:1px solid #94a3b8;display:block}' +
   '.sig div{font-size:11px;color:#64748b;margin-top:4px}' +
@@ -93,11 +99,11 @@ export function printConsultation(c, brand) {
   const prods = recProducts(c)
 
   const html =
-    '<html><head><title>Consultation — ' + esc(c.client_name || '') + '</title>' +
+    '<html><head><title>Consultation record for ' + esc(c.client_name || '') + '</title>' +
     '<style>' + STYLE + '</style></head><body>' +
     brandHeader(brand) +
     '<h2>Skin &amp; Aesthetic Consultation Form</h2>' +
-    '<div class="meta">Client: <strong>' + esc(c.client_name || '') + '</strong> · Date: ' + esc(c.consultation_date || '—') + ' · Therapist: ' + esc(c.provider_name || '—') + '</div>' +
+    '<div class="meta">Client: <strong>' + esc(c.client_name || '') + '</strong> · Date: ' + esc(c.consultation_date || 'Not recorded') + ' · Therapist: ' + esc(c.provider_name || 'Not recorded') + '</div>' +
 
     section('Client Information', [
       ['Full Name', ci.full_name], ['Date of Birth', ci.dob], ['Age', ci.age],
@@ -146,7 +152,7 @@ export function printConsultation(c, brand) {
     '<div class="sec"><h3>Products Recommended</h3>' +
     (prods.length
       ? '<div class="prods">' + prods.map(p => '<span class="prod">' + t(p.name) + '</span>').join('') + '</div>'
-      : '<table><tr><td>—</td></tr></table>') +
+      : '<p class="none">None recorded</p>') +
     '</div>' +
 
     '<div class="sec"><h3>Consent</h3><table>' +
@@ -186,11 +192,11 @@ export function printPharmacyConsultation(c, brand) {
   }[k] || k)
 
   const html =
-    '<html><head><title>Pharmacy Consultation — ' + esc(c.client_name || '') + '</title>' +
+    '<html><head><title>Pharmacy consultation record for ' + esc(c.client_name || '') + '</title>' +
     '<style>' + STYLE + '</style></head><body>' +
     brandHeader(brand) +
     '<h2>Pharmacy Consultation Form</h2>' +
-    '<div class="meta">Client: <strong>' + esc(c.client_name || '') + '</strong> · Date: ' + esc(c.consultation_date || '—') + ' · Pharmacist: ' + esc(c.provider_name || '—') + '</div>' +
+    '<div class="meta">Client: <strong>' + esc(c.client_name || '') + '</strong> · Date: ' + esc(c.consultation_date || 'Not recorded') + ' · Pharmacist: ' + esc(c.provider_name || 'Not recorded') + '</div>' +
 
     section('Client Information', [
       ['Full Name', ci.full_name], ['Date of Birth', ci.dob], ['Age', ci.age],
@@ -213,7 +219,7 @@ export function printPharmacyConsultation(c, brand) {
       ? '<table><tr style="background:#f1f5f9"><td style="font-weight:700">Drug</td><td style="font-weight:700">Dose</td><td style="font-weight:700">Frequency</td><td style="font-weight:700">Prescriber</td><td style="font-weight:700">Indication</td><td style="font-weight:700">Start</td><td style="font-weight:700">Adherence</td></tr>' +
         medRows.map(r => '<tr><td>' + t(r.drug) + '</td><td>' + t(r.dose) + '</td><td>' + t(r.frequency) + '</td><td>' + t(r.prescriber) + '</td><td>' + t(r.indication) + '</td><td>' + t(r.start_date) + '</td><td>' + t(r.adherence) + '</td></tr>').join('') +
         '</table>'
-      : '<table><tr><td>—</td></tr></table>') +
+      : '<p class="none">None recorded</p>') +
     '</div>' +
     section('Medication Review Notes', [
       ['Issues reported', mr.issues],
@@ -238,15 +244,15 @@ export function printPharmacyConsultation(c, brand) {
       ['Assessment / problem identified', as.problem],
       ['Recommendation type', as.recommendation_type],
       ['Counseling points given', as.counseling],
-      ['Referral', as.referral_yesno === 'yes' ? 'Yes — ' + t(as.referral_reason) : as.referral_yesno === 'no' ? 'No' : ''],
-      ['Follow-up needed', as.followup_yesno === 'yes' ? 'Yes — ' + t(as.followup_date) : as.followup_yesno === 'no' ? 'No' : ''],
+      ['Referral', as.referral_yesno === 'yes' ? 'Yes: ' + t(as.referral_reason) : as.referral_yesno === 'no' ? 'No' : ''],
+      ['Follow-up needed', as.followup_yesno === 'yes' ? 'Yes: ' + t(as.followup_date) : as.followup_yesno === 'no' ? 'No' : ''],
     ]) +
     '<div class="sec"><h3>Products Recommended / Dispensed</h3>' +
     (prods.length
       ? '<table><tr style="background:#f1f5f9"><td style="font-weight:700">Product</td><td style="font-weight:700">Qty</td><td style="font-weight:700">Source</td></tr>' +
         prods.map(p => '<tr><td>' + t(p.name) + '</td><td>' + t(p.qty) + '</td><td>' + t(p.source === 'dispensed' ? 'Dispensed' : 'Recommended') + '</td></tr>').join('') +
         '</table>'
-      : '<table><tr><td>—</td></tr></table>') +
+      : '<p class="none">None recorded</p>') +
     '</div>' +
 
     '<div class="sec"><h3>Consent</h3><table>' +

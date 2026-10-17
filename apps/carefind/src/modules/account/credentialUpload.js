@@ -74,7 +74,7 @@ export function validateCredentialFile(file) {
     return {
       ok: false,
       reason: 'size',
-      error: `That file is ${mb}MB. The limit is ${MAX_CREDENTIAL_LABEL} — please upload a smaller scan.`,
+      error: `That file is ${mb}MB. The limit is ${MAX_CREDENTIAL_LABEL}, so please upload a smaller scan.`,
     }
   }
 

@@ -27,7 +27,7 @@ const MODULE_ROWS = [
   { label: 'Reports' },
   { label: 'Staff & roles' },
   { label: 'CareFind listing' },
-  { label: 'Multi-location' },
+  { label: 'Multiple locations' },
 ]
 
 // The four priced plans, which are genuine peers and share one grid. Custom is
@@ -114,7 +114,7 @@ function PlanButton({ plan, primary }) {
         textAlign: 'center',
       }}
     >
-      Get started free
+      Start your account
     </Link>
   )
 }
@@ -126,7 +126,7 @@ export function PricingSection() {
         id="pricing-heading"
         eyebrow="Pricing"
         title="Annual plans, in naira, with the limits in the open"
-        lead="Every plan includes the full module set. What changes is scale — how many staff, locations and products you can run."
+        lead="Every plan includes the full module set. What changes is scale: how many staff, locations and products you can run."
       />
 
       <div data-reveal-group>
@@ -536,7 +536,7 @@ export function PricingSection() {
             maxWidth: 760,
           }}
         >
-          Every plan includes the full module set — the rows above are identical across
+          Every plan includes the full module set. The rows above are identical across
           all five because a plan buys scale, not features. Upgrade and downgrade from
           Settings at any time.
         </p>

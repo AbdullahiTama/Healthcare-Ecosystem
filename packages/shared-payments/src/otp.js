@@ -162,7 +162,7 @@ const VERIFY_FAILURES = {
   expired: { status: 400, code: 'otp_expired', error: 'That code has expired. Request a new one.' },
   locked: { status: 429, code: 'otp_locked', error: 'Too many wrong codes. Request a new one.' },
   none: { status: 400, code: 'otp_missing', error: 'Request a verification code first.' },
-  superseded: { status: 400, code: 'otp_superseded', error: 'A newer code was issued — please use the latest email.' },
+  superseded: { status: 400, code: 'otp_superseded', error: 'A newer code was issued. Please use the code in the latest email.' },
 }
 
 /** Verify and consume the code (single use). -> { ok: true } | { ok: false, status, code, error } */

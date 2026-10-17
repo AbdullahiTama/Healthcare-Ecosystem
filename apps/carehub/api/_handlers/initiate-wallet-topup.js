@@ -25,7 +25,7 @@ export default async function handler(req, res) {
 
   const amountKobo = Number(amount)
   if (!Number.isSafeInteger(amountKobo) || amountKobo < MIN_TOPUP_KOBO || amountKobo > MAX_TOPUP_KOBO || !callback_url) {
-    return res.status(400).json({ error: 'Amount must be a whole-kobo integer between N100 and N100,000' })
+    return res.status(400).json({ error: 'Amount must be a whole number of kobo between N100 and N100,000' })
   }
 
   // Where Paystack sends the customer back: only an origin this platform owns (audit F-27), never what the browser names.
