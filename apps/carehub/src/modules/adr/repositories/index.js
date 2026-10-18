@@ -391,7 +391,10 @@ export const adrReportRepository = createAdrReportRepository()
 
 // Maps a CareHub business_type to the ADR module type that drives presentation.
 // Enterprise businesses (manufacturer_importer / wholesale) report as `industry` —
-// previously the fallback collapsed them to community_pharmacy.
+// previously the fallback collapsed them to community_pharmacy. The signup
+// taxonomy reports as the clinical (clinic, laboratory) or cosmetic (aesthetic,
+// spa, haircare, cosmetics) presentation. This is the single business_type →
+// module_type map: AdrNav and formEngine consume it rather than duplicating it.
 export function getModuleTypeFromBusinessType(businessType) {
   const typeMap = {
     pharmacy: ADR_MODULE_TYPES.COMMUNITY_PHARMACY,
@@ -400,6 +403,12 @@ export function getModuleTypeFromBusinessType(businessType) {
     manufacturer_importer: ADR_MODULE_TYPES.INDUSTRY,
     wholesale: ADR_MODULE_TYPES.INDUSTRY,
     skincare: ADR_MODULE_TYPES.SKINCARE,
+    clinic: ADR_MODULE_TYPES.HOSPITAL,
+    laboratory: ADR_MODULE_TYPES.HOSPITAL,
+    aesthetic: ADR_MODULE_TYPES.SKINCARE,
+    spa: ADR_MODULE_TYPES.SKINCARE,
+    haircare: ADR_MODULE_TYPES.SKINCARE,
+    cosmetics: ADR_MODULE_TYPES.SKINCARE,
   }
   return typeMap[businessType] || ADR_MODULE_TYPES.COMMUNITY_PHARMACY
 }

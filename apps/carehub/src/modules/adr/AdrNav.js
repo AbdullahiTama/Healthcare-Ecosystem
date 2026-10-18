@@ -3,6 +3,7 @@ import {
   Pill, Stethoscope, Factory, Sparkles
 } from 'lucide-react'
 import { getPerms } from '../../lib/permissions'
+import { getModuleTypeFromBusinessType } from './repositories'
 
 export const ADR_NAV_ITEMS = {
   [ 'community_pharmacy' ]: [
@@ -31,8 +32,13 @@ const ITEM_PERMISSION = {
   'pv-tracker': 'pv-tracker',
 }
 
+// The ADR variant resolves through repositories' business-type map — the same
+// one validation and the reports list use — so the signup taxonomy (clinic,
+// laboratory, aesthetic, spa, haircare, cosmetics) lands on the right
+// presentation without a second mapping to keep in sync.
 export function getAdrNavItems(role, businessType) {
-  const items = ADR_NAV_ITEMS[businessType] || ADR_NAV_ITEMS['community_pharmacy']
+  const moduleType = getModuleTypeFromBusinessType(businessType)
+  const items = ADR_NAV_ITEMS[moduleType] || ADR_NAV_ITEMS['community_pharmacy']
   const nav = getPerms(role).nav || []
   return items.filter(item => nav.includes(ITEM_PERMISSION[item.id] || 'adr-reports'))
 }

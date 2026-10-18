@@ -210,11 +210,22 @@ export function isManagerRole(role) {
 // differently per vertical (the same clients table is "Clients" at a pharmacy
 // and "Patients" at a hospital). NAV_ORDER below only expresses the per-vertical
 // ordering, which predates the registry and must not be silently reshuffled.
-const ALL_TYPES = ['skincare', 'pharmacy', 'dental', 'optical', 'wellness', 'hospital', 'manufacturer_importer', 'wholesale']
-const RETAIL_TYPES = ['skincare', 'pharmacy', 'dental', 'optical', 'wellness']
+// Two taxonomies coexist here. The legacy types (skincare…wholesale) stay on
+// old business rows; the signup taxonomy in config/constants.js BUSINESS_TYPES
+// (clinic, laboratory, aesthetic, spa, cosmetics, haircare, other) replaced
+// them in the Sep 2026 Register redesign. Both must resolve — a registered
+// type the registry doesn't know about gets an empty app. New types join the
+// family lists below but never a family that belongs to another vertical (no
+// clinical set for beauty types, no enterprise set beyond manufacturer/wholesale).
+const ALL_TYPES = ['skincare', 'pharmacy', 'dental', 'optical', 'wellness', 'hospital', 'manufacturer_importer', 'wholesale', 'clinic', 'laboratory', 'aesthetic', 'spa', 'cosmetics', 'haircare', 'other']
+// RETAIL_TYPES is the `appointments` gate — the appointment-driven types.
+const RETAIL_TYPES = ['skincare', 'pharmacy', 'dental', 'optical', 'wellness', 'clinic', 'aesthetic', 'spa', 'haircare']
 const HOSPITAL_TYPES = ['hospital']
 const ENTERPRISE_TYPES = ['manufacturer_importer', 'wholesale']
-const CONSULT_TYPES = ['skincare', 'pharmacy']
+// CONSULT_TYPES is the `consultation` gate — same appointment-driven four, per
+// the landing spec (businessTypes.js: "Appointment-driven types (clinic, spa,
+// aesthetic, haircare) genuinely get the appointments and consultation modules").
+const CONSULT_TYPES = ['skincare', 'pharmacy', 'clinic', 'aesthetic', 'spa', 'haircare']
 
 export const MODULES = {
   dashboard: { label: 'Dashboard', icon: Home, types: ALL_TYPES, section: 'overview' },
@@ -222,7 +233,7 @@ export const MODULES = {
   pos: { label: 'POS / Sales', icon: ShoppingCart, types: ALL_TYPES, section: 'operations' },
   inventory: { label: 'Stock Management', icon: Package, types: ALL_TYPES, section: 'operations' },
   mastercatalog: { label: 'Master Catalog', icon: Layers, types: ALL_TYPES, section: 'ecosystem' },
-  clients: { label: 'Clients', icon: Users, types: ALL_TYPES, labelByType: { hospital: 'Patients' }, section: 'patients' },
+  clients: { label: 'Clients', icon: Users, types: ALL_TYPES, labelByType: { hospital: 'Patients', clinic: 'Patients' }, section: 'patients' },
   appointments: { label: 'Appointments', icon: Calendar, types: RETAIL_TYPES, section: 'operations' },
   consultation: { label: 'Consultations', icon: Clipboard, types: CONSULT_TYPES, section: 'operations' },
   expenses: { label: 'Expenses', icon: Receipt, types: ALL_TYPES, section: 'finance' },
@@ -246,7 +257,8 @@ export const MODULES = {
   triage: { label: 'Triage', icon: Activity, types: HOSPITAL_TYPES, section: 'clinical' },
   doctor: { label: 'Doctor', icon: Stethoscope, types: HOSPITAL_TYPES, section: 'clinical' },
   rx_inbox: { label: 'Rx Inbox', icon: Pill, types: HOSPITAL_TYPES, section: 'clinical' },
-  lab: { label: 'Laboratory', icon: Microscope, types: HOSPITAL_TYPES, section: 'clinical' },
+  // The lab bench serves hospitals and stand-alone laboratories.
+  lab: { label: 'Laboratory', icon: Microscope, types: [...HOSPITAL_TYPES, 'laboratory'], section: 'clinical' },
   imaging: { label: 'Imaging', icon: Scan, types: HOSPITAL_TYPES, section: 'clinical' },
   activity: { label: 'Live Field Activity', icon: Radio, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   discovery: { label: 'Facility Discovery', icon: Search, types: ENTERPRISE_TYPES, section: 'ecosystem' },
@@ -282,6 +294,8 @@ export const SECTION_ORDER = ['overview', 'operations', 'patients', 'clinical', 
 // depend on a reorder happening silently.
 const NAV_ORDER = {
    default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
+    // Clinics lead with the appointment book and consultation notes.
+    clinic: ['overview', 'dashboard', 'appointments', 'consultation', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
     hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
     enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
 }
@@ -289,11 +303,24 @@ const NAV_ORDER = {
 function familyOf(businessType) {
   if (businessType === 'hospital') return 'hospital'
   if (businessType === 'manufacturer_importer' || businessType === 'wholesale') return 'enterprise'
+  if (businessType === 'clinic') return 'clinic'
+  // Stand-alone laboratories reuse the hospital ordering — their gate only
+  // admits the lab bench from the clinical block, and `lab` sorts early.
+  if (businessType === 'laboratory') return 'hospital'
   return 'default'
 }
 
 function labelFor(module, businessType) {
   return (module.labelByType && module.labelByType[businessType]) || module.label
+}
+
+// A business_type no gate knows — a future taxonomy addition, a typo, or an
+// empty string — must not produce an empty app. It resolves to the generic
+// "Other Healthcare" set, the modules every vertical shares.
+const KNOWN_TYPES = new Set(ALL_TYPES)
+
+function normalizeType(businessType) {
+  return KNOWN_TYPES.has(businessType) ? businessType : 'other'
 }
 
 // The modules a business type may use, as [id, icon, label] tuples. The
@@ -305,10 +332,11 @@ function labelFor(module, businessType) {
 // so the Owner of an enterprise business can reach POS instead of being silently
 // locked out by an ordering list that never mentioned it.
 export function getModulesForType(businessType) {
-  const family = familyOf(businessType)
-  const ordered = NAV_ORDER[family].filter(id => MODULES[id].types.includes(businessType))
-  const rest = NAV_ORDER.default.filter(id => !ordered.includes(id) && MODULES[id].types.includes(businessType))
-  return [...ordered, ...rest].map(id => [id, MODULES[id].icon, labelFor(MODULES[id], businessType)])
+  const type = normalizeType(businessType)
+  const family = familyOf(type)
+  const ordered = NAV_ORDER[family].filter(id => MODULES[id].types.includes(type))
+  const rest = NAV_ORDER.default.filter(id => !ordered.includes(id) && MODULES[id].types.includes(type))
+  return [...ordered, ...rest].map(id => [id, MODULES[id].icon, labelFor(MODULES[id], type)])
 }
 
 export const ALL_NAV_DEFAULT = NAV_ORDER.default.map(id => [id, MODULES[id].icon, MODULES[id].label])
@@ -408,14 +436,24 @@ export const ROLE_LIST = ['Owner', 'Manager', 'Pharmacist', 'Therapist', 'Recept
 // a pharmacy is never offered Doctor/Lab Technician and a hospital is never
 // offered Pharmacist/Therapist — an invalid assignment that another vertical's
 // module gate would silently neutralise. Enterprise businesses type their own.
+// The signup-taxonomy keys follow the same rule: a role is only offered where
+// that type's modules can actually show its nav (no Pharmacist at a cosmetics
+// shop, no Doctor at a laboratory).
 export const ROLES_FOR_TYPE = {
   hospital: ['Owner', 'Manager', 'Receptionist', 'Nurse', 'Doctor', 'Lab Technician', 'Cashier'],
   retail: ['Owner', 'Manager', 'Pharmacist', 'Therapist', 'Receptionist', 'Cashier'],
   enterprise: [],
+  clinic: ['Owner', 'Manager', 'Receptionist', 'Doctor', 'Cashier'],
+  laboratory: ['Owner', 'Manager', 'Lab Technician', 'Cashier'],
+  aesthetic: ['Owner', 'Manager', 'Therapist', 'Receptionist', 'Cashier'],
+  spa: ['Owner', 'Manager', 'Therapist', 'Receptionist', 'Cashier'],
+  haircare: ['Owner', 'Manager', 'Therapist', 'Receptionist', 'Cashier'],
+  cosmetics: ['Owner', 'Manager', 'Receptionist', 'Cashier'],
+  other: ['Owner', 'Manager', 'Receptionist', 'Cashier'],
 }
 
 export function rolesForType(businessType) {
-  if (businessType === 'hospital') return ROLES_FOR_TYPE.hospital
-  if (businessType === 'manufacturer_importer' || businessType === 'wholesale') return ROLES_FOR_TYPE.enterprise
-  return ROLES_FOR_TYPE.retail
+  const type = normalizeType(businessType)
+  if (type === 'manufacturer_importer' || type === 'wholesale') return ROLES_FOR_TYPE.enterprise
+  return ROLES_FOR_TYPE[type] || ROLES_FOR_TYPE.retail
 }

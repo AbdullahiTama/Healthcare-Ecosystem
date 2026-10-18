@@ -9,6 +9,19 @@ describe('getAdrNavItems', () => {
     expect(ids(getAdrNavItems('Owner', 'hospital'))).toEqual(['adr-hospital'])
   })
 
+  it('resolves the signup taxonomy and enterprise business types through the repositories map', () => {
+    expect(ids(getAdrNavItems('Owner', 'clinic'))).toEqual(['adr-hospital'])
+    expect(ids(getAdrNavItems('Owner', 'laboratory'))).toEqual(['adr-hospital'])
+    expect(ids(getAdrNavItems('Owner', 'aesthetic'))).toEqual(['adr-skincare'])
+    expect(ids(getAdrNavItems('Owner', 'spa'))).toEqual(['adr-skincare'])
+    expect(ids(getAdrNavItems('Owner', 'haircare'))).toEqual(['adr-skincare'])
+    expect(ids(getAdrNavItems('Owner', 'cosmetics'))).toEqual(['adr-skincare'])
+    // Repositories maps enterprise to industry; the nav must present the same
+    // (before the single-map wiring this collapsed to community_pharmacy).
+    expect(ids(getAdrNavItems('Owner', 'manufacturer_importer'))).toEqual(['adr-industry', 'pv-tracker'])
+    expect(ids(getAdrNavItems('Owner', 'wholesale'))).toEqual(['adr-industry', 'pv-tracker'])
+  })
+
   it('shows the Tracker only to roles whose nav grants pv-tracker', () => {
     expect(ids(getAdrNavItems('Manager', 'industry'))).toContain('pv-tracker')
     // Nurse may file ADR reports but has no Tracker permission.

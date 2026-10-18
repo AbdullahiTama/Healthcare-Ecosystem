@@ -17,6 +17,11 @@ describe('ecommerceSegments', () => {
   it('skincare maps to retail', () => {
     expect(resolveEcommerceSegment('skincare')).toBe('retail')
   })
+  it('maps the signup taxonomy to retail', () => {
+    for (const type of ['clinic', 'laboratory', 'aesthetic', 'spa', 'cosmetics', 'haircare', 'other']) {
+      expect(resolveEcommerceSegment(type)).toBe('retail')
+    }
+  })
   it('null/undefined maps to retail', () => {
     expect(resolveEcommerceSegment(null)).toBe('retail')
     expect(resolveEcommerceSegment(undefined)).toBe('retail')

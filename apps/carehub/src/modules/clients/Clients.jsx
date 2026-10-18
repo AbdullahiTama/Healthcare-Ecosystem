@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { clientRepository, isDuplicateError } from './repositories'
 import { PHARMACY_TYPE_LABEL } from '../consultation/PharmacyForm'
 import { fmt, todayDate } from '../../lib/utils'
+import { getModulesForType } from '../../lib/permissions'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
 import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients } from '../../hooks/queries'
@@ -95,7 +96,10 @@ function TimelineRow({ e }) {
 
 export default function Clients({ brand, role, perms }) {
   const navigate = useNavigate()
-  const canConsult = brand?.business_type === 'skincare' || brand?.business_type === 'pharmacy'
+  // Derived from the permission registry (single source of truth) so every
+  // consultation-enabled type — including the signup taxonomy's clinic,
+  // aesthetic, spa and haircare — gets the client-detail shortcut.
+  const canConsult = getModulesForType(brand?.business_type).some(([id]) => id === 'consultation')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const [saving, setSaving] = useState(false)

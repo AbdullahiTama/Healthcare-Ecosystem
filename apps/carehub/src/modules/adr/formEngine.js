@@ -1,5 +1,5 @@
 import { ADR_MODULE_TYPES, ADR_MODULE_TYPE_LABELS, REPORT_STATUS, REACTION_SEVERITY, REACTION_OUTCOME, ACTION_TAKEN, DECHALLENGE, RECHALLENGE, CAUSALITY, REACTION_EXPECTED, EVIDENCE_PHOTO_TYPE, QUALIFICATIONS, PATIENT_GENDER, PATIENT_AGE_GROUP } from './types'
-import { getDeadlineStatus } from './services'
+import { getDeadlineStatus, getModuleTypeFromBusinessType } from './services'
 import { adrValidation } from './validation'
 
 /**
@@ -23,15 +23,11 @@ export const ADR_FORM = {
   /**
    * Get the module type from a business type.
    * The existing CareHub business_type determines the ADR presentation.
+   * Delegates to repositories.getModuleTypeFromBusinessType (re-exported by
+   * services) so there is one mapping, not two.
    */
   getModuleType(businessType) {
-    const typeMap = {
-      pharmacy: ADR_MODULE_TYPES.COMMUNITY_PHARMACY,
-      hospital: ADR_MODULE_TYPES.HOSPITAL,
-      industry: ADR_MODULE_TYPES.INDUSTRY,
-      skincare: ADR_MODULE_TYPES.SKINCARE,
-    }
-    return typeMap[businessType] || ADR_MODULE_TYPES.COMMUNITY_PHARMACY
+    return getModuleTypeFromBusinessType(businessType)
   },
 
   /**
@@ -47,6 +43,12 @@ export const ADR_FORM = {
       wellness: 'Wellness & Nutrition Center',
       manufacturer_importer: 'Manufacturer / Importer',
       wholesale: 'Wholesale / Distributor',
+      clinic: 'Clinic / Medical Centre',
+      laboratory: 'Laboratory',
+      aesthetic: 'Aesthetic Clinic',
+      spa: 'Spa / Wellness Centre',
+      cosmetics: 'Cosmetics / Beauty',
+      haircare: 'Hair-Care / Salon',
     }
     return labels[businessType] || 'Healthcare'
   },

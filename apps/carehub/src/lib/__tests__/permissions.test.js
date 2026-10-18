@@ -23,6 +23,7 @@ import {
   isModuleActive,
   isManagerRole,
 } from '../permissions.js'
+import { BUSINESS_TYPES } from '../../config/constants.js'
 
 describe('isManagerRole', () => {
   it('matches the preset role and the custom titles real tenants type', () => {
@@ -155,14 +156,14 @@ describe('custom roles (the `roles` table)', () => {
 })
 
 describe('getNavItems by business type', () => {
-  it('hides consultation for every business type except skincare and pharmacy', () => {
+  it('grants consultation to the consultation-driven types only', () => {
     const nav = (type) => getNavItems('Owner', type).map(([id]) => id)
-    expect(nav('skincare')).toContain('consultation')
-    expect(nav('pharmacy')).toContain('consultation')
-    expect(nav('hospital')).not.toContain('consultation')
-    expect(nav('manufacturer_importer')).not.toContain('consultation')
-    expect(nav('wholesale')).not.toContain('consultation')
-    expect(nav('dental')).not.toContain('consultation')
+    for (const type of ['skincare', 'pharmacy', 'clinic', 'aesthetic', 'spa', 'haircare']) {
+      expect(nav(type), `${type} should offer consultations`).toContain('consultation')
+    }
+    for (const type of ['hospital', 'laboratory', 'cosmetics', 'other', 'dental', 'manufacturer_importer', 'wholesale']) {
+      expect(nav(type), `${type} should not offer consultations`).not.toContain('consultation')
+    }
   })
 
   it('filters the business nav by the role’s allowed routes', () => {
@@ -224,18 +225,22 @@ describe('module registry (business type → modules)', () => {
     }
   })
 
-  it('keeps consultation a skincare+pharmacy-only module', () => {
+  it('keeps consultation scoped to the consultation family', () => {
     const ids = (type) => getModulesForType(type).map(([id]) => id)
-    expect(ids('skincare')).toContain('consultation')
-    expect(ids('pharmacy')).toContain('consultation')
-    expect(ids('dental')).not.toContain('consultation')
-    expect(ids('hospital')).not.toContain('consultation')
+    for (const type of ['skincare', 'pharmacy', 'clinic', 'aesthetic', 'spa', 'haircare']) {
+      expect(ids(type), `${type} should have consultation`).toContain('consultation')
+    }
+    for (const type of ['dental', 'hospital', 'laboratory', 'cosmetics']) {
+      expect(ids(type), `${type} should not have consultation`).not.toContain('consultation')
+    }
   })
 
-  it('labels clients as Patients for hospitals and Clients everywhere else', () => {
+  it('labels clients as Patients at hospitals and clinics, Clients everywhere else', () => {
     const tuple = (type) => getModulesForType(type).find(([id]) => id === 'clients')
     expect(tuple('hospital')[2]).toBe('Patients')
+    expect(tuple('clinic')[2]).toBe('Patients')
     expect(tuple('pharmacy')[2]).toBe('Clients')
+    expect(tuple('laboratory')[2]).toBe('Clients')
   })
 
   it('produces the same nav tuples the legacy exported lists carried', () => {
@@ -261,6 +266,84 @@ describe('module registry (business type → modules)', () => {
     expect(rolesForType('hospital')).toContain('Lab Technician')
     expect(rolesForType('wholesale')).toEqual([])
     expect(rolesForType('manufacturer_importer')).toEqual([])
+  })
+})
+
+describe('signup taxonomy (config/constants.js BUSINESS_TYPES)', () => {
+  const ids = (type) => getModulesForType(type).map(([id]) => id)
+  const ownerNav = (type) => getNavItems('Owner', type).map(([id]) => id)
+  const CLINICAL = ['reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging']
+  const ENTERPRISE = ['activity', 'discovery', 'orders', 'warehouses', 'stock', 'territories', 'messages', 'pv-tracker']
+
+  it('resolves every registered signup type to a working owner nav', () => {
+    for (const { id } of BUSINESS_TYPES) {
+      expect(ids(id).length, `${id} should resolve modules`).toBeGreaterThan(0)
+      expect(ownerNav(id), `${id} should reach the dashboard`).toContain('dashboard')
+      expect(ownerNav(id), `${id} owner should reach the wallet`).toContain('wallet')
+    }
+  })
+
+  it('never leaks clinical or enterprise modules into the signup taxonomy', () => {
+    for (const { id } of BUSINESS_TYPES) {
+      if (id === 'hospital') continue
+      for (const moduleId of CLINICAL) {
+        if (id === 'laboratory' && moduleId === 'lab') continue
+        expect(ids(id), `${id} must not see ${moduleId}`).not.toContain(moduleId)
+      }
+      for (const moduleId of ENTERPRISE) {
+        expect(ids(id), `${id} must not see ${moduleId}`).not.toContain(moduleId)
+      }
+    }
+  })
+
+  it('gives the appointment-driven types appointments and consultations', () => {
+    for (const type of ['clinic', 'aesthetic', 'spa', 'haircare']) {
+      expect(ids(type), `${type} should get appointments`).toContain('appointments')
+      expect(ids(type), `${type} should get consultations`).toContain('consultation')
+    }
+    // cosmetics and other are commerce-first, not appointment-driven.
+    for (const type of ['cosmetics', 'other']) {
+      expect(ids(type)).not.toContain('appointments')
+      expect(ids(type)).not.toContain('consultation')
+      expect(ids(type)).toContain('pos')
+      expect(ids(type)).toContain('inventory')
+    }
+  })
+
+  it('gives laboratories the lab bench and nothing else clinical', () => {
+    expect(ids('laboratory')).toContain('lab')
+    for (const moduleId of ['reception', 'triage', 'doctor', 'rx_inbox', 'imaging', 'appointments', 'consultation']) {
+      expect(ids('laboratory')).not.toContain(moduleId)
+    }
+    expect(ids('laboratory')).toContain('pos')
+    expect(ids('laboratory')).toContain('inventory')
+  })
+
+  it('normalizes unknown and empty business types to the Other set', () => {
+    const other = ids('other')
+    for (const type of ['mystery_type', '', null, undefined]) {
+      expect(ids(type), `${String(type)} should fall back to Other`).toEqual(other)
+    }
+  })
+
+  it('scopes preset roles for the signup taxonomy', () => {
+    expect(rolesForType('clinic')).toContain('Doctor')
+    expect(rolesForType('clinic')).not.toContain('Pharmacist')
+    expect(rolesForType('laboratory')).toContain('Lab Technician')
+    expect(rolesForType('laboratory')).not.toContain('Doctor')
+    expect(rolesForType('aesthetic')).toContain('Therapist')
+    expect(rolesForType('aesthetic')).not.toContain('Pharmacist')
+    expect(rolesForType('cosmetics')).not.toContain('Therapist')
+    expect(rolesForType('')).toEqual(rolesForType('other'))
+  })
+
+  it('orders clinic and laboratory navs around their core workflow', () => {
+    const clinic = ownerNav('clinic')
+    expect(clinic.indexOf('appointments')).toBeLessThan(clinic.indexOf('pos'))
+    const lab = ownerNav('laboratory')
+    expect(lab.indexOf('lab')).toBeLessThan(lab.indexOf('pos'))
+    const clinicSections = getNavGroups('Owner', 'clinic').map(g => g.id)
+    expect(clinicSections).not.toContain('clinical')
   })
 })
 

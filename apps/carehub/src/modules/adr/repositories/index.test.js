@@ -277,6 +277,15 @@ describe('adrReportRepository', () => {
       expect(getModuleTypeFromBusinessType('skincare')).toBe('skincare')
     })
 
+    it('maps the signup taxonomy onto its ADR presentation', () => {
+      expect(getModuleTypeFromBusinessType('clinic')).toBe('hospital')
+      expect(getModuleTypeFromBusinessType('laboratory')).toBe('hospital')
+      expect(getModuleTypeFromBusinessType('aesthetic')).toBe('skincare')
+      expect(getModuleTypeFromBusinessType('spa')).toBe('skincare')
+      expect(getModuleTypeFromBusinessType('haircare')).toBe('skincare')
+      expect(getModuleTypeFromBusinessType('cosmetics')).toBe('skincare')
+    })
+
     it('falls back to community_pharmacy for unknown business types', () => {
       expect(getModuleTypeFromBusinessType('unrecognized')).toBe('community_pharmacy')
     })
