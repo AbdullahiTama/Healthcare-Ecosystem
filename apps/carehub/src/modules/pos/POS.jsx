@@ -120,13 +120,24 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   const creditSales = allSales.filter(s => s.is_credit && s.balance > 0)
 
   const cats = ['All', ...Array.from(new Set(products.map(p => p.cat)))]
+  // The search box accepts typed text AND barcode scans ("Search products or
+  // scan..."), so a barcode query must match here too — without it, a scanned
+  // code filtered every product away and read as "No products match your
+  // search." even though the product existed.
+  const searchText = search.trim().toLowerCase()
   const visible = products.filter(p =>
     (filter === 'All' || p.cat === filter) &&
-    ((p.name || '').toLowerCase().includes(search.toLowerCase()) || (p.generic_name || p.genericName || '').toLowerCase().includes(search.toLowerCase()))
+    ((p.name || '').toLowerCase().includes(searchText) ||
+      (p.generic_name || p.genericName || '').toLowerCase().includes(searchText) ||
+      (p.barcode || '').trim().toLowerCase().includes(searchText))
   )
   // Services are always sellable; stock goods only when stock > 0. Anything
   // else is collected for the Out-of-Stock sheet instead of the grid.
   const isService = p => (p.cat || p.category) === 'Services'
+  // One barcode rule for every scan entry point (camera, hardware scanner,
+  // fallback prompt): trim only — a stray space from a scanner or a saved
+  // label must not break the lookup.
+  const findByBarcode = code => products.find(p => (p.barcode || '').trim() === String(code).trim())
   const outOfStock = visible.filter(p => !isService(p) && p.stock <= 0)
 
   // The stock/expiry/sort controls were rendered but never read, so choosing
@@ -202,6 +213,22 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     const f = cart.find(c => c.id === p.id)
     if (f) setCart(cart.map(c => c.id === p.id ? { ...c, qty: c.qty + 1 } : c))
     else setCart([...cart, { ...p, qty: 1 }])
+  }
+  // Hardware scanners type the code into the focused field and press Enter.
+  // When the whole query is a registered barcode, treat it as a scan and add
+  // the product exactly like the camera path does; anything else stays a plain
+  // text search (Enter never adds an arbitrary name match).
+  const onSearchKeyDown = e => {
+    if (e.key !== 'Enter') return
+    const code = search.trim()
+    if (!code) return
+    const match = findByBarcode(code)
+    if (!match) return
+    e.preventDefault()
+    if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
+    add(match)
+    showToast('Added: ' + match.name, { type: 'success' })
+    setSearch('')
   }
   const rmv = id => setCart(cart.filter(c => c.id !== id))
   const setQty = (id, v) => { const n = parseInt(v) || 0; if (n <= 0) rmv(id); else setCart(cart.map(c => c.id === id ? { ...c, qty: n } : c)) }
@@ -548,7 +575,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
               stream.getTracks().forEach(t => t.stop())
               setScanning(false)
               const code = codes[0].rawValue
-              const match = products.find(p => p.barcode === code || (p.name || '').toLowerCase().includes(code.toLowerCase()))
+              const match = findByBarcode(code) || products.find(p => (p.name || '').toLowerCase().includes(code.toLowerCase()))
               if (match) {
                 if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
                 add(match); showToast('Added: ' + match.name, { type: 'success' })
@@ -561,7 +588,13 @@ function POSInner({ brand, products, setProducts, role, perms }) {
       }).catch(() => { setScanning(false); showToast('Camera access denied. Check your browser permissions and try again.', { type: 'error' }) })
     } else {
       const code = prompt('Enter barcode number:')
-      if (code) { const m = products.find(p => (p.name || '').toLowerCase().includes(code.toLowerCase())); if (m) { if (!isService(m) && m.stock <= 0) { showToast(m.name + ' is out of stock.', { type: 'warning' }); return } add(m) } else setSearch(code) }
+      if (code) {
+        const m = findByBarcode(code) || products.find(p => (p.name || '').toLowerCase().includes(code.toLowerCase()))
+        if (m) {
+          if (!isService(m) && m.stock <= 0) { showToast(m.name + ' is out of stock.', { type: 'warning' }); return }
+          add(m); showToast('Added: ' + m.name, { type: 'success' })
+        } else setSearch(code)
+      }
     }
   }
 
@@ -778,7 +811,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 12px', minWidth: 0 }}>
               <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
-              <input ref={productSearchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder='Search products or scan...' aria-label='Search products'
+              <input ref={productSearchRef} value={search} onChange={e => setSearch(e.target.value)} onKeyDown={onSearchKeyDown} placeholder='Search products or scan...' aria-label='Search products'
                 style={{ flex: 1, border: 'none', outline: 'none', padding: '12px 0', fontSize: 13, background: 'transparent', color: navy, minWidth: 0 }} />
               <span style={{ color: gray400, fontSize: 11, padding: '0 8px' }}>Ctrl+K</span>
             </div>
