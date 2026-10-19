@@ -41,11 +41,11 @@ const type = async (id, value) => {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
   await act(async () => { setter.call(el, value); el.dispatchEvent(new Event('input', { bubbles: true })) })
 }
-const mount = async ({ entries = ['/dashboard/wallet'], role = 'Owner' } = {}) => {
+const mount = async ({ entries = ['/dashboard/wallet'], role = 'Owner', perms } = {}) => {
   await act(async () => {
     root.render(
       <MemoryRouter initialEntries={entries}>
-        <Wallet brand={{ id: 'b1' }} role={role} />
+        <Wallet brand={{ id: 'b1' }} role={role} perms={perms} />
       </MemoryRouter>
     )
   })
@@ -246,5 +246,29 @@ describe('Wallet top-up: the processing fee is shown before checkout (the server
     await act(async () => {})
     await type('topup-amount', '4000')
     expect(host.querySelector('[role="status"]')).toBeNull()
+  })
+})
+
+describe('a custom role granted the Wallet module sees it read-only', () => {
+  it('shows balances and history, and hides every money-moving control', async () => {
+    await mount({ role: 'Medical sales rep', perms: { nav: ['wallet', 'inventory'] } })
+    expect(host.textContent).toContain('₦5,000')                    // the balance is readable
+    expect(host.textContent).toMatch(/View only/)
+    expect(button('Withdraw')).toBeUndefined()
+    expect(button('Top Up')).toBeUndefined()
+    expect(host.textContent).not.toContain('restricted to the business Owner')
+  })
+
+  it('still never triggers a top-up verification from a return URL', async () => {
+    await mount({ entries: ['/dashboard/wallet?reference=ch_topup_b1_abcdef123456'], role: 'Medical sales rep', perms: { nav: ['wallet'] } })
+    expect(callsTo('/api/verify-wallet-topup')).toHaveLength(0)
+    expect(host.textContent).toMatch(/View only/)
+  })
+
+  it('a role without the grant still gets the restricted screen', async () => {
+    await mount({ role: 'Staff', perms: { nav: ['inventory'] } })
+    expect(host.textContent).toContain('restricted to the business Owner')
+    expect(button('Withdraw')).toBeUndefined()
+    expect(button('Top Up')).toBeUndefined()
   })
 })

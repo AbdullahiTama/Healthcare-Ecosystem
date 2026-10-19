@@ -21,7 +21,7 @@ const TYPE_LABELS = {
   refund_debit: 'refund', refund_restore: 'refund reversed', withdrawal: 'withdrawal', withdrawal_refund: 'withdrawal returned',
 }
 
-export default function Wallet({ brand, role }) {
+export default function Wallet({ brand, role, perms }) {
   const [wallet, setWallet] = useState(null)
   const [txs, setTxs] = useState([])
   const [withdrawals, setWithdrawals] = useState([])
@@ -282,6 +282,11 @@ export default function Wallet({ brand, role }) {
   const filtered = filter === 'all' ? txs : txs.filter(t => (filter === 'booking_credit' ? t.type === 'booking_credit' || t.type === 'shop_credit' : t.type === filter))
   const totalReceived = txs.filter(t => t.type === 'booking_credit' || t.type === 'shop_credit' || t.type === 'release').reduce((s, t) => s + (t.amount || 0), 0)
   const isOwner = role === 'Owner'
+  // A custom role the owner granted the Wallet module (a Wallet tick in the role editor) may SEE the money,
+  // never move it: Withdraw and Top Up stay owner-only here, and the server agrees (initiate-business-withdrawal
+  // authorises the verified owner, then requires the owner's PIN and a fresh emailed code). The predicate is the
+  // same one the route guard uses (perms.nav), so the page can never open for a role the guard would bounce.
+  const canView = isOwner || (Array.isArray(perms?.nav) && perms.nav.includes('wallet'))
   // Guidance while the owner types (validation on submit, not keystroke —
   // UX_PATTERNS): the Continue button stays disabled until the amount is
   // inside the server's bounds.
@@ -290,7 +295,7 @@ export default function Wallet({ brand, role }) {
   const topupHint = topupAmount !== '' && !topupValid ? 'Enter an amount between ₦100 and ₦100,000.' : undefined
 
   if (loading) return <Loading text="Loading wallet..." />
-  if (!isOwner) return (
+  if (!canView) return (
     <div style={{ padding: '32px', textAlign: 'center', color: gray400 }}>
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}><WalletIcon size={40} /></div>
       <div style={{ fontWeight: '700', color: gray600 }}>Wallet is restricted to the business Owner</div>
@@ -309,7 +314,7 @@ export default function Wallet({ brand, role }) {
         <StatCard icon={<ArrowUpCircle />} label="Pending Withdrawals" value={withdrawals.filter(w => w.status === 'reserved' || w.status === 'processing').length} sub="In progress" />
       </div>
 
-      {wallet?.available_balance > 0 && (
+      {isOwner && wallet?.available_balance > 0 && (
         <Card style={{ marginBottom: '16px', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ width: 40, height: 40, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Banknote size={18} /></div>
@@ -322,16 +327,25 @@ export default function Wallet({ brand, role }) {
         </Card>
       )}
 
-      <Card style={{ marginBottom: '16px', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: 40, height: 40, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PlusCircle size={18} /></div>
-          <div>
-            <div style={{ fontSize: '13px', fontWeight: '800', color: navy }}>Add funds</div>
-            <div style={{ fontSize: '12px', color: gray500 }}>Top up your wallet by card. Minimum ₦100.</div>
+      {isOwner && (
+        <Card style={{ marginBottom: '16px', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: 40, height: 40, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PlusCircle size={18} /></div>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: '800', color: navy }}>Add funds</div>
+              <div style={{ fontSize: '12px', color: gray500 }}>Top up your wallet by card. Minimum ₦100.</div>
+            </div>
           </div>
-        </div>
-        <TealBtn onClick={() => { setTopupAmount(''); setShowTopup(true) }}><PlusCircle size={14} style={{ marginRight: 6 }} />Top Up</TealBtn>
-      </Card>
+          <TealBtn onClick={() => { setTopupAmount(''); setShowTopup(true) }}><PlusCircle size={14} style={{ marginRight: 6 }} />Top Up</TealBtn>
+        </Card>
+      )}
+
+      {!isOwner && (
+        <Card style={{ marginBottom: '16px', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <WalletIcon size={16} style={{ color: gray400, flexShrink: 0 }} />
+          <span style={{ fontSize: '12.5px', color: gray500 }}>View only — withdrawals and top-ups are managed by the business owner.</span>
+        </Card>
+      )}
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {['all', 'booking_credit', 'release', 'refund', 'withdrawal'].map(s => {
@@ -370,7 +384,7 @@ export default function Wallet({ brand, role }) {
         </>
       )}
 
-      {showWithdraw && (
+      {isOwner && showWithdraw && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
           <Card style={{ maxWidth: '480px', width: '100%', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ fontSize: '16px', fontWeight: '800', color: navy, marginBottom: '12px' }}>Withdraw to Bank</div>
@@ -447,7 +461,7 @@ export default function Wallet({ brand, role }) {
         </div>
       )}
 
-      {showTopup && (
+      {isOwner && showTopup && (
         <div role="dialog" aria-modal="true" aria-label="Top up wallet" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
           <Card style={{ maxWidth: '420px', width: '100%', padding: '24px' }}>
             <div style={{ fontSize: '16px', fontWeight: '800', color: navy, marginBottom: '12px' }}>Top Up Wallet</div>
