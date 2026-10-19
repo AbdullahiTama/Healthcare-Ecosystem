@@ -42,8 +42,11 @@ Ordering: `clinic` has its own `NAV_ORDER` list (appointment book and consultati
 
 Unchanged by the taxonomy work:
 
-- `wallet` is in the universal set, so **every owner of every business type** sees Wallet in the nav; the wallet row itself is created at signup and RLS (`business_id IN current_business_ids()`) is authoritative.
-- No staff preset (any business type) includes Wallet in its nav. To give a staff member wallet access — e.g. a "Medical sales rep" — create a **custom role** (Staff → Roles → New Role) named exactly how they'll refer to it, tick **Wallet**, and assign it to that person. `getPerms` resolves the custom role by name.
+- `wallet` is in the universal set, so **every owner of every business type** sees Wallet in the nav. RLS (`business_id IN current_business_ids()`) is authoritative.
+- The wallet row is **created by the first credit**, not at signup — a business without one simply reads zero. (Verified 2026-10-19: **3 of 28** production businesses have a row; the missing 25 are benign.)
+- No staff preset (any business type) includes Wallet in its nav. A **custom role** (Staff → Roles → New Role) can tick **Wallet**; `getPerms` resolves the custom role by name, so the tick adds the nav item and passes the route guard.
+
+**Known gap — decision owed (found 2026-10-19).** The Wallet *page* refuses every role that is not literally `Owner`: `Wallet.jsx` hard-gates on `role === 'Owner'` and renders "Wallet is restricted to the business Owner" (pinned by `Wallet.test.jsx`). So the custom-role tick currently ends in a restriction screen. Either relax the page gate (view-only is the natural shape — withdrawals and top-ups need the owner's PIN/OTP) or drop the grant claim from staff docs. Tracked as follow-up 6 in `docs/superpowers/plans/2026-10-18-business-type-taxonomy-registry.md`.
 
 ## ADR presentation mapping
 
