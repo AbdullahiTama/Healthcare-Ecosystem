@@ -408,11 +408,13 @@ export async function commitImport({ items, repo, businessId, scope, createdBy, 
   if (plan.unresolved > 0) throw new Error(plan.unresolved + ' possible duplicate(s) still need a decision.')
 
   const counts = summarise(items)
-  const batch = await repo.createBatch(businessId, {
+  // A platform admin with no company has nothing to own a batch record, so the rows
+  // land with no batch (import_batch_id NULL) and the batch/error log is skipped.
+  const batch = businessId ? await repo.createBatch(businessId, {
     file_name: fileName || null, total_rows: counts.total, new_count: counts.new,
     possible_duplicate_count: counts.possible, confirmed_duplicate_count: counts.confirmed,
     invalid_count: counts.invalid, review_count: counts.review, created_by: createdBy || null,
-  })
+  }) : { id: null }
 
   let imported = 0
   let merged = 0
@@ -446,7 +448,7 @@ export async function commitImport({ items, repo, businessId, scope, createdBy, 
       onProgress && onProgress('importing', imported + merged, total)
     }
     const bad = items.filter((it) => it.status === ITEM_STATUS.INVALID)
-    for (let i = 0; i < bad.length; i += COMMIT_CHUNK) {
+    for (let i = 0; businessId && i < bad.length; i += COMMIT_CHUNK) {
       await repo.addImportErrors(businessId, batch.id, bad.slice(i, i + COMMIT_CHUNK).flatMap((it) =>
         it.errors.map((e) => ({ row_number: it.rowNumber, field: e.field, message: e.message, raw: it.raw }))))
     }
@@ -455,7 +457,7 @@ export async function commitImport({ items, repo, businessId, scope, createdBy, 
   }
 
   const status = failure ? (failure.message === 'cancelled' ? 'cancelled' : 'failed') : 'completed'
-  await repo.finishBatch(batch.id, businessId, { status, imported_count: imported + merged, skipped_count: plan.skipped + plan.keptExisting })
+  if (businessId) await repo.finishBatch(batch.id, businessId, { status, imported_count: imported + merged, skipped_count: plan.skipped + plan.keptExisting })
   if (failure && status === 'failed') {
     const err = new Error(`Import stopped after ${imported + merged} record(s): ${failure.message}`)
     err.partial = { imported, merged, batchId: batch.id }

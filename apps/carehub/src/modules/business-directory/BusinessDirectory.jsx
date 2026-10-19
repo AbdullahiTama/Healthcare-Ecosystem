@@ -217,7 +217,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
       )}
 
       <div role='tablist' aria-label='Directory sections' style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-        {TABS.filter(([id]) => (canManage || id === 'businesses' || id === 'categories') && !(platformScope && !['businesses', 'import'].includes(id)) && !(id === 'import' && !businessId)).map(([id, label]) => (
+        {TABS.filter(([id]) => (canManage || id === 'businesses' || id === 'categories') && !(platformScope && !['businesses', 'import'].includes(id))).map(([id, label]) => (
           <button key={id} role='tab' aria-selected={tab === id} onClick={() => setTab(id)}
             style={{ fontSize: 12.5, fontWeight: 800, padding: '9px 16px', borderRadius: 10, cursor: 'pointer', border: `1px solid ${tab === id ? tealDeep : border}`, background: tab === id ? navy : 'white', color: tab === id ? 'white' : gray500 }}>
             {label}
@@ -250,7 +250,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
             onRowClick={(r) => setViewing(r)}
             empty={filtered
               ? <Empty cause='filtered' message='No businesses match these filters.' action='Clear filters' onAction={() => setFilters({ search: '', categoryId: '', state: '', verification: '', source: '', active: 'active' })} />
-              : <Empty message={businessId ? 'Your directory is empty. Add a business or import a spreadsheet.' : 'The platform directory is empty. Add a business to start it.'} action={canManage && businessId ? 'Import businesses' : undefined} onAction={() => setTab('import')} />}
+              : <Empty message={businessId ? 'Your directory is empty. Add a business or import a spreadsheet.' : 'The platform directory is empty. Add a business or import a spreadsheet.'} action={canManage ? 'Import businesses' : undefined} onAction={() => setTab('import')} />}
             actions={canManage ? (r) => (
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }} onClick={(e) => e.stopPropagation()}>
                 <GhostBtn onClick={() => setEditing(r)}>Edit</GhostBtn>
@@ -274,7 +274,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
         <>
           <ImportWizard businessId={businessId} scope={scopeId} repo={repo} categories={lookups.categories} subcategories={lookups.subcategories}
             loadExisting={() => repo.getDedupIndexRows(scopeId)} createdBy={actor} showToast={showToast}
-            onImported={() => { indexRef.current = null; load(); lookups.reload(); repo.getBatches(businessId, 10).then(setBatches).catch(() => {}) }} />
+            onImported={() => { indexRef.current = null; load(); lookups.reload(); businessId && repo.getBatches(businessId, 10).then(setBatches).catch(() => {}) }} />
           {batches.length > 0 && (
             <Card style={{ padding: 14, marginTop: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 800, color: navy, marginBottom: 8 }}>Recent imports</div>

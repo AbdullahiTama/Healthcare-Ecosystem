@@ -47,10 +47,10 @@ describe('BusinessDirectory in platform mode (admin console, platform admin with
     expect(host.textContent).toContain('The platform directory is empty')
   })
 
-  it('does not touch company-only data (territories, import batches) and hides Import', async () => {
+  it('does not touch company-only data (territories, import batches) and offers Import', async () => {
     await mount(<BusinessDirectory brand={null} perms={{ canManageDirectory: true }} platformMode />)
     expect(calls.some((c) => c[0] === 'territories' || c[0] === 'getBatches')).toBe(false)
-    expect(tabs()).toEqual(['Businesses'])
+    expect(tabs()).toEqual(['Businesses', 'Import'])
   })
 
   it('lists platform rows when there are some', async () => {
