@@ -15,15 +15,20 @@ import FacilityPicker from './FacilityPicker.jsx'
 // Business Directory: optional nearby-business suggestion + the Field Work switcher.
 import FieldWorkSwitch from '../field-work/FieldWorkSwitch'
 import NearbyBusinessPicker from '../business-directory/components/NearbyBusinessPicker'
+import CheckInPanel from '../checkins/CheckInPanel.jsx'
+import TeamLocations from '../checkins/TeamLocations.jsx'
 import { isManagerRole } from '../../lib/permissions'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
-import { watchTable } from '../../lib/realtime'
+import { watchTable, subscribeChanges } from '../../lib/realtime'
 import { Card, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 import { theme } from '../../styles/theme'
 import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
+
+// How many activities one page of the feed fetches (and the size that signals "there may be older ones").
+const ACTIVITY_PAGE = 100
 
 const FIELD_TYPES = ['text', 'long text', 'number', 'date', 'choice']
 
@@ -108,7 +113,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
   const [territories, setTerritories] = useState([])
   const [myViewers, setMyViewers] = useState([])
   const [loading, setLoading] = useState(true)
-  const [liveOn, setLiveOn] = useState(false)
+  const [liveStatus, setLiveStatus] = useState('connecting') // connecting | live | disconnected
 
   const [view, setView] = useState('feed')
   // Scope tabs (managers only): 'mine' shows the manager's own logs, 'team'
@@ -116,6 +121,8 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
   // has no staff row, so their "mine" would be empty — they start on 'team'.
   const [scope, setScope] = useState(isOwner ? 'team' : 'mine')
   const [counts, setCounts] = useState(null)
+  const [hasOlder, setHasOlder] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
   const [dateRange, setDateRange] = useState('all')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -170,6 +177,11 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
 
   useEffect(() => { load() }, [brand?.id])
 
+  // Latest list for the realtime handlers below, which outlive a single render.
+  const activitiesRef = useRef([])
+  useEffect(() => { activitiesRef.current = activities })
+  const prevLiveRef = useRef('connecting')
+
   useEffect(() => {
     if (!brand || !brand.id) return
     const stop = watchTable('field_activities', brand.id, function (row) {
@@ -177,12 +189,56 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
         if (prev.some(function (a) { return a.id === row.id })) return prev
         return [row].concat(prev)
       })
-      setLiveOn(true)
+    }, function (status) {
+      setLiveStatus(status)
+      // Rows that arrived while the connection was down are not replayed, so
+      // catch up with one refetch the moment it is live again.
+      if (status === 'live' && prevLiveRef.current === 'disconnected') load()
+      prevLiveRef.current = status
     })
-    setLiveOn(true)
     return function () {
       stop()
-      setLiveOn(false)
+    }
+  }, [brand?.id])
+
+  // Reactions and comments change a row that is already on screen, so there is
+  // nothing to insert: refetch just those two lists (newest 100 activities, to
+  // keep the request URL short), debounced so a burst is one request. These
+  // tables only deliver if they are in the supabase_realtime publication
+  // (carehub_20261127_realtime_activity_tables.sql); without it nothing breaks,
+  // the lists simply refresh on the person's own actions as before.
+  useEffect(() => {
+    if (!brand || !brand.id) return
+    let timer = null
+    const refresh = function () {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(async function () {
+        const ids = activitiesRef.current.slice(0, 100).map(function (a) { return a.id })
+        if (ids.length === 0) return
+        try {
+          const [rs, cs] = await Promise.all([
+            liveActivityRepository.getActivityReactions(ids),
+            liveActivityRepository.getActivityComments(ids),
+          ])
+          const group = function (list) {
+            const m = {}
+            ;(list || []).forEach(function (x) { (m[x.activity_id] = m[x.activity_id] || []).push(x) })
+            return m
+          }
+          // Keep entries for older pages the person loaded; replace the refreshed ones.
+          setReactionsByAct(function (prev) { const n = { ...prev }; ids.forEach(function (i) { delete n[i] }); return Object.assign(n, group(rs)) })
+          setCommentsByAct(function (prev) { const n = { ...prev }; ids.forEach(function (i) { delete n[i] }); return Object.assign(n, group(cs)) })
+        } catch (e) {
+          console.error('Live refresh of reactions/comments failed:', e)
+        }
+      }, 600)
+    }
+    const stopR = subscribeChanges({ table: 'activity_reactions', event: '*' }, refresh)
+    const stopC = subscribeChanges({ table: 'activity_comments', event: '*' }, refresh)
+    return function () {
+      if (timer) clearTimeout(timer)
+      stopR()
+      stopC()
     }
   }, [brand?.id])
 
@@ -196,6 +252,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
       const ters = await territoryRepository.getAll(brand.id)
       setFields(flds || [])
       setActivities(acts || [])
+      setHasOlder((acts || []).length >= ACTIVITY_PAGE)
       setStaffList(stf || [])
       setTerritories(ters || [])
 
@@ -248,6 +305,40 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
     }
     loadPending()
     setLoading(false)
+  }
+
+  // Older pages are fetched on request and keyed by created_at, so the feed never
+  // grows past what the person asked to see, and viewers/reactions/comments are
+  // fetched only for the rows of that page.
+  async function loadOlder() {
+    if (!brand || !brand.id || loadingOlder || activities.length === 0) return
+    setLoadingOlder(true)
+    try {
+      const oldest = activities[activities.length - 1].created_at
+      const page = await liveActivityRepository.getFieldActivities(brand.id, { limit: ACTIVITY_PAGE, before: oldest })
+      const rows = (page || []).filter(function (r) { return !activities.some(function (a) { return a.id === r.id }) })
+      setHasOlder((page || []).length >= ACTIVITY_PAGE)
+      if (rows.length === 0) return
+      const ids = rows.map(function (a) { return a.id })
+      const [vs, rs, cs] = await Promise.all([
+        liveActivityRepository.getActivityViewers(ids),
+        liveActivityRepository.getActivityReactions(ids),
+        liveActivityRepository.getActivityComments(ids),
+      ])
+      const group = function (list, prev) {
+        const next = { ...prev }
+        ;(list || []).forEach(function (x) { next[x.activity_id] = (next[x.activity_id] || []).concat(x) })
+        return next
+      }
+      setActivities(function (prev) { return prev.concat(rows) })
+      setViewersByAct(function (prev) { return group(vs, prev) })
+      setReactionsByAct(function (prev) { return group(rs, prev) })
+      setCommentsByAct(function (prev) { return group(cs, prev) })
+    } catch (e) {
+      showToast('Could not load older activity: ' + e.message, { type: 'error' })
+    } finally {
+      setLoadingOlder(false)
+    }
   }
 
   async function loadPending() {
@@ -762,10 +853,14 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
   return (
     <>
       <PageHeader
-        title={<>Live Field Activity{liveOn && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: '800', color: danger, background: dangerBg, padding: '3px 9px', borderRadius: '20px', border: `1px solid ${danger}`, marginLeft: '8px', verticalAlign: 'middle' }}>
+        title={<>Live Field Activity{liveStatus === 'live' ? (
+          <span data-live-status={liveStatus} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: '800', color: danger, background: dangerBg, padding: '3px 9px', borderRadius: '20px', border: `1px solid ${danger}`, marginLeft: '8px', verticalAlign: 'middle' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: danger }} />
             LIVE
+          </span>
+        ) : (
+          <span data-live-status={liveStatus} title={liveStatus === 'connecting' ? 'Connecting to live updates' : 'Live updates are off. Reload to reconnect.'} style={{ display: 'inline-flex', alignItems: 'center', fontSize: '10px', fontWeight: '800', padding: '3px 9px', borderRadius: '20px', border: '1px solid currentColor', marginLeft: '8px', verticalAlign: 'middle', opacity: 0.6 }}>
+            {liveStatus === 'connecting' ? 'CONNECTING' : 'NOT LIVE'}
           </span>
         )}</>}
         description="Reps log what happens in the field. Tagged managers see it the moment it lands, and can reply."
@@ -783,6 +878,9 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
       <div style={{ padding: '24px', maxWidth: '1100px' }}>
         <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
         <FieldWorkSwitch current='activity' allowed={allowedModules} />
+
+      <CheckInPanel businessId={brand && brand.id} />
+      {isManager && <TeamLocations businessId={brand && brand.id} />}
 
       {!isOwner && myViewers.length === 0 && (
         <div style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
@@ -1159,6 +1257,12 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
               </Card>
             )
           })}
+        </div>
+      )}
+
+      {!loading && hasOlder && (
+        <div style={{ textAlign: 'center', margin: '16px 0' }}>
+          <GhostBtn onClick={loadOlder} disabled={loadingOlder}>{loadingOlder ? 'Loading...' : 'Load older activity'}</GhostBtn>
         </div>
       )}
 

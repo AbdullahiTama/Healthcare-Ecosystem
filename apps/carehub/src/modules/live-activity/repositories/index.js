@@ -50,8 +50,12 @@ export function createLiveActivityRepository({ request = sbFetch } = {}) {
       }
     },
 
-    async getFieldActivities(businessId, { limit = 100 } = {}) {
-      return request('field_activities?business_id=eq.' + businessId + '&order=created_at.desc&select=*&limit=' + limit)
+    // Newest first. `before` (an ISO timestamp, the created_at of the oldest row
+    // already shown) turns this into keyset paging: the next page is strictly older.
+    async getFieldActivities(businessId, { limit = 100, before = null } = {}) {
+      let path = 'field_activities?business_id=eq.' + businessId
+      if (before) path += '&created_at=lt.' + encodeURIComponent(before)
+      return request(path + '&order=created_at.desc&select=*&limit=' + limit)
     },
 
     async countFieldActivities(businessId, staffId) {
