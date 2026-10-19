@@ -57,9 +57,49 @@ Surface: the `discovery` module (Facility Discovery) now opens on a **Business d
 |---|---|---|
 | `VITE_GOOGLE_MAPS_BROWSER_KEY` | carehub build env | Maps JavaScript API, browser key restricted by HTTP referrer and by API |
 
+## Company, representative and field-activity integration (Phases 5-8)
+
+**Reused, not rebuilt.** Company membership is the existing model: the business owner (login email = `businesses.email`) and `staff` rows (`business_id`, `email`, `status`, `role`). Territories and `rep_territories` are unchanged. A person can belong to several businesses (membership is looked up per business), and nothing assumes one global company per user. No parallel user system was added.
+
+**Check-ins** (`carehub_20261123_staff_checkins.sql`): see `CareHub-Location-and-Privacy.md`. Explicit, append-only, written only through `record_checkin()` which checks the caller's own membership; read by managers only through `manager_checkin_overview()`, which logs each access.
+
+**Field activity link** (`carehub_20261124_field_activity_directory_link.sql`): optional `directory_business_id` on a report. The logger shows "Possible nearby business (optional)" from the directory within 300 m of the position already captured for the report; nothing is pre-selected; the rep presses Select; the fields are sent only then; the database refuses an unconfirmed link and copies the business name itself. A report without a link is unchanged. Search, viewing and GPS proximity never write anything.
+
+**Field activity access** (`carehub_20261125_field_activity_access.sql`) and **staff privilege guard** (`carehub_20261126_staff_privilege_guard.sql`) are behaviour changes for findings S3-S5 and S8. See their headers; both need a product decision and a check of the live policies before applying.
+
+**Paging**: the feed fetches 100 activities, with an on-request "Load older activity" button (keyset on `created_at`; viewers, reactions and comments are fetched only for each new page).
+
+**Realtime**: the socket now carries the user's JWT and the LIVE badge needs a confirmed subscription (commit `66595da`). Not covered: live updates for reactions and comments (only INSERTs on `field_activities` are watched) and automatic reconnection (a dropped channel shows NOT LIVE until reload). Delivery to a second signed-in session has not been tested on Supabase.
+
+### Administrative ownership
+
+| Concern | Where it is decided | Default today |
+|---|---|---|
+| Who administers the shared directory | `is_directory_admin()` (one function) | `is_platform_admin()` |
+| Who sees the Directory console tab | platform permission `Directory` | UI only |
+| What a company can do to the directory | read active rows, search, export (if `canExportReports`), link a business to its own report | nothing else |
+| Company-specific notes/prospects | not built; would be a separate company-scoped table, never columns on the global record | n/a |
+
+**Decision for the product owner: CareFind administration or CareHub administration owns the directory.** Switching is a change to the body of `is_directory_admin()` (for example reading a `directory_admins` table or a claim), with no table, policy or client change. No email address is hardcoded anywhere. The `Directory` platform permission hides the console but is not the security boundary.
+
+### Migration order (all prepared, none applied)
+
+| # | File | Kind |
+|---|---|---|
+| 1 | `carehub_20261119_discover_facilities_cursor_lockdown` | security fix (S1, S2) |
+| 2 | `carehub_20261120_business_directory` | new tables |
+| 3 | `carehub_20261121_directory_imports` | new table |
+| 4 | `carehub_20261122_directory_search` | new function |
+| 5 | `carehub_20261123_staff_checkins` | new tables and functions |
+| 6 | `carehub_20261124_field_activity_directory_link` | additive columns |
+| 7 | `carehub_20261125_field_activity_access` | **behaviour change** (S3-S5) |
+| 8 | `carehub_20261126_staff_privilege_guard` | **behaviour change** (S8) |
+
+1-6 are additive or strictly tightening a function and are independent of the two behaviour changes. 7 and 8 should be reviewed against the live policies first.
+
 ## Not yet built
 
-Check-ins and location history (5-6), field-activity business linking and activity RLS hardening (7). RLS for check-ins, activity access and company isolation is not written yet.
+Retention/purge for check-ins, merge in the import flow, live reaction/comment updates, realtime auto-reconnect, company-specific prospect notes, an admin editor for category names, and any run against a real Supabase branch.
 
 ## Apply and rollback
 

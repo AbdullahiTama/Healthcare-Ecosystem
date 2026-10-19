@@ -71,6 +71,7 @@ Central directory with verification/audit; categories and subcategories; admin C
 | S5 | `field_activities` insert has no check that `staff_id`/`rep_name` match the caller, so one rep can log activity as another, and GPS columns are fully client-asserted. | same | Medium |
 | S6 | `facilities_cache` can still be written with fabricated `source='detected'` rows by any member (acknowledged residual risk in migration `20260823_facility_review_authorization`). | that migration's header | Low-Medium |
 | S7 | Overpass and Nominatim are called straight from the browser: no auth, no rate limiting, user coordinates sent to third parties; Nominatim's usage policy requires a valid identifying referer/UA and forbids heavy use. | `places.js`, `repositories/index.js:127` | Low-Medium (privacy and ToS) |
+| S8 | **Staff can promote themselves.** `staff` has one `FOR ALL` business-scoped policy, so any staff member can set their own `role` to a manager role, create manager accounts, change status/email or delete colleagues. `is_business_manager()` (and everything built on it) trusts the `role` text. Demonstrated on PGlite against the pilot policy. | `sql/phase2_rls_pilot.sql:150`, `scripts/db-tests/staff.pglite.mjs` | High if live matches |
 
 ## 9. Behavioural defects against the brief
 
@@ -83,6 +84,10 @@ Central directory with verification/audit; categories and subcategories; admin C
 | B5 | `verificationStatus` (`facilityDiscovery.js:37`) returns `VERIFIED` purely because the GPS fix is within 150 m of a facility. The brief says GPS proximity is not proof, and that "verified" must come from trusted system data. The label must be renamed or decoupled (the stored `facility_verified` is documented as distance-only). The branch for OSM/Google at lines 44-49 is also dead logic (both branches return the same value). |
 | B6 | Two coordinate column pairs on `businesses` (`latitude/longitude`, `lat/lng`). |
 | B7 | `fetchCareFindFacilities` treats the *tenant* table as a public directory with no consent/listing flag. |
+
+## 9a. Status after implementation (2026-10-19)
+
+S1, S2, S3, S4, S5, S8 and B1/B2 have fixes written. **None is applied**; S3-S5 and S8 need a product decision (see the migration headers). Everything else in this baseline is unchanged. See `CareHub-Business-Directory-and-Discovery.md` for the migration order and `CareHub-Enterprise-Test-Report.md` for results.
 
 ## 10. Dependencies and external services
 
