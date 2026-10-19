@@ -1,5 +1,8 @@
 # CareHub Business Directory and Discovery
 
+> **STATUS, 2026-10-19: RETIRED DESIGN. Do not implement or apply anything described in the directory, import, merge and discovery sections of this document.** They describe a second, CareHub-hosted directory that duplicates the one already live in CareFind (`directory_businesses` and friends, commits `c651fed` and `4331e88`). The migrations are in `docs/architecture/retired-migrations/` with the reason for each. What remains valid from this work: check-ins and location history (`CareHub-Location-and-Privacy.md`), the activity-access hardening, the realtime fixes, and the ideas being ported onto the live directory (Excel import, reviewed merge). The live directory's ownership model is the existing one: rows with `business_id` NULL are the platform-wide directory curated by a platform admin; rows with a `business_id` belong to that company and are managed through `can_manage_directory()`.
+
+
 Status: Phases 1-4 written. **Nothing here is applied to any database.** The migrations were exercised on PGlite (real Postgres compiled to WebAssembly) by `scripts/db-tests/directory.pglite.mjs`: 63 checks pass (apply, re-apply, grants, RLS, triggers, constraints, RPCs, radius maths). That harness uses stand-ins for Supabase's `auth` schema and the tenant tables, so it is **not** a substitute for a run against a Supabase branch. Baseline and findings: `CareHub-Enterprise-Implementation-Baseline.md`.
 
 ## Ownership boundary

@@ -1,4 +1,6 @@
--- Field activity access hardening (baseline findings S3-S5). PREPARED, NOT APPLIED.
+-- Field activity access hardening (baseline findings S3-S5).
+-- APPLIED TO PRODUCTION 2026-10-19 as carehub_20261131_field_activity_access (the applied copy omits the
+-- no-op DROP POLICY IF EXISTS lines; this file keeps them so it can be re-run).
 -- Reworked 2026-10-19 against the LIVE schema (renamed from 20261125). Approved in principle by
 -- the product owner; to be applied only after the rolled-back live run is reviewed.
 --

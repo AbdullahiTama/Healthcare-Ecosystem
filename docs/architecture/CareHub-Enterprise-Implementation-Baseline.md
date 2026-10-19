@@ -1,5 +1,8 @@
 # CareHub Enterprise Business Directory and Live Field Operations: Implementation Baseline
 
+> **CORRECTION, 2026-10-19: parts of this baseline are wrong.** It was written from CareHub-only searches and concluded that no business directory exists. **One does, and it is live**: the CareFind Business Directory and Business Discovery (commits `c651fed`, `4331e88`, spec 0001), with `directory_businesses`, `directory_categories`, `directory_subcategories`, `directory_import_batches`, `directory_import_errors`, `directory_duplicate_dismissals`, `directory_reports`, the rep-activity functions (`directory_unvisited`, `directory_coverage_summary`, `directory_rep_activity`, `directory_visit_totals`), and `field_activities.directory_business_id` with its link guard. Sections 2, 7 and 12 below (what exists, what is missing, and the recommendation to build new `directory_*` tables) are therefore **superseded**; the duplicate design built from them was retired (`docs/architecture/retired-migrations/`). Finding S8 (staff self-promotion) is also **not true in production**: the live `guard_staff_writes` trigger already prevents it; it was true only of the repo's older pilot policy. S1, S3, S4, S5 and B1/B2 were real; their status is in `CareHub-Enterprise-Test-Report.md` section 9.
+
+
 Phase 0 audit. Branch `main` at `fa2d735`. Written 2026-10-19.
 Method: static reading of the checked-out repository. **No live database, Supabase dashboard or Google Cloud access was used**, so every database statement below is derived from migration files in `supabase/migrations/` and may differ from production (see `reference_supabase_carehub_gotchas`: files that were never applied exist in this repo).
 

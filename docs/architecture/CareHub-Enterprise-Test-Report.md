@@ -146,3 +146,21 @@ Legend: PASS = verified as described; PARTIAL = code and tests exist but a state
 - Remaining blockers explicit: PASS (section 7)
 
 The feature is **not complete** by the brief's own definition: it has code and tests, but lacks the Google credentials, a Supabase run, a browser and responsive check, the realtime two-session test, and product decisions.
+
+## 9. Production application and verification (2026-10-19, project `szdybxmgmhndoytqanfb`)
+
+A pre-flight against the live database found the repository's assumptions were wrong in several places (a directory already existed, `is_business_manager()` was not executable by signed-in users, staff privilege escalation was already blocked, realtime tables were already published). The plan changed accordingly. Everything below was applied as **tracked migrations** and verified by re-reading the catalog and by role-impersonating checks inside transactions that always roll back.
+
+| Migration (live name) | What | Verification |
+|---|---|---|
+| `carehub_20261129_revoke_anon_discover_facilities_cursor` | Revoke PUBLIC/anon execute on the legacy discovery RPC (finding S1). Body unchanged | proacl now `{postgres, authenticated, service_role}`; anon denied 42501; signed-in still works; security advisor 163 to 162, nothing new |
+| `carehub_20261130_staff_checkins` | Append-only check-ins, access log, `record_checkin`, `manager_checkin_overview` | Rolled-back live run: 56 checks, 54 PASS, 2 FAIL that were wrong expectations (log count, anon error). After applying: catalog check (ACLs, grants, RLS, policies, triggers) and a 13-check smoke test, all PASS |
+| `carehub_20261131_field_activity_access` | Restrictive policies on activities, viewers, reactions, comments (S3-S5) | Same live run (before/after), plus real-data check: the owner still reads all 11 activities, tags (1) and comments (2); the staff rep reads exactly the 2 they wrote; an unrelated company reads 0 |
+| `carehub_20261132_grant_is_business_manager_to_authenticated` | Fixes a pre-existing live bug: manager facility review (confirm/dismiss) failed with permission denied | 13-check rolled-back run: before = 42501, after = works; reps still cannot self-confirm; other companies and anon unaffected |
+| `carehub_20261133_pin_search_path_location_tables_append_only` | Advisor finding on the new trigger function | proconfig verified |
+
+Final advisor delta against the original 163 findings: 9 new, all explained (8 `authenticated_security_definer_function_executable` for the intentionally callable RPCs, helpers and `is_business_manager`; the 9th, `function_search_path_mutable`, was then fixed by migration 20261133), 1 removed (the anonymous-executable discovery function).
+
+Reproducible evidence: `scripts/db-tests/live-rollback-verification.sql` (run it before applying; it ends in a deliberate error carrying PASS/FAIL lines), plus the PGlite suites `checkins` (60) and `activity` (49) under production-like permissions.
+
+Honest limits: the **screens** for check-ins are not deployed (the branch is not merged); the realtime delivery between two real sessions is still untested; behaviour for roles beyond the one live company with activity was verified with fixtures only.

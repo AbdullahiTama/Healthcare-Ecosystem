@@ -1,4 +1,7 @@
--- Explicit staff check-ins and location history. PREPARED, NOT APPLIED.
+-- Explicit staff check-ins and location history.
+-- APPLIED TO PRODUCTION 2026-10-19 as carehub_20261130_staff_checkins (the applied copy omits the
+-- no-op DROP ... IF EXISTS lines; this file keeps them so it can be re-run). search_path was pinned
+-- afterwards by carehub_20261133 and is included here from the start.
 -- Reworked 2026-10-19 against the LIVE schema (renamed from 20261123). Exercised on PGlite
 -- (scripts/db-tests/checkins.pglite.mjs) and by a rolled-back run against the live database.
 --
@@ -73,7 +76,7 @@ CREATE INDEX IF NOT EXISTS location_access_log_business_idx ON public.location_a
 
 -- Append-only, even against the table owner's casual UPDATE/DELETE.
 CREATE OR REPLACE FUNCTION public.location_tables_append_only()
-RETURNS trigger LANGUAGE plpgsql AS $$
+RETURNS trigger LANGUAGE plpgsql SET search_path TO 'public', 'pg_temp' AS $$
 BEGIN
   RAISE EXCEPTION '% is append-only', TG_TABLE_NAME USING ERRCODE = '42501';
 END $$;

@@ -1,6 +1,6 @@
 # CareHub Location and Privacy
 
-Status: check-ins written and database-tested on PGlite (60 checks). **Not applied to any database; not run on Supabase.** Business-link confirmation on field reports (Phase 7) is not built yet.
+Status: **applied to production 2026-10-19** (`carehub_20261130_staff_checkins`, `carehub_20261133_pin_search_path_location_tables_append_only`). Verified before applying by a rolled-back run against the live schema, and after applying by a rolled-back smoke test and a catalog check (function ACLs, table privileges, RLS, triggers). The screens that call it (`CheckInPanel`, `TeamLocations` in Live Field Activity) are in the `feat/enterprise-directory` branch and are **not deployed** until that branch merges. Business-link confirmation on field reports (Phase 7) is not built yet.
 
 ## Policy implemented
 
