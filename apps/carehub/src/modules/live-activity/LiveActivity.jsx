@@ -105,7 +105,7 @@ export default function LiveActivity({ brand }) {
   const [territories, setTerritories] = useState([])
   const [myViewers, setMyViewers] = useState([])
   const [loading, setLoading] = useState(true)
-  const [liveOn, setLiveOn] = useState(false)
+  const [liveStatus, setLiveStatus] = useState('connecting') // connecting | live | disconnected
 
   const [view, setView] = useState('feed')
   // Scope tabs (managers only): 'mine' shows the manager's own logs, 'team'
@@ -172,12 +172,9 @@ export default function LiveActivity({ brand }) {
         if (prev.some(function (a) { return a.id === row.id })) return prev
         return [row].concat(prev)
       })
-      setLiveOn(true)
-    })
-    setLiveOn(true)
+    }, setLiveStatus)
     return function () {
       stop()
-      setLiveOn(false)
     }
   }, [brand?.id])
 
@@ -752,10 +749,14 @@ export default function LiveActivity({ brand }) {
   return (
     <>
       <PageHeader
-        title={<>Live Field Activity{liveOn && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: '800', color: danger, background: dangerBg, padding: '3px 9px', borderRadius: '20px', border: `1px solid ${danger}`, marginLeft: '8px', verticalAlign: 'middle' }}>
+        title={<>Live Field Activity{liveStatus === 'live' ? (
+          <span data-live-status={liveStatus} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: '800', color: danger, background: dangerBg, padding: '3px 9px', borderRadius: '20px', border: `1px solid ${danger}`, marginLeft: '8px', verticalAlign: 'middle' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: danger }} />
             LIVE
+          </span>
+        ) : (
+          <span data-live-status={liveStatus} title={liveStatus === 'connecting' ? 'Connecting to live updates' : 'Live updates are off. Reload to reconnect.'} style={{ display: 'inline-flex', alignItems: 'center', fontSize: '10px', fontWeight: '800', padding: '3px 9px', borderRadius: '20px', border: '1px solid currentColor', marginLeft: '8px', verticalAlign: 'middle', opacity: 0.6 }}>
+            {liveStatus === 'connecting' ? 'CONNECTING' : 'NOT LIVE'}
           </span>
         )}</>}
         description="Reps log what happens in the field. Tagged managers see it the moment it lands, and can reply."
