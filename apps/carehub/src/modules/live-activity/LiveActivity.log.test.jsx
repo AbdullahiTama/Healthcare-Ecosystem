@@ -117,9 +117,29 @@ describe('LiveActivity log modal', () => {
       values_json: JSON.stringify({ 'fld-1': 'Allen Avenue Pharmacy' }),
     })
     expect(viewers).toEqual([])
+    // No business was selected, so nothing about the directory is sent: the report is
+    // identical to before the directory existed.
+    expect(activity).not.toHaveProperty('directory_business_id')
+    expect(activity).not.toHaveProperty('business_link_confirmed')
 
     expect(toast()).toContain('Activity logged')
     expect(dialog()).toBeNull()
+  })
+
+  it('pages older activity on request, keyed by the oldest row, and does not duplicate', async () => {
+    const mk = (i) => ({ id: 'a' + i, business_id: 'brand-1', staff_id: 'staff-1', rep_name: 'Ada Rep', rep_title: 'Field Rep', values_json: '{}', created_at: new Date(Date.UTC(2026, 9, 19, 12, 0, 0) - i * 60000).toISOString() })
+    const first = Array.from({ length: 100 }, (_, i) => mk(i))
+    repo.getFieldActivities.mockResolvedValueOnce(first).mockResolvedValueOnce([mk(99), mk(100), mk(101)])
+    await act(async () => { root.render(<LiveActivity brand={BRAND} />) })
+    await flush()
+    expect(button('Load older activity')).toBeTruthy()
+    await act(async () => { button('Load older activity').click() })
+    await flush()
+    expect(repo.getFieldActivities).toHaveBeenLastCalledWith('brand-1', { limit: 100, before: first[99].created_at })
+    // Only the genuinely new rows had their viewers/reactions/comments fetched.
+    expect(repo.getActivityViewers.mock.calls.at(-1)[0]).toEqual(['a100', 'a101'])
+    // A short page means nothing older is left.
+    expect(button('Load older activity')).toBeFalsy()
   })
 
   it('does not call the repository while a required field is empty', async () => {

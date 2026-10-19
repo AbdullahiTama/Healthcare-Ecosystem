@@ -12,6 +12,7 @@ import {
 } from '../../lib/places.js'
 import { discoverFacilities } from '../../lib/facilityDiscovery.js'
 import FacilityPicker from './FacilityPicker.jsx'
+import DirectoryBusinessLink from './DirectoryBusinessLink.jsx'
 import CheckInPanel from '../checkins/CheckInPanel.jsx'
 import TeamLocations from '../checkins/TeamLocations.jsx'
 import { isManagerRole } from '../../lib/permissions'
@@ -23,6 +24,9 @@ import { Card, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading
 import { theme } from '../../styles/theme'
 import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
+
+// How many activities one page of the feed fetches (and the size that signals "there may be older ones").
+const ACTIVITY_PAGE = 100
 
 const FIELD_TYPES = ['text', 'long text', 'number', 'date', 'choice']
 
@@ -115,6 +119,8 @@ export default function LiveActivity({ brand }) {
   // has no staff row, so their "mine" would be empty — they start on 'team'.
   const [scope, setScope] = useState(isOwner ? 'team' : 'mine')
   const [counts, setCounts] = useState(null)
+  const [hasOlder, setHasOlder] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
   const [dateRange, setDateRange] = useState('all')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -138,6 +144,8 @@ export default function LiveActivity({ brand }) {
   // nearest health facility. `facility` is the chosen facility object (or a
   // rep-added synthetic one); it replaces the old free-text `placeQuery` box.
   const [facility, setFacility] = useState(null)
+  // Directory business the rep explicitly selected for this report (never automatic).
+  const [dirLink, setDirLink] = useState(null)
   const [facilityLoading, setFacilityLoading] = useState(false)
   const [facilityError, setFacilityError] = useState(false)
   // Manager review: opens the same FacilityPicker centered on a logged visit's
@@ -190,6 +198,7 @@ export default function LiveActivity({ brand }) {
       const ters = await territoryRepository.getAll(brand.id)
       setFields(flds || [])
       setActivities(acts || [])
+      setHasOlder((acts || []).length >= ACTIVITY_PAGE)
       setStaffList(stf || [])
       setTerritories(ters || [])
 
@@ -242,6 +251,40 @@ export default function LiveActivity({ brand }) {
     }
     loadPending()
     setLoading(false)
+  }
+
+  // Older pages are fetched on request and keyed by created_at, so the feed never
+  // grows past what the person asked to see, and viewers/reactions/comments are
+  // fetched only for the rows of that page.
+  async function loadOlder() {
+    if (!brand || !brand.id || loadingOlder || activities.length === 0) return
+    setLoadingOlder(true)
+    try {
+      const oldest = activities[activities.length - 1].created_at
+      const page = await liveActivityRepository.getFieldActivities(brand.id, { limit: ACTIVITY_PAGE, before: oldest })
+      const rows = (page || []).filter(function (r) { return !activities.some(function (a) { return a.id === r.id }) })
+      setHasOlder((page || []).length >= ACTIVITY_PAGE)
+      if (rows.length === 0) return
+      const ids = rows.map(function (a) { return a.id })
+      const [vs, rs, cs] = await Promise.all([
+        liveActivityRepository.getActivityViewers(ids),
+        liveActivityRepository.getActivityReactions(ids),
+        liveActivityRepository.getActivityComments(ids),
+      ])
+      const group = function (list, prev) {
+        const next = { ...prev }
+        ;(list || []).forEach(function (x) { next[x.activity_id] = (next[x.activity_id] || []).concat(x) })
+        return next
+      }
+      setActivities(function (prev) { return prev.concat(rows) })
+      setViewersByAct(function (prev) { return group(vs, prev) })
+      setReactionsByAct(function (prev) { return group(rs, prev) })
+      setCommentsByAct(function (prev) { return group(cs, prev) })
+    } catch (e) {
+      showToast('Could not load older activity: ' + e.message, { type: 'error' })
+    } finally {
+      setLoadingOlder(false)
+    }
   }
 
   async function loadPending() {
@@ -434,6 +477,7 @@ export default function LiveActivity({ brand }) {
     setGpsAddress(null)
     setPlaceName('')
     setFacility(null)
+    setDirLink(null)
     setFacilityLoading(false)
     setFacilityError(false)
     setLogging(true)
@@ -553,6 +597,9 @@ export default function LiveActivity({ brand }) {
         facility_source: facility ? (facility.source || 'detected') : null,
         facility_verified: verified,
         facility_pending_review: pendingReview,
+        // Only sent when the rep selected a business, so a report without one is
+        // identical to before (and works before the directory migration is applied).
+        ...(dirLink ? { directory_business_id: dirLink.id, business_link_confirmed: true } : {}),
       }, viewers)
 
       showToast('Activity logged', { type: 'success' })
@@ -1152,6 +1199,12 @@ export default function LiveActivity({ brand }) {
         </div>
       )}
 
+      {!loading && hasOlder && (
+        <div style={{ textAlign: 'center', margin: '16px 0' }}>
+          <GhostBtn onClick={loadOlder} disabled={loadingOlder}>{loadingOlder ? 'Loading...' : 'Load older activity'}</GhostBtn>
+        </div>
+      )}
+
       <Modal show={pickingCols} onClose={function () { setPickingCols(false) }} sheet title='Columns'
         footer={<GhostBtn onClick={function () { setPickingCols(false) }} style={{ width: '100%', padding: '12px' }}>Done</GhostBtn>}>
             <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '16px' }}>
@@ -1214,6 +1267,9 @@ export default function LiveActivity({ brand }) {
                   value={facility}
                   onChange={function (f) { setFacility(f) }}
                 />
+              )}
+              {gps && (
+                <DirectoryBusinessLink gps={gps} value={dirLink} onChange={setDirLink} />
               )}
             </div>
 
