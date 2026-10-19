@@ -18,7 +18,14 @@ import fs from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 
 export const REPO = process.env.REPO_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-export const MIG = REPO + '/supabase/migrations/'
+// Applied migrations live in supabase/migrations; reworked-but-unapproved ones in pending-migrations;
+// superseded ones (kept only so their tests still run) in retired-migrations.
+export const MIG_DIRS = [
+  REPO + '/supabase/migrations/',
+  REPO + '/docs/architecture/pending-migrations/',
+  REPO + '/docs/architecture/retired-migrations/',
+]
+export const migrationPath = (f) => MIG_DIRS.map((d) => d + f).find((x) => fs.existsSync(x)) || (MIG_DIRS[0] + f)
 export const db = new PGlite()
 
 let pass = 0
@@ -49,7 +56,7 @@ export function finish() {
 
 // ---- Supabase-like scaffolding ------------------------------------------------------------
 await db.exec(`
-  CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;
+  CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN BYPASSRLS;
   CREATE SCHEMA auth;
   CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')::uuid $$;
   CREATE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email' $$;
@@ -123,12 +130,33 @@ export const sup = (sql, params) => db.query(sql, params)
 
 export async function applyMigrations(files, { rerun = true } = {}) {
   for (const f of files) {
-    try { await db.exec(fs.readFileSync(MIG + f, 'utf8')); ok('migration applies: ' + f, true) }
+    try { await db.exec(fs.readFileSync(migrationPath(f), 'utf8')); ok('migration applies: ' + f, true) }
     catch (e) { ok('migration applies: ' + f, false, e.message) }
   }
   if (!rerun) return
   for (const f of files) {
-    try { await db.exec(fs.readFileSync(MIG + f, 'utf8')); ok('migration re-runs cleanly: ' + f, true) }
+    try { await db.exec(fs.readFileSync(migrationPath(f), 'utf8')); ok('migration re-runs cleanly: ' + f, true) }
     catch (e) { ok('migration re-runs cleanly: ' + f, false, e.message) }
   }
+}
+
+// Live-like permissions. On the production project is_business_manager() is NOT executable by
+// signed-in users (ACL {postgres, service_role}); an RLS policy that calls it directly fails with
+// "permission denied". Tests that apply the facility-review migration call this afterwards so
+// they behave like production instead of like a database with permissive default grants.
+export async function makeLikeLive() {
+  await db.exec(`REVOKE ALL ON FUNCTION public.is_business_manager(uuid) FROM PUBLIC, anon, authenticated;`)
+}
+
+// Stand-in for the live can_manage_directory(business_id): true when the caller's email is listed.
+// (Live: owner-level, or a role whose permissions include canManageDirectory.)
+export async function addDirectoryManagerStub() {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS public.directory_managers_stub (business_id uuid, email text);
+    CREATE OR REPLACE FUNCTION public.can_manage_directory(p_business_id uuid) RETURNS boolean
+      LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public', 'pg_temp'
+      AS $$ SELECT EXISTS (SELECT 1 FROM public.directory_managers_stub d WHERE d.business_id = p_business_id AND lower(d.email) = lower(auth.email())) $$;
+    REVOKE ALL ON FUNCTION public.can_manage_directory(uuid) FROM PUBLIC, anon;
+    GRANT EXECUTE ON FUNCTION public.can_manage_directory(uuid) TO authenticated;
+  `)
 }

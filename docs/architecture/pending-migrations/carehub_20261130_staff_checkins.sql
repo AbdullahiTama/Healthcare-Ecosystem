@@ -1,5 +1,11 @@
--- Explicit staff check-ins and location history (Phase 6). PREPARED, NOT APPLIED.
--- Exercised on PGlite by scripts/db-tests/checkins.pglite.mjs; not run on Supabase.
+-- Explicit staff check-ins and location history. PREPARED, NOT APPLIED.
+-- Reworked 2026-10-19 against the LIVE schema (renamed from 20261123). Exercised on PGlite
+-- (scripts/db-tests/checkins.pglite.mjs) and by a rolled-back run against the live database.
+--
+-- Live facts this relies on: staff(id, business_id, email, status, role, full_name) and
+-- field_activities(business_id, staff_id, created_at) exist; is_business_manager() is NOT
+-- executable by authenticated, so it is only ever called here from SECURITY DEFINER functions
+-- (which run as their owner); is_platform_admin() IS executable by authenticated.
 -- Design: docs/architecture/CareHub-Location-and-Privacy.md
 --
 -- Principles
@@ -77,6 +83,9 @@ CREATE TRIGGER staff_checkins_append_only BEFORE UPDATE OR DELETE ON public.staf
 DROP TRIGGER IF EXISTS location_access_log_append_only ON public.location_access_log;
 CREATE TRIGGER location_access_log_append_only BEFORE UPDATE OR DELETE ON public.location_access_log
   FOR EACH ROW EXECUTE FUNCTION public.location_tables_append_only();
+
+-- Trigger functions are not meant to be called: remove the default EXECUTE grants Supabase adds.
+REVOKE ALL ON FUNCTION public.location_tables_append_only() FROM PUBLIC, anon, authenticated;
 
 ALTER TABLE public.staff_checkins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.location_access_log ENABLE ROW LEVEL SECURITY;

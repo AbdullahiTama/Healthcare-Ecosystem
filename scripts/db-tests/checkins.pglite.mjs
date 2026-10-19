@@ -1,6 +1,6 @@
 // Check-in / location-history database tests. See _harness.mjs for scope and limits.
 //   node scripts/db-tests/checkins.pglite.mjs
-import { ok, expectError, finish, as, sup, db, applyMigrations, seedStaff, USERS, ADMIN } from './_harness.mjs'
+import { ok, expectError, finish, as, sup, db, applyMigrations, seedStaff, USERS, ADMIN, makeLikeLive } from './_harness.mjs'
 
 // is_business_manager() lives in the facility-review migration, which also
 // touches these two tables; minimal stand-ins let the real file apply.
@@ -9,7 +9,8 @@ await db.exec(`
   CREATE TABLE public.rep_added_facilities (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid, status text);
 `)
 await applyMigrations(['carehub_20260823_facility_review_authorization.sql'], { rerun: false })
-await applyMigrations(['carehub_20261123_staff_checkins.sql'])
+await makeLikeLive() // signed-in users cannot execute is_business_manager(), as in production
+await applyMigrations(['carehub_20261130_staff_checkins.sql'])
 
 const S = await seedStaff() // { A, B, repA1, repA2, mgrA, repB1 }
 const call = (who, biz, ev, extra = {}) => as(who,

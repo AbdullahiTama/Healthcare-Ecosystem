@@ -1,8 +1,8 @@
-// Field-activity access hardening and directory-link database tests.
-// See _harness.mjs for scope and limits. The permissive policies below are copied
-// from sql/phase2_rls_pilot.sql; the live ones may differ (see the migration header).
+// Field-activity access hardening database tests (live-like permissions).
+// See _harness.mjs for scope and limits. The permissive policies are copied from the live project
+// (verified from pg_policies on 2026-10-19). The pilot file is no longer the source of truth.
 //   node scripts/db-tests/activity.pglite.mjs
-import { ok, expectError, finish, as, sup, db, applyMigrations, seedStaff, USERS } from './_harness.mjs'
+import { ok, expectError, finish, as, sup, db, applyMigrations, seedStaff, USERS, makeLikeLive, addDirectoryManagerStub } from './_harness.mjs'
 
 await db.exec(`
   CREATE TABLE public.facilities_cache (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid, name text, source text);
@@ -14,9 +14,10 @@ await db.exec(`
   GRANT ALL ON public.field_activities, public.activity_viewers, public.activity_reactions, public.activity_comments TO authenticated;
 `)
 await applyMigrations(['carehub_20260823_facility_review_authorization.sql'], { rerun: false })
-await applyMigrations(['carehub_20261120_business_directory.sql'], { rerun: false })
+await makeLikeLive()              // is_business_manager() not executable by signed-in users, as in production
+await addDirectoryManagerStub()   // can_manage_directory() exists and IS executable, as in production
 
-// Today's permissive policies (sql/phase2_rls_pilot.sql 520-560).
+// The live permissive policies (roles {public}, FOR ALL).
 await db.exec(`
   ALTER TABLE field_activities ENABLE ROW LEVEL SECURITY;
   CREATE POLICY "field_activities of own business" ON field_activities FOR ALL
@@ -37,19 +38,37 @@ await db.exec(`
 `)
 
 const S = await seedStaff()
-const log = (who, biz, staffId, extra = '') => as(who, `insert into field_activities (business_id, staff_id, rep_name${extra ? ', ' + extra.split('=')[0] : ''}) values ($1,$2,'x'${extra ? ',' + extra.split('=')[1] : ''}) returning id`, [biz, staffId]).then((r) => r.rows[0].id)
+// A directory manager who is NOT a "manager" role (e.g. a Marketing Lead with canManageDirectory).
+await sup("insert into staff (business_id,email,role,full_name,status) values ($1,'dir@a.test','Marketing Lead','Dir Lead','active')", [S.A])
+await sup("insert into directory_managers_stub (business_id, email) values ($1,'dir@a.test')", [S.A])
+USERS.dirA = { sub: '00000000-0000-0000-0000-0000000000c9', email: 'dir@a.test' }
 
-// ---- BEFORE hardening: prove the findings are real -------------------------------------------
+const log = (who, biz, staffId) => as(who, `insert into field_activities (business_id, staff_id, rep_name) values ($1,$2,'x') returning id`, [biz, staffId]).then((r) => r.rows[0].id)
+
+// ---- production parity: the trap this rework exists to avoid ------------------------------------
+await expectError('PARITY: signed-in users cannot call is_business_manager() directly', () => as('repA1', 'select is_business_manager($1)', [S.A]), '42501')
+await db.exec(`CREATE POLICY naive_probe ON field_activities AS RESTRICTIVE FOR SELECT TO authenticated USING (is_business_manager(business_id))`)
+await expectError('PARITY: a policy that calls it directly breaks every read (why the old migration was unsafe)', () => as('repA1', 'select id from field_activities'), '42501')
+await db.exec(`DROP POLICY naive_probe ON field_activities`)
+
+// ---- BEFORE: the findings are real -----------------------------------------------------------
 const pre = await log('repA1', S.A, S.repA1)
 ok('BEFORE: a colleague can read another rep\'s activity (finding S3)', (await as('repA2', 'select id from field_activities where id=$1', [pre])).rows.length === 1)
 const forged = await log('repA1', S.A, S.repA2)
 ok('BEFORE: a rep can log as another rep (finding S5)', !!forged)
 ok('BEFORE: a rep can delete a colleague\'s activity', (await as('repA2', 'delete from field_activities where id=$1 returning id', [pre])).rows.length === 1)
 
-await applyMigrations(['carehub_20261124_field_activity_directory_link.sql', 'carehub_20261125_field_activity_access.sql'])
+await applyMigrations(['carehub_20261131_field_activity_access.sql'])
 await sup('delete from field_activities')
 
-// ---- attribution -----------------------------------------------------------------------------
+// ---- ACLs (the Supabase default-privilege trap) -------------------------------------------------
+const acl = async (fn) => (await sup(`select has_function_privilege('anon', $1::regprocedure, 'execute') a, has_function_privilege('authenticated', $1::regprocedure, 'execute') u`, [fn])).rows[0]
+for (const fn of ['caller_staff_id(uuid)', 'caller_sees_all_activity(uuid)', 'is_activity_viewer(uuid)', 'activity_business(uuid)', 'activity_author(uuid)']) {
+  const r = await acl('public.' + fn)
+  ok('ACL ' + fn + ': not anon, yes authenticated', r.a === false && r.u === true, JSON.stringify(r))
+}
+
+// ---- attribution -------------------------------------------------------------------------------
 const own = await log('repA1', S.A, S.repA1)
 ok('a rep can log under their own staff id', !!own)
 await expectError('a rep cannot log as another rep', () => log('repA1', S.A, S.repA2), '42501')
@@ -59,78 +78,55 @@ ok('the owner logs with a null staff id', !!ownerAct)
 await expectError('the owner cannot log as a staff member', () => log('a', S.A, S.repA1), '42501')
 await expectError('a rep cannot log into another company', () => log('repA1', S.B, S.repA1), '42501')
 await expectError('another company\'s rep cannot log into company A', () => log('repB1', S.A, S.repB1), '42501')
-const adminAct = await log('admin', S.A, null)
-ok('platform admin is exempt from attribution', !!adminAct)
+ok('platform admin is exempt from attribution', !!(await log('admin', S.A, null)))
 
-// ---- visibility (S3) -------------------------------------------------------------------------
+// ---- visibility (S3) ---------------------------------------------------------------------------
 const seen = async (who) => (await as(who, 'select id from field_activities')).rows.map((r) => r.id)
 ok('the author sees their own activity', (await seen('repA1')).includes(own))
 ok('a colleague who is not tagged does NOT see it', !(await seen('repA2')).includes(own))
 ok('a manager sees all of the company\'s activity', (await seen('mgrA')).includes(own) && (await seen('mgrA')).includes(ownerAct))
 ok('the owner sees all of the company\'s activity', (await seen('a')).includes(own))
+ok('a directory manager (not a "manager" role) still sees all, so coverage reports keep working', (await seen('dirA')).includes(own) && (await seen('dirA')).includes(ownerAct))
 ok('another company sees none of it', (await seen('repB1')).length === 0 && (await seen('b')).length === 0)
 ok('platform admin sees it', (await seen('admin')).includes(own))
 await expectError('anonymous cannot read', () => as('anon', 'select id from field_activities'), '42501')
 
-// ---- tagging viewers -------------------------------------------------------------------------
+// ---- the live coverage functions run as the caller and must stay correct ---------------------------
+await db.exec(`CREATE FUNCTION public.coverage_probe(bid uuid) RETURNS bigint LANGUAGE sql STABLE SET search_path TO 'public' AS $$ SELECT count(*) FROM field_activities WHERE business_id = bid $$;
+  GRANT EXECUTE ON FUNCTION public.coverage_probe(uuid) TO authenticated;`)
+const cover = async (who) => Number((await as(who, 'select coverage_probe($1) c', [S.A])).rows[0].c)
+ok('an INVOKER coverage query counts everything for a directory manager and for the owner', (await cover('dirA')) === 3 && (await cover('a')) === 3, (await cover('dirA')) + '/' + (await cover('a')))
+ok('...and only the caller\'s own for an ordinary colleague (so it cannot be used to count others\' activity)', (await cover('repA2')) === 0 && (await cover('repA1')) === 1)
+
+// ---- tagging viewers ---------------------------------------------------------------------------
 await expectError('an untagged colleague cannot tag themselves onto it', () => as('repA2', `insert into activity_viewers (activity_id, staff_id) values ($1,$2)`, [own, S.repA2]), '42501')
 await as('repA1', `insert into activity_viewers (activity_id, staff_id, viewer_name) values ($1,$2,'Rep Two')`, [own, S.repA2])
 ok('the author can tag a colleague, who then sees the activity', (await seen('repA2')).includes(own))
 await expectError('a tagged viewer cannot tag further people', () => as('repA2', `insert into activity_viewers (activity_id, staff_id) values ($1,$2)`, [own, S.mgrA]), '42501')
 ok('a tagged viewer cannot remove the tagging', (await as('repA2', 'delete from activity_viewers where activity_id=$1 returning id', [own])).rows.length === 0)
 ok('a tagged viewer still cannot see an untagged activity of the same author', !(await seen('repA2')).includes(await log('repA1', S.A, S.repA1)))
-const mgrTag = await as('mgrA', `insert into activity_viewers (activity_id, staff_id) values ($1,$2) returning id`, [own, S.mgrA])
-ok('a manager can manage viewers', mgrTag.rows.length === 1)
+ok('a manager can manage viewers', (await as('mgrA', `insert into activity_viewers (activity_id, staff_id) values ($1,$2) returning id`, [own, S.mgrA])).rows.length === 1)
 
-// ---- reactions and comments (S4) -------------------------------------------------------------
+// ---- reactions and comments (S4) ---------------------------------------------------------------
 await as('repA2', `insert into activity_reactions (activity_id, staff_id, actor_name) values ($1,$2,'Rep Two')`, [own, S.repA2])
 await expectError('a rep cannot react as someone else', () => as('repA2', `insert into activity_reactions (activity_id, staff_id, actor_name) values ($1,$2,'Mgr')`, [own, S.mgrA]), '42501')
 await as('repA2', `insert into activity_comments (activity_id, staff_id, actor_name, body) values ($1,$2,'Rep Two','hello')`, [own, S.repA2])
 await expectError('a rep cannot comment as someone else', () => as('repA2', `insert into activity_comments (activity_id, staff_id, actor_name, body) values ($1,$2,'Mgr','fake')`, [own, S.mgrA]), '42501')
-await expectError('an unrelated colleague cannot react to an activity they cannot see', () => as('mgrA', 'select 1').then(() => as('repB1', `insert into activity_reactions (activity_id, staff_id) values ($1,$2)`, [own, S.repB1])), '42501')
+await expectError('someone who cannot see an activity cannot react to it', () => as('repB1', `insert into activity_reactions (activity_id, staff_id) values ($1,$2)`, [own, S.repB1]), '42501')
 const react = (await sup('select id from activity_reactions limit 1')).rows[0].id
 ok('another rep cannot delete someone else\'s reaction', (await as('repA1', 'delete from activity_reactions where id=$1 returning id', [react])).rows.length === 0)
 const comment = (await sup('select id from activity_comments limit 1')).rows[0].id
 ok('a manager can remove a comment', (await as('mgrA', 'delete from activity_comments where id=$1 returning id', [comment])).rows.length === 1)
 ok('an author can remove their own reaction', (await as('repA2', 'delete from activity_reactions where id=$1 returning id', [react])).rows.length === 1)
 
-// ---- activities are records ------------------------------------------------------------------
+// ---- activities are records ----------------------------------------------------------------------
 ok('the author cannot edit an activity after submitting (GPS stays as logged)', (await as('repA1', 'update field_activities set lat=0 where id=$1 returning id', [own])).rows.length === 0)
 ok('a manager cannot edit it either', (await as('mgrA', 'update field_activities set lat=0 where id=$1 returning id', [own])).rows.length === 0)
-ok('the author cannot delete it', (await as('repA1', 'delete from field_activities where id=$1 returning id', [own])).rows.length === 0)
+ok('the author cannot delete it (it has tags, and the row is hidden from DELETE)', (await as('repA1', 'delete from field_activities where id=$1 returning id', [own])).rows.length === 0)
 ok('the owner cannot delete it', (await as('a', 'delete from field_activities where id=$1 returning id', [own])).rows.length === 0)
 ok('platform admin can correct a record', (await as('admin', 'update field_activities set rep_name=$2 where id=$1 returning id', [own, 'fixed'])).rows.length === 1)
 
-// ---- directory link --------------------------------------------------------------------------
-const dirBiz = (await as('admin', `insert into directory_businesses (name, latitude, longitude, state) values ('Alpha Pharmacy', 6.6, 3.35, 'Lagos') returning id`)).rows[0].id
-const dirOff = (await as('admin', `insert into directory_businesses (name, is_active) values ('Closed Clinic', false) returning id`)).rows[0].id
-const link = (who, biz, staff, did, confirmed, name = 'Client Chosen Name') => as(who, `insert into field_activities (business_id, staff_id, rep_name, directory_business_id, directory_business_name, business_link_confirmed) values ($1,$2,'x',$3,$4,$5) returning *`, [biz, staff, did, name, confirmed]).then((r) => r.rows[0])
-const linked = await link('repA1', S.A, S.repA1, dirBiz, true)
-ok('a confirmed link is stored', linked.directory_business_id === dirBiz && linked.business_link_confirmed === true)
-ok('the name is copied from the directory, not trusted from the client', linked.directory_business_name === 'Alpha Pharmacy', linked.directory_business_name)
-await expectError('an unconfirmed link cannot be stored', () => link('repA1', S.A, S.repA1, dirBiz, false), '23514')
-await expectError('an inactive directory business cannot be linked', () => link('repA1', S.A, S.repA1, dirOff, true), '22023')
-await expectError('a non-existent directory business cannot be linked', () => link('repA1', S.A, S.repA1, '00000000-0000-0000-0000-00000000dead', true))
-const plain = (await as('repA1', `insert into field_activities (business_id, staff_id, rep_name) values ($1,$2,'x') returning *`, [S.A, S.repA1])).rows[0]
-ok('a report without a link is valid and has none (the link is optional)', plain.directory_business_id === null && plain.business_link_confirmed === false && plain.directory_business_name === null)
-const stray = (await as('repA1', `insert into field_activities (business_id, staff_id, rep_name, business_link_confirmed, directory_business_name) values ($1,$2,'x',true,'Made Up') returning *`, [S.A, S.repA1])).rows[0]
-ok('a confirmation flag or name with no business id is cleared', stray.business_link_confirmed === false && stray.directory_business_name === null)
-await as('admin', 'update directory_businesses set name=$2 where id=$1', [dirBiz, 'Renamed Pharmacy'])
-ok('the report keeps the name the rep saw when the directory record is later renamed', (await sup('select directory_business_name n from field_activities where id=$1', [linked.id])).rows[0].n === 'Alpha Pharmacy')
-// Discovery is read-only: run searches (including a radius search around the business) and compare.
-await applyMigrations(['carehub_20261122_directory_search.sql'], { rerun: false })
-const countAll = async () => (await sup('select (select count(*) from field_activities)::int a, (select count(*) from staff_checkins)::int c, (select count(*) from location_access_log)::int l').catch(() => sup('select (select count(*) from field_activities)::int a'))).rows[0].a
-const beforeCount = await countAll()
-await as('repA1', `select directory_search(p_q=>'Renamed', p_lat=>6.6, p_lng=>3.35, p_radius_m=>1000)`)
-await as('repA1', `select directory_search(p_lat=>6.6, p_lng=>3.35, p_sort=>'distance')`)
-ok('searching and viewing directory businesses creates no field activity', (await countAll()) === beforeCount)
-
-// ---- realtime publication ------------------------------------------------------------------
-const inPub = async () => (await sup("select tablename from pg_publication_tables where pubname='supabase_realtime' order by 1")).rows.map((r) => r.tablename)
-await applyMigrations(['carehub_20261127_realtime_activity_tables.sql'], { rerun: false })
-ok('no publication: the migration is a harmless no-op', (await inPub()).length === 0)
-await db.exec('CREATE PUBLICATION supabase_realtime FOR TABLE public.activity_viewers')
-await applyMigrations(['carehub_20261127_realtime_activity_tables.sql'])
-ok('the three activity tables are published, existing members left alone', (await inPub()).join() === 'activity_comments,activity_reactions,activity_viewers,field_activities', (await inPub()).join())
+// ---- Realtime consequence -----------------------------------------------------------------------
+ok('an untagged colleague does not see a new activity (Realtime evaluates the same policy)', !(await seen('repA2')).includes(ownerAct))
 
 finish()
