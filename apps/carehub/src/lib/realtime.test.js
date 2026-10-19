@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // watchTable must (1) hand the user's JWT to the realtime socket before
 // subscribing, (2) report 'live' only once the server confirms SUBSCRIBED, and
@@ -88,5 +88,94 @@ describe('watchTable', () => {
     const stop = watchTable('field_activities', null, () => {}, (s) => seen.push(s))
     expect(seen).toEqual(['disconnected'])
     expect(() => stop()).not.toThrow()
+  })
+})
+
+describe('subscribeChanges: reconnection', () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); h.statusCb = null; h.channel = null })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('retries with exponential backoff after a drop and reports live again', async () => {
+    const { subscribeChanges } = await import('./realtime.js')
+    h.getSession.mockResolvedValue({ data: { session: { access_token: 'jwt' } } })
+    const seen = []
+    const stop = subscribeChanges({ table: 'field_activities', filter: 'business_id=eq.b1' }, () => {}, (s) => seen.push(s))
+    await vi.advanceTimersByTimeAsync(0)
+    h.statusCb('SUBSCRIBED')
+    h.statusCb('CHANNEL_ERROR')
+    expect(seen.slice(-1)).toEqual(['disconnected'])
+    expect(h.removeChannel).toHaveBeenCalledTimes(1)
+
+    const firstChannel = h.channel
+    await vi.advanceTimersByTimeAsync(1999)
+    expect(h.channel).toBe(firstChannel) // not yet
+    await vi.advanceTimersByTimeAsync(2)
+    expect(h.channel).not.toBe(firstChannel) // a fresh channel after 2 s
+    h.statusCb('SUBSCRIBED')
+    expect(seen.slice(-1)).toEqual(['live'])
+
+    // A second drop starts the backoff over because the first reconnect succeeded.
+    h.statusCb('TIMED_OUT')
+    const secondChannel = h.channel
+    await vi.advanceTimersByTimeAsync(2001)
+    expect(h.channel).not.toBe(secondChannel)
+    stop()
+  })
+
+  it('doubles the delay while reconnects keep failing, capped at 30 s', async () => {
+    const { subscribeChanges, RECONNECT_MAX_MS } = await import('./realtime.js')
+    h.getSession.mockResolvedValue({ data: { session: { access_token: 'jwt' } } })
+    const stop = subscribeChanges({ table: 't' }, () => {}, () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    const delays = []
+    for (let i = 0; i < 7; i++) {
+      const before = h.channel
+      h.statusCb('CHANNEL_ERROR')
+      let waited = 0
+      while (h.channel === before && waited < 40000) { await vi.advanceTimersByTimeAsync(500); waited += 500 }
+      delays.push(waited)
+    }
+    expect(delays[0]).toBe(2000); expect(delays[1]).toBe(4000); expect(delays[2]).toBe(8000)
+    expect(Math.max(...delays)).toBeLessThanOrEqual(RECONNECT_MAX_MS)
+    expect(delays[6]).toBe(30000)
+    stop()
+  })
+
+  it('stops retrying once unsubscribed', async () => {
+    const { subscribeChanges } = await import('./realtime.js')
+    h.getSession.mockResolvedValue({ data: { session: { access_token: 'jwt' } } })
+    const stop = subscribeChanges({ table: 't' }, () => {}, () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    h.statusCb('CHANNEL_ERROR')
+    stop()
+    const ch = h.channel
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(h.channel).toBe(ch)
+  })
+
+  it('keeps retrying when there is no session yet, instead of staying silent', async () => {
+    const { subscribeChanges } = await import('./realtime.js')
+    h.getSession.mockResolvedValue({ data: { session: null } })
+    const seen = []
+    const stop = subscribeChanges({ table: 't' }, () => {}, (s) => seen.push(s))
+    await vi.advanceTimersByTimeAsync(2100)
+    expect(seen.filter((s) => s === 'disconnected').length).toBeGreaterThanOrEqual(2)
+    h.getSession.mockResolvedValue({ data: { session: { access_token: 'jwt' } } })
+    await vi.advanceTimersByTimeAsync(5000)
+    h.statusCb('SUBSCRIBED')
+    expect(seen.slice(-1)).toEqual(['live'])
+    stop()
+  })
+
+  it('delivers rows from the channel to the handler', async () => {
+    const { subscribeChanges } = await import('./realtime.js')
+    h.getSession.mockResolvedValue({ data: { session: { access_token: 'jwt' } } })
+    const rows = []
+    const stop = subscribeChanges({ table: 't', event: '*' }, (p) => rows.push(p), () => {})
+    await vi.advanceTimersByTimeAsync(0)
+    const handler = h.channel.on.mock.calls[0][2]
+    handler({ eventType: 'INSERT', new: { id: 1 } })
+    expect(rows).toEqual([{ eventType: 'INSERT', new: { id: 1 } }])
+    stop()
   })
 })

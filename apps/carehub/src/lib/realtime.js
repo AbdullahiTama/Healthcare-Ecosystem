@@ -20,32 +20,60 @@ try {
 
 export const realtime = client
 
-// Listens for new rows on a table for one business.
-// If realtime can't connect for any reason, this returns a no-op instead of
-// crashing the page — the page still works, it just isn't live.
+// Generic subscription with reconnection.
+//
+//   spec    { table, event: 'INSERT' | '*', filter?: 'col=eq.value' }
+//   onRow   (payload) => void   payload.new / payload.old as Supabase delivers them
+//   onStatus 'connecting' | 'live' | 'disconnected'
 //
 // The socket must carry the user's JWT: postgres_changes is filtered by RLS for
 // the connecting role, and an anon socket is never delivered rows from tables
 // whose policies admit only authenticated members. So the channel is opened
 // only after the session token has been handed to the realtime client.
 //
-// `onStatus` receives 'connecting' | 'live' | 'disconnected'. 'live' means the
-// server confirmed the subscription (SUBSCRIBED), not that setup began.
-export function watchTable(tableName, businessId, onInsert, onStatus) {
+// 'live' means the server confirmed the subscription (SUBSCRIBED), not that setup
+// began. If the channel drops it reports 'disconnected' and retries with
+// exponential backoff (2 s, 4 s ... capped at 30 s). Rows that arrive while it is
+// down are NOT replayed, so on the first 'live' after a 'disconnected' the
+// consumer must refetch to catch up; the callers below do.
+// If realtime can't be set up at all, this returns a no-op instead of crashing
+// the page: the page still works, it just isn't live.
+export const RECONNECT_BASE_MS = 2000
+export const RECONNECT_MAX_MS = 30000
+let channelSeq = 0
+
+export function subscribeChanges(spec, onRow, onStatus) {
   const report = function (status) {
     try { if (onStatus) onStatus(status) } catch (e) {}
   }
-  if (!client || !businessId) {
+  if (!client || !spec || !spec.table) {
     report('disconnected')
     return function () {}
   }
 
   report('connecting')
+  const id = ++channelSeq
   let channel = null
   let stopped = false
   let authSub = null
+  let retryTimer = null
+  let attempts = 0
+
+  function teardownChannel() {
+    const c = channel
+    channel = null
+    try { if (c) client.removeChannel(c) } catch (e) {}
+  }
+
+  function scheduleRetry() {
+    if (stopped || retryTimer) return
+    const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * Math.pow(2, attempts))
+    attempts++
+    retryTimer = setTimeout(function () { retryTimer = null; start() }, delay)
+  }
 
   async function start() {
+    if (stopped) return
     let token = null
     try {
       const { data } = await authClient.auth.getSession()
@@ -55,47 +83,61 @@ export function watchTable(tableName, businessId, onInsert, onStatus) {
     if (!token) {
       // No session: an anon socket would sit "connected" and receive nothing.
       report('disconnected')
+      scheduleRetry()
       return
     }
     try {
       client.realtime.setAuth(token)
-      channel = client
-        .channel('watch-' + tableName + '-' + businessId)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: tableName,
-            filter: 'business_id=eq.' + businessId,
-          },
-          function (payload) {
-            try {
-              if (onInsert && payload && payload.new) onInsert(payload.new)
-            } catch (e) {}
-          }
-        )
-        .subscribe(function (status) {
-          if (stopped) return
-          if (status === 'SUBSCRIBED') report('live')
-          else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') report('disconnected')
+      const filterOpts = { event: spec.event || 'INSERT', schema: 'public', table: spec.table }
+      if (spec.filter) filterOpts.filter = spec.filter
+      const mine = client
+        .channel('watch-' + spec.table + '-' + (spec.filter || 'all') + '-' + id + '-' + attempts)
+        .on('postgres_changes', filterOpts, function (payload) {
+          try { if (onRow && payload) onRow(payload) } catch (e) {}
         })
-      // Keep the socket authorised across token refreshes.
-      const res = authClient.auth.onAuthStateChange(function (event, session) {
-        if (event === 'TOKEN_REFRESHED' && session && session.access_token) {
-          try { client.realtime.setAuth(session.access_token) } catch (e) {}
+      channel = mine // assigned before subscribing: the callback below compares against it
+      mine.subscribe(function (status) {
+        if (stopped || channel !== mine) return // a retired channel closing is not news
+        if (status === 'SUBSCRIBED') { attempts = 0; report('live') }
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          report('disconnected')
+          teardownChannel()
+          scheduleRetry()
         }
       })
-      authSub = res && res.data ? res.data.subscription : null
+      if (!authSub) {
+        // Keep the socket authorised across token refreshes.
+        const res = authClient.auth.onAuthStateChange(function (event, session) {
+          if (event === 'TOKEN_REFRESHED' && session && session.access_token) {
+            try { client.realtime.setAuth(session.access_token) } catch (e) {}
+          }
+        })
+        authSub = res && res.data ? res.data.subscription : null
+      }
     } catch (e) {
       report('disconnected')
+      scheduleRetry()
     }
   }
   start()
 
   return function unsubscribe() {
     stopped = true
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
     try { if (authSub) authSub.unsubscribe() } catch (e) {}
-    try { if (channel) client.removeChannel(channel) } catch (e) {}
+    teardownChannel()
   }
+}
+
+// New rows on a table for one business (the original API, unchanged for callers).
+export function watchTable(tableName, businessId, onInsert, onStatus) {
+  if (!businessId) {
+    if (onStatus) { try { onStatus('disconnected') } catch (e) {} }
+    return function () {}
+  }
+  return subscribeChanges(
+    { table: tableName, event: 'INSERT', filter: 'business_id=eq.' + businessId },
+    function (payload) { if (onInsert && payload.new) onInsert(payload.new) },
+    onStatus,
+  )
 }

@@ -125,4 +125,12 @@ await as('repA1', `select directory_search(p_q=>'Renamed', p_lat=>6.6, p_lng=>3.
 await as('repA1', `select directory_search(p_lat=>6.6, p_lng=>3.35, p_sort=>'distance')`)
 ok('searching and viewing directory businesses creates no field activity', (await countAll()) === beforeCount)
 
+// ---- realtime publication ------------------------------------------------------------------
+const inPub = async () => (await sup("select tablename from pg_publication_tables where pubname='supabase_realtime' order by 1")).rows.map((r) => r.tablename)
+await applyMigrations(['carehub_20261127_realtime_activity_tables.sql'], { rerun: false })
+ok('no publication: the migration is a harmless no-op', (await inPub()).length === 0)
+await db.exec('CREATE PUBLICATION supabase_realtime FOR TABLE public.activity_viewers')
+await applyMigrations(['carehub_20261127_realtime_activity_tables.sql'])
+ok('the three activity tables are published, existing members left alone', (await inPub()).join() === 'activity_comments,activity_reactions,activity_viewers,field_activities', (await inPub()).join())
+
 finish()

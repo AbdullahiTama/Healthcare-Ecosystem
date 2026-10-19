@@ -27,7 +27,7 @@ vi.mock('./repositories', () => ({
 }))
 vi.mock('../territories/repositories', () => ({ territoryRepository: { getAll: vi.fn() } }))
 vi.mock('../staff/repositories', () => ({ staffRepository: { getAll: vi.fn() } }))
-vi.mock('../../lib/realtime', () => ({ watchTable: vi.fn(() => () => {}) }))
+vi.mock('../../lib/realtime', () => ({ watchTable: vi.fn(() => () => {}), subscribeChanges: vi.fn(() => () => {}) }))
 // The check-in panels have their own tests; here they must not touch the network.
 vi.mock('../checkins/CheckInPanel.jsx', () => ({ default: () => null }))
 vi.mock('../checkins/TeamLocations.jsx', () => ({ default: () => null }))
@@ -43,6 +43,7 @@ vi.mock('../../lib/facilityDiscovery.js', () => ({ discoverFacilities: vi.fn(asy
 vi.mock('../../services/supabase', () => ({ sbFetch: vi.fn(), sbUpload: vi.fn() }))
 
 import LiveActivity from './LiveActivity.jsx'
+import { watchTable, subscribeChanges } from '../../lib/realtime'
 import { liveActivityRepository as repo } from './repositories'
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
@@ -140,6 +141,41 @@ describe('LiveActivity log modal', () => {
     expect(repo.getActivityViewers.mock.calls.at(-1)[0]).toEqual(['a100', 'a101'])
     // A short page means nothing older is left.
     expect(button('Load older activity')).toBeFalsy()
+  })
+
+  it('refetches once when the realtime connection comes back after a drop', async () => {
+    await act(async () => { root.render(<LiveActivity brand={BRAND} />) })
+    await flush()
+    const onStatus = watchTable.mock.calls[0][3]
+    const loadsBefore = repo.getFieldActivities.mock.calls.length
+    await act(async () => { onStatus('live') })           // first connection: nothing missed
+    expect(repo.getFieldActivities.mock.calls.length).toBe(loadsBefore)
+    await act(async () => { onStatus('disconnected') })
+    expect(host.textContent).toContain('NOT LIVE')
+    await act(async () => { onStatus('live') })           // back: catch up
+    await flush()
+    expect(repo.getFieldActivities.mock.calls.length).toBe(loadsBefore + 1)
+    expect(host.textContent).toContain('LIVE')
+    expect(host.textContent).not.toContain('NOT LIVE')
+  })
+
+  it('refreshes only reactions and comments when they change live, debounced', async () => {
+    vi.useFakeTimers()
+    try {
+      repo.getFieldActivities.mockResolvedValue([{ id: 'a1', business_id: 'brand-1', staff_id: 'staff-1', rep_name: 'Ada Rep', values_json: '{}', created_at: '2026-10-19T10:00:00Z' }])
+      await act(async () => { root.render(<LiveActivity brand={BRAND} />) })
+      await act(async () => { await vi.advanceTimersByTimeAsync(50) })
+      const reactionsCall = subscribeChanges.mock.calls.find((c) => c[0].table === 'activity_reactions')
+      expect(reactionsCall[0].event).toBe('*')
+      const notify = reactionsCall[1]
+      repo.getActivityReactions.mockClear(); repo.getActivityComments.mockClear()
+      const feedLoads = repo.getFieldActivities.mock.calls.length
+      await act(async () => { notify(); notify(); notify(); await vi.advanceTimersByTimeAsync(700) })
+      expect(repo.getActivityReactions).toHaveBeenCalledTimes(1)
+      expect(repo.getActivityComments).toHaveBeenCalledTimes(1)
+      expect(repo.getActivityReactions.mock.calls[0][0]).toEqual(['a1'])
+      expect(repo.getFieldActivities.mock.calls.length).toBe(feedLoads) // the feed itself is not refetched
+    } finally { vi.useRealTimers() }
   })
 
   it('does not call the repository while a required field is empty', async () => {

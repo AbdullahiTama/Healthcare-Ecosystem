@@ -19,7 +19,7 @@ import { isManagerRole } from '../../lib/permissions'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
-import { watchTable } from '../../lib/realtime'
+import { watchTable, subscribeChanges } from '../../lib/realtime'
 import { Card, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 import { theme } from '../../styles/theme'
 import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
@@ -175,6 +175,11 @@ export default function LiveActivity({ brand }) {
 
   useEffect(() => { load() }, [brand?.id])
 
+  // Latest list for the realtime handlers below, which outlive a single render.
+  const activitiesRef = useRef([])
+  useEffect(() => { activitiesRef.current = activities })
+  const prevLiveRef = useRef('connecting')
+
   useEffect(() => {
     if (!brand || !brand.id) return
     const stop = watchTable('field_activities', brand.id, function (row) {
@@ -182,9 +187,56 @@ export default function LiveActivity({ brand }) {
         if (prev.some(function (a) { return a.id === row.id })) return prev
         return [row].concat(prev)
       })
-    }, setLiveStatus)
+    }, function (status) {
+      setLiveStatus(status)
+      // Rows that arrived while the connection was down are not replayed, so
+      // catch up with one refetch the moment it is live again.
+      if (status === 'live' && prevLiveRef.current === 'disconnected') load()
+      prevLiveRef.current = status
+    })
     return function () {
       stop()
+    }
+  }, [brand?.id])
+
+  // Reactions and comments change a row that is already on screen, so there is
+  // nothing to insert: refetch just those two lists (newest 100 activities, to
+  // keep the request URL short), debounced so a burst is one request. These
+  // tables only deliver if they are in the supabase_realtime publication
+  // (carehub_20261127_realtime_activity_tables.sql); without it nothing breaks,
+  // the lists simply refresh on the person's own actions as before.
+  useEffect(() => {
+    if (!brand || !brand.id) return
+    let timer = null
+    const refresh = function () {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(async function () {
+        const ids = activitiesRef.current.slice(0, 100).map(function (a) { return a.id })
+        if (ids.length === 0) return
+        try {
+          const [rs, cs] = await Promise.all([
+            liveActivityRepository.getActivityReactions(ids),
+            liveActivityRepository.getActivityComments(ids),
+          ])
+          const group = function (list) {
+            const m = {}
+            ;(list || []).forEach(function (x) { (m[x.activity_id] = m[x.activity_id] || []).push(x) })
+            return m
+          }
+          // Keep entries for older pages the person loaded; replace the refreshed ones.
+          setReactionsByAct(function (prev) { const n = { ...prev }; ids.forEach(function (i) { delete n[i] }); return Object.assign(n, group(rs)) })
+          setCommentsByAct(function (prev) { const n = { ...prev }; ids.forEach(function (i) { delete n[i] }); return Object.assign(n, group(cs)) })
+        } catch (e) {
+          console.error('Live refresh of reactions/comments failed:', e)
+        }
+      }, 600)
+    }
+    const stopR = subscribeChanges({ table: 'activity_reactions', event: '*' }, refresh)
+    const stopC = subscribeChanges({ table: 'activity_comments', event: '*' }, refresh)
+    return function () {
+      if (timer) clearTimeout(timer)
+      stopR()
+      stopC()
     }
   }, [brand?.id])
 

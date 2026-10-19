@@ -11,7 +11,7 @@ Branch `feat/enterprise-directory` (head after this commit). Run 2026-10-19 on a
 | Undefined-identifier lint | `eslint -c eslint.no-undef.json` on every new/changed directory | Clean |
 | Directory database tests | `scripts/db-tests/directory.pglite.mjs` | **64 passed, 0 failed** |
 | Check-in database tests | `scripts/db-tests/checkins.pglite.mjs` | **60 passed, 0 failed** |
-| Activity access and link tests | `scripts/db-tests/activity.pglite.mjs` | **51 passed, 0 failed** |
+| Activity access, link and realtime publication tests | `scripts/db-tests/activity.pglite.mjs` | **56 passed, 0 failed** |
 | Staff privilege and tenant tests | `scripts/db-tests/staff.pglite.mjs` | **29 passed, 0 failed** |
 | Spatial query plan | ad hoc script on 30,000 synthetic rows | Bounding box uses `directory_businesses_coord_idx` (bitmap index scan, 12 rows, ~8 ms). `directory_search` 270-340 ms in WebAssembly under load: **indicative only** |
 | CareFind suite | not run | CareFind code was not changed |
@@ -66,7 +66,7 @@ Not tested: SQL injection beyond wildcard escaping (parameters are bound), rate 
 | Google Maps unavailable or no key | Tested (no key): list works and a message replaces the map. A bad or restricted key (`gm_authFailure`) is handled in code, **not exercised** |
 | Invalid import file | Tested: non-CSV, oversize, unclosed quote, no name column, invalid rows |
 | Duplicate import retry | Tested with mocks (409 reported as already imported) and in the database (unique `source_ref`) |
-| Realtime disconnect | LIVE state transitions tested with a mocked client. **No real disconnect or two-session delivery test** |
+| Realtime disconnect | Mocked-client tests: status transitions, exponential backoff 2 s to 30 s, retry stops on unsubscribe, keeps retrying without a session, catch-up refetch on reconnect, debounced live refresh of reactions and comments. **No real disconnect or two-session delivery test** |
 | Network/database failure | Error states tested in search, directory console, check-in panels |
 | Empty search results | Tested |
 | Missing coordinates | Tested (no map entry, no directions) |
@@ -78,14 +78,14 @@ Not tested: SQL injection beyond wildcard escaping (parameters are bound), rate 
 - No end-to-end test of the complete journey (admin imports, rep searches, opens map, reports, manager sees it, other company cannot). The parts are tested separately.
 - No Google credentials: the live map has never loaded.
 - No test on Supabase or against live policies.
-- Excel import, import merge, check-in retention, live reaction/comment updates, realtime auto-reconnect.
+- Excel import, import merge, check-in retention.
 
 ## 7. Production-readiness review (Phase 11)
 
 - **Indexes.** Directory: normalised name, normalised phone (partial), state/LGA/city, coordinates (partial), category, active/verification, unique `(data_source, source_ref)`. Check-ins: by business/time, user/time, business/staff/time. The coordinate btree is used for the radius prefilter (plan above). No PostGIS added; revisit only if real data shows the prefilter is too loose at scale. Substring `ILIKE '%x%'` name search cannot use a btree and will scan the filtered set; add `pg_trgm` only if measured necessary.
 - **Pagination.** Directory search: server-side, limit capped at 100. Activity feed: keyset "load older". Import: batches of 50, 5,000-row file cap. Not paginated: `countFieldActivities` still caps at 1,000 and fetches ids; `getActivityViewers/Reactions/Comments` use `in.(ids)` URLs, fine at 100 ids.
 - **External calls.** Directory search makes none. Google Maps JS loads only with a key. Directions use plain links. The legacy live search still calls Overpass and Nominatim straight from the browser (privacy and usage-policy risk, finding S7, unchanged).
-- **Logging.** `sbFetch` logs a 20-character prefix of the user's access token to the console on every call (`services/supabase.js`). Unchanged by this work, worth removing.
+- **Logging.** `sbFetch` used to log a 20-character prefix of the user's access token on every call. Removed (the anon-key warning is kept). Search the rest of the app for other token logging before production.
 - **Secrets.** No secrets added or committed. `VITE_GOOGLE_MAPS_BROWSER_KEY` is a public browser key and must be referrer- and API-restricted. No server-side Google key is used.
 - **Remaining blockers before production.** All eight migrations unapplied and untested on Supabase; two behaviour-change migrations need a decision; directory ownership undecided; retention undecided; legal/consent review of location data not done; Google key and restrictions not created.
 
@@ -125,7 +125,7 @@ Legend: PASS = verified as described; PARTIAL = code and tests exist but a state
 - Nearby suggestions optional: PASS (UI and payload test)
 - Representatives confirm links: PASS (UI explicit Select; database refuses unconfirmed)
 - Submitted activities appear to authorised managers: PARTIAL. Visibility tested in the database; live delivery untested
-- Realtime verified: NOT DONE on real Supabase. The JWT and honest status fix are tested with mocks only
+- Realtime verified: NOT DONE on real Supabase. JWT, honest status, reconnect and live reaction/comment refresh are tested with mocks only, and the tables must be in the publication
 - Filters and pagination work: PARTIAL. Keyset paging tested; filters unchanged
 - Voice notes, reactions, comments, exports functional: PARTIAL. Unchanged code, existing tests pass; not exercised manually
 

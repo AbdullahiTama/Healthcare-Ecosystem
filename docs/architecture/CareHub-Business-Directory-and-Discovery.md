@@ -69,7 +69,7 @@ Surface: the `discovery` module (Facility Discovery) now opens on a **Business d
 
 **Paging**: the feed fetches 100 activities, with an on-request "Load older activity" button (keyset on `created_at`; viewers, reactions and comments are fetched only for each new page).
 
-**Realtime**: the socket now carries the user's JWT and the LIVE badge needs a confirmed subscription (commit `66595da`). Not covered: live updates for reactions and comments (only INSERTs on `field_activities` are watched) and automatic reconnection (a dropped channel shows NOT LIVE until reload). Delivery to a second signed-in session has not been tested on Supabase.
+**Realtime**: the socket carries the user's JWT and the LIVE badge needs a confirmed subscription. If the channel drops it shows NOT LIVE and reconnects with exponential backoff (2 s doubling to 30 s); when it comes back the feed refetches once, because rows that arrived while it was down are not replayed (this reload also drops any older pages the person had loaded). Reactions and comments update live too: a change refetches just those two lists for the newest 100 activities, debounced. All of that is tested with a mocked client. It needs the tables in the `supabase_realtime` publication, which nothing in this repository sets up (`carehub_20261127_realtime_activity_tables.sql` adds them idempotently). **Delivery to a second signed-in session has not been tested on Supabase.**
 
 ### Administrative ownership
 
@@ -94,12 +94,13 @@ Surface: the `discovery` module (Facility Discovery) now opens on a **Business d
 | 6 | `carehub_20261124_field_activity_directory_link` | additive columns |
 | 7 | `carehub_20261125_field_activity_access` | **behaviour change** (S3-S5) |
 | 8 | `carehub_20261126_staff_privilege_guard` | **behaviour change** (S8) |
+| 9 | `carehub_20261127_realtime_activity_tables` | additive publication change; check `pg_publication_tables` first |
 
-1-6 are additive or strictly tightening a function and are independent of the two behaviour changes. 7 and 8 should be reviewed against the live policies first.
+1-6 and 9 are additive or strictly tightening a function and are independent of the two behaviour changes. 7 and 8 should be reviewed against the live policies first.
 
 ## Not yet built
 
-Retention/purge for check-ins, merge in the import flow, live reaction/comment updates, realtime auto-reconnect, company-specific prospect notes, an admin editor for category names, and any run against a real Supabase branch.
+Retention/purge for check-ins, merge in the import flow, company-specific prospect notes, an admin editor for category names, and any run against a real Supabase branch.
 
 ## Apply and rollback
 
