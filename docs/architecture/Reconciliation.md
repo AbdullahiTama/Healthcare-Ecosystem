@@ -23,7 +23,7 @@ Each step is isolated (one failing never stops the others) and the report names 
 
 ## 4. The database checks
 
-coins (wallet vs ledger, ledger chain); commissions, withdrawals, refunds and shop vendor credits (the existing `reconcile_*` functions, now actually run); payment intents (settled without a provider transaction id; settled shop order or appointment whose entity is not paid); provider events (failed, stored and never processed, and **every successful charge no intent recognised** = real money nothing settled).
+coins (wallet vs ledger, ledger chain); commissions, withdrawals, refunds, shop vendor credits and **business wallet balances** (the existing `reconcile_*` functions, now actually run; business wallets wired into the scan by `carefind_20261116`); payment intents (settled without a provider transaction id; settled shop order or appointment whose entity is not paid); provider events (failed, stored and never processed, and **every successful charge no intent recognised** = real money nothing settled).
 
 ## 5. Findings
 

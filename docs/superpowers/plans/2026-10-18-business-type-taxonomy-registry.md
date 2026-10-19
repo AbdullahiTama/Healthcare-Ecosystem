@@ -46,7 +46,7 @@ Anchors from the landing notes (the product's own claims):
 Additional pins:
 - **clinic clients label** = `Patients` (mirrors hospital; `labelByType`).
 - **clinic/laboratory ordering**: clinic gets its own `NAV_ORDER.clinic` (appointments/consultation directly after dashboard); laboratory reuses the hospital ordering family (its gate only lets the lab bench through from the clinical block, and `lab` sorts early).
-- **Wallet policy unchanged**: wallet in every Owner nav for every type; staff roles exclude it by default, grantable per custom role (the `roles` table) — **nav and route only in practice: the Wallet page itself is owner-gated (found 2026-10-19, follow-up 6)**. RLS (`business_id IN current_business_ids()`) remains authoritative.
+- **Wallet policy unchanged**: wallet in every Owner nav for every type; staff roles exclude it by default, grantable per custom role (the `roles` table). A granted non-owner now gets a **view-only** wallet page (2026-10-19, follow-up 6 closed); money-moving controls stay owner-only. RLS (`business_id IN current_business_ids()`) remains authoritative.
 - **Unknown-type fallback**: a business_type the registry doesn't know (typo, empty string, future addition) resolves to the `other` set instead of a bricked app.
 
 ---
@@ -176,5 +176,5 @@ Command: `cd apps/carehub && npx vitest run src/lib/__tests__/ecommerceSegments.
 
 ### Update 2026-10-19 — wallet policy claims corrected
 
-6. The custom-role grant is **nav/route-level only**: `Wallet.jsx` hard-gates on `role === 'Owner'` (the "Wallet is restricted to the business Owner" screen, pinned by `Wallet.test.jsx`), so a custom role with Wallet ticked lands on a restriction screen. Live impact: none — no production custom role ticks Wallet (the 5 live roles: Four sisters Manager, General Sales, Manager, Pharmacy manager, Senior Pharmacist). Decision owed: relax the page gate (view-only is the natural shape — withdrawals/top-ups need the owner PIN/OTP) or drop the grant claim from staff docs.
+6. **Closed 2026-10-19.** `Wallet.jsx` now reads `perms` and renders a **view-only** wallet for any non-owner whose nav includes `wallet` (the same predicate as the route guard): balances, transactions, withdrawal history and CSV export; Withdraw, Top Up and both dialogs stay owner-only — matching the server (`initiate-business-withdrawal` = verified owner + PIN + OTP). A role without the tick still sees the restriction screen. Pinned by `Wallet.test.jsx`. (History: the grant was nav/route-only when found.)
 7. The same architecture doc's "wallet row created at signup" bullet was wrong: rows are created by the first credit (3 of 28 production businesses have a row). Corrected 2026-10-19.

@@ -1,7 +1,7 @@
 # Wallet integrity — decision brief
 
 **Date:** 2026-10-19
-**Status:** awaiting the owner's decision. **Nothing below has been applied; no balance was touched.**
+**Status:** updated 2026-10-19. **D2 — applied to production, verified** (the nightly scan now publishes business wallets). **Follow-up 6 — applied** (a custom role granted Wallet gets a read-only page). **D1 — evidence gathered: no receipt exists for the N5,000; awaiting the owner's one-line decision.** **No balance has been touched.**
 **Scope:** business `business_wallets` only. The 3 CareFind withdrawals and 9 legacy shop orders are Rem-09 — frozen pending explicit financial authorisation.
 **Tracked by:** `planning/financial-system/00-master-plan.md` Rem-06; `docs/architecture/Production-Readiness.md` section 5.4.
 
@@ -31,11 +31,15 @@ The migration is explicit that this needs the owner's judgement, not a mechanica
 
 A correction needs a new single-purpose migration plus a note in the reconciliation docs. Note `business_wallets` rows are write-locked to server paths but nothing records a hand correction today, so the corrective row should carry an unmistakable reference (e.g. `correction_2026_10_<nn>`).
 
+**Evidence gathered 2026-10-19 (read-only): no receipt exists in the database.** Every money path for fdba0136 is accounted: `payment_intents` begin 2026-10-07 and each settled one is ledgered (two shop credits, the 10-11 top-up); the only two paid `shop_orders` are credited; all four appointments are unpaid and never released; `platform_transactions` has zero rows; `business_wallet_transactions` (globally) begin 2026-09-29. The N5,000 is pre-ledger residue with no surviving record — option (a) can no longer be confirmed from the data; it would rest on the owner's own bank/ops records. The live choice is **(a′) keep and ledger a `correction_*` legacy credit if the owner recognises the N5,000**, **(b) reduce to 1,340,000**, or **(c) keep and acknowledge** the warning. d8663307 (QA) stands as a test-fixture reset to zero (recommend (a) there). One word applies the correction.
+
 ### D2 — the check is not wired into the nightly scan (found 2026-10-19)
 
 `run_db_reconciliation` publishes these sources: `coins`, `commissions`, `withdrawals`, `refunds`, `shop_vendor`, `intents`, `events`. It **never publishes business wallets** — nothing outside the db tests calls `reconcile_business_wallets()`. The migration header says the findings "surface in `reconciliation_findings`", but in production they do not: the N10,000 is visible only when someone runs the function by hand, and admin Money Checks does not show it. (This is also why a wallet-filtered `reconciliation_findings` query returns `[]`.)
 
 **Proposal (recommended first):** one small migration — build the `_rs` temp rows from `reconcile_business_wallets()` and `_recon_publish('business_wallets')` with severity `warning`, plus a db test pinning that a drifted wallet becomes a finding and a clean ledger reports none. Visibility only; no balance moves.
+
+**APPLIED 2026-10-19 (approved).** Migration `carefind_20261116_business_wallet_reconciliation_wiring` (ledger version 20261019084144): `run_db_reconciliation` re-created **verbatim** from `carefind_20261020` plus one source — `_rs` from `reconcile_business_wallets()`, published as `business_wallets`, severity `warning`, subject `business` / the business id, with a guard that skips the redefinition where the function is absent — then `_apply_engine_timeouts()` re-applied (a redefinition drops the timeouts), per the "redefine ⇒ re-apply" rule. Verified in production: a light run published both rows (`business_wallets` → inserted 2: fdba0136 `balance_not_derivable`, d8663307 `no_ledger_rows`), `proconfig` intact (`lock_timeout=10s`, `statement_timeout=120s`), still `service_role` only. Pinned by four new tests in `apps/carefind/src/test/payments/businessWalletReconciliation.db.test.js` (source list, finding lifecycle including reopen, timeout/ACL preservation). The source is non-heavy, so both the nightly (heavy) and light runs publish it; Money Checks shows the two rows.
 
 ### D3 — business wallets still have no balance write-guard (structural, Rem-06 note)
 
