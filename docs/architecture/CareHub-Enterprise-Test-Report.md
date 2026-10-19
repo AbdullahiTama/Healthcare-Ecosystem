@@ -64,7 +64,7 @@ Not tested: SQL injection beyond wildcard escaping (parameters are bound), rate 
 |---|---|
 | Location permission denied / unavailable / timeout / unsupported / bad data | Tested (unit and UI). Failed check-in stored as failed with no position |
 | Google Maps unavailable or no key | Tested (no key): list works and a message replaces the map. A bad or restricted key (`gm_authFailure`) is handled in code, **not exercised** |
-| Invalid import file | Tested: non-CSV, oversize, unclosed quote, no name column, invalid rows |
+| Invalid import file | Tested: wrong extension, `.xls`/password-protected (OLE) files, non-workbook bytes, corrupt zip, valid zip that is not a workbook, oversize, decompression-bomb and too-many-entries archives, unclosed quote, no name column, invalid rows, empty workbook |
 | Duplicate import retry | Tested with mocks (409 reported as already imported) and in the database (unique `source_ref`) |
 | Realtime disconnect | Mocked-client tests: status transitions, exponential backoff 2 s to 30 s, retry stops on unsubscribe, keeps retrying without a session, catch-up refetch on reconnect, debounced live refresh of reactions and comments. **No real disconnect or two-session delivery test** |
 | Network/database failure | Error states tested in search, directory console, check-in panels |
@@ -78,7 +78,7 @@ Not tested: SQL injection beyond wildcard escaping (parameters are bound), rate 
 - No end-to-end test of the complete journey (admin imports, rep searches, opens map, reports, manager sees it, other company cannot). The parts are tested separately.
 - No Google credentials: the live map has never loaded.
 - No test on Supabase or against live policies.
-- Excel import, import merge, check-in retention.
+- Import merge and check-in retention. Excel import is implemented and tested against real generated workbooks, but not against files saved by Excel itself, LibreOffice or Google Sheets (formulas, date cells, merged cells and very large sheets are untested).
 
 ## 7. Production-readiness review (Phase 11)
 

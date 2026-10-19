@@ -15,6 +15,7 @@ const repo = vi.hoisted(() => ({
 vi.mock('../../../modules/directory/repositories', () => ({ directoryRepository: repo }))
 
 import DirectoryPanel from './DirectoryPanel'
+import { makeXlsx } from '../../../test/makeXlsx'
 
 let host, root
 const flush = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 450)) }) }
@@ -71,10 +72,37 @@ describe('DirectoryPanel', () => {
     await flush()
     await click([...host.querySelectorAll('[role=tab]')].find((t) => t.textContent.includes('Import')))
     const input = host.querySelector('input[type=file]')
-    const file = new File(['x'], 'sheet.xlsx')
+    const file = new File(['x'], 'sheet.xls')
     Object.defineProperty(input, 'files', { value: [file] })
     await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })
-    expect(text()).toContain('Choose a .csv file')
+    expect(text()).toContain('Choose an .xlsx or .csv file')
     expect(repo.findCandidates).not.toHaveBeenCalled()
+  })
+
+  it('import wizard reads an Excel workbook and reaches column mapping, naming the sheet used', async () => {
+    repo.search.mockResolvedValue([])
+    await act(async () => { root.render(<DirectoryPanel />) })
+    await flush()
+    await click([...host.querySelectorAll('[role=tab]')].find((t) => t.textContent.includes('Import')))
+    const input = host.querySelector('input[type=file]')
+    const bytes = makeXlsx([{ name: 'Lagos pharmacies', rows: { 1: ['Business Name', 'State'], 2: ['Alpha Pharmacy', 'Lagos'], 3: ['Beta Pharmacy', 'Lagos'] } }])
+    const file = new File([bytes], 'directory.xlsx')
+    Object.defineProperty(input, 'files', { value: [file], configurable: true })
+    await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); await new Promise((r) => setTimeout(r, 400)) })
+    expect(text()).toContain('Sheet "Lagos pharmacies"')
+    expect(text()).toContain('2 data rows')
+    expect(button('Check file')).toBeTruthy()
+    expect(repo.findCandidates).not.toHaveBeenCalled() // nothing is looked up or saved until the admin continues
+  })
+
+  it('import wizard explains an unreadable workbook instead of failing silently', async () => {
+    repo.search.mockResolvedValue([])
+    await act(async () => { root.render(<DirectoryPanel />) })
+    await flush()
+    await click([...host.querySelectorAll('[role=tab]')].find((t) => t.textContent.includes('Import')))
+    const input = host.querySelector('input[type=file]')
+    Object.defineProperty(input, 'files', { value: [new File([new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 1, 2, 3, 4])], 'old.xlsx')], configurable: true })
+    await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); await new Promise((r) => setTimeout(r, 300)) })
+    expect(text()).toMatch(/old \.xls|password-protected/)
   })
 })

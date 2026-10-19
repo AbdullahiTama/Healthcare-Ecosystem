@@ -9,6 +9,7 @@ import {
 import { runImport } from '../../../modules/directory/directoryImportRunner'
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024
+const EXCEL_NAME = /\.xlsx$/i
 const STATUS_PILL = { new: 'green', needs_review: 'amber', possible_duplicate: 'amber', confirmed_duplicate: 'red', invalid: 'red' }
 const STATUS_LABEL = { new: 'New', needs_review: 'Needs review', possible_duplicate: 'Possible duplicate', confirmed_duplicate: 'Confirmed duplicate', invalid: 'Invalid' }
 const FILTERS = ['all', ...Object.values(ROW_STATUS)]
@@ -29,6 +30,8 @@ export default function DirectoryImport() {
   const [fileName, setFileName] = useState('')
   const [fingerprint, setFingerprint] = useState('')
   const [table, setTable] = useState(null)
+  const [rowNumbers, setRowNumbers] = useState(null) // original spreadsheet row of each table row
+  const [sourceNote, setSourceNote] = useState('')
   const [mapping, setMapping] = useState({})
   const [plan, setPlan] = useState(null)
   const [decisions, setDecisions] = useState({})
@@ -48,13 +51,25 @@ export default function DirectoryImport() {
     e.target.value = ''
     if (!file) return
     setError('')
-    if (!/\.csv$/i.test(file.name)) { setError('Choose a .csv file. Excel files are not supported yet: save the sheet as CSV first.'); return }
+    const isExcel = EXCEL_NAME.test(file.name)
+    if (!isExcel && !/\.csv$/i.test(file.name)) { setError('Choose an .xlsx or .csv file. Older .xls files are not supported: open them in Excel and save as .xlsx or CSV.'); return }
     if (file.size > MAX_FILE_BYTES) { setError('That file is larger than 2 MB. Split it and import in parts.'); return }
-    const text = await file.text()
-    const parsed = parseCsv(text)
+    let parsed, print, note = ''
+    if (isExcel) {
+      // The spreadsheet reader is loaded only now, not with the page.
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const { readSpreadsheet } = await import('../../../modules/directory/directoryExcel')
+      parsed = await readSpreadsheet(bytes)
+      print = fileFingerprint(bytes)
+      if (!parsed.error) note = 'Sheet "' + parsed.sheetName + '"' + (parsed.sheetCount > 1 ? ' (first of ' + parsed.sheetCount + ' sheets; other sheets are ignored)' : '')
+    } else {
+      const text = await file.text()
+      parsed = parseCsv(text)
+      print = fileFingerprint(text)
+    }
     if (parsed.error) { setError(parsed.error); return }
     if (parsed.rows.length < 2) { setError('The file has no data rows.'); return }
-    setFileName(file.name); setFingerprint(fileFingerprint(text)); setTable(parsed.rows)
+    setFileName(file.name); setFingerprint(print); setTable(parsed.rows); setRowNumbers(parsed.rowNumbers || null); setSourceNote(note)
     setMapping(autoMapColumns(parsed.rows[0]).mapping)
     setStep('map')
   }
@@ -63,10 +78,10 @@ export default function DirectoryImport() {
     setBusy(true); setError('')
     try {
       // Cheap pre-check so a missing name column fails before any network use.
-      const dry = buildImportPlan(table, { mapping, categories, existing: [], fingerprint })
+      const dry = buildImportPlan(table, { mapping, categories, existing: [], fingerprint, rowNumbers })
       if (dry.error) { setError(dry.error); return }
       const existing = await repo.findCandidates(dry.rows.map((r) => r.record))
-      const full = buildImportPlan(table, { mapping, categories, existing, fingerprint })
+      const full = buildImportPlan(table, { mapping, categories, existing, fingerprint, rowNumbers })
       setPlan(full); setDecisions(defaultDecisions(full.rows)); setFilter('all'); setStep('review')
     } catch (e) {
       setError('Could not check for duplicates: ' + (e.message || 'request failed') + '. Nothing was imported.')
@@ -99,13 +114,13 @@ export default function DirectoryImport() {
       {step === 'choose' && (
         <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, background: 'var(--panel)', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>
-            Upload a CSV of businesses (up to 5,000 rows). You will review every row before anything is saved. Imported records always start as unverified.
+            Upload an Excel (.xlsx) or CSV file of businesses (up to 5,000 rows). You will review every row before anything is saved. Imported records always start as unverified.
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button variant="ghost" size="md" onClick={downloadTemplate}><Download size={14} aria-hidden="true" /> Download template</Button>
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, background: 'var(--teal)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-              <FileUp size={14} aria-hidden="true" /> Choose CSV file
-              <input type="file" accept=".csv,text/csv" onChange={onFile} style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />
+              <FileUp size={14} aria-hidden="true" /> Choose Excel or CSV file
+              <input type="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onFile} style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />
             </label>
           </div>
           <ImportHistory history={history} />
@@ -115,7 +130,7 @@ export default function DirectoryImport() {
       {step === 'map' && table && (
         <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, background: 'var(--panel)', display: 'flex', flexDirection: 'column', gap: 10 }}>
           <strong>{fileName}</strong>
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{table.length - 1} data rows. Check which column feeds each field.</span>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{sourceNote ? sourceNote + '. ' : ''}{table.length - 1} data rows. Check which column feeds each field.</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {IMPORT_FIELDS.map((f) => (
               <Select key={f} label={f.replace('_', ' ')} required={f === 'name'} value={mapping[f] === undefined ? '' : String(mapping[f])} placeholder="Not in file"

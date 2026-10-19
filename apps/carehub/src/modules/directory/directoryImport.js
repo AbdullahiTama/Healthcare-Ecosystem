@@ -51,6 +51,8 @@ export function templateCsv() {
 export function parseCsv(input) {
   const s = String(input == null ? '' : input).replace(/^﻿/, '')
   const rows = []
+  const rowNumbers = [] // original record number of each kept row (blank lines are skipped but counted)
+  let record = 0
   let row = []
   let field = ''
   let inQuotes = false
@@ -58,7 +60,8 @@ export function parseCsv(input) {
   const endField = () => { row.push(field); field = '' }
   const endRow = () => {
     endField()
-    if (row.some((c) => String(c).trim() !== '')) rows.push(row)
+    record++
+    if (row.some((c) => String(c).trim() !== '')) { rows.push(row); rowNumbers.push(record) }
     row = []
   }
   while (i < s.length) {
@@ -76,9 +79,9 @@ export function parseCsv(input) {
     if (c === '\n') { endRow(); i++; continue }
     field += c; i++
   }
-  if (inQuotes) return { rows: [], error: 'The file has an unclosed quote. Check for a stray " character.' }
+  if (inQuotes) return { rows: [], rowNumbers: [], error: 'The file has an unclosed quote. Check for a stray " character.' }
   if (field !== '' || row.length) endRow()
-  return { rows, error: null }
+  return { rows, rowNumbers, error: null }
 }
 
 // Header row -> { field: columnIndex }. Unmatched headers are returned so the
@@ -101,11 +104,12 @@ export function autoMapColumns(headers) {
 
 // Cheap, stable, non-cryptographic fingerprint of the file text. Only used to
 // make re-importing the same file idempotent (see runner), not for security.
-export function fileFingerprint(text) {
+export function fileFingerprint(content) {
   let h = 0x811c9dc5
-  const s = String(text)
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
-  return h.toString(16).padStart(8, '0') + '-' + s.length.toString(16)
+  const isBytes = typeof content !== 'string'
+  const n = content.length
+  for (let i = 0; i < n; i++) { h ^= isBytes ? content[i] : content.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
+  return h.toString(16).padStart(8, '0') + '-' + n.toString(16)
 }
 
 function tokenSet(name) {
@@ -168,11 +172,12 @@ function resolveCategory(value, categories, parentId) {
  * possible matches (see repository.findCandidates). Rows are compared with
  * those AND with earlier rows of the same file.
  *
+ * `rowNumbers[i]` (optional) is the original spreadsheet row of table[i].
  * Returns { rows, counts, fingerprint, error }. Each row:
  *   { row, status, errors: {field:msg}, warnings: [msg], record, candidates: [{ref, level, reasons}] }
  * `row` is the 1-based spreadsheet row number (header = row 1).
  */
-export function buildImportPlan(table, { mapping, categories = [], existing = [], fingerprint = '' } = {}) {
+export function buildImportPlan(table, { mapping, categories = [], existing = [], fingerprint = '', rowNumbers = null } = {}) {
   if (!table || table.length < 2) return { rows: [], counts: {}, fingerprint, error: 'The file has no data rows.' }
   if (table.length - 1 > MAX_IMPORT_ROWS) {
     return { rows: [], counts: {}, fingerprint, error: 'Import at most ' + MAX_IMPORT_ROWS + ' rows per file. Split the file and import in parts.' }
@@ -182,7 +187,8 @@ export function buildImportPlan(table, { mapping, categories = [], existing = []
   const planned = []
   const seen = [] // { rec, rowNo } of earlier valid rows in this file
   table.slice(1).forEach((cells, i) => {
-    const rowNo = i + 2
+    // Original spreadsheet row when the reader supplied it (blank rows skipped), else position + 2.
+    const rowNo = rowNumbers && rowNumbers[i + 1] ? rowNumbers[i + 1] : i + 2
     const input = {}
     IMPORT_FIELDS.forEach((f) => { input[f] = cell(cells, mapping, f) })
 
