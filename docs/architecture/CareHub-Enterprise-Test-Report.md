@@ -13,6 +13,7 @@ Branch `feat/enterprise-directory` (head after this commit). Run 2026-10-19 on a
 | Check-in database tests | `scripts/db-tests/checkins.pglite.mjs` | **60 passed, 0 failed** |
 | Activity access, link and realtime publication tests | `scripts/db-tests/activity.pglite.mjs` | **56 passed, 0 failed** |
 | Staff privilege and tenant tests | `scripts/db-tests/staff.pglite.mjs` | **29 passed, 0 failed** |
+| Import merge database tests | `scripts/db-tests/merge.pglite.mjs` | **49 passed, 0 failed** |
 | Spatial query plan | ad hoc script on 30,000 synthetic rows | Bounding box uses `directory_businesses_coord_idx` (bitmap index scan, 12 rows, ~8 ms). `directory_search` 270-340 ms in WebAssembly under load: **indicative only** |
 | CareFind suite | not run | CareFind code was not changed |
 
@@ -46,6 +47,7 @@ All pass on PGlite unless noted. "Before" rows show the finding is real on the p
 | Company A cannot retrieve B's private location history | checkins: B rep and B owner read zero A rows; overview refused for B owner and B staff |
 | A rep cannot assign themselves to another company | staff insert into B refused; `rep_territories` for B's territory refused; `record_checkin` for B refused |
 | A company cannot change global directory verification | directory: company UPDATE affects 0 rows; `directory_set_verification` refused (42501); a direct admin UPDATE cannot change it either |
+| Import merge cannot launder or overwrite trusted data | merge: company and rep refused (42501); name, verification, source, active flag cannot be merged; verified records keep existing values; verification columns unchanged by a merge; bad value fails the whole call atomically; retry does not undo a later edit; merge log not writable by anyone |
 | A company cannot access unauthorised imports | `directory_imports`: company insert refused, no read policy for companies |
 | Revoked membership removes access | check-in write refused and staff leaves the overview; (activity: not separately tested after revocation) |
 | Client-supplied company ids cannot bypass membership | forged business id refused for check-in, activity insert, staff insert |
@@ -78,7 +80,7 @@ Not tested: SQL injection beyond wildcard escaping (parameters are bound), rate 
 - No end-to-end test of the complete journey (admin imports, rep searches, opens map, reports, manager sees it, other company cannot). The parts are tested separately.
 - No Google credentials: the live map has never loaded.
 - No test on Supabase or against live policies.
-- Import merge and check-in retention. Excel import is implemented and tested against real generated workbooks, but not against files saved by Excel itself, LibreOffice or Google Sheets (formulas, date cells, merged cells and very large sheets are untested).
+- Check-in retention, undo for a merge. Excel import is implemented and tested against real generated workbooks, but not against files saved by Excel itself, LibreOffice or Google Sheets (formulas, date cells, merged cells and very large sheets are untested).
 
 ## 7. Production-readiness review (Phase 11)
 
@@ -98,7 +100,7 @@ Legend: PASS = verified as described; PARTIAL = code and tests exist but a state
 - Categories and subcategories: PARTIAL. Add and list only; no rename/reorder
 - Verification explicit and auditable: PASS on PGlite (RPC-only, actor and time stamped, audit rows); not on Supabase
 - Bulk imports validate and report errors: PASS (unit, mocks); CSV only
-- Duplicate handling safe: PARTIAL. Classification and review tested; no merge; fuzzy match limited to key/city candidates
+- Duplicate handling safe: PARTIAL. Classification, review and a reviewed field-by-field merge are tested (49 database checks, UI flow, runner); fuzzy match is limited to key/city candidates; two existing directory records cannot be merged with each other
 - Directory permissions enforced: PASS on PGlite
 
 **Maps and discovery**

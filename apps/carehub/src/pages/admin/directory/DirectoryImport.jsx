@@ -7,6 +7,9 @@ import {
   fileFingerprint, templateCsv, ROW_STATUS, IMPORT_FIELDS,
 } from '../../../modules/directory/directoryImport'
 import { runImport } from '../../../modules/directory/directoryImportRunner'
+import { mergeTargets } from '../../../modules/directory/directoryImport'
+import { SKIP_REASON_TEXT } from '../../../modules/directory/directoryMerge'
+import DirectoryMergeReview from './DirectoryMergeReview'
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024
 const EXCEL_NAME = /\.xlsx$/i
@@ -35,6 +38,9 @@ export default function DirectoryImport() {
   const [mapping, setMapping] = useState({})
   const [plan, setPlan] = useState(null)
   const [decisions, setDecisions] = useState({})
+  const [existingById, setExistingById] = useState({}) // directory rows found as candidates, for merge review
+  const [mergePlans, setMergePlans] = useState({})     // row -> { targetId, targetName, selections, changes, summary }
+  const [mergeRow, setMergeRow] = useState(null)       // row number being reviewed
   const [filter, setFilter] = useState('all')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -82,6 +88,7 @@ export default function DirectoryImport() {
       if (dry.error) { setError(dry.error); return }
       const existing = await repo.findCandidates(dry.rows.map((r) => r.record))
       const full = buildImportPlan(table, { mapping, categories, existing, fingerprint, rowNumbers })
+      setExistingById(Object.fromEntries(existing.map((e) => [e.id, e]))); setMergePlans({})
       setPlan(full); setDecisions(defaultDecisions(full.rows)); setFilter('all'); setStep('review')
     } catch (e) {
       setError('Could not check for duplicates: ' + (e.message || 'request failed') + '. Nothing was imported.')
@@ -90,22 +97,28 @@ export default function DirectoryImport() {
 
   const visible = useMemo(() => (plan ? plan.rows.filter((r) => filter === 'all' || r.status === filter) : []), [plan, filter])
   const toImport = plan ? selectRowsToImport(plan.rows, decisions).length : 0
+  // Only rows the reviewer turned into a confirmed merge. Nothing is merged by default.
+  const confirmedMerges = plan ? plan.rows.filter((r) => decisions[r.row] === 'merge' && mergePlans[r.row]).map((r) => ({
+    row: r.row, targetId: mergePlans[r.row].targetId, sourceRef: r.record.source_ref, changes: mergePlans[r.row].changes,
+  })) : []
+  const reviewable = (r) => mergeTargets(r).filter((t) => existingById[t.id])
+  const mergeRowObj = plan && mergeRow ? plan.rows.find((r) => r.row === mergeRow) : null
 
   async function start() {
     setStep('running'); setResult(null); setError('')
     const ctl = new AbortController(); abortRef.current = ctl
-    setProgress({ processed: 0, total: toImport, inserted: 0, failed: 0 })
-    const res = await runImport({ planRows: plan.rows, decisions, repo, signal: ctl.signal, onProgress: setProgress })
+    setProgress({ processed: 0, total: toImport + confirmedMerges.length, inserted: 0, failed: 0 })
+    const res = await runImport({ planRows: plan.rows, decisions, repo, merges: confirmedMerges, signal: ctl.signal, onProgress: setProgress })
     try {
       await repo.recordImport({
         fileName, fileFingerprint: fingerprint, counts: plan.counts,
-        result: { total: res.total, inserted: res.inserted, alreadyImported: res.alreadyImported, failed: res.failed.slice(0, 200), cancelled: res.cancelled, denied: res.denied },
+        result: { total: res.total, inserted: res.inserted, alreadyImported: res.alreadyImported, failed: res.failed.slice(0, 200), merged: res.merged, mergeAlreadyApplied: res.mergeAlreadyApplied, mergeFailed: res.mergeFailed.slice(0, 100), cancelled: res.cancelled, denied: res.denied },
       })
     } catch (e) { showToast('Imported, but the history entry could not be saved: ' + e.message, { type: 'warning' }) }
     setResult(res); setStep('done')
   }
 
-  function reset() { setStep('choose'); setTable(null); setPlan(null); setResult(null); setProgress(null); setError('') }
+  function reset() { setStep('choose'); setTable(null); setPlan(null); setMergePlans({}); setMergeRow(null); setResult(null); setProgress(null); setError('') }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -172,9 +185,21 @@ export default function DirectoryImport() {
                   <Pill label={STATUS_LABEL[r.status]} type={STATUS_PILL[r.status]} />
                   {r.status !== ROW_STATUS.INVALID && (
                     <Select aria-label={'Decision for row ' + r.row} value={decisions[r.row] || 'skip'} placeholder="Skip"
-                      onChange={(v) => setDecisions((d) => ({ ...d, [r.row]: v || 'skip' }))}
-                      options={[{ value: 'import', label: 'Import as new' }, { value: 'skip', label: 'Skip' }, ...(r.candidates.some((c) => c.ref.id) ? [{ value: 'keep_existing', label: 'Keep existing' }] : [])]}
-                      style={{ width: 150 }} />
+                      onChange={(v) => {
+                        // Merge needs a confirmed field-by-field review first; the decision is only set on confirm.
+                        if (v === 'merge') { setMergeRow(r.row); return }
+                        setDecisions((d) => ({ ...d, [r.row]: v || 'skip' }))
+                      }}
+                      options={[{ value: 'import', label: 'Import as new' }, { value: 'skip', label: 'Skip' },
+                        ...(r.candidates.some((c) => c.ref.id) ? [{ value: 'keep_existing', label: 'Keep existing' }] : []),
+                        ...(reviewable(r).length ? [{ value: 'merge', label: 'Merge into existing...' }] : [])]}
+                      style={{ width: 170 }} />
+                  )}
+                  {decisions[r.row] === 'merge' && mergePlans[r.row] && (
+                    <div style={{ flexBasis: '100%', fontSize: 12 }}>
+                      Merge into <strong>{mergePlans[r.row].targetName}</strong>: {mergePlans[r.row].summary}.{' '}
+                      <button type="button" onClick={() => setMergeRow(r.row)} style={{ background: 'none', border: 'none', color: 'var(--teal)', cursor: 'pointer', fontSize: 12, padding: 0 }}>Review again</button>
+                    </div>
                   )}
                 </li>
               ))}
@@ -183,7 +208,9 @@ export default function DirectoryImport() {
           {visible.length > 300 && <div style={{ fontSize: 12, color: 'var(--muted)' }}>Showing the first 300 rows of this view. Use the filters to narrow it down.</div>}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <Button variant="ghost" size="sm" onClick={reset}>Cancel</Button>
-            <Button variant="primary" size="md" disabled={toImport === 0} onClick={start}>Import {toImport} {toImport === 1 ? 'row' : 'rows'}</Button>
+            <Button variant="primary" size="md" disabled={toImport + confirmedMerges.length === 0} onClick={start}>
+              {confirmedMerges.length ? 'Import ' + toImport + ' and merge ' + confirmedMerges.length : 'Import ' + toImport + (toImport === 1 ? ' row' : ' rows')}
+            </Button>
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>Duplicates and rows needing review are skipped unless you choose to import them.</span>
           </div>
         </>
@@ -209,9 +236,30 @@ export default function DirectoryImport() {
               {result.failed.slice(0, 100).map((f) => <li key={f.row}>Row {f.row}: {f.message}</li>)}
             </ul>
           )}
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>You can re-run the same file safely: rows already saved are recognised and not duplicated.</div>
+          {(result.merged + result.mergeAlreadyApplied + result.mergeNothingChanged + result.mergeFailed.length > 0) && (
+            <div style={{ fontSize: 13 }}>{result.merged} merged · {result.mergeAlreadyApplied} already merged earlier · {result.mergeNothingChanged} needed no change · {result.mergeFailed.length} merge failed</div>
+          )}
+          {result.mergeSkipped.filter((s) => s.reason !== 'same').length > 0 && (
+            <ul aria-label="Merge fields that were not changed" style={{ margin: 0, paddingLeft: 18, fontSize: 12, maxHeight: 160, overflowY: 'auto' }}>
+              {result.mergeSkipped.filter((s) => s.reason !== 'same').slice(0, 100).map((s, i) => <li key={i}>Row {s.row}, {s.field}: {SKIP_REASON_TEXT[s.reason] || s.reason}</li>)}
+            </ul>
+          )}
+          {result.mergeFailed.length > 0 && (
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12 }}>{result.mergeFailed.slice(0, 50).map((f) => <li key={'m' + f.row}>Merge, row {f.row}: {f.message}</li>)}</ul>
+          )}
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>You can re-run the same file safely: rows already saved or merged are recognised and not applied twice.</div>
           <Button variant="primary" size="md" onClick={reset}>Done</Button>
         </div>
+      )}
+      {mergeRowObj && (
+        <DirectoryMergeReview planRow={mergeRowObj} targets={reviewable(mergeRowObj)} existingById={existingById} categories={categories}
+          initial={mergePlans[mergeRowObj.row]}
+          onCancel={() => setMergeRow(null)}
+          onConfirm={(p) => {
+            setMergePlans((m) => ({ ...m, [mergeRowObj.row]: p }))
+            setDecisions((d) => ({ ...d, [mergeRowObj.row]: 'merge' }))
+            setMergeRow(null)
+          }} />
       )}
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
     </div>

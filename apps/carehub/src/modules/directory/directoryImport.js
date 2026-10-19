@@ -240,9 +240,17 @@ export function buildImportPlan(table, { mapping, categories = [], existing = []
   return { rows: planned, counts, fingerprint, error: null }
 }
 
-// Decisions a reviewer can make per row. 'merge' is intentionally absent: a
-// merge changes a trusted record and needs its own authorised, reviewed flow.
-export const DECISIONS = ['import', 'skip', 'keep_existing']
+// Decisions a reviewer can make per row. 'merge' is never a default and is only
+// available for a row that matches an existing record; it additionally needs a
+// confirmed, field-by-field review (see directoryMerge.js) before anything runs.
+export const DECISIONS = ['import', 'skip', 'keep_existing', 'merge']
+
+// Existing directory records a row could be merged into (in-file matches cannot be).
+export function mergeTargets(planRow) {
+  return (planRow && planRow.status !== ROW_STATUS.INVALID ? planRow.candidates : [])
+    .filter((c) => c.ref && c.ref.id)
+    .map((c) => c.ref)
+}
 
 // What happens to each row if the reviewer decides nothing. Duplicates and
 // rows needing review are NOT imported by default.

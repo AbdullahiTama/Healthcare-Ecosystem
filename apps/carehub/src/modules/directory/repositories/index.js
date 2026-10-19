@@ -149,7 +149,9 @@ export function createDirectoryRepository(request = sbFetch) {
     // proximity comparison has something to compare with. Rows elsewhere with a
     // merely similar name are NOT found: that is a documented limit.
     async findCandidates(records) {
-      const cols = 'id,name,name_normalized,phone_normalized,address,latitude,longitude,data_source,source_ref,verification_status'
+      // Also what a reviewer needs to compare field by field before a merge.
+      const cols = 'id,name,name_normalized,phone_normalized,address,latitude,longitude,data_source,source_ref,verification_status,is_active,' +
+        'category_id,subcategory_id,business_type,city,state,lga,phone,email,website,description'
       const names = [...new Set(records.map((r) => duplicateKeys(r).name).filter(Boolean))]
       const phones = [...new Set(records.map((r) => duplicateKeys(r).phone).filter(Boolean))]
       const cities = [...new Set(records.map((r) => r.city).filter(Boolean))].slice(0, 50)
@@ -166,6 +168,19 @@ export function createDirectoryRepository(request = sbFetch) {
         add(await request('directory_businesses?city=ilike.' + likeTerm(city) + '&select=' + cols + '&limit=1000'))
       }
       return [...out.values()]
+    },
+
+    // Merge a reviewed import row into an existing business. The database enforces
+    // who may do it, which fields are allowed, that verified records are never
+    // overwritten, and that the same import row merges only once.
+    // changes: { field: { value, mode: 'fill' | 'overwrite' } } from buildMergeChanges.
+    async mergeImportRow(targetId, sourceRef, changes) {
+      if (!targetId || !sourceRef || !changes) throw new Error('Nothing to merge.')
+      const res = await request('rpc/directory_merge_import_row', {
+        method: 'POST', body: JSON.stringify({ p_id: targetId, p_source_ref: sourceRef, p_changes: changes }),
+      })
+      const r = Array.isArray(res) ? res[0] : res
+      return { alreadyMerged: false, applied: {}, skipped: [], ...(r || {}) }
     },
 
     async recordImport({ fileName, fileFingerprint, counts, result }) {
