@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 
 // Regression: tapping "Log It" in the Log Activity modal called a bare
 // `logActivity({...})` that was never defined, so every attempt to log a field
@@ -94,7 +95,7 @@ afterEach(() => {
 
 describe('LiveActivity log modal', () => {
   it('saves the visit through liveActivityRepository.logActivity and reports success', async () => {
-    await act(async () => { root.render(<LiveActivity brand={BRAND} />) })
+    await act(async () => { root.render(<MemoryRouter><LiveActivity brand={BRAND} /></MemoryRouter>) })
     await flush() // let load() resolve so the activity fields are available
 
     await act(async () => { button('Log Activity').click() })
@@ -127,7 +128,7 @@ describe('LiveActivity log modal', () => {
     const mk = (i) => ({ id: 'a' + i, business_id: 'brand-1', staff_id: 'staff-1', rep_name: 'Ada Rep', rep_title: 'Field Rep', values_json: '{}', created_at: new Date(Date.UTC(2026, 9, 19, 12, 0, 0) - i * 60000).toISOString() })
     const first = Array.from({ length: 100 }, (_, i) => mk(i))
     repo.getFieldActivities.mockResolvedValueOnce(first).mockResolvedValueOnce([mk(99), mk(100), mk(101)])
-    await act(async () => { root.render(<LiveActivity brand={BRAND} />) })
+    await act(async () => { root.render(<MemoryRouter><LiveActivity brand={BRAND} /></MemoryRouter>) })
     await flush()
     expect(button('Load older activity')).toBeTruthy()
     await act(async () => { button('Load older activity').click() })
@@ -140,7 +141,7 @@ describe('LiveActivity log modal', () => {
   })
 
   it('refetches once when the realtime connection comes back after a drop', async () => {
-    await act(async () => { root.render(<LiveActivity brand={BRAND} />) })
+    await act(async () => { root.render(<MemoryRouter><LiveActivity brand={BRAND} /></MemoryRouter>) })
     await flush()
     const onStatus = watchTable.mock.calls[0][3]
     const loadsBefore = repo.getFieldActivities.mock.calls.length
@@ -159,7 +160,7 @@ describe('LiveActivity log modal', () => {
     vi.useFakeTimers()
     try {
       repo.getFieldActivities.mockResolvedValue([{ id: 'a1', business_id: 'brand-1', staff_id: 'staff-1', rep_name: 'Ada Rep', values_json: '{}', created_at: '2026-10-19T10:00:00Z' }])
-      await act(async () => { root.render(<LiveActivity brand={BRAND} />) })
+      await act(async () => { root.render(<MemoryRouter><LiveActivity brand={BRAND} /></MemoryRouter>) })
       await act(async () => { await vi.advanceTimersByTimeAsync(50) })
       const reactionsCall = subscribeChanges.mock.calls.find((c) => c[0].table === 'activity_reactions')
       expect(reactionsCall[0].event).toBe('*')
@@ -175,7 +176,7 @@ describe('LiveActivity log modal', () => {
   })
 
   it('does not call the repository while a required field is empty', async () => {
-    await act(async () => { root.render(<LiveActivity brand={BRAND} />) })
+    await act(async () => { root.render(<MemoryRouter><LiveActivity brand={BRAND} /></MemoryRouter>) })
     await flush()
 
     await act(async () => { button('Log Activity').click() })
