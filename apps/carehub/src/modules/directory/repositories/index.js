@@ -123,6 +123,15 @@ export function createDirectoryRepository(request = sbFetch) {
         '&order=created_at.desc&select=id,action,actor_id,before,after,note,created_at&limit=' + clampLimit(limit, 200))
     },
 
+    // Business Discovery: server-side filter, radius, sort and pagination via
+    // the read-only directory_search RPC. `params` are built by
+    // business-directory/searchQuery.buildSearchParams.
+    async discover(params) {
+      const res = await request('rpc/directory_search', { method: 'POST', body: JSON.stringify(params) })
+      const r = Array.isArray(res) ? res[0] : res
+      return { rows: [], total: 0, hasMore: false, ...(r || {}) }
+    },
+
     // Import execution. Records come from buildImportPlan (already validated);
     // the database re-checks them. One request = one atomic batch.
     async insertBatch(records) {
