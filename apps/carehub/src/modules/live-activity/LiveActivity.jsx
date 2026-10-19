@@ -12,7 +12,6 @@ import {
 } from '../../lib/places.js'
 import { discoverFacilities } from '../../lib/facilityDiscovery.js'
 import FacilityPicker from './FacilityPicker.jsx'
-import DirectoryBusinessLink from './DirectoryBusinessLink.jsx'
 import CheckInPanel from '../checkins/CheckInPanel.jsx'
 import TeamLocations from '../checkins/TeamLocations.jsx'
 import { isManagerRole } from '../../lib/permissions'
@@ -144,8 +143,6 @@ export default function LiveActivity({ brand }) {
   // nearest health facility. `facility` is the chosen facility object (or a
   // rep-added synthetic one); it replaces the old free-text `placeQuery` box.
   const [facility, setFacility] = useState(null)
-  // Directory business the rep explicitly selected for this report (never automatic).
-  const [dirLink, setDirLink] = useState(null)
   const [facilityLoading, setFacilityLoading] = useState(false)
   const [facilityError, setFacilityError] = useState(false)
   // Manager review: opens the same FacilityPicker centered on a logged visit's
@@ -529,7 +526,6 @@ export default function LiveActivity({ brand }) {
     setGpsAddress(null)
     setPlaceName('')
     setFacility(null)
-    setDirLink(null)
     setFacilityLoading(false)
     setFacilityError(false)
     setLogging(true)
@@ -649,9 +645,6 @@ export default function LiveActivity({ brand }) {
         facility_source: facility ? (facility.source || 'detected') : null,
         facility_verified: verified,
         facility_pending_review: pendingReview,
-        // Only sent when the rep selected a business, so a report without one is
-        // identical to before (and works before the directory migration is applied).
-        ...(dirLink ? { directory_business_id: dirLink.id, business_link_confirmed: true } : {}),
       }, viewers)
 
       showToast('Activity logged', { type: 'success' })
@@ -1319,9 +1312,6 @@ export default function LiveActivity({ brand }) {
                   value={facility}
                   onChange={function (f) { setFacility(f) }}
                 />
-              )}
-              {gps && (
-                <DirectoryBusinessLink gps={gps} value={dirLink} onChange={setDirLink} />
               )}
             </div>
 

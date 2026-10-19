@@ -27,7 +27,7 @@ describe('platformPermissions', () => {
     expect(hasPlatformPerm({ Dashboard: true }, 'Businesses')).toBe(false)
   })
   it('defines a nav entry for every platform permission', () => {
-    expect(PLATFORM_PERMISSIONS).toHaveLength(15)
+    expect(PLATFORM_PERMISSIONS).toHaveLength(14)
     expect(PLATFORM_PERMISSIONS).toContain('Team-Agents')
     expect(PLATFORM_NAV).toHaveLength(PLATFORM_PERMISSIONS.length)
   })

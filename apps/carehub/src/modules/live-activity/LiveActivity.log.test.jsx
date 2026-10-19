@@ -118,10 +118,6 @@ describe('LiveActivity log modal', () => {
       values_json: JSON.stringify({ 'fld-1': 'Allen Avenue Pharmacy' }),
     })
     expect(viewers).toEqual([])
-    // No business was selected, so nothing about the directory is sent: the report is
-    // identical to before the directory existed.
-    expect(activity).not.toHaveProperty('directory_business_id')
-    expect(activity).not.toHaveProperty('business_link_confirmed')
 
     expect(toast()).toContain('Activity logged')
     expect(dialog()).toBeNull()

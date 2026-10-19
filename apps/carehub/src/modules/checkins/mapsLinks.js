@@ -1,5 +1,9 @@
-import { isValidLatLng } from '../directory/directoryRecord.js'
 import { formatDistance } from '../../lib/geo.js'
+
+function isValidLatLng(lat, lng) {
+  return Number.isFinite(lat) && Number.isFinite(lng) &&
+    lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+}
 
 // Google Maps URLs (no API key needed). They open Google Maps in a new tab; the
 // app never calls a Google web service for them. Returns null for a business

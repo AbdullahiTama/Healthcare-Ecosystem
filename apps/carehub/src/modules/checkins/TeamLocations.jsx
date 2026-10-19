@@ -3,7 +3,7 @@ import { Users, RefreshCw } from 'lucide-react'
 import { Button, Pill, Loading, Empty, ErrorState } from '../../components/ui'
 import { checkinRepository } from './repositories'
 import { describeStaffRow } from './checkinView'
-import { viewOnMapUrl } from '../business-directory/mapsLinks'
+import { viewOnMapUrl } from './mapsLinks'
 
 // Manager view of the team's latest explicit check-ins. Shown only to managers
 // and owners; the database refuses anyone else. Opening it is recorded in the

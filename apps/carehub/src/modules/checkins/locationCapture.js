@@ -1,6 +1,9 @@
-import { isValidLatLng } from '../directory/directoryRecord.js'
+function isValidLatLng(lat, lng) {
+  return Number.isFinite(lat) && Number.isFinite(lng) &&
+    lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+}
 
-// One-shot browser location capture for Business Discovery. It never throws and
+// One-shot browser location capture for check-in. It never throws and
 // never fabricates a position: a failure is reported as { ok:false, reason }.
 // It is only called from a user action (a button), never on page load, and
 // never watches the position continuously.

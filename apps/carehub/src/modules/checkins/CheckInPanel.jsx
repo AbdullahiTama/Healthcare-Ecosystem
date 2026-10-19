@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { MapPin, LogIn, LogOut } from 'lucide-react'
 import { Button, Loading, ErrorState } from '../../components/ui'
 import { checkinRepository } from './repositories'
-import { captureLocation, locationMessage } from '../business-directory/locationCapture'
+import { captureLocation, locationMessage } from './locationCapture'
 import { EVENT_LABEL, FAILURE_TEXT } from './checkinView'
 
 // Explicit check-in for the signed-in person. Location is requested ONLY when a
