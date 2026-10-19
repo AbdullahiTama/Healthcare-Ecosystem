@@ -1,89 +1,14 @@
-// Directory database tests, run against PGlite (Postgres compiled to WebAssembly).
-//
-//   npm i --no-save @electric-sql/pglite     (not a project dependency)
+// Directory database tests. See _harness.mjs for what this does and does not prove.
 //   node scripts/db-tests/directory.pglite.mjs
-//
-// WHAT THIS PROVES: the directory migrations apply and re-apply cleanly on real
-// Postgres, and the grants, RLS policies, triggers, constraints and RPCs behave
-// as intended for admin, company and anonymous roles.
-// WHAT IT DOES NOT PROVE: Supabase itself. auth.uid()/auth.email() are stand-ins
-// that read request.jwt.claims; businesses/staff are minimal stand-in tables;
-// is_platform_admin() and current_business_ids() are the real definitions from
-// sql/phase2_rls_pilot.sql. PostgREST, Realtime and the live schema are not
-// exercised. Re-run against a Supabase branch before applying to production.
-import { fileURLToPath } from 'node:url'
-import path from 'node:path'
-import { PGlite } from '@electric-sql/pglite'
-import fs from 'node:fs'
+import { ok, expectError, finish, as, sup, applyMigrations, ADMIN } from './_harness.mjs'
 
-const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-const MIG = REPO + '/supabase/migrations/'
-const db = new PGlite()
-process.on('uncaughtException', (e) => { console.log(results.join(String.fromCharCode(10))); console.log('CRASH', e.code, String(e.message).slice(0,300), String(e.query||'').slice(0,300)); process.exit(2) })
-
-let pass = 0, fail = 0
-const results = []
-function ok(name, cond, extra) { (cond ? pass++ : fail++); results.push((cond ? 'PASS ' : 'FAIL ') + name + (cond ? '' : '  -> ' + (extra ?? ''))) }
-async function expectError(name, fn, codeOrText) {
-  try { await fn(); ok(name, false, 'expected an error, got none') }
-  catch (e) { ok(name, !codeOrText || String(e.code) === codeOrText || String(e.message).includes(codeOrText), e.code + ' ' + e.message) }
-}
-
-// ---- Supabase-like scaffolding ----------------------------------------------------------------
-await db.exec(`
-  CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;
-  CREATE SCHEMA auth;
-`)
-await db.exec(`
-  CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')::uuid $$;
-  CREATE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email' $$;
-  GRANT USAGE ON SCHEMA public, auth TO anon, authenticated;
-  GRANT EXECUTE ON FUNCTION auth.uid(), auth.email() TO anon, authenticated;
-  CREATE TABLE public.businesses (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text, email text, is_platform_admin boolean NOT NULL DEFAULT false,
-    parent_business_id uuid, business_type text, category text, state text, city text, lga text, area text, address text,
-    phone text, latitude double precision, longitude double precision, lat double precision, lng double precision,
-    website text, created_at timestamptz DEFAULT now());
-  CREATE TABLE public.staff (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid, email text, status text DEFAULT 'active', role text);
-`)
-// Real definitions from sql/phase2_rls_pilot.sql
-await db.exec(`
-  CREATE OR REPLACE FUNCTION current_business_ids() RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-    SELECT id FROM businesses WHERE lower(email) = lower(auth.email())
-    UNION SELECT business_id FROM staff WHERE lower(email) = lower(auth.email()) AND status = 'active' $$;
-  CREATE OR REPLACE FUNCTION is_platform_admin() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-    SELECT COALESCE((SELECT is_platform_admin FROM businesses WHERE lower(email) = lower(auth.email())), false) $$;
-`)
-
-const ADMIN = '00000000-0000-0000-0000-0000000000a1'
-const COMPANY_A = '00000000-0000-0000-0000-0000000000b1'
-const COMPANY_B = '00000000-0000-0000-0000-0000000000b2'
-await db.exec(`
-  INSERT INTO businesses (email, is_platform_admin, name, state, city, latitude, longitude, phone) VALUES
-   ('admin@x.test', true, 'Platform', 'Lagos', 'Ikeja', 6.6, 3.35, '0803'),
-   ('a@x.test', false, 'Company A', 'Lagos', 'Yaba', 6.5, 3.38, '0804'),
-   ('b@x.test', false, 'Company B', 'Oyo', 'Ibadan', 7.4, 3.9, '0805');
-`)
-
-async function as(who, sql, params) {
-  const claims = who === 'admin' ? { sub: ADMIN, email: 'admin@x.test' } : who === 'a' ? { sub: COMPANY_A, email: 'a@x.test' } : who === 'b' ? { sub: COMPANY_B, email: 'b@x.test' } : null
-  await db.exec(`RESET ROLE; SELECT set_config('request.jwt.claims', '${claims ? JSON.stringify(claims) : ''}', false);`)
-  await db.exec(who === 'anon' || who === null ? 'SET ROLE anon' : 'SET ROLE authenticated')
-  try { return await db.query(sql, params) } finally { await db.exec('RESET ROLE') }
-}
-const sup = (sql, params) => db.query(sql, params)
-
-// ---- apply the repo's migrations, in order ---------------------------------------------------
-const files = ['carehub_20260905_facility_discovery_cursor_pagination.sql', 'carehub_20261119_discover_facilities_cursor_lockdown.sql', 'carehub_20261120_business_directory.sql', 'carehub_20261121_directory_imports.sql', 'carehub_20261122_directory_search.sql']
-for (const f of files) {
-  try { await db.exec(fs.readFileSync(MIG + f, 'utf8')); ok('migration applies: ' + f, true) }
-  catch (e) { ok('migration applies: ' + f, false, e.message); }
-}
-// idempotency: the directory migrations must be re-runnable
-for (const f of files.slice(1)) {
-  try { await db.exec(fs.readFileSync(MIG + f, 'utf8')); ok('migration re-runs cleanly: ' + f, true) }
-  catch (e) { ok('migration re-runs cleanly: ' + f, false, e.message) }
-}
+await applyMigrations([
+  'carehub_20260905_facility_discovery_cursor_pagination.sql',
+  'carehub_20261119_discover_facilities_cursor_lockdown.sql',
+  'carehub_20261120_business_directory.sql',
+  'carehub_20261121_directory_imports.sql',
+  'carehub_20261122_directory_search.sql',
+])
 
 // ---- authorisation ---------------------------------------------------------------------------
 ok('is_directory_admin: platform admin', (await as('admin', 'select is_directory_admin() v')).rows[0].v === true)
@@ -196,6 +121,4 @@ const legacy = (await as('a', "select discover_facilities_cursor('Lagos', null, 
 ok('legacy RPC: signed-in user still works; bad cursor -> offset 0; limit clamped to 100', legacy.rows.length >= 1 && legacy.rows.length <= 100, JSON.stringify(legacy).slice(0, 120))
 ok('legacy RPC: % wildcard no longer matches everything', (await as('a', "select discover_facilities_cursor('%') r")).rows[0].r.total === 0)
 
-console.log(results.join('\n'))
-console.log(`\n${pass} passed, ${fail} failed`)
-process.exit(fail ? 1 : 0)
+finish()
