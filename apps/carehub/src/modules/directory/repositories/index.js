@@ -1,6 +1,6 @@
 import { sbFetch } from '../../../services/supabase'
 import { isDuplicateError } from '../../../lib/dbErrors'
-import { validateDirectoryRecord, VERIFICATION_STATUSES } from '../directoryRecord'
+import { validateDirectoryRecord, VERIFICATION_STATUSES, duplicateKeys } from '../directoryRecord'
 
 // Directory repository: the transport seam for directory_businesses,
 // directory_categories, directory_business_private and directory_audit.
@@ -121,6 +121,57 @@ export function createDirectoryRepository(request = sbFetch) {
     async history(id, limit = 50) {
       return request('directory_audit?directory_business_id=eq.' + enc(id) +
         '&order=created_at.desc&select=id,action,actor_id,before,after,note,created_at&limit=' + clampLimit(limit, 200))
+    },
+
+    // Import execution. Records come from buildImportPlan (already validated);
+    // the database re-checks them. One request = one atomic batch.
+    async insertBatch(records) {
+      if (!Array.isArray(records) || records.length === 0) return
+      if (records.length > 200) throw new Error('Batch too large')
+      return request('directory_businesses', { method: 'POST', body: JSON.stringify(records), prefer: 'return=minimal' })
+    },
+
+    async insertOne(record) {
+      return request('directory_businesses', { method: 'POST', body: JSON.stringify(record), prefer: 'return=minimal' })
+    },
+
+    // Existing rows an import might duplicate: exact name or phone keys, plus
+    // everything in the cities the file mentions (capped), so fuzzy and
+    // proximity comparison has something to compare with. Rows elsewhere with a
+    // merely similar name are NOT found: that is a documented limit.
+    async findCandidates(records) {
+      const cols = 'id,name,name_normalized,phone_normalized,address,latitude,longitude,data_source,source_ref,verification_status'
+      const names = [...new Set(records.map((r) => duplicateKeys(r).name).filter(Boolean))]
+      const phones = [...new Set(records.map((r) => duplicateKeys(r).phone).filter(Boolean))]
+      const cities = [...new Set(records.map((r) => r.city).filter(Boolean))].slice(0, 50)
+      const out = new Map()
+      const add = (rows) => (Array.isArray(rows) ? rows : []).forEach((r) => out.set(r.id, r))
+      const inList = (vals) => '(' + vals.map((v) => '"' + String(v).replace(/["\\]/g, '') + '"').join(',') + ')'
+      for (let i = 0; i < names.length; i += 100) {
+        add(await request('directory_businesses?name_normalized=in.' + enc(inList(names.slice(i, i + 100))) + '&select=' + cols + '&limit=1000'))
+      }
+      for (let i = 0; i < phones.length; i += 100) {
+        add(await request('directory_businesses?phone_normalized=in.' + enc(inList(phones.slice(i, i + 100))) + '&select=' + cols + '&limit=1000'))
+      }
+      for (const city of cities) {
+        add(await request('directory_businesses?city=ilike.' + likeTerm(city) + '&select=' + cols + '&limit=1000'))
+      }
+      return [...out.values()]
+    },
+
+    async recordImport({ fileName, fileFingerprint, counts, result }) {
+      const rows = await request('directory_imports', {
+        method: 'POST',
+        body: JSON.stringify({
+          file_name: fileName || null, file_fingerprint: fileFingerprint,
+          row_counts: counts || {}, result: result || {},
+        }),
+      })
+      return Array.isArray(rows) ? rows[0] : rows
+    },
+
+    async listImports(limit = 25) {
+      return request('directory_imports?order=created_at.desc&select=*&limit=' + clampLimit(limit))
     },
 
     async saveCategory(category) {
