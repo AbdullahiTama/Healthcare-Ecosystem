@@ -67,6 +67,7 @@ beforeAll(async () => {
   `)
   expect((await one("select has_function_privilege('authenticated','public.confirm_appointment(uuid)','execute') v")).v).toBe(true)
   await db.exec(M('carefind_20261115_business_wallet_reconciliation'))
+  await db.exec(M('carefind_20261116_business_wallet_reconciliation_wiring'))
 }, 240_000)
 
 const one = async (sql, p = []) => (await db.query(sql, p)).rows[0]
@@ -166,5 +167,51 @@ describe('the legacy release path is closed', () => {
   it('but still works for the server, which is its only real caller', async () => {
     expect((await one("select has_function_privilege('service_role','public.confirm_appointment(uuid)','execute') v")).v).toBe(true)
     expect((await one("select to_regprocedure('public.confirm_appointment(uuid)') is not null v")).v).toBe(true)
+  })
+})
+
+describe('the nightly scan publishes business wallets (carefind_20261116)', () => {
+  const runLight = async () => (await asRole('service_role', () => one('select run_db_reconciliation(false) r'))).r
+  const rowsFor = (b) => all("select kind, severity, status from reconciliation_findings where source = 'business_wallets' and subject_id = $1 order by kind", [b])
+  const occOf = (b) => one("select occurrences::int occ, status from reconciliation_findings where source = 'business_wallets' and subject_id = $1", [b])
+
+  it('is a source of the scan, beside the others', async () => {
+    const r = await runLight()
+    expect(r.sources.map((s) => s.source)).toEqual(['commissions', 'withdrawals', 'refunds', 'shop_vendor', 'business_wallets', 'events'])
+  })
+
+  it('publishes a drifted wallet as a warning finding, and resolves it once the ledger agrees', async () => {
+    const b = await business({ available: 500_000 })
+    await runLight()
+    expect(await rowsFor(b)).toEqual([{ kind: 'no_ledger_rows', severity: 'warning', status: 'open' }])
+
+    await ledgerRow(b, 'topup', 500_000)
+    await runLight()
+    expect(await rowsFor(b)).toEqual([{ kind: 'no_ledger_rows', severity: 'warning', status: 'resolved' }])
+  })
+
+  it('counts a repeat sighting, resolves when the ledger agrees, and reopens if the wallet breaks again', async () => {
+    const b = await business({ available: 300_000 })
+    await runLight()
+    await runLight()
+    expect(await occOf(b)).toMatchObject({ occ: 2, status: 'open' })
+
+    await ledgerRow(b, 'topup', 300_000)
+    await runLight()
+    expect(await occOf(b)).toMatchObject({ occ: 2, status: 'resolved' })
+
+    await db.query('delete from business_wallet_transactions where business_id = $1', [b])
+    await runLight()
+    expect(await occOf(b)).toMatchObject({ occ: 3, status: 'open' })
+  })
+
+  it('kept the runner service_role-only and time-bounded when it was redefined', async () => {
+    const cfg = (await one("select proconfig from pg_proc where proname = 'run_db_reconciliation' and pronamespace = 'public'::regnamespace")).proconfig
+    expect(cfg).toContain('lock_timeout=10s')
+    expect(cfg).toContain('statement_timeout=120s')
+    expect((await one("select has_function_privilege('service_role','public.run_db_reconciliation(boolean)','execute') v")).v).toBe(true)
+    for (const role of ['anon', 'authenticated']) {
+      expect((await one("select has_function_privilege($1,'public.run_db_reconciliation(boolean)','execute') v", [role])).v, role).toBe(false)
+    }
   })
 })
