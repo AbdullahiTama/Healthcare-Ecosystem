@@ -75,7 +75,8 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
   useEffect(() => { const t = setTimeout(() => { setDebounced(filters); setPage(0) }, 300); return () => clearTimeout(t) }, [filters])
 
   const load = useCallback(async () => {
-    if (!businessId) return
+    // The platform registry has no company id, so gate on the scope, not on the company.
+    if (!scopeId) return
     setLoading(true)
     setError('')
     try {
@@ -86,10 +87,11 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
       setError(e.message || 'Could not load the directory')
     }
     setLoading(false)
-  }, [repo, businessId, scopeId, debounced, page])
+  }, [repo, scopeId, debounced, page])
 
   useEffect(() => { load() }, [load])
   useEffect(() => {
+    // Territories and import batches belong to a company; a platform admin without one has neither.
     if (!businessId) return
     territoryRepository.getAll(businessId).then((t) => setTerritories(t || [])).catch(() => {})
     repo.getBatches(businessId, 10).then(setBatches).catch(() => {})
@@ -135,7 +137,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
   async function scanDuplicates() {
     setDupProgress({ done: 0, total: 0 })
     try {
-      const [all, dismissed] = await Promise.all([repo.getDedupIndexRows(businessId), repo.getDismissedPairs(businessId)])
+      const [all, dismissed] = await Promise.all([repo.getDedupIndexRows(scopeId), repo.getDismissedPairs(scopeId)])
       const pairs = await findDuplicatePairs(all.filter((r) => r.is_active !== false), {
         dismissed: new Set(dismissed.map((d) => pairKey(d.a_id, d.b_id))),
         onProgress: (done, total) => setDupProgress({ done, total }),
@@ -147,7 +149,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
 
   async function resolvePair(pair, how) {
     try {
-      if (how === 'dismiss') await repo.dismissPair(businessId, pair.keep.id, pair.other.id, actor)
+      if (how === 'dismiss') await repo.dismissPair(scopeId, pair.keep.id, pair.other.id, actor)
       else {
         if (how === 'merge') {
           const [keep, other] = await Promise.all([repo.getById(pair.keep.id, scopeId), repo.getById(pair.other.id, scopeId)])
@@ -166,11 +168,11 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
   useEffect(() => {
     if (tab !== 'reports' || !canManage) return
     setReports(null)
-    repo.getOpenReports(businessId).then(async (rs) => {
-      const named = await Promise.all(rs.map(async (r) => ({ ...r, business: await repo.getById(r.directory_business_id, businessId).catch(() => null) })))
+    repo.getOpenReports(scopeId).then(async (rs) => {
+      const named = await Promise.all(rs.map(async (r) => ({ ...r, business: await repo.getById(r.directory_business_id, scopeId).catch(() => null) })))
       setReports(named)
     }).catch((e) => { setReports([]); showToast(e.message, { type: 'error' }) })
-  }, [tab, canManage, businessId, repo])
+  }, [tab, canManage, scopeId, repo])
 
   const columns = useMemo(() => [
     { key: 'name', label: 'Business', sortable: true, render: (r) => (
@@ -189,7 +191,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
       </div>) },
   ], [lookups.categories, lookups.subcategories])
 
-  if (!businessId) return null
+  if (!scopeId) return null
 
   return (
     <div style={{ padding: 24, maxWidth: 1200 }}>
@@ -215,7 +217,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
       )}
 
       <div role='tablist' aria-label='Directory sections' style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-        {TABS.filter(([id]) => (canManage || id === 'businesses' || id === 'categories') && !(platformScope && !['businesses', 'import'].includes(id))).map(([id, label]) => (
+        {TABS.filter(([id]) => (canManage || id === 'businesses' || id === 'categories') && !(platformScope && !['businesses', 'import'].includes(id)) && !(id === 'import' && !businessId)).map(([id, label]) => (
           <button key={id} role='tab' aria-selected={tab === id} onClick={() => setTab(id)}
             style={{ fontSize: 12.5, fontWeight: 800, padding: '9px 16px', borderRadius: 10, cursor: 'pointer', border: `1px solid ${tab === id ? tealDeep : border}`, background: tab === id ? navy : 'white', color: tab === id ? 'white' : gray500 }}>
             {label}
@@ -248,7 +250,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
             onRowClick={(r) => setViewing(r)}
             empty={filtered
               ? <Empty cause='filtered' message='No businesses match these filters.' action='Clear filters' onAction={() => setFilters({ search: '', categoryId: '', state: '', verification: '', source: '', active: 'active' })} />
-              : <Empty message='Your directory is empty. Add a business or import a spreadsheet.' action={canManage ? 'Import businesses' : undefined} onAction={() => setTab('import')} />}
+              : <Empty message={businessId ? 'Your directory is empty. Add a business or import a spreadsheet.' : 'The platform directory is empty. Add a business to start it.'} action={canManage && businessId ? 'Import businesses' : undefined} onAction={() => setTab('import')} />}
             actions={canManage ? (r) => (
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }} onClick={(e) => e.stopPropagation()}>
                 <GhostBtn onClick={() => setEditing(r)}>Edit</GhostBtn>
@@ -326,7 +328,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
       )}
 
       {tab === 'categories' && (lookups.loading ? <Loading /> : lookups.error ? <ErrorState message={lookups.error} onRetry={lookups.reload} /> : (
-        <CategoryManager businessId={businessId} repo={repo} categories={lookups.categories} subcategories={lookups.subcategories}
+        <CategoryManager businessId={scopeId} repo={repo} categories={lookups.categories} subcategories={lookups.subcategories}
           canManage={canManage} onChanged={lookups.reload} showToast={showToast} />
       ))}
 
@@ -338,8 +340,8 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
             <div style={{ fontSize: 11.5, color: gray500 }}>Reported by {r.reported_by || 'unknown'} · {new Date(r.created_at).toLocaleString('en-NG')}</div>
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
               {r.business && <GhostBtn onClick={() => setEditing(r.business)}>Open record</GhostBtn>}
-              <GhostBtn onClick={async () => { await repo.resolveReport(r.id, businessId, 'resolved'); setReports((p) => p.filter((x) => x.id !== r.id)) }}>Mark resolved</GhostBtn>
-              <GhostBtn onClick={async () => { await repo.resolveReport(r.id, businessId, 'dismissed'); setReports((p) => p.filter((x) => x.id !== r.id)) }}>Dismiss</GhostBtn>
+              <GhostBtn onClick={async () => { await repo.resolveReport(r.id, scopeId, 'resolved'); setReports((p) => p.filter((x) => x.id !== r.id)) }}>Mark resolved</GhostBtn>
+              <GhostBtn onClick={async () => { await repo.resolveReport(r.id, scopeId, 'dismissed'); setReports((p) => p.filter((x) => x.id !== r.id)) }}>Dismiss</GhostBtn>
             </div>
           </Card>
         ))

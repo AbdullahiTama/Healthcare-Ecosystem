@@ -53,7 +53,7 @@ export function createDirectoryRepository(request = sbFetch) {
     },
 
     async updateCategory(id, businessId, updates) {
-      return request(`directory_categories?id=eq.${id}&business_id=eq.${businessId}`, {
+      return request(`directory_categories?id=eq.${id}&${scope(businessId)}`, {
         method: 'PATCH', body: JSON.stringify(updates), prefer: 'return=minimal',
       })
     },
@@ -83,7 +83,7 @@ export function createDirectoryRepository(request = sbFetch) {
     },
 
     async updateSubcategory(id, businessId, updates) {
-      return request(`directory_subcategories?id=eq.${id}&business_id=eq.${businessId}`, {
+      return request(`directory_subcategories?id=eq.${id}&${scope(businessId)}`, {
         method: 'PATCH', body: JSON.stringify(updates), prefer: 'return=minimal',
       })
     },
@@ -222,7 +222,7 @@ export function createDirectoryRepository(request = sbFetch) {
     },
 
     async finishBatch(batchId, businessId, fields) {
-      return request(`directory_import_batches?id=eq.${batchId}&business_id=eq.${businessId}`, {
+      return request(`directory_import_batches?id=eq.${batchId}&${scope(businessId)}`, {
         method: 'PATCH', body: JSON.stringify({ ...fields, completed_at: new Date().toISOString() }), prefer: 'return=minimal',
       })
     },
@@ -241,7 +241,7 @@ export function createDirectoryRepository(request = sbFetch) {
 
     // ── Duplicate review ───────────────────────────────────────────────────
     async getDismissedPairs(businessId) {
-      return pagedQuery(request, `directory_duplicate_dismissals?business_id=eq.${businessId}&order=a_id.asc,b_id.asc&select=a_id,b_id`, { pageSize: PAGE })
+      return pagedQuery(request, `directory_duplicate_dismissals?${scope(businessId)}&order=a_id.asc,b_id.asc&select=a_id,b_id`, { pageSize: PAGE })
     },
 
     async dismissPair(businessId, idA, idB, by) {
@@ -304,11 +304,11 @@ export function createDirectoryRepository(request = sbFetch) {
     },
 
     async getOpenReports(businessId) {
-      return request(`directory_reports?business_id=eq.${businessId}&status=eq.open&order=created_at.desc&select=*`)
+      return request(`directory_reports?${scope(businessId)}&status=eq.open&order=created_at.desc&select=*`)
     },
 
     async resolveReport(id, businessId, status = 'resolved') {
-      return request(`directory_reports?id=eq.${id}&business_id=eq.${businessId}`, {
+      return request(`directory_reports?id=eq.${id}&${scope(businessId)}`, {
         method: 'PATCH', body: JSON.stringify({ status, resolved_at: new Date().toISOString() }), prefer: 'return=minimal',
       })
     },
