@@ -1,6 +1,6 @@
 # CareHub Business Directory and Discovery
 
-Status: Phase 1 data layer written. **Nothing here is applied to any database, and the SQL has not been run against a real Postgres.** Baseline and findings: `CareHub-Enterprise-Implementation-Baseline.md`.
+Status: Phases 1-4 written. **Nothing here is applied to any database.** The migrations were exercised on PGlite (real Postgres compiled to WebAssembly) by `scripts/db-tests/directory.pglite.mjs`: 63 checks pass (apply, re-apply, grants, RLS, triggers, constraints, RPCs, radius maths). That harness uses stand-ins for Supabase's `auth` schema and the tenant tables, so it is **not** a substitute for a run against a Supabase branch. Baseline and findings: `CareHub-Enterprise-Implementation-Baseline.md`.
 
 ## Ownership boundary
 
@@ -59,8 +59,8 @@ Surface: the `discovery` module (Facility Discovery) now opens on a **Business d
 
 ## Not yet built
 
-Check-ins and location history (5-6), field-activity business linking and activity RLS hardening (7). Direct-RLS tests need a Postgres instance; none was available.
+Check-ins and location history (5-6), field-activity business linking and activity RLS hardening (7). RLS for check-ins, activity access and company isolation is not written yet.
 
 ## Apply and rollback
 
-Not applied. Before applying: run the migration on an isolated Postgres/Supabase branch, and confirm `is_platform_admin()` exists with the signature this file assumes. Rollback is in the migration header.
+Not applied. Before applying: run the migrations on an isolated Supabase branch (the PGlite run does not cover PostgREST, Realtime or the live schema), and confirm the live `is_platform_admin()` and `current_business_ids()` match the definitions in `sql/phase2_rls_pilot.sql`, which the harness uses. Order: `20261119` (legacy RPC lockdown), `20261120`, `20261121`, `20261122`. Rollback is in each migration header.
