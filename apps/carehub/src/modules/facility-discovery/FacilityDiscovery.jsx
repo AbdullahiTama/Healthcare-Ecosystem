@@ -8,6 +8,7 @@ import { FACILITY_FILTERS } from '../../lib/places.js'
 import { NIGERIA_STATES, getLgasForState, normalizeState } from '../../lib/nigeriaGeo.js'
 import { discoverFacilities, VERIFICATION_LEVEL, FACILITY_SOURCE } from '../../lib/facilityDiscovery.js'
 import { downloadCSV, exportToPDF, createExportJob } from './export.js'
+import BusinessDirectorySearch from '../business-directory/BusinessDirectorySearch.jsx'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray200, gray100, border, success, successBg, warning, warningBg, info, infoBg, bg, danger } = theme
 
@@ -46,7 +47,7 @@ const SORT_OPTIONS = [
   { value: 'updated', label: 'Updated' },
 ]
 
-export default function FacilityDiscovery({ brand }) {
+function LiveFacilityDiscovery({ brand }) {
   const { msg, type, show: showToast } = useToast()
   const [mode, setMode] = useState('state')
   const [stateSel, setStateSel] = useState('')
@@ -392,6 +393,34 @@ export default function FacilityDiscovery({ brand }) {
           {loading ? 'Loading facilities' : facilities.length + ' facilities found'}
         </div>
       </div>
+    </>
+  )
+}
+
+// Two ways to find businesses, kept apart on purpose:
+//  - Directory: the platform-maintained business directory, searched on the
+//    server with radius, pagination and explicit verification status.
+//  - Live search: the original multi-source map discovery (CareFind, OpenStreetMap,
+//    optional Google), unchanged.
+// Neither creates a field activity or visit.
+const VIEWS = [
+  { id: 'directory', label: 'Business directory' },
+  { id: 'live', label: 'Live search (maps)' },
+]
+
+export default function FacilityDiscovery(props) {
+  const [view, setView] = useState('directory')
+  return (
+    <>
+      <div role="tablist" aria-label="Discovery source" style={{ display: 'flex', gap: 6, padding: '12px 20px 0', flexWrap: 'wrap' }}>
+        {VIEWS.map(v => (
+          <button key={v.id} role="tab" aria-selected={view === v.id} onClick={() => setView(v.id)}
+            style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: view === v.id ? `1px solid ${tealDeep}` : `1px solid ${border}`, background: view === v.id ? tealMist : 'white', color: view === v.id ? tealDeep : gray500 }}>
+            {v.label}
+          </button>
+        ))}
+      </div>
+      {view === 'directory' ? <BusinessDirectorySearch perms={props.perms} /> : <LiveFacilityDiscovery {...props} />}
     </>
   )
 }

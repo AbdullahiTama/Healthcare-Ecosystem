@@ -35,9 +35,31 @@ Explicit column `verification_status` in `unverified | pending | verified | reje
 - `modules/directory/directoryRecord.js`: pure validation and normalisation, reusing `normalizeName` / `normalizePhone` from `lib/facilityDiscovery.js` (the SQL normalisers mirror them).
 - `modules/directory/repositories/index.js`: injected-transport repository. Server-side filtering with a clamped limit (max 100), LIKE wildcards escaped, unknown verification filters dropped, no delete method, verification only via RPC. Authorisation is by RLS, not by this layer.
 
+## Import (Phase 2)
+
+CSV only (no spreadsheet library is installed; Excel is not supported). Parser handles quotes, CRLF, BOM and embedded newlines. Each row is validated, then classified `new | possible_duplicate | confirmed_duplicate | invalid | needs_review` against existing candidates and earlier rows in the file (normalised name, phone, address, coordinates, token-overlap name similarity). Default decisions import only `new` rows; everything else needs an explicit choice. Merge is not implemented: decisions are import, skip, keep existing. Execution is batched (50), per-row failures are tracked, a failed batch is retried row by row, and a re-run of the same file reports rows as already imported (source_ref = file fingerprint + row, unique index). Existing-record fuzzy matching only sees rows sharing a name or phone key or in a city named in the file.
+
+## Business Discovery (Phases 3-4)
+
+Surface: the `discovery` module (Facility Discovery) now opens on a **Business directory** tab; the previous multi-source map search is unchanged as **Live search (maps)**. The directory tab is a separate, server-paginated path because the legacy engine merges and paginates in the browser and labels GPS proximity as "verified".
+
+- `directory_search` RPC (`carehub_20261122_directory_search.sql`): SECURITY INVOKER, read-only, authenticated only. Filters (name, category, subcategory, state, LGA, city, free-text place, verification, source), radius via bounding box then haversine (no PostGIS), sorts (name, distance, verified first, recent), limit capped at 100, radius 100 m to 100 km. Distance is **straight-line** and labelled so.
+- Natural language: rule-based (`searchQuery.js`), no AI dependency. It only interprets; the filters are shown and editable. Ambiguous input (for example Surulere exists in two states) is flagged, never guessed. A place it cannot match to a state or LGA is searched as text and is **not geocoded**, so a radius does not apply to it.
+- Location: `locationCapture.js`, one-shot, only on a button press, never continuous. Denied, unavailable, timeout, unsupported and invalid positions are reported honestly; low accuracy is flagged. Manual location: coordinates, the centre of a chosen state (labelled approximate, opt-in), or a map click.
+- Google Maps: `googleMapsLoader.js` reads `VITE_GOOGLE_MAPS_BROWSER_KEY` (a public, referrer-restricted browser key; never a server key). With no key the map is replaced by a message and the list keeps working. **Not verified against a live key.** Directions and "view on map" use `google.com/maps` URLs that need no key and are hidden for rows without valid coordinates. No Geocoding/Places web service is called, and no external result is stored or labelled as verified.
+- List and map selection: the parent owns `selectedId`; a marker click selects and scrolls to the row, a row click highlights and pans to the marker.
+- Export: CSV of the same filters, paged, capped at 1,000 rows (the UI says when truncated), formula-injection safe, no contact person or notes, shown only to roles with `canExportReports`.
+- Read-only: the screen's repository surface is `listCategories` and `discover`. Search, select, directions and export never create an activity, visit, attendance or notification.
+
+### Environment
+
+| Variable | Where | Purpose |
+|---|---|---|
+| `VITE_GOOGLE_MAPS_BROWSER_KEY` | carehub build env | Maps JavaScript API, browser key restricted by HTTP referrer and by API |
+
 ## Not yet built
 
-Admin UI, import (Phase 2), duplicate review UI, maps and discovery (Phases 3-4), check-ins (5-6), field-activity business linking (7). Direct-RLS tests need a Postgres instance; none was available.
+Check-ins and location history (5-6), field-activity business linking and activity RLS hardening (7). Direct-RLS tests need a Postgres instance; none was available.
 
 ## Apply and rollback
 
