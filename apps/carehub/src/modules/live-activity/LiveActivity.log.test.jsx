@@ -28,6 +28,9 @@ vi.mock('./repositories', () => ({
 vi.mock('../territories/repositories', () => ({ territoryRepository: { getAll: vi.fn() } }))
 vi.mock('../staff/repositories', () => ({ staffRepository: { getAll: vi.fn() } }))
 vi.mock('../../lib/realtime', () => ({ watchTable: vi.fn(() => () => {}) }))
+// The check-in panels have their own tests; here they must not touch the network.
+vi.mock('../checkins/CheckInPanel.jsx', () => ({ default: () => null }))
+vi.mock('../checkins/TeamLocations.jsx', () => ({ default: () => null }))
 vi.mock('../../lib/places.js', () => ({
   FACILITY_FILTERS: [],
   nearbyHealthFacilities: vi.fn(async () => []),

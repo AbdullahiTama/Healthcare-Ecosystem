@@ -12,6 +12,8 @@ import {
 } from '../../lib/places.js'
 import { discoverFacilities } from '../../lib/facilityDiscovery.js'
 import FacilityPicker from './FacilityPicker.jsx'
+import CheckInPanel from '../checkins/CheckInPanel.jsx'
+import TeamLocations from '../checkins/TeamLocations.jsx'
 import { isManagerRole } from '../../lib/permissions'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
@@ -773,6 +775,9 @@ export default function LiveActivity({ brand }) {
       />
       <div style={{ padding: '24px', maxWidth: '1100px' }}>
         <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
+
+      <CheckInPanel businessId={brand && brand.id} />
+      {isManager && <TeamLocations businessId={brand && brand.id} />}
 
       {!isOwner && myViewers.length === 0 && (
         <div style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
