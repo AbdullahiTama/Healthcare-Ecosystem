@@ -35,11 +35,9 @@ async function authToken() {
 export async function sbFetch(path, options = {}) {
   const token = await authToken()
   const isAnon = token === SB_KEY
-  if (isAnon) {
-    console.warn('[sbFetch] Using anon key for:', path)
-  } else {
-    console.log('[sbFetch] Using auth token for:', path, 'Token prefix:', token.substring(0, 20) + '...')
-  }
+  // Never log any part of a signed-in token. The anon fallback is worth a warning:
+  // it is how an expired session shows up as empty RLS-filtered reads.
+  if (isAnon) console.warn('[sbFetch] Using anon key for:', path)
   const res = await fetch(SB_URL + '/rest/v1/' + path, {
     method: options.method || 'GET',
     headers: {
