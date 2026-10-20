@@ -126,6 +126,68 @@ ok('the author cannot delete it (it has tags, and the row is hidden from DELETE)
 ok('the owner cannot delete it', (await as('a', 'delete from field_activities where id=$1 returning id', [own])).rows.length === 0)
 ok('platform admin can correct a record', (await as('admin', 'update field_activities set rep_name=$2 where id=$1 returning id', [own, 'fixed'])).rows.length === 1)
 
+// ---- retry-safe save: a client-chosen id + ON CONFLICT DO NOTHING -------------------------------------
+// The page saves a report under an id it made, with PostgREST's resolution=ignore-duplicates (which is
+// INSERT ... ON CONFLICT DO NOTHING). This proves, on real Postgres under the live-like policies, that a
+// repeat is harmless and cannot be used to take over someone else's report. It does not prove PostgREST
+// builds exactly that statement from the header; that needs the live API.
+const RID = "11111111-1111-4111-8111-111111111111"
+const saveWithId = (who, biz, staffId, id, name) =>
+  as(who, "insert into field_activities (id, business_id, staff_id, rep_name) values ($1,$2,$3,$4) on conflict do nothing returning id", [id, biz, staffId, name])
+const countOf = async (id) => Number((await sup("select count(*) c from field_activities where id=$1", [id])).rows[0].c)
+
+const firstSave = await saveWithId("repA1", S.A, S.repA1, RID, "First attempt")
+ok("a client-chosen id is accepted", firstSave.rows.length === 1 && firstSave.rows[0].id === RID)
+const repeatSave = await saveWithId("repA1", S.A, S.repA1, RID, "Edited retry")
+ok("sending the same report again inserts nothing and raises nothing", repeatSave.rows.length === 0)
+ok("...so there is still exactly one row", (await countOf(RID)) === 1)
+ok("...and the first values stand: an edited retry is ignored, which is why the page resends the original", (await sup("select rep_name from field_activities where id=$1", [RID])).rows[0].rep_name === "First attempt")
+await expectError("a repeat cannot be used to attribute the report to someone else", () => saveWithId("repA1", S.A, S.repA2, RID, "Forged"), "42501")
+
+const takeover = await saveWithId("repA2", S.A, S.repA2, RID, "Hijack")
+const afterTakeover = (await sup("select staff_id, rep_name from field_activities where id=$1", [RID])).rows[0]
+ok("a colleague reusing the id changes nothing: not the author, not the content", takeover.rows.length === 0 && afterTakeover.staff_id === S.repA1 && afterTakeover.rep_name === "First attempt", JSON.stringify(afterTakeover))
+await expectError("...and cannot tag themselves onto the report as a viewer", () => as("repA2", "insert into activity_viewers (activity_id, staff_id, viewer_name) values ($1,$2,'x')", [RID, S.repA2]), "42501")
+ok("...and cannot read it", !(await seen("repA2")).includes(RID))
+ok("another company reusing the id changes nothing either", (await saveWithId("repB1", S.B, S.repB1, RID, "Other company")).rows.length === 0 && (await countOf(RID)) === 1)
+
+// The viewers table has no unique (activity_id, staff_id), so the page reads what is there and adds only
+// the missing ones. Prove both halves: the database would accept a duplicate, and the author can read back.
+await as("repA1", "insert into activity_viewers (activity_id, staff_id, viewer_name) values ($1,$2,'Mgr')", [RID, S.mgrA])
+const viewersNow = (await as("repA1", "select staff_id from activity_viewers where activity_id=$1", [RID])).rows
+ok("the author can read back the viewers already written, so a retry adds only the missing ones", viewersNow.length === 1 && viewersNow[0].staff_id === S.mgrA)
+await as("repA1", "insert into activity_viewers (activity_id, staff_id, viewer_name) values ($1,$2,'Mgr')", [RID, S.mgrA])
+ok("the table itself would accept the same viewer twice, which is why the client must read first", Number((await sup("select count(*) c from activity_viewers where activity_id=$1", [RID])).rows[0].c) === 2)
+
+// ---- notifications addressed to other people (audit item U2) ---------------------------------------------
+// The page tells tagged colleagues about a report by inserting staff_notifications rows from the browser.
+// This replays the LIVE policy on that table (copied from pg_policies, 2026-10-20: one PERMISSIVE ALL policy for
+// role public, same expression for USING and WITH CHECK) to see who a signed-in user can write a row for.
+await db.exec(`
+  CREATE TABLE public.staff_notifications (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid, staff_id uuid, is_owner boolean, kind text, title text);
+  GRANT ALL ON public.staff_notifications TO authenticated;
+  -- The policy reads these two tables as the signed-in user, who can read them in production.
+  GRANT SELECT ON public.businesses, public.staff TO authenticated;
+  ALTER TABLE public.staff_notifications ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "staff_notifications for own business and owner" ON public.staff_notifications FOR ALL
+    USING (is_platform_admin() OR (business_id IN (SELECT current_business_ids()) AND (
+      (is_owner = true AND EXISTS (SELECT 1 FROM businesses WHERE businesses.id = staff_notifications.business_id AND lower(businesses.email) = lower((SELECT auth.email()))))
+      OR staff_id IN (SELECT staff.id FROM staff WHERE lower(staff.email) = lower((SELECT auth.email())) AND staff.status = 'active'))))
+    WITH CHECK (is_platform_admin() OR (business_id IN (SELECT current_business_ids()) AND (
+      (is_owner = true AND EXISTS (SELECT 1 FROM businesses WHERE businesses.id = staff_notifications.business_id AND lower(businesses.email) = lower((SELECT auth.email()))))
+      OR staff_id IN (SELECT staff.id FROM staff WHERE lower(staff.email) = lower((SELECT auth.email())) AND staff.status = 'active'))));
+`)
+const notifyRow = (who, biz, staffId, isOwner) =>
+  as(who, "insert into staff_notifications (business_id, staff_id, is_owner, kind, title) values ($1,$2,$3,'activity','x') returning id", [biz, staffId, isOwner])
+ok("a person can write a notification for themselves", (await notifyRow("repA1", S.A, S.repA1, false)).rows.length === 1)
+await expectError("FINDING: a rep cannot write a notification for a colleague, so a browser-side 'tell my viewers' is refused", () => notifyRow("repA1", S.A, S.repA2, false), "42501")
+await expectError("FINDING: a rep cannot write one for the owner either", () => notifyRow("repA1", S.A, null, true), "42501")
+ok("the owner can write one for the owner", (await notifyRow("a", S.A, null, true)).rows.length === 1)
+await expectError("FINDING: the owner cannot write one for a staff member", () => notifyRow("a", S.A, S.repA1, false), "42501")
+await expectError("a manager cannot write one for a rep", () => notifyRow("mgrA", S.A, S.repA1, false), "42501")
+ok("platform admin can write one for anyone", (await notifyRow("admin", S.A, S.repA2, false)).rows.length === 1)
+ok("a person reads only their own notifications", (await as("repA2", "select id from staff_notifications")).rows.length === 1)
+
 // ---- Realtime consequence -----------------------------------------------------------------------
 ok('an untagged colleague does not see a new activity (Realtime evaluates the same policy)', !(await seen('repA2')).includes(ownerAct))
 
