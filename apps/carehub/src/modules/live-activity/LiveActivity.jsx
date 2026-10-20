@@ -21,6 +21,7 @@ import TeamLocations from '../checkins/TeamLocations.jsx'
 import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
 import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivities, affectedActivityIds } from './feedScope'
 import { newActivityId } from './activityId'
+import { effectiveFields, fieldLabel, missingRequired } from './reportFields'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
@@ -113,6 +114,10 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
   const canSeeAll = canSeeAllActivity({ isOwner, role: authData.staff && authData.staff.role, perms })
 
   const [fields, setFields] = useState([])
+  // What the form, validation and columns use: the business's own fields, or one
+  // built-in note until it has defined any (see reportFields.js).
+  const reportFields = effectiveFields(fields)
+  const usingStarterFields = fields.length === 0
   const [activities, setActivities] = useState([])
   const [viewersByAct, setViewersByAct] = useState({})
   const [reactionsByAct, setReactionsByAct] = useState({})
@@ -584,10 +589,6 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
   }
 
   function openLogger() {
-    if (fields.length === 0) {
-      showToast('No activity fields set up yet. The Owner needs to define what a visit record looks like first.', { type: 'warning' })
-      return
-    }
     draftRef.current = null
     setRetryNote('')
     setValues({})
@@ -629,9 +630,9 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
   // quietly lose them); the modal says so.
   async function submitActivity() {
     if (submitLock.current) return
-    const missing = fields.filter(function (f) { return f.required && !String(values[f.id] == null ? '' : values[f.id]).trim() })
+    const missing = missingRequired(reportFields, values)
     if (missing.length > 0) {
-      showToast('Please fill in: ' + missing.map(function (f) { return f.label }).join(', '), { type: 'warning' })
+      showToast('Please fill in: ' + missing.join(', '), { type: 'warning' })
       return
     }
 
@@ -810,8 +811,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
   }
 
   function labelFor(fieldId) {
-    const f = fields.filter(function (x) { return x.id === fieldId })[0]
-    return f ? f.label : null
+    return fieldLabel(fields, fieldId)
   }
 
   const columns = [
@@ -820,7 +820,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
     { key: 'territory', label: 'Territory' },
     { key: 'place', label: 'Location' },
     { key: 'business', label: 'Business' },
-  ].concat(fields.map(function (f) {
+  ].concat(reportFields.map(function (f) {
     return { key: 'f_' + f.id, label: f.label, fieldId: f.id }
   })).concat([
     { key: 'voice', label: 'Voice' },
@@ -967,11 +967,11 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
         </div>
       )}
 
-      {isOwner && fields.length === 0 && (
-        <div style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '800', color: warning }}>No activity fields set up yet</div>
+      {isOwner && usingStarterFields && (
+        <div role='status' style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
+          <div style={{ fontSize: '13px', fontWeight: '800', color: warning }}>Reports use a simple note for now</div>
           <div style={{ fontSize: '12px', color: warning, marginTop: '2px' }}>
-            Tap "Set up fields" and decide what a visit record should capture.
+            Your team can already log reports with one "What happened" note. Tap "Set up fields" to decide what a visit record should capture instead.
           </div>
         </div>
       )}
@@ -1376,7 +1376,12 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
                 </select>
               </div>
 
-              {fields.map(function (f) {
+              {usingStarterFields && (
+                <div style={{ fontSize: '11.5px', color: gray500 }}>
+                  Your company has not set up its own report fields yet, so this is a simple note. {isOwner ? 'You can add fields under Set up fields.' : 'The owner can add fields.'}
+                </div>
+              )}
+              {reportFields.map(function (f) {
                 const val = values[f.id] || ''
                 const set = function (v) {
                   setValues(function (prev) {
