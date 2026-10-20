@@ -107,7 +107,7 @@ Severity: High = security exposure or silent data/behaviour failure; Medium = wr
 | # | Item | Why unverified | How to close |
 |---|---|---|---|
 | U1 | Deployed branch | No readable config | Vercel project settings |
-| U2 | Whether `staff_notifications` inserts addressed to *another* user succeed. The only live policy requires `staff_id` in the caller's own staff ids (or caller is the owner). One live `activity` notification and two `activity_comment` rows exist, which proves it worked at least once (possibly owner/self). | Needs a write attempt | PGlite test (`scripts/db-tests`), not production |
+| U2 | **RESOLVED on a replica of the live policy: refused (see section 8).** Whether `staff_notifications` inserts addressed to *another* user succeed. The only live policy requires `staff_id` in the caller's own staff ids (or caller is the owner). One live `activity` notification and two `activity_comment` rows exist, which proves it worked at least once (possibly owner/self). | Needs a write attempt | PGlite test (`scripts/db-tests`), not production |
 | U3 | Whether `20261012_directory_platform_scope.sql` is live | Not in the migration list | Query live columns/functions it defines, compare |
 | U4 | Live realtime delivery per role, reconnect behaviour | Needs two sessions in a browser | Browser test, staging project |
 | U5 | Whether a global notification bell subscribes to `staff_notifications` | Not read | Read `BusinessDashboard`/notification code |
@@ -144,6 +144,149 @@ Small phases, each with targeted tests and its own commit. Items marked **[prod]
 
 Definition of done is as in the task brief; every item stays NOT TESTED until its command is run and its output recorded here.
 
-## 6. Baseline test run
+## 6. Baseline test run (before any change)
 
-(Appended after the run completes.)
+Targeted vitest run over live-activity, checkins, business-discovery, business-directory and lib: **475 passed, 3 failed**. All three failures are in `business-directory`, a module this work did not touch: the 3000 x 3000 dedup timing assertion, and two XLSX tests that timed out.
+
+---
+
+# Outcome (added after implementation)
+
+Work is on branch `feat/live-activity-client-phases`, cut from `main` (confirmed by the product owner as the deployed branch; that is their statement, not something readable from the repository). Nothing has been pushed, merged, deployed or applied to the database. No SQL, migration or policy file was changed.
+
+## 7. Commits
+
+| Commit | What |
+|---|---|
+| `ac617a0` | Team Reports shows what the person's permissions allow (`canSeeAllActivity` mirrors `caller_sees_all_activity`); this audit |
+| `880e22c` | Server-side feed scope, exact counts, `(created_at, id)` cursor, full-range export |
+| `d183eb2` | Retry-safe save: client-made id + ignore-duplicates, viewers read-then-add, lock against double tap, frozen payload on retry, notification outcome shown |
+| `6d80a28` | Catch-up on every confirmed connection, scoped reaction/comment refresh, honest status badge |
+| `23c5965` | A nearby place is a suggestion until chosen; one target per report; "Location matches" / "Compare location" wording |
+| `988c505` | A new business can log its first report (starter "What happened" note) |
+| `e316ecb` | Distinct location failures with Try again; throttled, cached, attributed area lookup |
+| `90f305b` | Unsent report survives reload or accidental close |
+| `1ca91ac`, `7fa7335` | Real-Postgres tests: retry-safe save, notification policy, equal-timestamp paging, check-in creates no report |
+| `b4478c6` | No Retry offered for a notification the database will always refuse |
+
+## 8. Status of each finding
+
+FIXED = changed and tested in this branch. OPEN = needs a decision or a database change that was not made.
+
+| # | Status | Notes |
+|---|---|---|
+| F1 Team Reports filtered by tags | FIXED | `feedScope.js`, role-matrix tests |
+| F2 "Manager" defined three ways | PARTIAL | Page now uses the database's rule. `manager_checkin_overview` still admits only manager-role names, so a directory-only role sees Team Reports but not Team check-ins. Needs a database decision. |
+| F3 Voice bucket public, anon can upload | **OPEN, needs approval** | Highest-severity item left. |
+| F4 Save not atomic, failure invites duplicate | PARTIAL | Retry can no longer duplicate, and the partial state is recoverable. Still two requests, not one transaction (needs a function). |
+| F5 Double submit | FIXED | |
+| F6 Tagged non-managers miss the live push | **OPEN** | Needs the activity and its viewers committed together. Mitigated by catch-up and a delayed viewer fetch; the person still gets it on the next catch-up or reload, not as a push. |
+| F7 Default viewers writable for anyone's staff id | **OPEN, needs approval** | Restrictive policy needed. Table is empty today. |
+| F8 Nearest place pre-selected | FIXED | |
+| F9 Duplicate columns for one fact | PARTIAL | `facility_*` is the source of truth; `place_*` still written for compatibility. |
+| F10 Coverage ignores facility-only reports | OPEN, product decision | See "Decisions needed". |
+| F11 Misleading labels | FIXED | |
+| F12 Initial subscription not reconciled | FIXED | |
+| F13 Global subscriptions / full reloads | FIXED | Initial `load()` still awaits requests one after another. |
+| F14 Paging skips tied timestamps | FIXED | Also proven on real Postgres. |
+| F15 Count capped at 1000 | FIXED | |
+| F16 Export covers loaded rows only | FIXED | Capped at 10,000 rows and says so. "Shared with me" exports only what is loaded and says so. |
+| F17 First report blocked | FIXED | |
+| F18 GPS failure collapsed | FIXED | Accuracy is shown at capture but not stored (no column). |
+| F19 Nominatim use | FIXED for this module | `lib/nigeriaGeo.js` still calls Nominatim directly without throttling or attribution. |
+| F20 Check-in self view has no staleness | OPEN, low | Manager view labels it correctly. |
+| F21 Dead duplicate `logActivity`/`uploadActivityVoice` in `services/supabase.js` | OPEN, low | No callers. Left alone to keep this branch to one module. |
+| F22 Whitespace passes required | FIXED | |
+| F23 Missing tests | FIXED | |
+
+| Unverified item | Status |
+|---|---|
+| U1 Deployed branch | Stated by the product owner as `main`; not independently readable. |
+| U2 Cross-user notification inserts | **RESOLVED on a replica of the live policy: refused (42501).** A rep cannot write a notification for a colleague or the owner; the owner cannot for staff; only a platform admin can. Not executed against the live database. The old code swallowed this, so tagged colleagues were presumably never alerted from the browser. |
+| U3 `20261012` platform scope live? | Still unverified. |
+| U4 Live realtime per role / reconnect | NOT TESTED (needs two browser sessions). |
+| U5 Global notification bell subscription | Not read. |
+| U6 Platform-directory candidates in the picker | Not offered: suggestions cover the company directory only. |
+| U8 Responsive layout and accessibility | NOT TESTED in a browser. |
+
+## 9. Acceptance (task Phase 7)
+
+PASS means a test that was run passed. "Replica" means PGlite with the live policies copied from the catalog, not Supabase itself.
+
+| # | Item | Result | Evidence and limits |
+|---|---|---|---|
+| 1 | Check-in creates no report | **PASS** | `checkins.pglite.mjs` 61/0 incl. "check in, check out and a failed capture create no field report"; `record_checkin` writes only `staff_checkins`. Not exercised in a browser. |
+| 2 | Business Discovery read-only | PASS (static) | Code trace: only writes are "report incorrect information" and manager-only adopt. Existing discovery tests ran green. No dedicated "no writes" test was added. |
+| 3 | Nearby facility is not a confirmed visit | **PASS** | `LiveActivity.target.test.jsx` (14): nothing saved until tapped; one target per report. |
+| 4 | Target and evidence consistent in feed, table, export, coverage | **PARTIAL** | Feed, table, export PASS (`activityTarget`). Coverage analytics still count only directory-linked reports (F10). |
+| 5 | Manager sees Team Reports untagged | **PASS** | Component role-matrix tests; replica confirms the database returns them. Live session not tested. |
+| 6 | Ordinary user cannot read another's report | **PASS on replica** | `activity.pglite.mjs` 70/0. No signed-in live session was available. |
+| 7 | Tagged recipient receives it live after commit | **FAIL / not implemented** | Needs an atomic save (database function), not approved. |
+| 8 | Subscription, reconnect, catch-up: no omissions, no duplicates | **PASS (component level)** | `LiveActivity.realtime.test.jsx` (12) with a mocked socket. Real websocket NOT TESTED. |
+| 9 | Write failure cannot duplicate on retry | **PASS** | Repository and page tests; replica proves same-id insert is idempotent and cannot be hijacked. PostgREST's translation of the header is NOT TESTED live. |
+| 10 | Repeated clicks make one report | **PASS** | `LiveActivity.save.test.jsx`. |
+| 11 | Check-in location current / stale / unavailable / failed is understandable | **PARTIAL** | Manager view PASS (existing tests). The person's own view has no stale label (F20). |
+| 12 | Empty fields, permission denial, GPS failure, voice upload failure, offline recoverable | **PARTIAL** | Empty fields, GPS failures, failed save: PASS. **Voice-note upload failure NOT TESTED** (needs a recorder; the code returns early without saving). **No offline queue exists**; a failed send is retried by the user under the same id. |
+| 13 | Pagination, counts, export accurate | **PASS (unit + replica)** | Cursor and tie handling proven on real Postgres; count and export paging unit-tested against a scripted backend. PostgREST parsing of the filters checked for syntax only. |
+
+## 10. Final workflow and event model
+
+1. **Check in / out**: an explicit press captures one position and writes `staff_checkins` through `record_checkin`. It is not a visit, a report or a login. A failed capture is stored as failed with no coordinates.
+2. **Business Discovery**: read-only research. Creates no activity, attendance event, visit or notification.
+3. **Log Field Activity**: the authoritative record. Opening the form requests one fresh position. The rep may choose one place (company directory or map data); nothing is chosen for them. The report is saved under a client-made id, viewers are added, and notification is attempted.
+4. **Manager team view**: Team Reports shows everything the person's permissions allow. Team check-ins shows each person's latest explicit check-in with its age, never as live tracking.
+
+**Who sees what.** The database decides (restrictive policy). The page mirrors it: owner, manager role, or a role granted directory management see all; everyone else sees their own reports plus those shared with them. Being tagged grants read access to one report; it is not a notification subscription.
+
+**Provider dependencies.** OpenStreetMap Nominatim (area names): at most one request per second, cached about 110 m, attribution shown. Overpass/OSM for nearby facilities (existing).
+
+## 11. Database work that remains (nothing here has been applied; each needs explicit approval)
+
+In suggested order:
+
+1. **Voice bucket** (F3): make `activity-voice` private, authenticated and business-scoped policies, size and type limits, signed URLs. Plan for existing public links.
+2. **Default viewers** (F7): restrictive policies so a member writes only their own rows.
+3. **Atomic save** (F4/F6): one function that inserts the activity and its viewers in a single transaction, so a tagged recipient is authorised when the row is published.
+4. **Server-side alerts** (U2): a trigger or function that writes the notification when a viewer is added or a comment is made, since the browser cannot. This also lets replies reach the rep.
+5. **Check-in overview** (F2): decide whether directory-management roles may use `manager_checkin_overview`.
+6. **Record realtime publication membership** in a real migration (it is live-only state today) and write down the apply procedure; stop using far-future file names for new work.
+
+## 12. Decisions needed
+
+- Reports about a map-data facility with no directory record are invisible to coverage figures. Show them as "unmatched external places", or add a reviewed import step?
+- Offer suggestions from the shared platform directory in the picker (U6)?
+
+## 13. Outstanding risks
+
+- Until item 4 above ships, tagged colleagues are not alerted. The page now says so plainly instead of failing silently.
+- Live behaviour has not been observed by a person in a browser. Realtime, layout, accessibility and the voice recorder are NOT TESTED.
+- The `dedup 3000 x 3000` timing test in `business-directory` fails (also in isolation, also before this work); unrelated, but it keeps the full suite red.
+
+## 14. Commands
+
+```
+cd apps/carehub
+npx vitest run src/modules/live-activity src/modules/checkins src/modules/business-discovery
+npx vitest run                      # full suite
+npm run build
+npm run lint:undef
+# real-Postgres tests (PGlite installed outside the repo, scripts copied beside it):
+REPO_ROOT=<repo> node activity.pglite.mjs     # 70 passed, 0 failed
+REPO_ROOT=<repo> node checkins.pglite.mjs     # 61 passed, 0 failed
+```
+
+## 15. What was verified at the final commit, and what was not
+
+Be precise about this: the last complete run of everything is older than the last commit.
+
+| Check | Where | Result |
+|---|---|---|
+| Whole test suite | at `90f305b` (before the last three commits) | **1908 passed, 2 failed**, run to completion. The 2 failures are in `business-directory`: the 3000 x 3000 dedup timing check, and an XLSX template round-trip that times out only under load (it and `exportService` pass when run alone). |
+| Whole test suite | at the final commit `7fa7335` | **Not completed.** The run was stopped by the system for low memory after 61 of 163 test files had reported, with no summary. The only failure it showed was the dedup timing check. No total is claimed. |
+| Live Activity, check-ins, Business Discovery tests | at `b4478c6` and again in the partial run at `7fa7335` | All of these files ran and passed (live-activity folder: 16 files, 187 tests). These are the files that cover every source file changed after `90f305b`. |
+| `lint:undef` (un-imported components) | at `7fa7335` | Passed, exit 0. |
+| Production build | at `7fa7335` | Passed, built in 2m 36s. |
+| Real-Postgres tests | scratch copies of `7fa7335` scripts | activity 70 passed / 0 failed; check-ins 61 passed / 0 failed. |
+| Lint (errors only) on every changed source file | at each commit | Clean. Warnings were not reviewed one by one. |
+
+The dedup timing test fails on its own as well (11.8 s against its limit), and failed before this work began; it is unrelated to these changes but keeps the full suite red. A complete re-run of the whole suite at the final commit is still owed and should be done on a machine with free memory.
