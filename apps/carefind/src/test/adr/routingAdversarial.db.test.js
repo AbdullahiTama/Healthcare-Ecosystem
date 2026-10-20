@@ -43,6 +43,7 @@ const MIGRATIONS = [
   'carehub_20261110_adr_delete_guards',
   'carehub_20261111_adr_public_single_company',
   'carehub_20261112_adr_notify_party',
+  'carehub_20261113_adr_route_write_guard',
 ]
 
 let db
