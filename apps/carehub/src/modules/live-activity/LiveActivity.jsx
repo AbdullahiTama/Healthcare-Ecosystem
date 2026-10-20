@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { MapPin, BadgeCheck, AlertTriangle, Clock } from 'lucide-react'
+import { MapPin } from 'lucide-react'
 import { liveActivityRepository } from './repositories'
 // Pure distance helpers for the GPS-driven facility verification.
 import { facilityVerification, FACILITY_VERIFICATION, haversineMeters } from '../../lib/geo'
@@ -10,14 +10,23 @@ import {
   confirmRepAddedFacility,
   dismissRepAddedFacility,
 } from '../../lib/places.js'
-import { discoverFacilities } from '../../lib/facilityDiscovery.js'
 import FacilityPicker from './FacilityPicker.jsx'
+import VisitTarget from './VisitTarget.jsx'
+import LocationMatchBadge from './LocationMatchBadge.jsx'
+import VoicePlayer from './VoicePlayer.jsx'
+import { areaLabel, directoryName, facilityName, facilitySourceLabel, targetLabel } from './activityTarget'
 // Business Directory: optional nearby-business suggestion + the Field Work switcher.
 import FieldWorkSwitch from '../field-work/FieldWorkSwitch'
-import NearbyBusinessPicker from '../business-directory/components/NearbyBusinessPicker'
 import CheckInPanel from '../checkins/CheckInPanel.jsx'
 import TeamLocations from '../checkins/TeamLocations.jsx'
-import { isManagerRole } from '../../lib/permissions'
+import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
+import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivities, affectedActivityIds } from './feedScope'
+import { newActivityId } from './activityId'
+import { effectiveFields, fieldLabel, missingRequired } from './reportFields'
+import { captureLocation } from '../checkins/locationCapture'
+import { saveDraft, loadDraft, clearDraft, hasContent } from './draftStore'
+import { describeReportLocation, describeArea } from './locationStatus'
+import { OSM_ATTRIBUTION, OSM_COPYRIGHT_URL } from './areaLookup'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
@@ -25,7 +34,7 @@ import { watchTable, subscribeChanges } from '../../lib/realtime'
 import { Card, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 import { theme } from '../../styles/theme'
 import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
-const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
+const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, warning, warningBg, purple, bg } = theme
 
 // How many activities one page of the feed fetches (and the size that signals "there may be older ones").
 const ACTIVITY_PAGE = 100
@@ -74,13 +83,13 @@ function pickAudioType() {
   return ''
 }
 
-function startOfWeek(d) {
-  const x = new Date(d)
-  const day = x.getDay()
-  const diff = day === 0 ? 6 : day - 1
-  x.setDate(x.getDate() - diff)
-  x.setHours(0, 0, 0, 0)
-  return x
+// Replace the grouped rows for `ids` with `list`, leaving every other report's
+// entries (older pages the person loaded) alone.
+function regroup(prev, ids, list) {
+  const next = { ...prev }
+  ids.forEach(function (id) { delete next[id] })
+  ;(list || []).forEach(function (x) { (next[x.activity_id] = next[x.activity_id] || []).push(x) })
+  return next
 }
 
 function csvCell(v) {
@@ -88,7 +97,7 @@ function csvCell(v) {
   return '"' + s.replace(/"/g, '""') + '"'
 }
 
-export default function LiveActivity({ brand, allowedModules = [] }) {
+export default function LiveActivity({ brand, allowedModules = [], perms }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const authData = readAuth()
   const meStaffId = (authData && authData.staff && authData.staff.id) ? authData.staff.id : null
@@ -103,8 +112,17 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
   // isManagerRole is the shared definition — the facility-review recipient
   // lookup in places.js uses the same one.
   const isManager = isOwner || isManagerRole(authData.staff && authData.staff.role)
+  // Who may read every report. Same rule as the database's caller_sees_all_activity,
+  // so a custom role granted directory management gets Team Reports too. isManager
+  // above stays for what the database still decides by manager role alone: facility
+  // review and the team check-in overview.
+  const canSeeAll = canSeeAllActivity({ isOwner, role: authData.staff && authData.staff.role, perms })
 
   const [fields, setFields] = useState([])
+  // What the form, validation and columns use: the business's own fields, or one
+  // built-in note until it has defined any (see reportFields.js).
+  const reportFields = effectiveFields(fields)
+  const usingStarterFields = fields.length === 0
   const [activities, setActivities] = useState([])
   const [viewersByAct, setViewersByAct] = useState({})
   const [reactionsByAct, setReactionsByAct] = useState({})
@@ -121,6 +139,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
   // has no staff row, so their "mine" would be empty — they start on 'team'.
   const [scope, setScope] = useState(isOwner ? 'team' : 'mine')
   const [counts, setCounts] = useState(null)
+  const [exporting, setExporting] = useState(false)
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [dateRange, setDateRange] = useState('all')
@@ -141,15 +160,17 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
   const [gps, setGps] = useState(null)
   // The directory business the rep explicitly confirmed (never auto-selected).
   const [confirmedBiz, setConfirmedBiz] = useState(null)
-  const [gpsAddress, setGpsAddress] = useState(null)
   const [placeName, setPlaceName] = useState('')
   const [findingPlace, setFindingPlace] = useState(false)
+  // Why there is no position (denied, timed out ...), and the area-name lookup's own
+  // outcome. captureToken lets a late answer from an earlier open be ignored.
+  const [gpsIssue, setGpsIssue] = useState(null)
+  const [area, setArea] = useState(null)
+  const captureToken = useRef(0)
   // Facility capture (issue #1): the GPS fix drives automatic detection of the
   // nearest health facility. `facility` is the chosen facility object (or a
   // rep-added synthetic one); it replaces the old free-text `placeQuery` box.
   const [facility, setFacility] = useState(null)
-  const [facilityLoading, setFacilityLoading] = useState(false)
-  const [facilityError, setFacilityError] = useState(false)
   // Manager review: opens the same FacilityPicker centered on a logged visit's
   // saved GPS, so a manager can independently verify what was near.
   const [reviewing, setReviewing] = useState(null)
@@ -160,6 +181,14 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
   const [reviewLoading, setReviewLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
+  // Save safety: a lock the handler checks itself (state lags a rapid second tap),
+  // the draft for this modal session, and what the person must be told after a failure.
+  const submitLock = useRef(false)
+  const draftRef = useRef(null)
+  const [retryNote, setRetryNote] = useState('')
+  const [restoredAt, setRestoredAt] = useState(null) // when the restored unsent draft was saved
+  const [notifyPending, setNotifyPending] = useState(null)
+  const [notifying, setNotifying] = useState(false)
 
   const [settingUp, setSettingUp] = useState(false)
   const [newField, setNewField] = useState({ label: '', field_type: 'text', required: false, options: '' })
@@ -177,64 +206,123 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
 
   useEffect(() => { load() }, [brand?.id])
 
-  // Latest list for the realtime handlers below, which outlive a single render.
+  // Remember the unsent form (typed answers and territory only) so a reload or an
+  // accidental close does not lose it. Once a send has been attempted the report may
+  // already exist on the server, so nothing is kept: restoring it later would log it twice.
+  useEffect(() => {
+    if (!logging || !brand || !brand.id) return undefined
+    if (draftRef.current && draftRef.current.sent) return undefined
+    const t = setTimeout(function () { saveDraft(brand.id, meStaffId, { values: values, terrId: terrId }) }, 400)
+    return function () { clearTimeout(t) }
+  }, [logging, values, terrId])
+
+  // load() and the realtime catch-up are also called from long-lived handlers, so
+  // they read the tab from a ref, never from the render they were created in.
+  const scopeRef = useRef(scope)
+  scopeRef.current = scope
+  const firstScope = useRef(true)
+  useEffect(() => {
+    if (firstScope.current) { firstScope.current = false; return }
+    load()
+  }, [scope])
+
+  // Latest list and handlers for the realtime callbacks below, which outlive a render.
   const activitiesRef = useRef([])
   useEffect(() => { activitiesRef.current = activities })
-  const prevLiveRef = useRef('connecting')
+  const liveHandlers = useRef({})
+
+  // Fetch viewers, reactions and comments for these reports and fold them in.
+  async function hydrate(ids) {
+    if (!ids || ids.length === 0) return
+    const [vs, rs, cs] = await Promise.all([
+      liveActivityRepository.getActivityViewers(ids),
+      liveActivityRepository.getActivityReactions(ids),
+      liveActivityRepository.getActivityComments(ids),
+    ])
+    setViewersByAct(function (prev) { return regroup(prev, ids, vs) })
+    setReactionsByAct(function (prev) { return regroup(prev, ids, rs) })
+    setCommentsByAct(function (prev) { return regroup(prev, ids, cs) })
+  }
+
+  // Reactions and comments change a report that is already on screen, so only
+  // those two lists are refetched, and only for the reports that changed.
+  async function refreshEngagement(ids) {
+    if (!ids || ids.length === 0) return
+    const [rs, cs] = await Promise.all([
+      liveActivityRepository.getActivityReactions(ids),
+      liveActivityRepository.getActivityComments(ids),
+    ])
+    setReactionsByAct(function (prev) { return regroup(prev, ids, rs) })
+    setCommentsByAct(function (prev) { return regroup(prev, ids, cs) })
+  }
+
+  // Realtime never replays what happened while it was not connected, and a report
+  // saved between the first fetch and the subscription being confirmed is missed
+  // the same way. So every time the connection is confirmed, fetch the newest
+  // page for the current tab and fold in whatever is not already on screen. It
+  // merges (never replaces), so it neither blanks the feed nor shows a card twice.
+  async function catchUp() {
+    if (!brand || !brand.id) return
+    const page = await liveActivityRepository.getFieldActivities(brand.id, {
+      limit: ACTIVITY_PAGE,
+      ...scopeQuery(scopeRef.current, { canSeeAll: canSeeAll, meStaffId: meStaffId }),
+    })
+    const known = new Set(activitiesRef.current.map(function (a) { return a.id }))
+    const fresh = (page || []).filter(function (a) { return !known.has(a.id) })
+    if (fresh.length === 0) return
+    setActivities(function (prev) { return mergeActivities(prev, fresh) })
+    await hydrate(fresh.map(function (a) { return a.id }))
+  }
+  liveHandlers.current = { catchUp: catchUp, hydrate: hydrate, refreshEngagement: refreshEngagement }
 
   useEffect(() => {
     if (!brand || !brand.id) return
+    const timers = []
     const stop = watchTable('field_activities', brand.id, function (row) {
-      setActivities(function (prev) {
-        if (prev.some(function (a) { return a.id === row.id })) return prev
-        return [row].concat(prev)
-      })
+      setActivities(function (prev) { return mergeActivities(prev, [row]) })
+      // Who a report is shared with is written just after the report itself, so
+      // fetch that (and any early reactions) a moment later.
+      if (row.staff_id !== meStaffId) {
+        timers.push(setTimeout(function () {
+          liveHandlers.current.hydrate([row.id]).catch(function (e) { console.error('Could not load the new report details:', e) })
+        }, 1200))
+      }
     }, function (status) {
       setLiveStatus(status)
-      // Rows that arrived while the connection was down are not replayed, so
-      // catch up with one refetch the moment it is live again.
-      if (status === 'live' && prevLiveRef.current === 'disconnected') load()
-      prevLiveRef.current = status
+      if (status === 'live') {
+        liveHandlers.current.catchUp().catch(function (e) { console.error('Live catch-up failed:', e) })
+      }
     })
     return function () {
+      timers.forEach(clearTimeout)
       stop()
     }
   }, [brand?.id])
 
-  // Reactions and comments change a row that is already on screen, so there is
-  // nothing to insert: refetch just those two lists (newest 100 activities, to
-  // keep the request URL short), debounced so a burst is one request. These
-  // tables only deliver if they are in the supabase_realtime publication
-  // (carehub_20261127_realtime_activity_tables.sql); without it nothing breaks,
-  // the lists simply refresh on the person's own actions as before.
+  // Reactions and comments only deliver if their tables are in the
+  // supabase_realtime publication (they are, on the live project); without it
+  // nothing breaks, the lists simply refresh on the person's own actions. Events
+  // are gathered for 600 ms so a burst is one request.
   useEffect(() => {
     if (!brand || !brand.id) return
     let timer = null
-    const refresh = function () {
+    let all = false
+    const pending = new Set()
+    const onEvent = function (payload) {
+      const hit = affectedActivityIds(payload, activitiesRef.current.map(function (a) { return a.id }))
+      if (hit.all) all = true
+      hit.ids.forEach(function (id) { pending.add(id) })
+      if (!all && pending.size === 0) return
       if (timer) clearTimeout(timer)
-      timer = setTimeout(async function () {
-        const ids = activitiesRef.current.slice(0, 100).map(function (a) { return a.id })
-        if (ids.length === 0) return
-        try {
-          const [rs, cs] = await Promise.all([
-            liveActivityRepository.getActivityReactions(ids),
-            liveActivityRepository.getActivityComments(ids),
-          ])
-          const group = function (list) {
-            const m = {}
-            ;(list || []).forEach(function (x) { (m[x.activity_id] = m[x.activity_id] || []).push(x) })
-            return m
-          }
-          // Keep entries for older pages the person loaded; replace the refreshed ones.
-          setReactionsByAct(function (prev) { const n = { ...prev }; ids.forEach(function (i) { delete n[i] }); return Object.assign(n, group(rs)) })
-          setCommentsByAct(function (prev) { const n = { ...prev }; ids.forEach(function (i) { delete n[i] }); return Object.assign(n, group(cs)) })
-        } catch (e) {
-          console.error('Live refresh of reactions/comments failed:', e)
-        }
+      timer = setTimeout(function () {
+        const ids = all ? activitiesRef.current.slice(0, 100).map(function (a) { return a.id }) : Array.from(pending)
+        all = false
+        pending.clear()
+        liveHandlers.current.refreshEngagement(ids).catch(function (e) { console.error('Live refresh of reactions/comments failed:', e) })
       }, 600)
     }
-    const stopR = subscribeChanges({ table: 'activity_reactions', event: '*' }, refresh)
-    const stopC = subscribeChanges({ table: 'activity_comments', event: '*' }, refresh)
+    const stopR = subscribeChanges({ table: 'activity_reactions', event: '*' }, onEvent)
+    const stopC = subscribeChanges({ table: 'activity_comments', event: '*' }, onEvent)
     return function () {
       if (timer) clearTimeout(timer)
       stopR()
@@ -247,7 +335,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
     setLoading(true)
     try {
       const flds = await liveActivityRepository.getActivityFields(brand.id)
-      const acts = await liveActivityRepository.getFieldActivities(brand.id)
+      const acts = await liveActivityRepository.getFieldActivities(brand.id, { limit: ACTIVITY_PAGE, ...scopeQuery(scopeRef.current, { canSeeAll: canSeeAll, meStaffId: meStaffId }) })
       const stf = await staffRepository.getAll(brand.id)
       const ters = await territoryRepository.getAll(brand.id)
       setFields(flds || [])
@@ -258,11 +346,11 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
 
       // Tab badges for managers. Non-fatal: a failed count just hides the
       // numbers, it must not blank the feed.
-      if (isManager) {
+      if (canSeeAll) {
         try {
           const [mine, team] = await Promise.all([
-            liveActivityRepository.countFieldActivities(brand.id, meStaffId),
-            liveActivityRepository.countFieldActivities(brand.id),
+            liveActivityRepository.countFieldActivities(brand.id, scopeQuery('mine', { canSeeAll: canSeeAll, meStaffId: meStaffId })),
+            liveActivityRepository.countFieldActivities(brand.id, scopeQuery('team', { canSeeAll: canSeeAll, meStaffId: meStaffId })),
           ])
           setCounts({ mine: mine, team: team })
         } catch (e) {
@@ -314,8 +402,12 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
     if (!brand || !brand.id || loadingOlder || activities.length === 0) return
     setLoadingOlder(true)
     try {
-      const oldest = activities[activities.length - 1].created_at
-      const page = await liveActivityRepository.getFieldActivities(brand.id, { limit: ACTIVITY_PAGE, before: oldest })
+      const last = activities[activities.length - 1]
+      const page = await liveActivityRepository.getFieldActivities(brand.id, {
+        limit: ACTIVITY_PAGE,
+        cursor: { created_at: last.created_at, id: last.id },
+        ...scopeQuery(scopeRef.current, { canSeeAll: canSeeAll, meStaffId: meStaffId }),
+      })
       const rows = (page || []).filter(function (r) { return !activities.some(function (a) { return a.id === r.id }) })
       setHasOlder((page || []).length >= ACTIVITY_PAGE)
       if (rows.length === 0) return
@@ -518,151 +610,198 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
   }
 
   function openLogger() {
-    if (fields.length === 0) {
-      showToast('No activity fields set up yet. The Owner needs to define what a visit record looks like first.', { type: 'warning' })
-      return
-    }
-    setValues({})
-    setTerrId('')
+    draftRef.current = null
+    setRetryNote('')
+    const saved = brand && brand.id ? loadDraft(brand.id, meStaffId) : null
+    const known = new Set(reportFields.map(function (f) { return f.id }))
+    const keptValues = {}
+    if (saved) Object.keys(saved.values).forEach(function (k) { if (known.has(k)) keptValues[k] = saved.values[k] })
+    const keptTerr = saved && territories.some(function (t) { return t.id === saved.terrId }) ? saved.terrId : ''
+    const restore = !!saved && hasContent({ values: keptValues, terrId: keptTerr })
+    setValues(restore ? keptValues : {})
+    setTerrId(restore ? keptTerr : '')
+    setRestoredAt(restore ? saved.savedAt : null)
     setOverrideViewers(null)
     setVoiceBlob(null)
     setVoicePreview(null)
     setGps(null)
+    setGpsIssue(null)
+    setArea(null)
     setConfirmedBiz(null)
-    setGpsAddress(null)
     setPlaceName('')
     setFacility(null)
-    setFacilityLoading(false)
-    setFacilityError(false)
     setLogging(true)
 
-    if (navigator.geolocation) {
-      setFindingPlace(true)
-      navigator.geolocation.getCurrentPosition(
-        async function (pos) {
-          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }
-          setGps(coords)
-          // Best-effort area label (reverse geocode) for the location caption;
-          // the precise place now comes from the auto-detected facility.
-          // Capture address/LGA/State via reverseGeocode for location_label enrichment
-          liveActivityRepository.reverseGeocode(coords.lat, coords.lng).then(function (name) {
-            if (name) {
-              setPlaceName(name)
-              setGpsAddress(name)
-            }
-          }).catch(function () {})
-          // Auto-detect the single closest facility to the GPS via shared engine.
-          // No hard 200m cap — progressive radius 500→1000 via nearbyHealthFacilities default,
-          // with Expanded/Area controls inside FacilityPicker for further discovery.
-          setFacilityLoading(true)
-          try {
-            const res = await discoverFacilities({
-              mode: 'nearby',
-              coords: coords,
-              category: 'all',
-              page: 0,
-              pageSize: 10,
-              businessId: brand.id,
-            })
-            if (res.facilities.length > 0) {
-              const best = res.facilities[0]
-              if (best.category && best.category !== 'Other Health Facility') {
-                setFacility(best)
-              } else if (res.facilities.length > 1) {
-                const known = res.facilities.find(function (f) { return f.category && f.category !== 'Other Health Facility' })
-                setFacility(known || best)
-              } else {
-                setFacility(best)
-              }
-            }
-          } catch (e) {
-            console.error('Auto facility detection failed:', e)
-            setFacilityError(true)
-          } finally {
-            setFacilityLoading(false)
-          }
-          setFindingPlace(false)
-        },
-        function () { setFindingPlace(false) },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-      )
+    captureReportLocation()
+  }
+
+  // One position, asked for because the rep opened the form (or pressed Try again);
+  // nothing is watched afterwards. A fresh fix is requested, not a cached one. Every
+  // way it can fail is kept apart (see locationStatus.js) and none blocks the report.
+  // The area name is a caption looked up afterwards; it is never the place visited.
+  async function captureReportLocation() {
+    const token = ++captureToken.current
+    setGps(null)
+    setGpsIssue(null)
+    setArea(null)
+    setFindingPlace(true)
+    const cap = await captureLocation({ timeoutMs: 15000, maximumAgeMs: 0 })
+    if (token !== captureToken.current) return
+    setFindingPlace(false)
+    if (!cap.ok) { setGpsIssue({ reason: cap.reason }); return }
+    setGps({ lat: cap.lat, lng: cap.lng, accuracy: cap.accuracyM })
+    setArea({ status: 'looking' })
+    try {
+      const found = await liveActivityRepository.lookupArea(cap.lat, cap.lng)
+      if (token !== captureToken.current) return
+      if (found && found.status === 'ok') { setPlaceName(found.label); setArea({ status: 'ok', label: found.label }) }
+      else setArea({ status: 'no_result' })
+    } catch (e) {
+      if (token === captureToken.current) setArea({ status: 'failed' })
     }
   }
 
+  // Saving a report is safe to repeat. One draft (a client-made id) lives for as
+  // long as the modal is open: the same id is the same row on the server, so a
+  // double tap or a retry after a lost response cannot create a second report.
+  // Once the report has been sent, a retry resends it exactly as submitted (the
+  // server would ignore edits to an existing row, so letting the form drift would
+  // quietly lose them); the modal says so.
   async function submitActivity() {
-    const missing = fields.filter(function (f) { return f.required && !values[f.id] })
+    if (submitLock.current) return
+    const missing = missingRequired(reportFields, values)
     if (missing.length > 0) {
-      showToast('Please fill in: ' + missing.map(function (f) { return f.label }).join(', '), { type: 'warning' })
+      showToast('Please fill in: ' + missing.join(', '), { type: 'warning' })
       return
     }
 
+    submitLock.current = true
     setSaving(true)
     try {
-      let voiceUrl = null
-      if (voiceBlob) {
-        setSaveStatus('Uploading voice note...')
-        voiceUrl = await liveActivityRepository.uploadActivityVoice(voiceBlob)
+      const draft = draftRef.current || (draftRef.current = { id: newActivityId(), sent: false, voiceBlob: null, voiceUrl: null, activity: null, viewers: [] })
+
+      if (!draft.sent) {
+        // Nothing has reached the server yet, so the form may still change.
+        if (voiceBlob && draft.voiceBlob !== voiceBlob) {
+          setSaveStatus('Uploading voice note...')
+          try {
+            draft.voiceUrl = await liveActivityRepository.uploadActivityVoice(voiceBlob, { businessId: brand.id, activityId: draft.id })
+            draft.voiceBlob = voiceBlob
+          } catch (e) {
+            showToast('The voice note did not upload: ' + e.message + '. Nothing was saved. Try again, or remove the voice note to log without it.', { type: 'error' })
+            return
+          }
+        }
+        if (!voiceBlob) { draft.voiceBlob = null; draft.voiceUrl = null }
+
+        const chosen = overrideViewers !== null
+          ? overrideViewers
+          : myViewers.map(function (v) { return v.viewer_staff_id })
+        draft.viewers = chosen.map(function (id) {
+          return { staff_id: id, viewer_name: nameFor(id) }
+        })
+
+        // Verification is computed once, at log time, and stored with the row —
+        // the feed never re-derives it. It is DISTANCE-ONLY: is the GPS fix within
+        // FACILITY_VERIFY_THRESHOLD_M of the chosen facility's coordinates? No GPS
+        // or no chosen facility means "unverified", never an error: the log must
+        // still go through. We never text-match facility names.
+        //
+        // A facility the rep typed themselves is 'pending', not verified — its
+        // coordinates ARE this GPS fix, so distance proves nothing until a manager
+        // confirms it. facilityVerification owns that rule.
+        const facilityCoords = facility ? { lat: facility.lat, lng: facility.lng } : null
+        const distanceM = (gps && facilityCoords) ? Math.round(haversineMeters(gps, facilityCoords)) : null
+        const verifyState = facilityVerification(gps, facility)
+        const verified = verifyState === FACILITY_VERIFICATION.VERIFIED
+        const pendingReview = verifyState === FACILITY_VERIFICATION.PENDING
+
+        draft.activity = {
+          id: draft.id,
+          business_id: brand.id,
+          staff_id: meStaffId,
+          rep_name: meName,
+          rep_title: meTitle,
+          territory_id: terrId || null,
+          values_json: JSON.stringify(values),
+          voice_url: draft.voiceUrl,
+          lat: gps ? gps.lat : null,
+          lng: gps ? gps.lng : null,
+          location_label: (facility && facility.name) || (confirmedBiz && confirmedBiz.name) || placeName || null,
+          place_of_visit: (facility && facility.name) || null,
+          place_coords: facilityCoords || null,
+          place_verified: verified,
+          facility_name: facility ? facility.name : null,
+          facility_address: facility ? facility.address || null : null,
+          facility_category: facility ? facility.category : null,
+          facility_lat: facilityCoords ? facility.lat : null,
+          facility_lng: facilityCoords ? facility.lng : null,
+          facility_distance_m: distanceM,
+          facility_source: facility ? (facility.source || 'detected') : null,
+          facility_verified: verified,
+          facility_pending_review: pendingReview,
+          // Only present when the rep confirmed a business; the name is a snapshot for the audit record.
+          ...(confirmedBiz ? { directory_business_id: confirmedBiz.id, directory_business_name: confirmedBiz.name } : {}),
+        }
+        draft.sent = true // from here the request may have reached the server
+        clearDraft(brand.id, meStaffId)
       }
-      setSaveStatus('Saving...')
 
-      const chosen = overrideViewers !== null
-        ? overrideViewers
-        : myViewers.map(function (v) { return v.viewer_staff_id })
+      setSaveStatus(retryNote ? 'Retrying...' : 'Saving...')
+      const res = await liveActivityRepository.logActivity(draft.activity, draft.viewers)
 
-      const viewers = chosen.map(function (id) {
-        return { staff_id: id, viewer_name: nameFor(id) }
-      })
-
-      // Verification is computed once, at log time, and stored with the row —
-      // the feed never re-derives it. It is DISTANCE-ONLY: is the GPS fix within
-      // FACILITY_VERIFY_THRESHOLD_M of the chosen facility's coordinates? No GPS
-      // or no chosen facility means "unverified", never an error: the log must
-      // still go through. We never text-match facility names.
-      //
-      // A facility the rep typed themselves is 'pending', not verified — its
-      // coordinates ARE this GPS fix, so distance proves nothing until a manager
-      // confirms it. facilityVerification owns that rule.
-      const facilityCoords = facility ? { lat: facility.lat, lng: facility.lng } : null
-      const distanceM = (gps && facilityCoords) ? Math.round(haversineMeters(gps, facilityCoords)) : null
-      const verifyState = facilityVerification(gps, facility)
-      const verified = verifyState === FACILITY_VERIFICATION.VERIFIED
-      const pendingReview = verifyState === FACILITY_VERIFICATION.PENDING
-
-      await liveActivityRepository.logActivity({
-        business_id: brand.id,
-        staff_id: meStaffId,
-        rep_name: meName,
-        rep_title: meTitle,
-        territory_id: terrId || null,
-        values_json: JSON.stringify(values),
-        voice_url: voiceUrl,
-        lat: gps ? gps.lat : null,
-        lng: gps ? gps.lng : null,
-        location_label: (facility && facility.name) || placeName || null,
-        place_of_visit: (facility && facility.name) || null,
-        place_coords: facilityCoords || null,
-        place_verified: verified,
-        facility_name: facility ? facility.name : null,
-        facility_address: facility ? facility.address || null : null,
-        facility_category: facility ? facility.category : null,
-        facility_lat: facilityCoords ? facility.lat : null,
-        facility_lng: facilityCoords ? facility.lng : null,
-        facility_distance_m: distanceM,
-        facility_source: facility ? (facility.source || 'detected') : null,
-        facility_verified: verified,
-        facility_pending_review: pendingReview,
-        // Only present when the rep confirmed a business; the name is a snapshot for the audit record.
-        ...(confirmedBiz ? { directory_business_id: confirmedBiz.id, directory_business_name: confirmedBiz.name } : {}),
-      }, viewers)
-
-      showToast('Activity logged', { type: 'success' })
+      draftRef.current = null
+      clearDraft(brand.id, meStaffId)
+      setRestoredAt(null)
+      setRetryNote('')
       setLogging(false)
+      if (res && res.notification === 'failed') {
+        setNotifyPending({ activity: draft.activity, viewers: draft.viewers })
+        showToast('Activity saved. The people you share it with were not notified yet; use Retry notifying on the page.', { type: 'warning', duration: 8000 })
+      } else if (res && res.notification === 'refused') {
+        // The database does not let this person write alerts for colleagues, so there is
+        // nothing to retry. Say what is true: it is saved, shared, and findable.
+        showToast('Activity logged. The people you shared it with can see it under Shared with me; in-app alerts to them are not available yet.', { type: 'info', duration: 8000 })
+      } else {
+        showToast('Activity logged', { type: 'success' })
+      }
       load()
     } catch (e) {
-      showToast('Could not log activity: ' + e.message, { type: 'error' })
+      if (draftRef.current && draftRef.current.sent) {
+        setRetryNote('This report may already be saved. Press Retry to finish: it is sent exactly as you submitted it and cannot create a second report. To change it, cancel, then check your feed before logging it again.')
+      }
+      showToast('Could not finish saving: ' + e.message, { type: 'error' })
+    } finally {
+      submitLock.current = false
+      setSaveStatus('')
+      setSaving(false)
     }
-    setSaveStatus('')
-    setSaving(false)
+  }
+
+  function discardDraft() {
+    clearDraft(brand.id, meStaffId)
+    setValues({})
+    setTerrId('')
+    setRestoredAt(null)
+  }
+
+  async function retryNotify() {
+    if (!notifyPending || notifying) return
+    setNotifying(true)
+    try {
+      const outcome = await liveActivityRepository.notifyViewers(notifyPending.activity, notifyPending.viewers)
+      if (outcome === 'sent') {
+        setNotifyPending(null)
+        showToast('Notified.', { type: 'success' })
+      } else if (outcome === 'refused') {
+        setNotifyPending(null)
+        showToast('In-app alerts to colleagues are not available yet, so this cannot be retried. The report is saved and they can find it under Shared with me.', { type: 'info', duration: 8000 })
+      } else {
+        showToast('Still could not notify them. The report is saved and they can find it under Shared with me.', { type: 'warning' })
+      }
+    } finally {
+      setNotifying(false)
+    }
   }
 
   function myReaction(actId) {
@@ -675,7 +814,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
     try {
       if (existing) await liveActivityRepository.unreactToActivity(existing.id)
       else await liveActivityRepository.reactToActivity(actId, meStaffId, meName)
-      load()
+      await refreshEngagement([actId])
     } catch (e) {
       showToast('Could not react: ' + e.message, { type: 'error' })
     }
@@ -699,60 +838,17 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
         next[actId] = ''
         return next
       })
-      load()
+      await refreshEngagement([actId])
     } catch (e) {
       showToast('Could not comment: ' + e.message, { type: 'error' })
     }
   }
 
   function inRange(dateStr) {
-    if (dateRange === 'all') return true
-    const d = new Date(dateStr)
-    const now = new Date()
-
-    if (dateRange === 'today') {
-      const start = new Date()
-      start.setHours(0, 0, 0, 0)
-      return d >= start
-    }
-    if (dateRange === 'week') return d >= startOfWeek(now)
-    if (dateRange === 'lastweek') {
-      const thisWeek = startOfWeek(now)
-      const lastWeek = new Date(thisWeek)
-      lastWeek.setDate(lastWeek.getDate() - 7)
-      return d >= lastWeek && d < thisWeek
-    }
-    if (dateRange === 'month') {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1)
-      return d >= start
-    }
-    if (dateRange === 'year') {
-      const start = new Date(now.getFullYear(), 0, 1)
-      return d >= start
-    }
-    if (dateRange === 'custom') {
-      if (customFrom) {
-        const from = new Date(customFrom)
-        from.setHours(0, 0, 0, 0)
-        if (d < from) return false
-      }
-      if (customTo) {
-        const to = new Date(customTo)
-        to.setHours(23, 59, 59, 999)
-        if (d > to) return false
-      }
-      return true
-    }
-    return true
+    return inWindow(dateStr, dateWindow(dateRange, customFrom, customTo))
   }
 
-  const permitted = activities.filter(function (a) {
-    if (isManager && scope === 'mine') return a.staff_id === meStaffId
-    if (isOwner) return true
-    if (a.staff_id === meStaffId) return true
-    const vs = viewersByAct[a.id] || []
-    return vs.some(function (v) { return v.staff_id === meStaffId })
-  })
+  const permitted = filterByScope(activities, { scope: scope, canSeeAll: canSeeAll, meStaffId: meStaffId, viewersByAct: viewersByAct })
 
   const visible = permitted.filter(function (a) {
     if (!inRange(a.created_at)) return false
@@ -771,8 +867,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
   }
 
   function labelFor(fieldId) {
-    const f = fields.filter(function (x) { return x.id === fieldId })[0]
-    return f ? f.label : null
+    return fieldLabel(fields, fieldId)
   }
 
   const columns = [
@@ -781,7 +876,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
     { key: 'territory', label: 'Territory' },
     { key: 'place', label: 'Location' },
     { key: 'business', label: 'Business' },
-  ].concat(fields.map(function (f) {
+  ].concat(reportFields.map(function (f) {
     return { key: 'f_' + f.id, label: f.label, fieldId: f.id }
   })).concat([
     { key: 'voice', label: 'Voice' },
@@ -794,7 +889,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
     if (col.key === 'date') return fmtStamp(a.created_at)
     if (col.key === 'rep') return a.rep_name
     if (col.key === 'territory') return terrName(a.territory_id) || ''
-    if (col.key === 'place') return a.facility_name || a.place_of_visit || a.location_label || ''
+    if (col.key === 'place') return targetLabel(a)
     if (col.key === 'business') return a.directory_business_name || ''
     if (col.key === 'voice') return a.voice_url ? 'Yes' : ''
     if (col.key === 'coords') return (a.lat && a.lng) ? (a.lat.toFixed(5) + ', ' + a.lng.toFixed(5)) : ''
@@ -819,23 +914,45 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
     return found ? found[1] : 'All time'
   }
 
-  function exportCSV() {
-    if (visible.length === 0) {
-      showToast('Nothing to export with the current filters.', { type: 'warning' })
-      return
-    }
+  // Exports everything the current tab and filters match, fetched from the server,
+  // not just the pages already on screen. A "shared with me" view cannot be
+  // expressed as a query, so that one exports what is loaded and says so.
+  async function exportCSV() {
+    if (exporting) return
+    const serverSide = canSeeAll || scope === 'mine'
+    setExporting(true)
     try {
+      let list = visible
+      let truncated = false
+      if (serverSide) {
+        const win = dateWindow(dateRange, customFrom, customTo)
+        const base = scopeQuery(scope, { canSeeAll: canSeeAll, meStaffId: meStaffId })
+        const res = await liveActivityRepository.getAllFieldActivities(brand.id, {
+          ...base,
+          ...(filterRep !== 'all' ? { staffId: filterRep, ownerOnly: false } : {}),
+          ...(filterTerr !== 'all' ? { territoryId: filterTerr } : {}),
+          since: win.since ? win.since.toISOString() : null,
+          until: win.until ? win.until.toISOString() : null,
+        })
+        list = res.rows
+        truncated = res.truncated
+      }
+      if (list.length === 0) {
+        showToast('Nothing to export with the current filters.', { type: 'warning' })
+        return
+      }
       const header = shownColumns.map(function (c) { return csvCell(c.label) }).join(',')
-      const rows = visible.map(function (a) {
+      const rows = list.map(function (a) {
         return shownColumns.map(function (c) { return csvCell(cellValue(a, c)) }).join(',')
       })
       const csv = [header].concat(rows).join('\n')
 
-      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+      const blob = new Blob([String.fromCharCode(0xFEFF) + csv], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
 
-      const repPart = filterRep === 'all' ? 'all-reps' : (nameFor(filterRep) || 'rep').replace(/\s+/g, '-').toLowerCase()
+      const repName = (staffList.filter(function (x) { return x.id === filterRep })[0] || {}).full_name
+      const repPart = filterRep === 'all' ? 'all-reps' : (repName || 'rep').replace(/\s+/g, '-').toLowerCase()
       const datePart = rangeLabel().replace(/\s+/g, '-').toLowerCase()
       a.href = url
       a.download = 'field-activity-' + repPart + '-' + datePart + '.csv'
@@ -844,26 +961,36 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
 
-      showToast('Exported ' + visible.length + ' record' + (visible.length > 1 ? 's' : ''), { type: 'success' })
+      showToast('Exported ' + list.length + ' record' + (list.length > 1 ? 's' : '')
+        + (truncated ? '. That is the most one export holds; narrow the dates to get the rest.' : '')
+        + (serverSide ? '' : ' (the reports loaded on this page)'),
+      { type: truncated || !serverSide ? 'warning' : 'success' })
     } catch (e) {
       showToast('Could not export: ' + e.message, { type: 'error' })
+    } finally {
+      setExporting(false)
     }
   }
+
+  const resolveVoice = function (url) { return liveActivityRepository.signedVoiceUrl(url) }
+  const loc = describeReportLocation({ finding: findingPlace, gps: gps, issue: gpsIssue })
+  const areaText = describeArea(area)
+  const showsAreaNames = visible.some(function (a) { return !!areaLabel(a) })
 
   return (
     <>
       <PageHeader
         title={<>Live Field Activity{liveStatus === 'live' ? (
-          <span data-live-status={liveStatus} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: '800', color: danger, background: dangerBg, padding: '3px 9px', borderRadius: '20px', border: `1px solid ${danger}`, marginLeft: '8px', verticalAlign: 'middle' }}>
+          <span data-live-status={liveStatus} title='Connected. New reports you are allowed to see appear here. Reload if one seems to be missing.' style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: '800', color: danger, background: dangerBg, padding: '3px 9px', borderRadius: '20px', border: `1px solid ${danger}`, marginLeft: '8px', verticalAlign: 'middle' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: danger }} />
-            LIVE
+            UPDATES ON
           </span>
         ) : (
-          <span data-live-status={liveStatus} title={liveStatus === 'connecting' ? 'Connecting to live updates' : 'Live updates are off. Reload to reconnect.'} style={{ display: 'inline-flex', alignItems: 'center', fontSize: '10px', fontWeight: '800', padding: '3px 9px', borderRadius: '20px', border: '1px solid currentColor', marginLeft: '8px', verticalAlign: 'middle', opacity: 0.6 }}>
-            {liveStatus === 'connecting' ? 'CONNECTING' : 'NOT LIVE'}
+          <span data-live-status={liveStatus} title={liveStatus === 'connecting' ? 'Connecting to live updates' : 'Live updates are paused and reconnecting by itself. Anything saved meanwhile appears when it is back.'} style={{ display: 'inline-flex', alignItems: 'center', fontSize: '10px', fontWeight: '800', padding: '3px 9px', borderRadius: '20px', border: '1px solid currentColor', marginLeft: '8px', verticalAlign: 'middle', opacity: 0.6 }}>
+            {liveStatus === 'connecting' ? 'CONNECTING' : 'UPDATES PAUSED'}
           </span>
         )}</>}
-        description="Reps log what happens in the field. Tagged managers see it the moment it lands, and can reply."
+        description="Reps log what happens in the field. New reports appear here as they are saved, and managers can reply."
         secondaryActions={[
           ...(isOwner ? [{ label: 'Set up fields', variant: 'ghost', onClick: function () { setSettingUp(true) } }] : []),
           ...(!isOwner ? [{ label: 'Who sees my activity', variant: 'ghost', onClick: openViewerPicker }] : []),
@@ -882,6 +1009,16 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
       <CheckInPanel businessId={brand && brand.id} />
       {isManager && <TeamLocations businessId={brand && brand.id} />}
 
+      {notifyPending && (
+        <div role='status' style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 240px' }}>
+            <div style={{ fontSize: '13px', fontWeight: '800', color: warning }}>Your report is saved, but nobody has been notified yet</div>
+            <div style={{ fontSize: '12px', color: warning, marginTop: '2px' }}>The people you shared it with can still find it under Shared with me.</div>
+          </div>
+          <GhostBtn onClick={retryNotify} disabled={notifying}>{notifying ? 'Notifying...' : 'Retry notifying'}</GhostBtn>
+        </div>
+      )}
+
       {!isOwner && myViewers.length === 0 && (
         <div style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
           <div style={{ fontSize: '13px', fontWeight: '800', color: warning }}>Nobody is seeing your activity yet</div>
@@ -891,24 +1028,23 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
         </div>
       )}
 
-      {isOwner && fields.length === 0 && (
-        <div style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '800', color: warning }}>No activity fields set up yet</div>
+      {isOwner && usingStarterFields && (
+        <div role='status' style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
+          <div style={{ fontSize: '13px', fontWeight: '800', color: warning }}>Reports use a simple note for now</div>
           <div style={{ fontSize: '12px', color: warning, marginTop: '2px' }}>
-            Tap "Set up fields" and decide what a visit record should capture.
+            Your team can already log reports with one "What happened" note. Tap "Set up fields" to decide what a visit record should capture instead.
           </div>
         </div>
       )}
 
-      {isManager && (
-        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
-          {[
-            ['mine', 'My Feed', counts ? counts.mine : null],
-            ['team', 'Team Reports', counts ? counts.team : null],
-          ].map(function (t) {
+      {(
+        <div role='group' aria-label='Which reports to show' style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+          {scopeTabs(canSeeAll).map(function (tab) {
+            return [tab[0], tab[1], canSeeAll && counts ? counts[tab[0]] : null]
+          }).map(function (t) {
             const on = scope === t[0]
             const label = t[2] != null
-              ? t[1] + ' (' + (t[2] >= 1000 ? '1000+' : t[2]) + ')'
+              ? t[1] + ' (' + t[2] + ')'
               : t[1]
             return (
               <button key={t[0]} onClick={function () { setScope(t[0]) }}
@@ -996,16 +1132,16 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
             </button>
           )}
 
-          <button onClick={exportCSV}
+          <button onClick={exportCSV} disabled={exporting} aria-busy={exporting}
             style={{ flexShrink: 0, border: 'none', background: navy, color: 'white', borderRadius: '8px', padding: '10px 16px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' }}>
-            Export
+            {exporting ? 'Exporting...' : 'Export'}
           </button>
         </div>
 
         <div style={{ fontSize: '11.5px', color: gray400, marginTop: '10px' }}>
           Showing <strong style={{ color: navy }}>{visible.length}</strong> record{visible.length !== 1 ? 's' : ''} · {rangeLabel()}
           {filterRep !== 'all' ? ' · ' + nameFor(filterRep) : ''}
-          . Export downloads exactly what you see here, as a spreadsheet.
+          . Export downloads every report matching these filters, as a spreadsheet.
         </div>
       </Card>
 
@@ -1047,7 +1183,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
                         if (c.key === 'voice' && a.voice_url) {
                           return (
                             <td key={c.key} style={{ padding: '10px 14px', borderBottom: `1px solid ${gray100}` }}>
-                              <audio src={a.voice_url} controls preload='none' style={{ height: '30px', maxWidth: '160px' }} />
+                              <VoicePlayer url={a.voice_url} resolve={resolveVoice} compact />
                             </td>
                           )
                         }
@@ -1096,55 +1232,29 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
                       {timeAgo(a.created_at)} · {fmtStamp(a.created_at)}
                       {terrName(a.territory_id) ? ' · ' + terrName(a.territory_id) : ''}
                     </div>
-                    {a.location_label && (
-                       <div style={{ fontSize: '12px', color: tealDeep, fontWeight: '600', marginTop: '4px' }}>
-                         {a.location_label}
-                       </div>
-                     )}
-                    {a.directory_business_name && (
-                      <div style={{ fontSize: '12px', color: navy, fontWeight: '700', marginTop: '3px' }}>
-                        Business: {a.directory_business_name}
+                    {directoryName(a) && (
+                      <div style={{ fontSize: '12px', color: navy, fontWeight: '700', marginTop: '4px' }}>
+                        Business: {directoryName(a)} <span style={{ fontSize: '10px', fontWeight: '700', color: gray500 }}>Company directory</span>
                       </div>
                     )}
-                    {(a.facility_name || a.facility_category || a.place_verified != null) && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: a.location_label ? '2px' : '4px' }}>
+                    {facilityName(a) && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: '3px' }}>
                         <span style={{ fontSize: '12px', fontWeight: '700', color: navy }}>
-                          <MapPin size={11} style={{ verticalAlign: '-1px', marginRight: '3px' }} />{a.facility_name || a.place_of_visit}
+                          <MapPin size={11} style={{ verticalAlign: '-1px', marginRight: '3px' }} aria-hidden='true' />{facilityName(a)}
                         </span>
-                        {(a.facility_category || a.facility_source) && (
-                          <span style={{ fontSize: '10px', fontWeight: '700', color: gray500 }}>
-                            {a.facility_category || ''}{a.facility_source === 'rep_added' ? ' · rep-added' : ''}
-                          </span>
-                        )}
-                        {/* Three states. A pending row is awaiting review, not a
-                            failed distance check. Do not flag the rep amber for
-                            it. facility_pending_review is stored at log time so
-                            the feed never has to guess (a CONFIRMED rep-added
-                            facility logged from 180 m away is genuinely
-                            unverified, and reads that way). */}
-                        {(a.facility_verified != null ? a.facility_verified : a.place_verified) ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: successBg, color: success }}>
-                            <BadgeCheck size={10} /> GPS verified
-                          </span>
-                        ) : a.facility_pending_review ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: infoBg, color: info }}>
-                            <Clock size={10} /> Pending review
-                          </span>
-                        ) : (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: warningBg, color: warning }}>
-                            <AlertTriangle size={10} /> Unverified
-                          </span>
-                        )}
-                        {/* A pending place sits at the rep's own GPS, so "0 m
-                            from GPS" is an artefact of how it was created, not
-                            evidence. Only show the distance for a facility
-                            positioned independently of this fix. */}
+                        {a.facility_category && <span style={{ fontSize: '10px', fontWeight: '700', color: gray500 }}>{a.facility_category}</span>}
+                        <span style={{ fontSize: '10px', fontWeight: '700', color: gray500 }}>{facilitySourceLabel(a.facility_source)}</span>
+                        <LocationMatchBadge state={(a.facility_verified != null ? a.facility_verified : a.place_verified) ? FACILITY_VERIFICATION.VERIFIED : a.facility_pending_review ? FACILITY_VERIFICATION.PENDING : FACILITY_VERIFICATION.UNVERIFIED} />
+                        {/* A pending place sits at the rep's own GPS, so '0 m' is an artefact of how it
+                            was created, not evidence. Only show a distance for a place positioned
+                            independently of this fix. */}
                         {a.facility_distance_m != null && !a.facility_pending_review && (
-                          <span style={{ fontSize: '10px', fontWeight: '700', color: gray400 }}>
-                            {a.facility_distance_m} m from GPS
-                          </span>
+                          <span style={{ fontSize: '10px', fontWeight: '700', color: gray400 }}>{a.facility_distance_m} m from GPS pin</span>
                         )}
                       </div>
+                    )}
+                    {areaLabel(a) && (
+                      <div style={{ fontSize: '11.5px', color: gray500, marginTop: '3px' }}>Near {areaLabel(a)}</div>
                     )}
                   </div>
                   {a.lat && a.lng && (
@@ -1174,7 +1284,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
                 {a.voice_url && (
                   <div style={{ marginTop: '10px' }}>
                     <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Voice note</div>
-                    <audio src={a.voice_url} controls preload='none' style={{ width: '100%', height: '38px' }} />
+                    <VoicePlayer url={a.voice_url} resolve={resolveVoice} />
                   </div>
                 )}
 
@@ -1207,7 +1317,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
                   {isManager && a.lat && a.lng && (
                     <button onClick={function () { setReviewing(a) }}
                       style={{ border: `1px solid ${tealDeep}`, background: tealMist, color: tealDeep, borderRadius: '20px', padding: '6px 13px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                      Verify location
+                      Compare location
                     </button>
                   )}
                 </div>
@@ -1260,6 +1370,12 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
         </div>
       )}
 
+      {showsAreaNames && (
+        <div style={{ fontSize: '11px', color: gray400, margin: '10px 0 0' }}>
+          Area names ("Near ...") come from <a href={OSM_COPYRIGHT_URL} target='_blank' rel='noopener noreferrer' style={{ color: gray400 }}>{OSM_ATTRIBUTION}</a>.
+        </div>
+      )}
+
       {!loading && hasOlder && (
         <div style={{ textAlign: 'center', margin: '16px 0' }}>
           <GhostBtn onClick={loadOlder} disabled={loadingOlder}>{loadingOlder ? 'Loading...' : 'Load older activity'}</GhostBtn>
@@ -1293,45 +1409,50 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
       <Modal show={logging} onClose={function () { setLogging(false) }} sheet wide title='Log Activity'
         footer={<>
           <GhostBtn onClick={function () { setLogging(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
-          <TealBtn onClick={submitActivity} style={{ flex: 2, padding: '12px' }}>{saving ? 'Saving...' : 'Log It'}</TealBtn>
+          <TealBtn onClick={submitActivity} disabled={saving} aria-busy={saving} style={{ flex: 2, padding: '12px' }}>{saving ? 'Saving...' : (retryNote ? 'Retry' : 'Log It')}</TealBtn>
         </>}>
-            <div style={{ padding: '10px 12px', borderRadius: '8px', background: bg, border: `1px solid ${gray100}`, marginBottom: '16px' }}>
-              <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>GPS</div>
-              <div style={{ fontSize: '12.5px', color: gps ? tealDeep : gray400, fontWeight: gps ? '700' : '500', marginTop: '2px' }}>
-                {findingPlace
-                  ? 'Finding where you are...'
-                  : gps
-                    ? 'Coordinates captured'
-                    : 'Location not available'}
+            {restoredAt && (
+              <div aria-live='polite' style={{ padding: '10px 12px', borderRadius: '8px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '16px', fontSize: '12px', color: warning, display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ flex: '1 1 200px', fontWeight: '600' }}>Restored your unsent draft from {fmtStamp(restoredAt)}. Your location and place are captured fresh.</span>
+                <button type='button' onClick={discardDraft}
+                  style={{ background: 'none', border: `1px solid ${warning}`, color: warning, borderRadius: '8px', padding: '5px 10px', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer' }}>
+                  Discard draft
+                </button>
               </div>
-            </div>
+            )}
 
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>
-                Facility visited <span style={{ fontWeight: '500', color: gray400 }}>(detected from your GPS)</span>
+            <div aria-live='polite' style={{ padding: '10px 12px', borderRadius: '8px', background: bg, border: `1px solid ${gray100}`, marginBottom: '16px' }}>
+              <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Your location</div>
+              <div style={{ fontSize: '12.5px', color: loc.tone === 'ok' ? tealDeep : loc.tone === 'warn' ? warning : gray500, fontWeight: loc.tone === 'ok' ? '700' : '500', marginTop: '2px' }}>
+                {loc.text}
               </div>
-              {!gps && !findingPlace && (
-                <div style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${border}`, background: bg, fontSize: '12.5px', color: gray500 }}>
-                  Waiting for GPS before we can find nearby facilities.
-                </div>
+              {loc.note && <div style={{ fontSize: '11.5px', color: warning, marginTop: '3px' }}>{loc.note}</div>}
+              {loc.canRetry && !findingPlace && (
+                <button type='button' onClick={captureReportLocation}
+                  style={{ marginTop: '6px', background: 'none', border: 'none', color: tealDeep, fontSize: '12px', fontWeight: '700', cursor: 'pointer', padding: 0 }}>
+                  Try again
+                </button>
               )}
-              {findingPlace && (
-                <div style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${border}`, background: bg, fontSize: '12.5px', color: gray500 }}>
-                  Finding where you are…
+              {areaText && (
+                <div style={{ fontSize: '11.5px', color: gray500, marginTop: '6px' }}>
+                  {areaText}
+                  {area && area.status === 'ok' && (
+                    <> · <a href={OSM_COPYRIGHT_URL} target='_blank' rel='noopener noreferrer' style={{ color: gray500 }}>{OSM_ATTRIBUTION}</a></>
+                  )}
                 </div>
-              )}
-              {gps && (
-                <FacilityPicker
-                  gps={gps}
-                  businessId={brand.id}
-                  createdBy={meStaffId}
-                  value={facility}
-                  onChange={function (f) { setFacility(f) }}
-                />
               )}
             </div>
 
-            <NearbyBusinessPicker businessId={brand?.id} gps={gps} selected={confirmedBiz} onSelect={setConfirmedBiz} />
+            <VisitTarget
+              gps={gps}
+              findingPlace={findingPlace}
+              businessId={brand.id}
+              createdBy={meStaffId}
+              facility={facility}
+              onFacility={setFacility}
+              business={confirmedBiz}
+              onBusiness={setConfirmedBiz}
+            />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
@@ -1343,7 +1464,12 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
                 </select>
               </div>
 
-              {fields.map(function (f) {
+              {usingStarterFields && (
+                <div style={{ fontSize: '11.5px', color: gray500 }}>
+                  Your company has not set up its own report fields yet, so this is a simple note. {isOwner ? 'You can add fields under Set up fields.' : 'The owner can add fields.'}
+                </div>
+              )}
+              {reportFields.map(function (f) {
                 const val = values[f.id] || ''
                 const set = function (v) {
                   setValues(function (prev) {
@@ -1467,6 +1593,12 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
               )}
             </div>
 
+            {retryNote && (
+              <div role='alert' style={{ marginTop: '14px', padding: '9px 11px', borderRadius: '8px', background: warningBg, border: `1px solid ${warning}`, fontSize: '12px', color: warning, fontWeight: '600' }}>
+                {retryNote}
+              </div>
+            )}
+
             {saveStatus && (
               <div style={{ marginTop: '14px', padding: '9px 11px', borderRadius: '8px', background: tealMist, border: `1px solid ${tealMist}`, fontSize: '12px', color: tealDeep, fontWeight: '600' }}>
                 {saveStatus}
@@ -1574,7 +1706,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
       {/* Manager review (issue #1): the SAME FacilityPicker, read-only, centered
           on the logged visit's saved GPS so a manager can independently verify
           what facilities were actually near — without altering the record. */}
-      <Modal show={!!reviewing} onClose={function () { setReviewing(null) }} sheet title='Verify logged location'
+      <Modal show={!!reviewing} onClose={function () { setReviewing(null) }} sheet title='Compare logged location'
         footer={<GhostBtn onClick={function () { setReviewing(null) }} style={{ width: '100%', padding: '12px' }}>Close</GhostBtn>}>
         {reviewing && (function () {
           const reviewGps = { lat: reviewing.lat, lng: reviewing.lng }
@@ -1591,7 +1723,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
             <div>
               <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '10px' }}>
                 The rep logged this at {reviewGps.lat != null ? reviewGps.lat.toFixed(5) + ', ' + reviewGps.lng.toFixed(5) : 'no GPS'}.
-                Tap a nearby facility below to compare it against the logged pin.
+                Tap a nearby place below to compare it with the logged pin. This changes nothing on the report.
               </div>
               <FacilityPicker gps={reviewGps} businessId={brand.id} value={reviewValue} readOnly />
             </div>

@@ -22,7 +22,9 @@ export function locationMessage(reason) {
   return MESSAGES[reason] || MESSAGES.unavailable
 }
 
-export function captureLocation({ timeoutMs = 10000, geolocation = typeof navigator !== 'undefined' ? navigator.geolocation : undefined, now = () => new Date() } = {}) {
+// maximumAgeMs: how stale a cached position the browser may hand back. A check-in is
+// happy with a minute-old fix; a report's location evidence asks for a fresh one (0).
+export function captureLocation({ timeoutMs = 10000, maximumAgeMs = 60000, geolocation = typeof navigator !== 'undefined' ? navigator.geolocation : undefined, now = () => new Date() } = {}) {
   return new Promise((resolve) => {
     if (!geolocation || typeof geolocation.getCurrentPosition !== 'function') {
       resolve({ ok: false, reason: 'unsupported', message: MESSAGES.unsupported }); return
@@ -53,7 +55,7 @@ export function captureLocation({ timeoutMs = 10000, geolocation = typeof naviga
           const reason = err && err.code === 1 ? 'denied' : err && err.code === 3 ? 'timeout' : 'unavailable'
           done({ ok: false, reason, message: MESSAGES[reason] })
         },
-        { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 60000 },
+        { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: maximumAgeMs },
       )
     } catch (e) {
       clearTimeout(guard)

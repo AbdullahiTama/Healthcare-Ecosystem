@@ -38,7 +38,7 @@ export default function NearbyBusinessPicker({ businessId, gps, selected, onSele
   return (
     <div style={{ padding: '10px 12px', borderRadius: 8, border: `1px solid ${border}`, marginBottom: 16, background: 'white' }}>
       <div style={{ fontSize: 10, fontWeight: 800, color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        {selected ? NEARBY_LABELS.selected : NEARBY_LABELS.candidates}
+        {(selected ? NEARBY_LABELS.selected : NEARBY_LABELS.candidates) + ' · from your company directory'}
       </div>
 
       {selected ? (

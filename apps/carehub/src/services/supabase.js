@@ -93,6 +93,25 @@ export async function sbUpload(bucket, path, file, contentType, errorLabel) {
   return SB_URL + '/storage/v1/object/public/' + bucket + '/' + encodedPath
 }
 
+// A time-limited link to a file in a bucket, made with the signed-in session. This is how a
+// private bucket's files are played; for a public bucket it also works, so callers can use it
+// before and after a bucket is made private. Throws if the session may not read the file.
+export async function sbSignUrl(bucket, path, expiresInSeconds = 3600) {
+  const res = await fetch(SB_URL + '/storage/v1/object/sign/' + bucket + '/' + encodeStoragePath(path), {
+    method: 'POST',
+    headers: {
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + await authToken(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ expiresIn: expiresInSeconds }),
+  })
+  if (!res.ok) throw new Error('Could not open the file (' + res.status + ')')
+  const data = await res.json()
+  if (!data || !data.signedURL) throw new Error('Could not open the file (no link returned)')
+  return SB_URL + '/storage/v1' + data.signedURL
+}
+
 // AUTH
 // C2 (20260813_purge_plaintext_password_columns.sql) dropped businesses.password
 // and staff.password, and with them legacy_login_business and the client's
