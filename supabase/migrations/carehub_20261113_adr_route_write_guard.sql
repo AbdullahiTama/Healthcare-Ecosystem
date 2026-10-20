@@ -1,7 +1,9 @@
 -- ============================================================================
 -- ADR routing P0-1: close direct client writes to routing/authorisation columns.
 --
--- Status: DRAFT, NOT APPLIED. Apply only with explicit owner approval.
+-- Status: APPLIED live 2026-10-20 (tracked as 20261020185832) under explicit owner
+--         approval. Catalog verified post-apply (trigger enabled; no anon/authenticated
+--         EXECUTE; routing RPCs owned by postgres). Live behavioural probe NOT run.
 --
 -- Problem (docs/audits/carefind-carehub-pv-routing-audit.md, P0-1): the routes
 -- INSERT/UPDATE policies admit a public-draft owner (and the submitter chain)
