@@ -190,3 +190,79 @@ describe('liveActivityRepository.logActivity: retry-safe save', () => {
     expect(note.body).toHaveLength(2)
   })
 })
+
+describe('liveActivityRepository: voice notes', () => {
+  const PUBLIC = 'https://proj.supabase.co/storage/v1/object/public/activity-voice/'
+  const make = (over = {}) => {
+    const uploads = []
+    const signs = []
+    const repo = createLiveActivityRepository({
+      request: async () => [],
+      upload: async (bucket, path, blob, type, label) => { uploads.push({ bucket, path, type, label }); return PUBLIC + path },
+      signUrl: async (bucket, path, seconds) => { signs.push({ bucket, path, seconds }); return 'https://proj.supabase.co/storage/v1/object/sign/' + bucket + '/' + path + '?token=t' + signs.length },
+      randomSuffix: () => 'k1',
+      now: () => 1_000_000,
+      ...over,
+    })
+    return { repo, uploads, signs }
+  }
+
+  it('uploads into the company folder with a bare audio type and returns the stored URL', async () => {
+    const { repo, uploads } = make()
+    const url = await repo.uploadActivityVoice({ type: 'audio/webm;codecs=opus' }, { businessId: 'biz-1', activityId: 'act-9' })
+    expect(uploads).toEqual([{ bucket: 'activity-voice', path: 'biz-1/act-9-k1.webm', type: 'audio/webm', label: 'Voice upload failed' }])
+    expect(url).toBe(PUBLIC + 'biz-1/act-9-k1.webm')
+  })
+
+  it('will not upload without a company and a report', async () => {
+    const { repo, uploads } = make()
+    await expect(repo.uploadActivityVoice({ type: 'audio/webm' }, {})).rejects.toThrow()
+    expect(uploads).toHaveLength(0)
+  })
+
+  it('plays an existing public-URL note through a signed link for its path', async () => {
+    const { repo, signs } = make()
+    const link = await repo.signedVoiceUrl(PUBLIC + 'voice-1782-123.webm')
+    expect(signs).toEqual([{ bucket: 'activity-voice', path: 'voice-1782-123.webm', seconds: 3600 }])
+    expect(link).toContain('/object/sign/activity-voice/voice-1782-123.webm')
+  })
+
+  it('reuses a link while it is still good, and asks again once it is nearly expired', async () => {
+    let t = 1_000_000
+    const { repo, signs } = make({ now: () => t })
+    await repo.signedVoiceUrl(PUBLIC + 'a.webm')
+    t += 10 * 60 * 1000
+    await repo.signedVoiceUrl(PUBLIC + 'a.webm')
+    expect(signs).toHaveLength(1)
+    t += 45 * 60 * 1000          // 55 minutes in: inside the safety margin of a 60-minute link
+    await repo.signedVoiceUrl(PUBLIC + 'a.webm')
+    expect(signs).toHaveLength(2)
+  })
+
+  it('two requests for the same note at once share one signing call', async () => {
+    const { repo, signs } = make()
+    const [a, b] = await Promise.all([repo.signedVoiceUrl(PUBLIC + 'a.webm'), repo.signedVoiceUrl(PUBLIC + 'a.webm')])
+    expect(a).toBe(b)
+    expect(signs).toHaveLength(1)
+  })
+
+  it('falls back to the stored URL when signing fails, so a still-public bucket keeps working', async () => {
+    const { repo } = make({ signUrl: async () => { throw new Error('Could not open the file (400)') } })
+    expect(await repo.signedVoiceUrl(PUBLIC + 'a.webm')).toBe(PUBLIC + 'a.webm')
+  })
+
+  it('does not remember a failure: the next try signs again', async () => {
+    let fail = true
+    const { repo } = make({ signUrl: async (b, p) => { if (fail) throw new Error('x'); return 'signed:' + p } })
+    expect(await repo.signedVoiceUrl(PUBLIC + 'a.webm')).toBe(PUBLIC + 'a.webm')
+    fail = false
+    expect(await repo.signedVoiceUrl(PUBLIC + 'a.webm')).toBe('signed:a.webm')
+  })
+
+  it('leaves a URL that is not a voice note alone, without calling anything', async () => {
+    const { repo, signs } = make()
+    expect(await repo.signedVoiceUrl('https://example.com/song.mp3')).toBe('https://example.com/song.mp3')
+    expect(await repo.signedVoiceUrl(null)).toBeNull()
+    expect(signs).toHaveLength(0)
+  })
+})

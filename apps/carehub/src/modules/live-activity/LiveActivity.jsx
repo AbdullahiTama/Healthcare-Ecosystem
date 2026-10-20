@@ -13,6 +13,7 @@ import {
 import FacilityPicker from './FacilityPicker.jsx'
 import VisitTarget from './VisitTarget.jsx'
 import LocationMatchBadge from './LocationMatchBadge.jsx'
+import VoicePlayer from './VoicePlayer.jsx'
 import { areaLabel, directoryName, facilityName, facilitySourceLabel, targetLabel } from './activityTarget'
 // Business Directory: optional nearby-business suggestion + the Field Work switcher.
 import FieldWorkSwitch from '../field-work/FieldWorkSwitch'
@@ -684,7 +685,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
         if (voiceBlob && draft.voiceBlob !== voiceBlob) {
           setSaveStatus('Uploading voice note...')
           try {
-            draft.voiceUrl = await liveActivityRepository.uploadActivityVoice(voiceBlob)
+            draft.voiceUrl = await liveActivityRepository.uploadActivityVoice(voiceBlob, { businessId: brand.id, activityId: draft.id })
             draft.voiceBlob = voiceBlob
           } catch (e) {
             showToast('The voice note did not upload: ' + e.message + '. Nothing was saved. Try again, or remove the voice note to log without it.', { type: 'error' })
@@ -971,6 +972,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
     }
   }
 
+  const resolveVoice = function (url) { return liveActivityRepository.signedVoiceUrl(url) }
   const loc = describeReportLocation({ finding: findingPlace, gps: gps, issue: gpsIssue })
   const areaText = describeArea(area)
   const showsAreaNames = visible.some(function (a) { return !!areaLabel(a) })
@@ -1181,7 +1183,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
                         if (c.key === 'voice' && a.voice_url) {
                           return (
                             <td key={c.key} style={{ padding: '10px 14px', borderBottom: `1px solid ${gray100}` }}>
-                              <audio src={a.voice_url} controls preload='none' style={{ height: '30px', maxWidth: '160px' }} />
+                              <VoicePlayer url={a.voice_url} resolve={resolveVoice} compact />
                             </td>
                           )
                         }
@@ -1282,7 +1284,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
                 {a.voice_url && (
                   <div style={{ marginTop: '10px' }}>
                     <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Voice note</div>
-                    <audio src={a.voice_url} controls preload='none' style={{ width: '100%', height: '38px' }} />
+                    <VoicePlayer url={a.voice_url} resolve={resolveVoice} />
                   </div>
                 )}
 

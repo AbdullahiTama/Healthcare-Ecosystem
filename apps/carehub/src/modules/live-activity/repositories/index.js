@@ -1,6 +1,7 @@
-import { sbFetch, sbFetchWithCount, sbUpload } from '../../../services/supabase'
+import { sbFetch, sbFetchWithCount, sbUpload, sbSignUrl } from '../../../services/supabase'
 import { newActivityId } from '../activityId'
 import { lookupArea } from '../areaLookup'
+import { VOICE_BUCKET, voicePathFromUrl, voiceUploadInfo } from '../voiceUrl'
 
 // Did the database REFUSE this write (a policy or a missing grant), as opposed to
 // the request failing in transit? A refusal will be refused again, so retrying it
@@ -64,7 +65,21 @@ export function buildActivityQuery(businessId, { limit = 100, cursor = null, sta
   return path + '&order=created_at.desc,id.desc&select=*&limit=' + limit
 }
 
-export function createLiveActivityRepository({ request = sbFetch, requestWithCount = sbFetchWithCount } = {}) {
+const SIGNED_LINK_SECONDS = 3600
+const SIGNED_LINK_REUSE_MS = 50 * 60 * 1000
+
+export function createLiveActivityRepository({
+  request = sbFetch,
+  requestWithCount = sbFetchWithCount,
+  upload = sbUpload,
+  signUrl = sbSignUrl,
+  now = Date.now,
+  randomSuffix = function () { return Math.random().toString(36).slice(2, 8) },
+} = {}) {
+  // Signed playback links by stored URL: { promise, at }. In flight requests are shared;
+  // a failure is dropped so the next try asks again.
+  const signedLinks = new Map()
+
   // Tell the people a report was shared with: 'sent', 'refused' or 'failed' (see notify).
   function notifyViewers(activity, viewers) {
     return notify(
@@ -222,15 +237,30 @@ export function createLiveActivityRepository({ request = sbFetch, requestWithCou
       return lookupArea(lat, lng)
     },
 
-    async uploadActivityVoice(blob) {
-      const type = blob.type || 'audio/mp4'
-      let ext = 'mp4'
-      if (type.indexOf('webm') >= 0) ext = 'webm'
-      else if (type.indexOf('ogg') >= 0) ext = 'ogg'
-      else if (type.indexOf('aac') >= 0) ext = 'aac'
-      else if (type.indexOf('mpeg') >= 0) ext = 'mp3'
-      const path = 'voice-' + Date.now() + '-' + Math.floor(Math.random() * 100000) + '.' + ext
-      return sbUpload('activity-voice', path, blob, type, 'Voice upload failed')
+    // Stores a recording under '<company id>/<report id>-<suffix>.<ext>' and returns its URL, which is
+    // what the report keeps. The company folder is what the bucket's upload rule checks.
+    async uploadActivityVoice(blob, { businessId, activityId } = {}) {
+      const info = voiceUploadInfo(blob, businessId, activityId, randomSuffix())
+      return upload(VOICE_BUCKET, info.path, blob, info.contentType, 'Voice upload failed')
+    },
+
+    // A link to play a stored voice note. The stored URL is only used to find the file's path, so this
+    // works whether the bucket is public (today) or private (after carehub_20261020_activity_voice_private).
+    // If signing fails it returns the stored URL, which still plays while the bucket is public.
+    async signedVoiceUrl(storedUrl) {
+      const path = voicePathFromUrl(storedUrl)
+      if (!path) return storedUrl
+      const cached = signedLinks.get(storedUrl)
+      if (cached && now() - cached.at < SIGNED_LINK_REUSE_MS) return cached.promise
+      const promise = Promise.resolve(signUrl(VOICE_BUCKET, path, SIGNED_LINK_SECONDS)).catch(function (e) {
+        signedLinks.delete(storedUrl)
+        console.error('Could not sign the voice note link:', e)
+        return storedUrl
+      })
+      signedLinks.set(storedUrl, { promise: promise, at: now() })
+      const link = await promise
+      if (link === storedUrl) signedLinks.delete(storedUrl)
+      return link
     },
   }
 }
