@@ -290,3 +290,36 @@ Be precise about this: the last complete run of everything is older than the las
 | Lint (errors only) on every changed source file | at each commit | Clean. Warnings were not reviewed one by one. |
 
 The dedup timing test fails on its own as well (11.8 s against its limit), and failed before this work began; it is unrelated to these changes but keeps the full suite red. A complete re-run of the whole suite at the final commit is still owed and should be done on a machine with free memory.
+
+## 16. Drafted database fixes (written and tested, NOT applied)
+
+The four items from section 11 that the product owner asked to be drafted now exist as files in
+`docs/architecture/pending-migrations/` (outside `supabase/migrations/`, so nothing can apply them by accident).
+`README.md` there has the apply order and the rules for applying. Nothing was applied to any real database.
+
+Tested on real Postgres (PGlite) with the live policies copied from the catalog: `scripts/db-tests/activity.pglite.mjs`,
+**143 passed, 0 failed**. Each draft is shown BEFORE (the exposure is real on the replica), AFTER (closed), and re-applied
+to prove it can run twice.
+
+| Draft | Fixes | Proven on the replica | Safe to apply alone? |
+|---|---|---|---|
+| `default_viewers_own_rows` | F7 | A colleague could delete or rewrite another person's list; after, they cannot, while a person still manages their own, a platform admin can correct any, and reading is unchanged. | Yes, no app change |
+| `activity_server_alerts` | U2 | The database alerts a tagged viewer and a replied-to author in the same transaction; never the actor; skips inactive and other-company people; a retry adds no second alert; trigger functions are not callable by anyone. | Yes |
+| `log_field_activity` | F4, F6 | Activity and viewers saved in one transaction (a bad viewer rolls everything back, leaving no half-saved report); same id twice is one row; cannot forge the author, cross companies, or tag onto someone else's report; tagged colleague can see it at once. Reports `alerts: 'server'` once the triggers exist. | Yes, but nothing calls it until the app does |
+| `activity_voice_private` | F3 | Anyone online could read and upload; after, the bucket is private, capped at 10 MB, audio only, uploads limited to a company folder, reads limited to the uploader or to someone who can see the report. Another bucket's policy is untouched. | **No. The app must change first** |
+
+Found while testing, and fixed in the draft: a new recording exists before its report does, and an `INSERT ... RETURNING`
+must also pass the `SELECT` policy, so a read rule based only on the report would have refused a brand-new upload. The
+uploader may now read their own upload. Live data shows the storage service records the uploader on signed-in uploads
+(`owner_id` is set for every signed-in object in the other buckets); the 5 existing voice notes without an owner were
+uploaded anonymously and are reached through their report.
+
+Not proven, and needing a check on a Supabase branch or the live project before relying on them:
+- that Supabase Storage's upload SQL behaves as modelled (the stand-in `storage.objects` is mine, not Supabase's);
+- that PostgREST turns `Prefer: resolution=ignore-duplicates` and `rpc/log_field_activity` into the statements tested;
+- that Realtime then pushes the report to a tagged non-manager (a scratch database cannot show it);
+- that a voice note plays through a signed URL.
+
+App changes still owed (client work, not done): sign voice URLs and upload to `<business id>/<activity id>.<ext>` with a
+parameter-free MIME type (**required before the voice draft**); call `rpc/log_field_activity` with a fallback to the
+two-request path; skip the browser's own notification attempt when the function reports `alerts: 'server'`.
