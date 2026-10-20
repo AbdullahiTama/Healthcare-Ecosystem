@@ -339,6 +339,40 @@ export function createAdrReportRepository({ request = sbFetch, upload = sbUpload
       return Array.isArray(rows) ? rows[0] : rows
     },
 
+    // ── Reviewer routing queue (platform reviewers only) ──────────────────
+    // Every RPC re-checks is_platform_admin() server-side; an empty queue for
+    // a non-reviewer is the database's answer, not a client filter.
+    async getRouteReviewQueue(state = 'open') {
+      const rows = await request('rpc/list_adr_route_review_queue', {
+        method: 'POST',
+        body: JSON.stringify({ p_state: state }),
+      })
+      return rows || []
+    },
+
+    // action: 'approve' | 'redirect' | 'hold'. A reason is mandatory; redirect
+    // also needs the registered company to route to.
+    async reviewRoute({ routeId, action, reason, businessId = null }) {
+      const rows = await request('rpc/review_adr_product_route', {
+        method: 'POST',
+        body: JSON.stringify({ p_route_id: routeId, p_action: action, p_reason: reason, p_business_id: businessId }),
+      })
+      return Array.isArray(rows) ? rows[0] : rows
+    },
+
+    async getNotificationFailures() {
+      const rows = await request('rpc/list_adr_notification_failures', { method: 'POST', body: '{}' })
+      return rows || []
+    },
+
+    async retryRouteNotification(routeId) {
+      const rows = await request('rpc/retry_adr_route_notification', {
+        method: 'POST',
+        body: JSON.stringify({ p_route_id: routeId }),
+      })
+      return Array.isArray(rows) ? rows[0] : rows
+    },
+
     // Admin-owned versioned deadline intervals (Phase 8). Reads are
     // authenticated-wide; the row carries its own unverified/verified notes.
     async getActiveDeadlineRule() {
