@@ -19,6 +19,7 @@ import CheckInPanel from '../checkins/CheckInPanel.jsx'
 import TeamLocations from '../checkins/TeamLocations.jsx'
 import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
 import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow } from './feedScope'
+import { newActivityId } from './activityId'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
@@ -158,6 +159,13 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
   const [reviewLoading, setReviewLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
+  // Save safety: a lock the handler checks itself (state lags a rapid second tap),
+  // the draft for this modal session, and what the person must be told after a failure.
+  const submitLock = useRef(false)
+  const draftRef = useRef(null)
+  const [retryNote, setRetryNote] = useState('')
+  const [notifyPending, setNotifyPending] = useState(null)
+  const [notifying, setNotifying] = useState(false)
 
   const [settingUp, setSettingUp] = useState(false)
   const [newField, setNewField] = useState({ label: '', field_type: 'text', required: false, options: '' })
@@ -534,6 +542,8 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
       showToast('No activity fields set up yet. The Owner needs to define what a visit record looks like first.', { type: 'warning' })
       return
     }
+    draftRef.current = null
+    setRetryNote('')
     setValues({})
     setTerrId('')
     setOverrideViewers(null)
@@ -601,80 +611,130 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
     }
   }
 
+  // Saving a report is safe to repeat. One draft (a client-made id) lives for as
+  // long as the modal is open: the same id is the same row on the server, so a
+  // double tap or a retry after a lost response cannot create a second report.
+  // Once the report has been sent, a retry resends it exactly as submitted (the
+  // server would ignore edits to an existing row, so letting the form drift would
+  // quietly lose them); the modal says so.
   async function submitActivity() {
-    const missing = fields.filter(function (f) { return f.required && !values[f.id] })
+    if (submitLock.current) return
+    const missing = fields.filter(function (f) { return f.required && !String(values[f.id] == null ? '' : values[f.id]).trim() })
     if (missing.length > 0) {
       showToast('Please fill in: ' + missing.map(function (f) { return f.label }).join(', '), { type: 'warning' })
       return
     }
 
+    submitLock.current = true
     setSaving(true)
     try {
-      let voiceUrl = null
-      if (voiceBlob) {
-        setSaveStatus('Uploading voice note...')
-        voiceUrl = await liveActivityRepository.uploadActivityVoice(voiceBlob)
+      const draft = draftRef.current || (draftRef.current = { id: newActivityId(), sent: false, voiceBlob: null, voiceUrl: null, activity: null, viewers: [] })
+
+      if (!draft.sent) {
+        // Nothing has reached the server yet, so the form may still change.
+        if (voiceBlob && draft.voiceBlob !== voiceBlob) {
+          setSaveStatus('Uploading voice note...')
+          try {
+            draft.voiceUrl = await liveActivityRepository.uploadActivityVoice(voiceBlob)
+            draft.voiceBlob = voiceBlob
+          } catch (e) {
+            showToast('The voice note did not upload: ' + e.message + '. Nothing was saved. Try again, or remove the voice note to log without it.', { type: 'error' })
+            return
+          }
+        }
+        if (!voiceBlob) { draft.voiceBlob = null; draft.voiceUrl = null }
+
+        const chosen = overrideViewers !== null
+          ? overrideViewers
+          : myViewers.map(function (v) { return v.viewer_staff_id })
+        draft.viewers = chosen.map(function (id) {
+          return { staff_id: id, viewer_name: nameFor(id) }
+        })
+
+        // Verification is computed once, at log time, and stored with the row —
+        // the feed never re-derives it. It is DISTANCE-ONLY: is the GPS fix within
+        // FACILITY_VERIFY_THRESHOLD_M of the chosen facility's coordinates? No GPS
+        // or no chosen facility means "unverified", never an error: the log must
+        // still go through. We never text-match facility names.
+        //
+        // A facility the rep typed themselves is 'pending', not verified — its
+        // coordinates ARE this GPS fix, so distance proves nothing until a manager
+        // confirms it. facilityVerification owns that rule.
+        const facilityCoords = facility ? { lat: facility.lat, lng: facility.lng } : null
+        const distanceM = (gps && facilityCoords) ? Math.round(haversineMeters(gps, facilityCoords)) : null
+        const verifyState = facilityVerification(gps, facility)
+        const verified = verifyState === FACILITY_VERIFICATION.VERIFIED
+        const pendingReview = verifyState === FACILITY_VERIFICATION.PENDING
+
+        draft.activity = {
+          id: draft.id,
+          business_id: brand.id,
+          staff_id: meStaffId,
+          rep_name: meName,
+          rep_title: meTitle,
+          territory_id: terrId || null,
+          values_json: JSON.stringify(values),
+          voice_url: draft.voiceUrl,
+          lat: gps ? gps.lat : null,
+          lng: gps ? gps.lng : null,
+          location_label: (facility && facility.name) || placeName || null,
+          place_of_visit: (facility && facility.name) || null,
+          place_coords: facilityCoords || null,
+          place_verified: verified,
+          facility_name: facility ? facility.name : null,
+          facility_address: facility ? facility.address || null : null,
+          facility_category: facility ? facility.category : null,
+          facility_lat: facilityCoords ? facility.lat : null,
+          facility_lng: facilityCoords ? facility.lng : null,
+          facility_distance_m: distanceM,
+          facility_source: facility ? (facility.source || 'detected') : null,
+          facility_verified: verified,
+          facility_pending_review: pendingReview,
+          // Only present when the rep confirmed a business; the name is a snapshot for the audit record.
+          ...(confirmedBiz ? { directory_business_id: confirmedBiz.id, directory_business_name: confirmedBiz.name } : {}),
+        }
+        draft.sent = true // from here the request may have reached the server
       }
-      setSaveStatus('Saving...')
 
-      const chosen = overrideViewers !== null
-        ? overrideViewers
-        : myViewers.map(function (v) { return v.viewer_staff_id })
+      setSaveStatus(retryNote ? 'Retrying...' : 'Saving...')
+      const res = await liveActivityRepository.logActivity(draft.activity, draft.viewers)
 
-      const viewers = chosen.map(function (id) {
-        return { staff_id: id, viewer_name: nameFor(id) }
-      })
-
-      // Verification is computed once, at log time, and stored with the row —
-      // the feed never re-derives it. It is DISTANCE-ONLY: is the GPS fix within
-      // FACILITY_VERIFY_THRESHOLD_M of the chosen facility's coordinates? No GPS
-      // or no chosen facility means "unverified", never an error: the log must
-      // still go through. We never text-match facility names.
-      //
-      // A facility the rep typed themselves is 'pending', not verified — its
-      // coordinates ARE this GPS fix, so distance proves nothing until a manager
-      // confirms it. facilityVerification owns that rule.
-      const facilityCoords = facility ? { lat: facility.lat, lng: facility.lng } : null
-      const distanceM = (gps && facilityCoords) ? Math.round(haversineMeters(gps, facilityCoords)) : null
-      const verifyState = facilityVerification(gps, facility)
-      const verified = verifyState === FACILITY_VERIFICATION.VERIFIED
-      const pendingReview = verifyState === FACILITY_VERIFICATION.PENDING
-
-      await liveActivityRepository.logActivity({
-        business_id: brand.id,
-        staff_id: meStaffId,
-        rep_name: meName,
-        rep_title: meTitle,
-        territory_id: terrId || null,
-        values_json: JSON.stringify(values),
-        voice_url: voiceUrl,
-        lat: gps ? gps.lat : null,
-        lng: gps ? gps.lng : null,
-        location_label: (facility && facility.name) || placeName || null,
-        place_of_visit: (facility && facility.name) || null,
-        place_coords: facilityCoords || null,
-        place_verified: verified,
-        facility_name: facility ? facility.name : null,
-        facility_address: facility ? facility.address || null : null,
-        facility_category: facility ? facility.category : null,
-        facility_lat: facilityCoords ? facility.lat : null,
-        facility_lng: facilityCoords ? facility.lng : null,
-        facility_distance_m: distanceM,
-        facility_source: facility ? (facility.source || 'detected') : null,
-        facility_verified: verified,
-        facility_pending_review: pendingReview,
-        // Only present when the rep confirmed a business; the name is a snapshot for the audit record.
-        ...(confirmedBiz ? { directory_business_id: confirmedBiz.id, directory_business_name: confirmedBiz.name } : {}),
-      }, viewers)
-
-      showToast('Activity logged', { type: 'success' })
+      draftRef.current = null
+      setRetryNote('')
       setLogging(false)
+      if (res && res.notification === 'failed') {
+        setNotifyPending({ activity: draft.activity, viewers: draft.viewers })
+        showToast('Activity saved. The people you share it with were not notified yet; use Retry notifying on the page.', { type: 'warning', duration: 8000 })
+      } else {
+        showToast('Activity logged', { type: 'success' })
+      }
       load()
     } catch (e) {
-      showToast('Could not log activity: ' + e.message, { type: 'error' })
+      if (draftRef.current && draftRef.current.sent) {
+        setRetryNote('This report may already be saved. Press Retry to finish: it is sent exactly as you submitted it and cannot create a second report. To change it, cancel and edit it afterwards.')
+      }
+      showToast('Could not finish saving: ' + e.message, { type: 'error' })
+    } finally {
+      submitLock.current = false
+      setSaveStatus('')
+      setSaving(false)
     }
-    setSaveStatus('')
-    setSaving(false)
+  }
+
+  async function retryNotify() {
+    if (!notifyPending || notifying) return
+    setNotifying(true)
+    try {
+      const ok = await liveActivityRepository.notifyViewers(notifyPending.activity, notifyPending.viewers)
+      if (ok) {
+        setNotifyPending(null)
+        showToast('Notified.', { type: 'success' })
+      } else {
+        showToast('Still could not notify them. The report is saved and they can find it under Shared with me.', { type: 'warning' })
+      }
+    } finally {
+      setNotifying(false)
+    }
   }
 
   function myReaction(actId) {
@@ -877,6 +937,16 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
 
       <CheckInPanel businessId={brand && brand.id} />
       {isManager && <TeamLocations businessId={brand && brand.id} />}
+
+      {notifyPending && (
+        <div role='status' style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 240px' }}>
+            <div style={{ fontSize: '13px', fontWeight: '800', color: warning }}>Your report is saved, but nobody has been notified yet</div>
+            <div style={{ fontSize: '12px', color: warning, marginTop: '2px' }}>The people you shared it with can still find it under Shared with me.</div>
+          </div>
+          <GhostBtn onClick={retryNotify} disabled={notifying}>{notifying ? 'Notifying...' : 'Retry notifying'}</GhostBtn>
+        </div>
+      )}
 
       {!isOwner && myViewers.length === 0 && (
         <div style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
@@ -1288,7 +1358,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
       <Modal show={logging} onClose={function () { setLogging(false) }} sheet wide title='Log Activity'
         footer={<>
           <GhostBtn onClick={function () { setLogging(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
-          <TealBtn onClick={submitActivity} style={{ flex: 2, padding: '12px' }}>{saving ? 'Saving...' : 'Log It'}</TealBtn>
+          <TealBtn onClick={submitActivity} disabled={saving} aria-busy={saving} style={{ flex: 2, padding: '12px' }}>{saving ? 'Saving...' : (retryNote ? 'Retry' : 'Log It')}</TealBtn>
         </>}>
             <div style={{ padding: '10px 12px', borderRadius: '8px', background: bg, border: `1px solid ${gray100}`, marginBottom: '16px' }}>
               <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>GPS</div>
@@ -1461,6 +1531,12 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
                 </div>
               )}
             </div>
+
+            {retryNote && (
+              <div role='alert' style={{ marginTop: '14px', padding: '9px 11px', borderRadius: '8px', background: warningBg, border: `1px solid ${warning}`, fontSize: '12px', color: warning, fontWeight: '600' }}>
+                {retryNote}
+              </div>
+            )}
 
             {saveStatus && (
               <div style={{ marginTop: '14px', padding: '9px 11px', borderRadius: '8px', background: tealMist, border: `1px solid ${tealMist}`, fontSize: '12px', color: tealDeep, fontWeight: '600' }}>

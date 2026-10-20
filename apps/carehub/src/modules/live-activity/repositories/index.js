@@ -1,10 +1,13 @@
 import { sbFetch, sbFetchWithCount, sbUpload } from '../../../services/supabase'
+import { newActivityId } from '../activityId'
 
-// Internal notify helper — writes one notification row per recipient.
-// Never throws: a failed notification must not break the action that triggered it.
+// Internal notify helper: one notification row per recipient. Returns true when
+// they were written (or there was nobody to tell) and false when they were not,
+// so the caller can say so. It never throws: a failed notification must not break
+// the action that triggered it, but it must not be invisible either.
 async function notify(request, businessId, recipients, kind, title, body, link) {
   try {
-    if (!recipients || recipients.length === 0) return
+    if (!recipients || recipients.length === 0) return true
     const rows = recipients.map(function (r) {
       return {
         business_id: businessId,
@@ -16,7 +19,11 @@ async function notify(request, businessId, recipients, kind, title, body, link) 
       }
     })
     await request('staff_notifications', { method: 'POST', body: JSON.stringify(rows), prefer: 'return=minimal' })
-  } catch (e) {}
+    return true
+  } catch (e) {
+    console.error('Notification failed:', e)
+    return false
+  }
 }
 
 // The PostgREST path for a page of activities (or, with `count`, for counting them).
@@ -47,6 +54,19 @@ export function buildActivityQuery(businessId, { limit = 100, cursor = null, sta
 }
 
 export function createLiveActivityRepository({ request = sbFetch, requestWithCount = sbFetchWithCount } = {}) {
+  // Tell the people a report was shared with. Returns true when written.
+  function notifyViewers(activity, viewers) {
+    return notify(
+      request,
+      activity.business_id,
+      (viewers || []).map(function (v) { return { staffId: v.staff_id } }),
+      'activity',
+      activity.rep_name + ' logged field activity',
+      activity.location_label || null,
+      'activity'
+    )
+  }
+
   return {
     async getActivityFields(businessId) {
       return request('activity_fields?business_id=eq.' + businessId + '&order=sort_order.asc&select=*')
@@ -123,27 +143,40 @@ export function createLiveActivityRepository({ request = sbFetch, requestWithCou
       return request('activity_comments?activity_id=in.(' + activityIds.join(',') + ')&order=created_at.asc&select=*')
     },
 
+    // Saves a report and tells the people it is shared with, safely to repeat.
+    //
+    //  * The activity goes in under a client-chosen id with ignore-duplicates, so
+    //    sending it again (a double tap, or a retry after a response that never
+    //    arrived) is the same single row, never a second report.
+    //  * Viewers are read first and only the missing ones added: the table has no
+    //    unique (activity_id, staff_id), so blindly re-inserting would duplicate.
+    //  * Only newly added viewers are notified, and a notification failure does not
+    //    fail the save; it is reported as notification: 'failed' so the page can
+    //    offer a retry (notifyViewers).
+    // If the activity is written but a later step throws, the report exists; calling
+    // again with the same id finishes the job.
     async logActivity(activity, viewers) {
-      const rows = await request('field_activities', { method: 'POST', body: JSON.stringify(activity) })
-      const saved = Array.isArray(rows) ? rows[0] : rows
-      if (!saved || !saved.id) throw new Error('Activity was not saved — no id returned.')
+      const id = activity.id || newActivityId()
+      await request('field_activities', {
+        method: 'POST',
+        body: JSON.stringify({ ...activity, id }),
+        prefer: 'resolution=ignore-duplicates,return=minimal',
+      })
+      const result = { id, notification: 'none' }
       if (viewers && viewers.length > 0) {
-        const payload = viewers.map(function (v) { return { ...v, activity_id: saved.id } })
-        await request('activity_viewers', { method: 'POST', body: JSON.stringify(payload), prefer: 'return=minimal' })
-
-        const targets = viewers.map(function (v) { return { staffId: v.staff_id } })
-        await notify(
-          request,
-          activity.business_id,
-          targets,
-          'activity',
-          activity.rep_name + ' logged field activity',
-          activity.location_label || null,
-          'activity'
-        )
+        const existing = await request('activity_viewers?activity_id=eq.' + id + '&select=staff_id')
+        const have = new Set((Array.isArray(existing) ? existing : []).map(function (v) { return v.staff_id }))
+        const missing = viewers.filter(function (v) { return !have.has(v.staff_id) })
+        if (missing.length > 0) {
+          const payload = missing.map(function (v) { return { ...v, activity_id: id } })
+          await request('activity_viewers', { method: 'POST', body: JSON.stringify(payload), prefer: 'return=minimal' })
+          result.notification = (await notifyViewers({ ...activity, id }, missing)) ? 'sent' : 'failed'
+        }
       }
-      return saved
+      return result
     },
+
+    notifyViewers: notifyViewers,
 
     async reactToActivity(activityId, staffId, actorName) {
       return request('activity_reactions', { method: 'POST', body: JSON.stringify({

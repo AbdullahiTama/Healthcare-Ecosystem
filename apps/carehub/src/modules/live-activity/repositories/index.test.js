@@ -92,3 +92,72 @@ describe('liveActivityRepository.getAllFieldActivities', () => {
     expect(res.truncated).toBe(false)
   })
 })
+
+describe('liveActivityRepository.logActivity: retry-safe save', () => {
+  // A scripted backend: records every call, lets a test fail a chosen step, and
+  // remembers rows so a retry sees what the first attempt already wrote.
+  const backend = ({ failOn = {} } = {}) => {
+    const calls = []
+    const viewers = []
+    const request = async (path, opts = {}) => {
+      calls.push({ path, method: opts.method || 'GET', prefer: opts.prefer, body: opts.body ? JSON.parse(opts.body) : null })
+      const step = path.startsWith('field_activities') ? 'activity' : path.startsWith('activity_viewers') ? ((opts.method || 'GET') === 'GET' ? 'readViewers' : 'addViewers') : 'notify'
+      if (failOn[step] && failOn[step]-- > 0) throw new Error(step + ' failed')
+      if (step === 'readViewers') return viewers.map((staff_id) => ({ staff_id }))
+      if (step === 'addViewers') JSON.parse(opts.body).forEach((v) => viewers.push(v.staff_id))
+      return []
+    }
+    return { calls, viewers, repo: createLiveActivityRepository({ request }) }
+  }
+  const ACT = { business_id: 'b1', staff_id: 's1', rep_name: 'Ada', id: 'fixed-id' }
+  const V = [{ staff_id: 'm1', viewer_name: 'M1' }, { staff_id: 'm2', viewer_name: 'M2' }]
+  const inserts = (calls) => calls.filter((c) => c.method === 'POST' && c.path.startsWith('field_activities'))
+
+  it('inserts with the caller\'s id and ignores a duplicate, so a repeat cannot create a second report', async () => {
+    const { repo, calls } = backend()
+    await repo.logActivity(ACT, [])
+    expect(inserts(calls)[0].body.id).toBe('fixed-id')
+    expect(inserts(calls)[0].prefer).toContain('resolution=ignore-duplicates')
+  })
+
+  it('makes up an id when the caller gives none, and returns it', async () => {
+    const { repo, calls } = backend()
+    const res = await repo.logActivity({ ...ACT, id: undefined }, [])
+    expect(res.id).toMatch(/^[0-9a-f-]{36}$/)
+    expect(inserts(calls)[0].body.id).toBe(res.id)
+  })
+
+  it('a viewer-write failure leaves the report saved; the retry adds only the viewers still missing', async () => {
+    const { repo, calls, viewers } = backend({ failOn: { addViewers: 1 } })
+    await expect(repo.logActivity(ACT, V)).rejects.toThrow('addViewers failed')
+    expect(inserts(calls)).toHaveLength(1)
+    await repo.logActivity(ACT, V) // retry, same id
+    expect(viewers.sort()).toEqual(['m1', 'm2']) // exactly once each
+  })
+
+  it('a retry after everything was written adds no viewers twice and does not notify again', async () => {
+    const { repo, calls, viewers } = backend()
+    const first = await repo.logActivity(ACT, V)
+    expect(first.notification).toBe('sent')
+    const notifiesBefore = calls.filter((c) => c.path.startsWith('staff_notifications')).length
+    const again = await repo.logActivity(ACT, V)
+    expect(viewers).toHaveLength(2)
+    expect(again.notification).toBe('none')
+    expect(calls.filter((c) => c.path.startsWith('staff_notifications')).length).toBe(notifiesBefore)
+  })
+
+  it('a notification failure does not fail the save and is reported, not swallowed', async () => {
+    const { repo } = backend({ failOn: { notify: 1 } })
+    const res = await repo.logActivity(ACT, V)
+    expect(res.id).toBe('fixed-id')
+    expect(res.notification).toBe('failed')
+  })
+
+  it('notifyViewers can be retried on its own', async () => {
+    const { repo, calls } = backend()
+    const ok = await repo.notifyViewers(ACT, V)
+    expect(ok).toBe(true)
+    const note = calls.find((c) => c.path.startsWith('staff_notifications'))
+    expect(note.body).toHaveLength(2)
+  })
+})
