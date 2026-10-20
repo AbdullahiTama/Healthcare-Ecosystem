@@ -159,6 +159,31 @@ ok("the author can read back the viewers already written, so a retry adds only t
 await as("repA1", "insert into activity_viewers (activity_id, staff_id, viewer_name) values ($1,$2,'Mgr')", [RID, S.mgrA])
 ok("the table itself would accept the same viewer twice, which is why the client must read first", Number((await sup("select count(*) c from activity_viewers where activity_id=$1", [RID])).rows[0].c) === 2)
 
+// ---- paging across equal timestamps: the cursor is (created_at, id) -------------------------------------------
+// The feed pages with: created_at < T OR (created_at = T AND id < I), ordered by created_at desc, id desc.
+// Five reports share one timestamp and are read two at a time by a manager (who sees all of them).
+const TIE = "2026-10-20T12:00:00Z"
+const tieIds = []
+for (let i = 1; i <= 5; i++) {
+  const id = "2222222" + i + "-2222-4222-8222-222222222222"
+  tieIds.push(id)
+  await sup("insert into field_activities (id, business_id, staff_id, rep_name, created_at) values ($1,$2,$3,'tie',$4)", [id, S.A, S.repA1, TIE])
+}
+const tiePage = async (cursorId) => (await as("mgrA", cursorId
+  ? "select id from field_activities where rep_name='tie' and (created_at < $1 or (created_at = $1 and id < $2)) order by created_at desc, id desc limit 2"
+  : "select id from field_activities where rep_name='tie' order by created_at desc, id desc limit 2",
+  cursorId ? [TIE, cursorId] : [])).rows.map((r) => r.id)
+const walked = []
+let tieCursor = null
+for (let guard = 0; guard < 10; guard++) {
+  const rows = await tiePage(tieCursor)
+  if (rows.length === 0) break
+  walked.push(...rows)
+  tieCursor = rows[rows.length - 1]
+}
+ok("paging through five reports that share one timestamp returns each exactly once, in order", walked.length === 5 && new Set(walked).size === 5 && walked.join() === [...tieIds].sort().reverse().join(), walked.join())
+ok("a created_at-only cursor would have skipped the rest of the tie, which is why the cursor carries the id", (await as("mgrA", "select id from field_activities where rep_name='tie' and created_at < $1", [TIE])).rows.length === 0)
+
 // ---- notifications addressed to other people (audit item U2) ---------------------------------------------
 // The page tells tagged colleagues about a report by inserting staff_notifications rows from the browser.
 // This replays the LIVE policy on that table (copied from pg_policies, 2026-10-20: one PERMISSIVE ALL policy for

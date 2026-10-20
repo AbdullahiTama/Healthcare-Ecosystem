@@ -139,4 +139,13 @@ await expectError('the access log is append-only for users', () => as('mgrA', 'd
 await expectError('and for the owner (trigger)', () => sup('delete from location_access_log'), '42501')
 await expectError('users cannot forge access-log rows', () => as('repA1', "insert into location_access_log (actor_id,business_id,action) values ($1,$2,'x')", [USERS.repA1.sub, S.A]), '42501')
 
+// ---- a check-in is not a field report -------------------------------------------------------------------
+// Pressing Check in, Check out, or a capture that fails writes to staff_checkins and nowhere else.
+const reportsBefore = (await sup('select count(*)::int c from field_activities')).rows[0].c
+await call('repA1', S.A, 'workday_checkin', GOOD)
+await call('repA1', S.A, 'workday_checkout', GOOD)
+await call('repA1', S.A, 'location_capture', { fail: 'denied' })
+const reportsAfter = (await sup('select count(*)::int c from field_activities')).rows[0].c
+ok('check in, check out and a failed capture create no field report', reportsAfter === reportsBefore, reportsBefore + ' -> ' + reportsAfter)
+
 finish()
