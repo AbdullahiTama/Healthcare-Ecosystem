@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef } from 'react'
-import { MapPin, BadgeCheck, AlertTriangle, Plus, ChevronDown, Search, Clock } from 'lucide-react'
+import { MapPin, Plus, ChevronDown, Search } from 'lucide-react'
 import { Button } from '@care-ecosystem/design-system/components/ui'
 import { theme } from '../../styles/theme'
 import {
   formatDistance, matchesCategory, facilityVerification, FACILITY_VERIFICATION,
 } from '../../lib/geo.js'
+import LocationMatchBadge from './LocationMatchBadge.jsx'
+import { facilitySourceLabel } from './activityTarget'
 import {
   nearbyHealthFacilities, addRepAddedFacility, FACILITY_FILTERS,
 } from '../../lib/places.js'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50,
-  border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, bg } = theme
+  border, danger, bg } = theme
 
 // Single source of truth for the facility-capture UI, used by:
 //   * the logger (rep is logging a visit, `readOnly=false`) — auto-detects the
@@ -59,11 +61,9 @@ export default function FacilityPicker({
         if (cancelled) return
         setAll(res.facilities)
         setFromCache(res.fromCache)
-        // Auto-select the single closest facility when nothing is chosen yet.
-        // Preserve correct category — never default to Other when known (use as-is)
-        if (!readOnly && !value && res.facilities.length > 0) {
-          onChangeRef.current(res.facilities[0])
-        }
+        // Never pre-select: a place near the phone is a suggestion, not a visit.
+        // Open the list so the rep can choose one, or leave it empty.
+        if (!readOnly && !value && res.facilities.length > 0) setListOpen(true)
         if (readOnly && value) setHighlight(value)
       })
       .catch(function (e) {
@@ -123,15 +123,20 @@ export default function FacilityPicker({
   return (
     <div>
       {/* Selected / auto-detected facility card */}
-      <div style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${selected ? border : danger}`,
-        background: selected ? bg : dangerBg, marginBottom: '10px' }}>
+      <div style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${border}`,
+        background: bg, marginBottom: '10px' }}>
         {loading && <div style={{ fontSize: '12.5px', color: gray500 }}>Finding facilities near you…</div>}
         {!loading && error && (
           <div style={{ fontSize: '12.5px', color: danger, fontWeight: '700' }}>
             Couldn't reach the facility service. You can still add the place manually below.
           </div>
         )}
-        {!loading && !error && !selected && (
+        {!loading && !error && !selected && !readOnly && all.length > 0 && (
+          <div style={{ fontSize: '12.5px', color: gray600 }}>
+            Possible places near you are listed below. Choose the one you visited, or leave this empty if none of them is.
+          </div>
+        )}
+        {!loading && !error && !selected && (readOnly || all.length === 0) && (
           <div style={{ fontSize: '12.5px', color: gray600 }}>
             {searchMode === 'nearby' && 'No health facility detected nearby. Try Expanded or Area mode, or add it below.'}
             {searchMode === 'expanded' && 'No facility within expanded range. Try Area mode or add it below.'}
@@ -158,23 +163,9 @@ export default function FacilityPicker({
               </div>
             </div>
             <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              {verifyState === FACILITY_VERIFICATION.VERIFIED && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: successBg, color: success }}>
-                  <BadgeCheck size={10} /> GPS verified
-                </span>
-              )}
-              {verifyState === FACILITY_VERIFICATION.PENDING && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: infoBg, color: info }}>
-                  <Clock size={10} /> Pending review
-                </span>
-              )}
-              {verifyState === FACILITY_VERIFICATION.UNVERIFIED && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: warningBg, color: warning }}>
-                  <AlertTriangle size={10} /> Unverified
-                </span>
-              )}
+              <LocationMatchBadge state={verifyState} />
               {fromCache && <span style={{ fontSize: '10px', color: gray400 }}>cached</span>}
-              {selected.source && <span style={{ fontSize: '10px', fontWeight: '700', color: gray500, textTransform: 'uppercase' }}>{selected.source}</span>}
+              <span style={{ fontSize: '10px', fontWeight: '700', color: gray500 }}>{facilitySourceLabel(selected.source)}</span>
               {selected.source === 'rep_added' && (
                 <span style={{ fontSize: '10px', color: gray400 }}>
                   rep-added{verifyState === FACILITY_VERIFICATION.PENDING ? ' · a manager must confirm it' : ' · confirmed'}
@@ -231,6 +222,9 @@ export default function FacilityPicker({
       {/* Type filter + scrollable nearest-first list */}
       {listOpen && (
         <div style={{ marginTop: '10px', border: `1px solid ${border}`, borderRadius: '10px', overflow: 'hidden' }}>
+          <div style={{ padding: '8px 10px 0', fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em', background: gray50 }}>
+            {readOnly ? 'Nearby places, for comparison only' : 'Possible places near you. Tap the one you visited'}
+          </div>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', padding: '10px', background: gray50, borderBottom: `1px solid ${border}` }}>
             {FACILITY_FILTERS.map(function (f) {
               const on = filter === f.key
