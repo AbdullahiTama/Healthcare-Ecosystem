@@ -216,4 +216,164 @@ ok("a person reads only their own notifications", (await as("repA2", "select id 
 // ---- Realtime consequence -----------------------------------------------------------------------
 ok('an untagged colleague does not see a new activity (Realtime evaluates the same policy)', !(await seen('repA2')).includes(ownerAct))
 
+// =====================================================================================================
+// DRAFT MIGRATIONS (docs/architecture/pending-migrations): not applied to any real database.
+// Each is shown BEFORE (the exposure is real on this replica) and AFTER (it is closed), then re-applied
+// to prove it can be run twice. The stand-in tables below mirror the live columns checked on 2026-10-20.
+// =====================================================================================================
+await db.exec(`
+  ALTER TABLE public.field_activities
+    ADD COLUMN IF NOT EXISTS rep_title text, ADD COLUMN IF NOT EXISTS values_json text, ADD COLUMN IF NOT EXISTS voice_url text,
+    ADD COLUMN IF NOT EXISTS location_label text, ADD COLUMN IF NOT EXISTS place_of_visit text, ADD COLUMN IF NOT EXISTS place_coords jsonb,
+    ADD COLUMN IF NOT EXISTS place_verified boolean NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS facility_name text,
+    ADD COLUMN IF NOT EXISTS facility_address text, ADD COLUMN IF NOT EXISTS facility_category text,
+    ADD COLUMN IF NOT EXISTS facility_lat double precision, ADD COLUMN IF NOT EXISTS facility_lng double precision,
+    ADD COLUMN IF NOT EXISTS facility_distance_m integer, ADD COLUMN IF NOT EXISTS facility_source text,
+    ADD COLUMN IF NOT EXISTS facility_verified boolean NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS facility_pending_review boolean NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS directory_business_id uuid, ADD COLUMN IF NOT EXISTS directory_business_name text;
+  ALTER TABLE public.staff_notifications ADD COLUMN IF NOT EXISTS body text, ADD COLUMN IF NOT EXISTS link text, ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();
+  CREATE TABLE public.activity_default_viewers (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid, staff_id uuid, viewer_staff_id uuid, viewer_name text NOT NULL, created_at timestamptz DEFAULT now());
+  GRANT ALL ON public.activity_default_viewers TO authenticated;
+  ALTER TABLE public.activity_default_viewers ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "activity_default_viewers of own business" ON public.activity_default_viewers FOR ALL
+    USING ((business_id IN (SELECT current_business_ids())) OR is_platform_admin())
+    WITH CHECK ((business_id IN (SELECT current_business_ids())) OR is_platform_admin());
+`)
+
+// ---- F7: default viewers --------------------------------------------------------------------------------
+const addDefault = (who, biz, owner, viewer) => as(who, "insert into activity_default_viewers (business_id, staff_id, viewer_staff_id, viewer_name) values ($1,$2,$3,'V') returning id", [biz, owner, viewer])
+const dvMine = (await addDefault("repA1", S.A, S.repA1, S.mgrA)).rows[0].id
+ok("BEFORE: a colleague can delete another person's default viewers (finding F7)", (await as("repA2", "delete from activity_default_viewers where id=$1 returning id", [dvMine])).rows.length === 1)
+ok("BEFORE: a colleague can write a default-viewer list for someone else", !!(await addDefault("repA2", S.A, S.repA1, S.repA2)).rows[0].id)
+await sup("delete from activity_default_viewers")
+await applyMigrations(["carehub_20261020_default_viewers_own_rows.sql"])
+const dvOwn = (await addDefault("repA1", S.A, S.repA1, S.mgrA)).rows[0].id
+ok("a person can still write their own default viewers", !!dvOwn)
+await expectError("a colleague cannot write a default-viewer list for someone else", () => addDefault("repA2", S.A, S.repA1, S.repA2), "42501")
+ok("a colleague cannot delete another person's default viewers (row is hidden from DELETE)", (await as("repA2", "delete from activity_default_viewers where id=$1 returning id", [dvOwn])).rows.length === 0)
+ok("a colleague cannot rewrite another person's default viewers", (await as("repA2", "update activity_default_viewers set viewer_staff_id=$2 where id=$1 returning id", [dvOwn, S.repA2])).rows.length === 0)
+ok("a manager cannot edit someone else's list either", (await as("mgrA", "delete from activity_default_viewers where id=$1 returning id", [dvOwn])).rows.length === 0)
+await expectError("the owner cannot write a list for a staff member", () => addDefault("a", S.A, S.repA1, S.mgrA), "42501")
+await expectError("nobody writes a list with no owner staff id", () => addDefault("repA1", S.A, null, S.mgrA), "42501")
+await expectError("nor into another company", () => addDefault("repA1", S.B, S.repA1, S.mgrA), "42501")
+ok("reading is unchanged: a colleague can still read it", (await as("repA2", "select id from activity_default_viewers where id=$1", [dvOwn])).rows.length === 1)
+ok("the person can change and remove their own list", (await as("repA1", "update activity_default_viewers set viewer_name='Z' where id=$1 returning id", [dvOwn])).rows.length === 1 && (await as("repA1", "delete from activity_default_viewers where id=$1 returning id", [dvOwn])).rows.length === 1)
+ok("a platform admin can correct any list", !!(await addDefault("admin", S.A, S.repA1, S.mgrA)).rows[0].id)
+
+// ---- F3: the voice bucket ---------------------------------------------------------------------------------
+await db.exec(`
+  CREATE SCHEMA storage;
+  GRANT USAGE ON SCHEMA storage TO anon, authenticated;
+  CREATE TABLE storage.buckets (id text PRIMARY KEY, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+  CREATE TABLE storage.objects (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), bucket_id text, name text, owner_id text DEFAULT (auth.uid())::text);
+  GRANT ALL ON storage.objects TO anon, authenticated; -- as in Supabase: the policies decide, not the grants
+  CREATE FUNCTION storage.foldername(name text) RETURNS text[] LANGUAGE plpgsql AS $f$
+    DECLARE _parts text[]; BEGIN SELECT string_to_array(name, '/') INTO _parts; RETURN _parts[1:array_length(_parts, 1) - 1]; END $f$;
+  GRANT EXECUTE ON FUNCTION storage.foldername(text) TO anon, authenticated;
+  INSERT INTO storage.buckets VALUES ('activity-voice', true, NULL, NULL), ('ecommerce-images', true, NULL, NULL);
+  ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "activity-voice insert" ON storage.objects FOR INSERT TO anon, authenticated WITH CHECK (bucket_id = 'activity-voice');
+  CREATE POLICY "activity-voice read" ON storage.objects FOR SELECT TO anon, authenticated USING (bucket_id = 'activity-voice');
+  CREATE POLICY "other bucket read" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'ecommerce-images');
+`)
+const VOICE_ACT = "44444444-4444-4444-8444-444444444441"
+const VOICE_ACT2 = "44444444-4444-4444-8444-444444444442"
+await sup("insert into field_activities (id, business_id, staff_id, rep_name, voice_url) values ($1,$2,$3,'v','https://x.supabase.co/storage/v1/object/public/activity-voice/voice-flat.webm')", [VOICE_ACT, S.A, S.repA1])
+await sup("insert into field_activities (id, business_id, staff_id, rep_name, voice_url) values ($1,$2,$3,'v2',$4)", [VOICE_ACT2, S.A, S.repA1, "https://x.supabase.co/storage/v1/object/public/activity-voice/" + S.A + "/n1.webm"])
+await sup("insert into storage.objects (bucket_id, name) values ('activity-voice','voice-flat.webm'), ('activity-voice','voice-orphan.webm'), ('activity-voice',$1), ('ecommerce-images','pic.png')", [S.A + "/n1.webm"])
+const objs = async (who) => (await as(who, "select name from storage.objects where bucket_id='activity-voice' order by name")).rows.map((r) => r.name)
+ok("BEFORE: anyone on the internet can read every voice note (finding F3)", (await objs("anon")).length === 3)
+ok("BEFORE: anyone on the internet can upload any file", (await as("anon", "insert into storage.objects (bucket_id, name) values ('activity-voice','junk.exe') returning id")).rows.length === 1)
+await sup("delete from storage.objects where name='junk.exe'")
+
+await applyMigrations(["carehub_20261020_activity_voice_private.sql"])
+const bucket = (await sup("select public, file_size_limit, allowed_mime_types from storage.buckets where id='activity-voice'")).rows[0]
+ok("the bucket is private, capped at 10 MB, and audio only", bucket.public === false && Number(bucket.file_size_limit) === 10485760 && bucket.allowed_mime_types.every((m) => m.startsWith("audio/")), JSON.stringify(bucket))
+ok("another bucket's policy was left alone", (await as("repA1", "select name from storage.objects where bucket_id='ecommerce-images'")).rows.length === 1)
+ok("anonymous can read no voice note", (await objs("anon")).length === 0)
+await expectError("anonymous cannot upload", () => as("anon", "insert into storage.objects (bucket_id, name) values ('activity-voice',$1)", [S.A + "/x.webm"]), "42501")
+ok("a member can upload into their own company's folder", (await as("repA1", "insert into storage.objects (bucket_id, name) values ('activity-voice',$1) returning id", [S.A + "/new.webm"])).rows.length === 1)
+ok("...and can read back what they just recorded, before any report points to it", (await objs("repA1")).includes(S.A + "/new.webm"))
+ok("...but a colleague and a manager cannot, until a report points to it", !(await objs("repA2")).includes(S.A + "/new.webm") && !(await objs("mgrA")).includes(S.A + "/new.webm"))
+await expectError("...but not into another company's folder", () => as("repA1", "insert into storage.objects (bucket_id, name) values ('activity-voice',$1)", [S.B + "/x.webm"]), "42501")
+await expectError("...nor to the bucket's root (flat names were the guessable ones)", () => as("repA1", "insert into storage.objects (bucket_id, name) values ('activity-voice','voice-1.webm')"), "42501")
+await expectError("...nor into a folder that is not a company id", () => as("repA1", "insert into storage.objects (bucket_id, name) values ('activity-voice','evil/x.webm')"), "42501")
+ok("the author can read their report's voice note, old flat name and new folder name alike", (await objs("repA1")).includes("voice-flat.webm") && (await objs("repA1")).includes(S.A + "/n1.webm"))
+ok("a colleague who cannot see the report cannot read its voice note", !(await objs("repA2")).includes("voice-flat.webm"))
+await as("repA1", "insert into activity_viewers (activity_id, staff_id, viewer_name) values ($1,$2,'Rep Two')", [VOICE_ACT, S.repA2])
+ok("once tagged on the report, the colleague can", (await objs("repA2")).includes("voice-flat.webm") && !(await objs("repA2")).includes(S.A + "/n1.webm"))
+ok("a manager can read it, like the report itself", (await objs("mgrA")).includes("voice-flat.webm") && (await objs("mgrA")).includes(S.A + "/n1.webm"))
+ok("another company cannot", (await objs("repB1")).length === 0 && (await objs("b")).length === 0)
+ok("a file no report points to is readable by no member", !(await objs("mgrA")).includes("voice-orphan.webm") && !(await objs("repA1")).includes("voice-orphan.webm"))
+ok("notes are records: no one deletes one", (await as("repA1", "delete from storage.objects where name='voice-flat.webm' returning id")).rows.length === 0)
+ok("...and no one renames or replaces one", (await as("repA1", "update storage.objects set name='voice-moved.webm' where name='voice-flat.webm' returning id")).rows.length === 0)
+await applyMigrations(["carehub_20261020_activity_voice_private.sql"], { rerun: false })
+ok("the voice migration can be run twice and leaves exactly two policies on the bucket", (await sup("select count(*)::int c from pg_policies where schemaname='storage' and tablename='objects' and (coalesce(qual,'')||coalesce(with_check,'')) like '%activity-voice%'")).rows[0].c === 2)
+
+// ---- F4/F6: log_field_activity, then U2: server-side alerts ---------------------------------------------------
+await applyMigrations(["carehub_20261020_log_field_activity.sql"])
+const LA = "55555555-5555-4555-8555-555555555551"
+const payload = (over = {}) => JSON.stringify({ id: LA, business_id: S.A, staff_id: S.repA1, rep_name: "Rep One", values_json: "{}", lat: 6.5, lng: 3.4, location_label: "Ikeja", place_verified: false, ...over })
+const viewersJson = JSON.stringify([{ staff_id: S.repA2, viewer_name: "Rep Two" }])
+const logFn = (who, p, v = "[]") => as(who, "select log_field_activity($1::jsonb, $2::jsonb) r", [p, v]).then((r) => r.rows[0].r)
+ok("PARITY: anonymous cannot call log_field_activity", await (async () => { try { await as("anon", "select log_field_activity('{}'::jsonb)"); return false } catch (e) { return e.code === "42501" } })())
+const g1 = await logFn("repA1", payload(), viewersJson)
+ok("saves the report and its viewer in one call", g1.created === true && g1.viewers_added === 1 && g1.id === LA, JSON.stringify(g1))
+ok("...so the tagged colleague can already see it", (await seen("repA2")).includes(LA))
+ok("without the alert triggers it says the app must still tell people itself", g1.alerts === "client")
+const row = (await sup("select * from field_activities where id=$1", [LA])).rows[0]
+ok("columns that have defaults keep them (created_at set, booleans false, not null)", row.created_at !== null && row.place_verified === false && row.facility_verified === false && row.facility_pending_review === false)
+const g2 = await logFn("repA1", payload({ rep_name: "Edited retry" }), viewersJson)
+ok("the same call again creates nothing, adds nobody, and cannot edit the report", g2.created === false && g2.viewers_added === 0 && (await sup("select rep_name from field_activities where id=$1", [LA])).rows[0].rep_name === "Rep One")
+ok("...and there is one row and one viewer", (await sup("select count(*)::int c from field_activities where id=$1", [LA])).rows[0].c === 1 && (await sup("select count(*)::int c from activity_viewers where activity_id=$1", [LA])).rows[0].c === 1)
+const NEW_ID = "55555555-5555-4555-8555-555555555552"
+await expectError("a bad viewer rolls back the whole call: no half-saved report is left behind", () => logFn("repA1", payload({ id: NEW_ID }), JSON.stringify([{ staff_id: "not-a-uuid" }])), "22P02")
+ok("...the activity row does not exist", (await sup("select count(*)::int c from field_activities where id=$1", [NEW_ID])).rows[0].c === 0)
+await expectError("a rep cannot log as someone else through it", () => logFn("repA1", payload({ id: NEW_ID, staff_id: S.repA2 })), "42501")
+await expectError("nor into another company", () => logFn("repA1", payload({ id: NEW_ID, business_id: S.B })), "42501")
+await expectError("a colleague cannot tag themselves onto the report by repeating its id", () => logFn("repA2", payload({ staff_id: S.repA2 }), JSON.stringify([{ staff_id: S.mgrA, viewer_name: "M" }])), "42501")
+await expectError("a payload that is not an object is refused", () => as("repA1", "select log_field_activity('[]'::jsonb)"), "22023")
+await expectError("an id and business are required", () => as("repA1", "select log_field_activity('{\"rep_name\":\"x\"}'::jsonb)"), "22023")
+ok("the owner can log through it with no staff id", (await logFn("a", payload({ id: "55555555-5555-4555-8555-555555555553", staff_id: null }))).created === true)
+
+await applyMigrations(["carehub_20261020_activity_server_alerts.sql"])
+// Start from an empty inbox: the policy section above left rows behind that are not about alerts.
+await sup("delete from staff_notifications")
+const notes = async (staffId) => (await sup("select kind, title, body, link, is_owner from staff_notifications where staff_id=$1 order by created_at", [staffId])).rows
+const AL = "55555555-5555-4555-8555-555555555554"
+const g3 = await logFn("repA1", payload({ id: AL, rep_name: "Rep One", location_label: "Allen Ave" }), JSON.stringify([{ staff_id: S.repA2, viewer_name: "Rep Two" }, { staff_id: S.repA1, viewer_name: "Me" }]))
+ok("with the triggers in place the function reports server-side alerts", g3.alerts === "server")
+const n2 = await notes(S.repA2)
+ok("the tagged colleague is alerted by the database, once, with the report's details", n2.length === 1 && n2[0].kind === "activity" && n2[0].title === "Rep One logged field activity" && n2[0].body === "Allen Ave" && n2[0].link === "activity" && n2[0].is_owner === false, JSON.stringify(n2))
+ok("...and can read their own alert", (await as("repA2", "select id from staff_notifications")).rows.length === 1)
+ok("the author tagging themselves is not alerted about their own report", (await notes(S.repA1)).length === 0)
+await logFn("repA1", payload({ id: AL }), JSON.stringify([{ staff_id: S.repA2, viewer_name: "Rep Two" }]))
+ok("a retry adds no viewer row and so sends no second alert", (await notes(S.repA2)).length === 1)
+await sup("update staff set status='inactive' where id=$1", [S.mgrA])
+await as("repA1", "insert into activity_viewers (activity_id, staff_id, viewer_name) values ($1,$2,'Mgr')", [AL, S.mgrA])
+ok("an inactive member is not alerted", (await notes(S.mgrA)).length === 0)
+await sup("update staff set status='active' where id=$1", [S.mgrA])
+await as("repA1", "insert into activity_viewers (activity_id, staff_id, viewer_name) values ($1,$2,'B rep')", [AL, S.repB1])
+ok("someone from another company is not alerted", (await notes(S.repB1)).length === 0)
+
+await as("repA2", "insert into activity_comments (activity_id, staff_id, actor_name, body) values ($1,$2,'Rep Two','nice work')", [AL, S.repA2])
+const n1 = await notes(S.repA1)
+ok("a reply alerts the report's author, with the reply text", n1.length === 1 && n1[0].kind === "activity_comment" && n1[0].title === "Rep Two replied to your activity" && n1[0].body === "nice work", JSON.stringify(n1))
+await as("repA1", "insert into activity_comments (activity_id, staff_id, actor_name, body) values ($1,$2,'Rep One','thanks')", [AL, S.repA1])
+ok("replying to your own report alerts nobody", (await notes(S.repA1)).length === 1)
+await as("a", "insert into activity_comments (activity_id, staff_id, actor_name, body) values ($1,NULL,'Owner','well done')", [AL])
+ok("the owner replying (no staff id) alerts the rep", (await notes(S.repA1)).length === 2)
+const ownerReport = "55555555-5555-4555-8555-555555555553"
+const inboxBefore = (await sup("select count(*)::int c from staff_notifications")).rows[0].c
+await as("mgrA", "insert into activity_comments (activity_id, staff_id, actor_name, body) values ($1,$2,'Mgr','seen')", [ownerReport, S.mgrA])
+ok("a reply on a report written by the owner (no staff author) alerts nobody and does not break the reply", (await sup("select count(*)::int c from staff_notifications")).rows[0].c === inboxBefore && (await sup("select count(*)::int c from activity_comments where activity_id=$1", [ownerReport])).rows[0].c === 1)
+await expectError("an uninvolved colleague still cannot reply to a report they cannot see, with or without the alert triggers", () => as("repA2", "insert into activity_comments (activity_id, staff_id, actor_name, body) values ($1,$2,'Rep Two','hi')", [ownerReport, S.repA2]), "42501")
+const aclOf = async (fn) => (await sup("select has_function_privilege('anon', $1::regprocedure, 'execute') a, has_function_privilege('authenticated', $1::regprocedure, 'execute') u", [fn])).rows[0]
+for (const fn of ["public.alert_activity_viewer()", "public.alert_activity_comment()"]) {
+  const r = await aclOf(fn)
+  ok("ACL " + fn + ": nobody can call a trigger function directly", r.a === false && r.u === false, JSON.stringify(r))
+}
+const lfAcl = await aclOf("public.log_field_activity(jsonb, jsonb)")
+ok("ACL log_field_activity: signed-in yes, anonymous no", lfAcl.a === false && lfAcl.u === true, JSON.stringify(lfAcl))
+
 finish()
