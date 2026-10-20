@@ -25,6 +25,7 @@ import commandScore from 'command-score'
 import { PLATFORM_PERMISSIONS, PLATFORM_NAV, normalizePlatformPermissions, navCatalogueFor, buildPlatformPermissions } from '../../lib/platformPermissions'
 import { toBusinessCsv, downloadCsv, buildStatementHtml, openPrintWindow } from '../../lib/carefindhubExports'
 import { buildCommandList, scoreCommand } from './commandRegistry'
+import { adrReportRepository } from '../../modules/adr/repositories'
 
 // Lazy-loaded admin sub-panels for code splitting
 const ReferralCoveragePanel = lazy(() => import('./referral/AdminReferralPanels').then(m => ({ default: m.CoveragePanel })))
@@ -34,6 +35,9 @@ const TrustPanel = lazy(() => import('./trust/TrustPanel'))
 const GrowthPanel = lazy(() => import('./growth/GrowthPanel'))
 const SupportInbox = lazy(() => import('./ops/SupportInbox'))
 const Compliance = lazy(() => import('./compliance/Compliance'))
+// Reviewer queue for public safety-report routing (policy: reviewer approval). Gated by the 'Compliance'
+// permission here and by is_platform_admin() inside every RPC.
+const RouteReviewQueue = lazy(() => import('../../modules/adr/RouteReviewQueue'))
 // Platform-wide business directory (rows with no company). Gated by the 'Directory' permission here
 // and by is_platform_admin() in the database.
 const BusinessDirectory = lazy(() => import('../../modules/business-directory/BusinessDirectory'))
@@ -1370,6 +1374,7 @@ function SidebarRail({ collapsed, setCollapsed, active, setActive, counts, perms
     { id: 'growth', label: 'Growth', icon: TrendingUp, perm: 'Growth', count: null },
     { id: 'ops', label: 'Ops', icon: Inbox, perm: 'Ops', count: null },
     { id: 'compliance', label: 'Compliance', icon: ShieldAlert, perm: 'Compliance', count: null },
+    { id: 'pv-routing', label: 'PV Routing', icon: FileText, perm: 'Compliance', count: counts.pvRouting || null },
     { id: 'directory', label: 'Directory', icon: Building2, perm: 'Directory', count: null },
   ].filter(it => can(it.perm) || it.id==='dashboard')
 
@@ -1450,6 +1455,14 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('dashboard')
   const [highlightBusinessId, setHighlightBusinessId] = useState(null)
+  // Routes waiting for a reviewer. Null until loaded; a failed read just hides the badge (the panel shows the real error).
+  const [pvQueueCount, setPvQueueCount] = useState(null)
+  useEffect(() => {
+    if (tab === 'pv-routing') return undefined
+    let live = true
+    adrReportRepository.getRouteReviewQueue('open').then((r) => { if (live) setPvQueueCount(r.length) }).catch(() => {})
+    return () => { live = false }
+  }, [tab])
   const [platformPerms, setPlatformPerms] = useState(null)
   const { msg: toastMsg, show: showToast } = useToast()
   const navigate = useNavigate()
@@ -1667,6 +1680,7 @@ export default function AdminDashboard() {
     pendingBusinesses: pendingCount,
     pendingApps: 0,
     pendingPayouts: safePayoutsForCount.filter(p=>p.status==='pending'||p.status==='processing').length,
+    pvRouting: pvQueueCount,
   }
 
   const isPermitted = (perm) => {
@@ -1750,6 +1764,7 @@ export default function AdminDashboard() {
               {tab==='growth' && (isPermitted('Growth') ? <Suspense fallback={<PanelLoading />}><GrowthPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Growth" />)}
               {tab==='ops' && (isPermitted('Ops') ? <Suspense fallback={<PanelLoading />}><SupportInbox /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Ops" />)}
               {tab==='compliance' && (isPermitted('Compliance') ? <Suspense fallback={<PanelLoading />}><Compliance /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Compliance" />)}
+              {tab==='pv-routing' && (isPermitted('Compliance') ? <Suspense fallback={<PanelLoading />}><RouteReviewQueue /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to PV Routing" />)}
               {tab==='directory' && (isPermitted('Directory') ? <Suspense fallback={<PanelLoading />}><BusinessDirectory brand={null} perms={{ canManageDirectory: true }} platformMode /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Directory" />)}
             </>
           )}
