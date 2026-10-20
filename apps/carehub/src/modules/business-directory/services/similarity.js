@@ -17,7 +17,7 @@ export function levenshtein(a, b) {
       const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1
       cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
     }
-    ;[prev, cur] = [cur, prev]
+    [prev, cur] = [cur, prev]
   }
   return prev[b.length]
 }

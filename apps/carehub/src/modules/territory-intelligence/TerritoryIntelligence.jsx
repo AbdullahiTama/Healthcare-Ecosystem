@@ -81,7 +81,7 @@ export default function TerritoryIntelligence({ brand, perms }) {
       setError(e.message || 'Could not load coverage')
     }
     setLoading(false)
-  }, [repo, businessId, since, group, categoryId, state]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [repo, businessId, since, group, categoryId, state]) // dependencies deliberately limited (no react-hooks lint plugin: docs/architecture/Linting.md, section 5)
 
   useEffect(() => { loadCoverage() }, [loadCoverage])
 
@@ -110,7 +110,7 @@ export default function TerritoryIntelligence({ brand, perms }) {
       setUTotal(rows.length ? Number(rows[0].total_count) : 0)
     } catch (e) { showToast('Could not load the list: ' + e.message, { type: 'error' }) }
     setULoading(false)
-  }, [repo, businessId, since, uTerritory, state, categoryId, uPage]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [repo, businessId, since, uTerritory, state, categoryId, uPage]) // dependencies deliberately limited (no react-hooks lint plugin: docs/architecture/Linting.md, section 5)
 
   useEffect(() => { if (tab === 'unvisited') loadUnvisited() }, [tab, loadUnvisited])
   useEffect(() => { setUPage(0) }, [since, uTerritory, state, categoryId])
@@ -119,7 +119,7 @@ export default function TerritoryIntelligence({ brand, perms }) {
     if (tab !== 'reps' || !businessId) return
     setReps(null)
     repo.repActivity(businessId, since).then((r) => setReps(shapeReps(r))).catch((e) => { setReps([]); showToast(e.message, { type: 'error' }) })
-  }, [tab, businessId, since, repo]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, businessId, since, repo]) // dependencies deliberately limited (no react-hooks lint plugin: docs/architecture/Linting.md, section 5)
 
   const loadUnassigned = useCallback(async () => {
     try {
@@ -129,7 +129,7 @@ export default function TerritoryIntelligence({ brand, perms }) {
       r.forEach((x) => { byState[x.group_label || ''] = Number(x.total) })
       setUnassigned({ total: r.reduce((n, x) => n + Number(x.total), 0), byState })
     } catch (e) { setUnassigned({ total: 0, byState: {} }); showToast(e.message, { type: 'error' }) }
-  }, [repo, businessId, since]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [repo, businessId, since]) // dependencies deliberately limited (no react-hooks lint plugin: docs/architecture/Linting.md, section 5)
   useEffect(() => { if (tab === 'assign' && canManage) loadUnassigned() }, [tab, canManage, loadUnassigned])
 
   const totals = useMemo(() => totalsOf(groups || []), [groups])
