@@ -226,7 +226,7 @@ PASS means a test that was run passed. "Replica" means PGlite with the live poli
 | 9 | Write failure cannot duplicate on retry | **PASS** | Repository and page tests; replica proves same-id insert is idempotent and cannot be hijacked. PostgREST's translation of the header is NOT TESTED live. |
 | 10 | Repeated clicks make one report | **PASS** | `LiveActivity.save.test.jsx`. |
 | 11 | Check-in location current / stale / unavailable / failed is understandable | **PARTIAL** | Manager view PASS (existing tests). The person's own view has no stale label (F20). |
-| 12 | Empty fields, permission denial, GPS failure, voice upload failure, offline recoverable | **PARTIAL** | Empty fields, GPS failures, failed save: PASS. **Voice-note upload failure NOT TESTED** (needs a recorder; the code returns early without saving). **No offline queue exists**; a failed send is retried by the user under the same id. |
+| 12 | Empty fields, permission denial, GPS failure, voice upload failure, offline recoverable | **PARTIAL** | Empty fields, GPS failures, failed save: PASS. Voice-note upload failure: PASS through a fake recorder (nothing saved, form kept, retry reuses the report id, removing the note lets the report through). The real microphone and recorder are NOT TESTED. **No offline queue exists**; a failed send is retried by the user under the same id. |
 | 13 | Pagination, counts, export accurate | **PASS (unit + replica)** | Cursor and tie handling proven on real Postgres; count and export paging unit-tested against a scripted backend. PostgREST parsing of the filters checked for syntax only. |
 
 ## 10. Final workflow and event model
@@ -259,7 +259,7 @@ In suggested order:
 ## 13. Outstanding risks
 
 - Until item 4 above ships, tagged colleagues are not alerted. The page now says so plainly instead of failing silently.
-- Live behaviour has not been observed by a person in a browser. Realtime, layout, accessibility and the voice recorder are NOT TESTED.
+- Live behaviour has not been observed by a person in a browser. Realtime, layout, accessibility and the real microphone/recorder are NOT TESTED (a fake recorder is tested).
 - The `dedup 3000 x 3000` timing test in `business-directory` fails (also in isolation, also before this work); unrelated, but it keeps the full suite red.
 
 ## 14. Commands
@@ -320,6 +320,4 @@ Not proven, and needing a check on a Supabase branch or the live project before 
 - that Realtime then pushes the report to a tagged non-manager (a scratch database cannot show it);
 - that a voice note plays through a signed URL.
 
-App changes still owed (client work, not done): sign voice URLs and upload to `<business id>/<activity id>.<ext>` with a
-parameter-free MIME type (**required before the voice draft**); call `rpc/log_field_activity` with a fallback to the
-two-request path; skip the browser's own notification attempt when the function reports `alerts: 'server'`.
+App changes: DONE in this branch, written to work before and after each migration. Voice notes play through signed links and upload to `<business id>/<activity id>-<suffix>.<ext>` with a parameter-free MIME type (`2cb9a9e`); `logActivity` tries `rpc/log_field_activity` first and falls back to the two-request path only when the function is missing, and sends no browser alert when the database reports `alerts: 'server'` (`ecc0bb7`). 225 tests pass in the Live Activity folder. Still unproven on a live project: that a note plays through a signed link, that a new upload lands in the company folder, and that the function is called as modelled.

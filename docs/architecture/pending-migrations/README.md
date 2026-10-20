@@ -14,16 +14,16 @@ schema). Re-check each against a Supabase branch, or the live project read-only,
 | File | Fixes | Safe to apply alone? | App change needed |
 |---|---|---|---|
 | `carehub_20261020_default_viewers_own_rows.sql` | F7: any member can rewrite a colleague's default viewers | **Yes** | None (the app already writes only the caller's own rows) |
-| `carehub_20261020_activity_server_alerts.sql` | U2: the browser cannot alert colleagues; the database now does | **Yes** | Optional: skip the browser's own (refused) attempt when `alerts: 'server'` |
-| `carehub_20261020_log_field_activity.sql` | F4/F6: save the report and its viewers in one transaction | **Yes**, but nothing uses it until the app does | App tries `rpc/log_field_activity`, falls back to the two-request path on PGRST202 |
-| `carehub_20261020_activity_voice_private.sql` | F3: voice bucket public and anonymously writable | **NO. Breaks the app until it is changed** | **Required first:** play notes through signed URLs; upload to `<business id>/<activity id>.<ext>` with the session and a parameter-free MIME type |
+| `carehub_20261020_activity_server_alerts.sql` | U2: the browser cannot alert colleagues; the database now does | **Yes** | Done in the app (`ecc0bb7`): the browser sends no alert when the database reports `alerts: 'server'` |
+| `carehub_20261020_log_field_activity.sql` | F4/F6: save the report and its viewers in one transaction | **Yes**, but nothing uses it until the app does | Done in the app (`ecc0bb7`): tries the function first, falls back to the two-request path if it is missing |
+| `carehub_20261020_activity_voice_private.sql` | F3: voice bucket public and anonymously writable | **NO. Breaks the app until it is changed** | Done in the app (`2cb9a9e`): plays notes through signed links and uploads into `<business id>/<activity id>-<suffix>.<ext>` with a parameter-free MIME type. **Confirm on the live project before applying** |
 
 ## Suggested order
 
 1. `default_viewers_own_rows`: independent, no app change.
 2. `activity_server_alerts`: independent. After it, tagged colleagues and replied-to reps are alerted by the database.
 3. `log_field_activity`: then release the app that calls it (with the fallback), so release order does not matter.
-4. Release the app change for voice notes. Check on the live project that a note plays through a signed URL and a new upload lands in the company folder while the bucket is still public.
+4. Release the app (the voice change is on branch `feat/live-activity-client-phases`, `2cb9a9e`). Check on the live project that a note plays through a signed URL and a new upload lands in the company folder while the bucket is still public.
 5. `activity_voice_private`: last, once step 4 is confirmed live.
 
 ## How to apply (this project's own rules)
