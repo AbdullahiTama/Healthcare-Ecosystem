@@ -1,4 +1,6 @@
--- DRAFT, NOT APPLIED. Needs explicit approval before it goes to supabase/migrations and production.
+-- APPLIED TO PRODUCTION 2026-10-20 as carehub_20261020_log_field_activity (version 20261020154254). Verified by reading the catalog back and by a
+-- rolled-back behavioural run against the live policies. The applied copy carries a shorter header comment;
+-- the statements are identical.
 -- Audit findings F4 and F6 (docs/audits/live-field-activity-audit.md).
 --
 -- WHAT IS WRONG TODAY

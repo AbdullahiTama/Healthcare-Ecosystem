@@ -1,40 +1,47 @@
 # Pending migrations: DRAFTS, NOT APPLIED
 
 Files here are **not** in `supabase/migrations/`, so no pipeline can pick them up. Each needs explicit approval
-before it is moved there and applied to production. They were written for the Live Field Activity audit
-(`docs/audits/live-field-activity-audit.md`, findings F3, F4, F6, F7 and item U2) and tested on real Postgres
-with the PGlite harness (`scripts/db-tests/activity.pglite.mjs`), which shows each problem BEFORE the migration
-and its absence AFTER, and re-applies each to prove it can run twice.
+before it is moved there and applied to production.
 
-What those tests do **not** prove: Supabase itself (PostgREST, Realtime, Storage service behaviour, the live
-schema). Re-check each against a Supabase branch, or the live project read-only, before and after applying.
+Three of the four drafts written for the Live Field Activity audit
+(`docs/audits/live-field-activity-audit.md`) were **applied to production on 2026-10-20** and now live in
+`supabase/migrations/`:
 
-## Files and what each needs
+| Applied as | Version | Fixes |
+|---|---|---|
+| `carehub_20261020_default_viewers_own_rows` | 20261020154020 | F7: any member could rewrite a colleague's default viewers |
+| `carehub_20261020_activity_server_alerts` | 20261020154138 | U2: the browser cannot alert colleagues; the database now does |
+| `carehub_20261020_log_field_activity` | 20261020154254 | F4/F6: save the report and its viewers in one transaction |
 
-| File | Fixes | Safe to apply alone? | App change needed |
-|---|---|---|---|
-| `carehub_20261020_default_viewers_own_rows.sql` | F7: any member can rewrite a colleague's default viewers | **Yes** | None (the app already writes only the caller's own rows) |
-| `carehub_20261020_activity_server_alerts.sql` | U2: the browser cannot alert colleagues; the database now does | **Yes** | Done in the app (`ecc0bb7`): the browser sends no alert when the database reports `alerts: 'server'` |
-| `carehub_20261020_log_field_activity.sql` | F4/F6: save the report and its viewers in one transaction | **Yes**, but nothing uses it until the app does | Done in the app (`ecc0bb7`): tries the function first, falls back to the two-request path if it is missing |
-| `carehub_20261020_activity_voice_private.sql` | F3: voice bucket public and anonymously writable | **NO. Breaks the app until it is changed** | Done in the app (`2cb9a9e`): plays notes through signed links and uploads into `<business id>/<activity id>-<suffix>.<ext>` with a parameter-free MIME type. **Confirm on the live project before applying** |
+Section 17 of the audit records how each was verified.
 
-## Suggested order
+## Still pending: `carehub_20261020_activity_voice_private.sql`
 
-1. `default_viewers_own_rows`: independent, no app change.
-2. `activity_server_alerts`: independent. After it, tagged colleagues and replied-to reps are alerted by the database.
-3. `log_field_activity`: then release the app that calls it (with the fallback), so release order does not matter.
-4. Release the app (the voice change is on branch `feat/live-activity-client-phases`, `2cb9a9e`). Check on the live project that a note plays through a signed URL and a new upload lands in the company folder while the bucket is still public.
-5. `activity_voice_private`: last, once step 4 is confirmed live.
+Fixes F3: the voice bucket is public and anonymously writable (anyone online can read every voice note and upload any file).
+
+**Do not apply it until the app that signs voice links is live.** The deployed app still plays notes from their stored
+public URLs and uploads to the bucket root. Once the bucket is private, every existing voice note (6 at last count)
+stops playing and every new upload is refused, for as long as that older app is deployed. The new app is written to
+work before and after (`2cb9a9e`: signed links, upload to `<business id>/<activity id>-<suffix>.<ext>` with a
+parameter-free MIME type), but it is only on branch `feat/live-activity-client-phases`.
+
+Order:
+1. Merge and deploy the branch.
+2. Check on the live project, while the bucket is still public, that a voice note plays through a signed link and a
+   new recording lands in the company folder.
+3. Apply `activity_voice_private`, then read back `storage.buckets` and `pg_policies` and re-check playback and upload.
 
 ## How to apply (this project's own rules)
 
 - Apply with `apply_migration` (a tracked migration), not `execute_sql`, so it lands in `supabase_migrations`.
-- Name the file with a real date when it moves to `supabase/migrations/`. Do not invent far-future names.
 - Each file ends with a verification block that raises if what it set up is not there. A statement completing is
   not evidence it did anything: afterwards re-read the catalog (`pg_policies`, `pg_proc.proacl`, `storage.buckets`)
   and take a `get_advisors` security snapshot before and after.
-- After any function is created, check `pg_proc.proacl`: Supabase re-grants EXECUTE to anon and authenticated at
-  creation, after any earlier REVOKE.
+- After any function is created, check `pg_proc.proacl` and that there is exactly one overload: Supabase re-grants
+  EXECUTE to anon and authenticated at creation, and `CREATE OR REPLACE` does not drop a differently-signed sibling.
+- To verify behaviour without leaving data behind, run an end-to-end check inside a `DO` block that impersonates real
+  users with `SET LOCAL ROLE` and `request.jwt.claims`, and ends with `RAISE EXCEPTION` so it rolls back. Re-query
+  afterwards to confirm zero residue.
 
 ## Still not covered by a draft
 

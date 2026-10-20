@@ -321,3 +321,32 @@ Not proven, and needing a check on a Supabase branch or the live project before 
 - that a voice note plays through a signed URL.
 
 App changes: DONE in this branch, written to work before and after each migration. Voice notes play through signed links and upload to `<business id>/<activity id>-<suffix>.<ext>` with a parameter-free MIME type (`2cb9a9e`); `logActivity` tries `rpc/log_field_activity` first and falls back to the two-request path only when the function is missing, and sends no browser alert when the database reports `alerts: 'server'` (`ecc0bb7`). 225 tests pass in the Live Activity folder. Still unproven on a live project: that a note plays through a signed link, that a new upload lands in the company folder, and that the function is called as modelled.
+
+## 17. Applied to production, 2026-10-20
+
+Three of the four drafts were applied to the live project, one at a time, as tracked migrations, with the product owner's
+explicit approval. The first two attempts were rejected by the connector ("Invalid or expired requestState") before
+anything ran; the catalog was re-read each time to confirm nothing had changed. After the connector was re-authorised
+the third attempt worked.
+
+| Migration | Version | Verified by |
+|---|---|---|
+| `default_viewers_own_rows` | 20261020154020 | Catalog read-back: three RESTRICTIVE policies for the signed-in role with the reviewed expressions. Rolled-back run on two real staff: a colleague can still read the row but updates 0 rows, deletes 0 rows and is refused when writing a row for someone else; they can write their own; the owner can change and remove their own. |
+| `activity_server_alerts` | 20261020154138 | Catalog read-back: both triggers enabled; both functions SECURITY DEFINER with a pinned search_path and executable by neither `anon` nor signed-in users. Rolled-back run: a tagged colleague is alerted once with the right title, place and link; the author is not alerted about their own report; the colleague reads their own alert; the report's author is alerted of a reply; neither the replier nor someone replying to themselves is. |
+| `log_field_activity` | 20261020154254 | Catalog read-back: exactly one overload, SECURITY INVOKER, executable by signed-in users and the service role but not `anon`, search_path pinned. Rolled-back run: first call created the report and its viewer and reported `alerts: server`; the retry created nothing and added nobody; an edited retry did not change the stored name; forging another staff member and writing into another company were refused; a bad viewer failed with 22P02 and left no half-saved report; the tagged colleague (role "Doctor", not a manager) could see the report at once; anonymous was refused. |
+
+After every rolled-back run the counts were read again and matched the baseline (12 reports, 1 viewer, 2 comments,
+0 default viewers, 3 activity alert rows, no probe rows). The security advisor snapshot after all three was
+**identical to the one taken before** (same eight finding types, none naming the new objects).
+
+**Held back on purpose: `activity_voice_private`.** The deployed app still plays voice notes from their public URLs and
+uploads to the bucket root. Making the bucket private now would stop all 6 existing notes playing and refuse every new
+upload until the new app is deployed. It is applied last, after the branch is merged and a voice note is confirmed to
+play and upload through the new path (see `docs/architecture/pending-migrations/README.md`).
+
+What this changes for users today, before the app is deployed: tagged colleagues and replied-to reps are now alerted by
+the database (the old app's own attempt is still refused and tells the person so); a colleague can no longer rewrite
+someone else's default viewers. The one-step save does nothing until the new app, which calls it, is deployed.
+
+Still unproven on the live project: that Realtime pushes a newly saved report to a tagged non-manager (the database now
+makes the access visible at once, but no two-session test was run), and everything listed as NOT TESTED above.

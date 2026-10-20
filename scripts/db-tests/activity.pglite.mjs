@@ -217,7 +217,9 @@ ok("a person reads only their own notifications", (await as("repA2", "select id 
 ok('an untagged colleague does not see a new activity (Realtime evaluates the same policy)', !(await seen('repA2')).includes(ownerAct))
 
 // =====================================================================================================
-// DRAFT MIGRATIONS (docs/architecture/pending-migrations): not applied to any real database.
+// MIGRATIONS FOR THE LIVE FIELD ACTIVITY FINDINGS. default_viewers_own_rows, activity_server_alerts and
+// log_field_activity were applied to production on 2026-10-20 (now in supabase/migrations). activity_voice_private is
+// still a draft in docs/architecture/pending-migrations: it must wait until the app that signs voice links is live.
 // Each is shown BEFORE (the exposure is real on this replica) and AFTER (it is closed), then re-applied
 // to prove it can be run twice. The stand-in tables below mirror the live columns checked on 2026-10-20.
 // =====================================================================================================

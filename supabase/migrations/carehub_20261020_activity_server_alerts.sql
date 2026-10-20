@@ -1,4 +1,6 @@
--- DRAFT, NOT APPLIED. Needs explicit approval before it goes to supabase/migrations and production.
+-- APPLIED TO PRODUCTION 2026-10-20 as carehub_20261020_activity_server_alerts (version 20261020154138). Verified by reading the catalog back and by a
+-- rolled-back behavioural run against the live policies. The applied copy carries a shorter header comment;
+-- the statements are identical.
 -- Audit item U2 (docs/audits/live-field-activity-audit.md).
 --
 -- WHAT IS WRONG TODAY

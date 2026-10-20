@@ -1,4 +1,6 @@
--- DRAFT, NOT APPLIED. Needs explicit approval before it goes to supabase/migrations and production.
+-- APPLIED TO PRODUCTION 2026-10-20 as carehub_20261020_default_viewers_own_rows (version 20261020154020). Verified by reading the catalog back and by a
+-- rolled-back behavioural run against the live policies. The applied copy carries a shorter header comment;
+-- the statements are identical.
 -- Audit finding F7 (docs/audits/live-field-activity-audit.md).
 --
 -- WHAT IS WRONG TODAY (confirmed on the live project, 2026-10-20)
