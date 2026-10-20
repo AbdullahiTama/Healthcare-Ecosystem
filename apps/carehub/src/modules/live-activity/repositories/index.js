@@ -1,4 +1,4 @@
-import { sbFetch, sbUpload } from '../../../services/supabase'
+import { sbFetch, sbFetchWithCount, sbUpload } from '../../../services/supabase'
 
 // Internal notify helper — writes one notification row per recipient.
 // Never throws: a failed notification must not break the action that triggered it.
@@ -19,7 +19,34 @@ async function notify(request, businessId, recipients, kind, title, body, link) 
   } catch (e) {}
 }
 
-export function createLiveActivityRepository({ request = sbFetch } = {}) {
+// The PostgREST path for a page of activities (or, with `count`, for counting them).
+//   staffId        only reports written by this staff member
+//   ownerOnly      only reports with no staff author (the owner's own)
+//   excludeStaffId everything except this staff member's (owner's reports kept)
+//   cursor         { created_at, id } of the last row shown
+//   since / until  ISO timestamps, inclusive
+// Authorisation is not decided here: row level security still filters every
+// result; these options only narrow what the caller asks for.
+export function buildActivityQuery(businessId, { limit = 100, cursor = null, staffId = null, ownerOnly = false, excludeStaffId = null, since = null, until = null, territoryId = null, count = false } = {}) {
+  let path = 'field_activities?business_id=eq.' + businessId
+  const ors = []
+  if (ownerOnly) path += '&staff_id=is.null'
+  else if (staffId) path += '&staff_id=eq.' + staffId
+  if (excludeStaffId) ors.push('staff_id.is.null,staff_id.neq.' + excludeStaffId)
+  if (since) path += '&created_at=gte.' + encodeURIComponent(since)
+  if (until) path += '&created_at=lte.' + encodeURIComponent(until)
+  if (territoryId) path += '&territory_id=eq.' + territoryId
+  if (cursor) {
+    const t = encodeURIComponent(cursor.created_at)
+    ors.push('created_at.lt.' + t + ',and(created_at.eq.' + t + ',id.lt.' + cursor.id + ')')
+  }
+  if (ors.length === 1) path += '&or=(' + ors[0] + ')'
+  else if (ors.length > 1) path += '&and=(' + ors.map(function (o) { return 'or(' + o + ')' }).join(',') + ')'
+  if (count) return path + '&select=id'
+  return path + '&order=created_at.desc,id.desc&select=*&limit=' + limit
+}
+
+export function createLiveActivityRepository({ request = sbFetch, requestWithCount = sbFetchWithCount } = {}) {
   return {
     async getActivityFields(businessId) {
       return request('activity_fields?business_id=eq.' + businessId + '&order=sort_order.asc&select=*')
@@ -50,19 +77,35 @@ export function createLiveActivityRepository({ request = sbFetch } = {}) {
       }
     },
 
-    // Newest first. `before` (an ISO timestamp, the created_at of the oldest row
-    // already shown) turns this into keyset paging: the next page is strictly older.
-    async getFieldActivities(businessId, { limit = 100, before = null } = {}) {
-      let path = 'field_activities?business_id=eq.' + businessId
-      if (before) path += '&created_at=lt.' + encodeURIComponent(before)
-      return request(path + '&order=created_at.desc&select=*&limit=' + limit)
+    // Newest first. `cursor` ({ created_at, id } of the last row already shown)
+    // gives keyset paging with a tie-breaker: the next page is every row after it
+    // in (created_at, id) order, so rows sharing a timestamp are neither skipped
+    // nor repeated. See buildActivityQuery for the scope and window options.
+    async getFieldActivities(businessId, opts = {}) {
+      return request(buildActivityQuery(businessId, opts))
     },
 
-    async countFieldActivities(businessId, staffId) {
-      let path = 'field_activities?business_id=eq.' + businessId
-      if (staffId) path += '&staff_id=eq.' + staffId
-      const rows = await request(path + '&select=id&limit=1000')
-      return Array.isArray(rows) ? rows.length : 0
+    // Every row matching the options, fetched page by page with the same cursor
+    // as the feed, for export. Stops at `max` and says so, so a huge history is
+    // reported as truncated rather than silently cut.
+    async getAllFieldActivities(businessId, opts = {}, { max = 10000, pageSize = 1000 } = {}) {
+      const rows = []
+      let cursor = null
+      while (rows.length < max) {
+        const page = await request(buildActivityQuery(businessId, { ...opts, limit: Math.min(pageSize, max - rows.length), cursor }))
+        const list = Array.isArray(page) ? page : []
+        rows.push(...list)
+        if (list.length < Math.min(pageSize, max - (rows.length - list.length))) return { rows, truncated: false }
+        const last = list[list.length - 1]
+        cursor = { created_at: last.created_at, id: last.id }
+      }
+      return { rows, truncated: true }
+    },
+
+    // Exact server-side count (Content-Range), not the length of a capped list.
+    async countFieldActivities(businessId, scope = {}) {
+      const res = await requestWithCount(buildActivityQuery(businessId, { ...scope, count: true }), { head: true })
+      return res && Number.isFinite(res.total) ? res.total : 0
     },
 
     async getActivityViewers(activityIds) {

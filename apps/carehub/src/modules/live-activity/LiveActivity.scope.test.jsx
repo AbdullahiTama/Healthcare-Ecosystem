@@ -15,7 +15,7 @@ vi.mock('./repositories', () => ({
   liveActivityRepository: {
     getActivityFields: vi.fn(), getFieldActivities: vi.fn(), countFieldActivities: vi.fn(),
     getActivityViewers: vi.fn(), getActivityReactions: vi.fn(), getActivityComments: vi.fn(),
-    getDefaultViewers: vi.fn(), logActivity: vi.fn(), reverseGeocode: vi.fn(), uploadActivityVoice: vi.fn(),
+    getDefaultViewers: vi.fn(), logActivity: vi.fn(), reverseGeocode: vi.fn(), uploadActivityVoice: vi.fn(), getAllFieldActivities: vi.fn(),
   },
 }))
 vi.mock('../territories/repositories', () => ({ territoryRepository: { getAll: vi.fn() } }))
@@ -99,5 +99,54 @@ describe('feed tabs by role', () => {
     await act(async () => { tab('Team Reports').click() })
     await act(async () => { tab('My Feed').click() })
     expect(shown()).toEqual(['own'])
+  })
+})
+
+describe('what the page asks the server for', () => {
+  it('re-queries with the narrowest scope when the tab changes', async () => {
+    await mount({ role: 'Manager', perms: getPerms('Manager') })
+    // Starts on My Feed: the manager's own reports only.
+    expect(repo.getFieldActivities.mock.calls.at(-1)[1]).toMatchObject({ limit: 100, staffId: 'me' })
+    await act(async () => { tab('Team Reports').click() })
+    await flush()
+    const team = repo.getFieldActivities.mock.calls.at(-1)[1]
+    expect(team).toEqual({ limit: 100 })
+    expect(team.staffId).toBeUndefined()
+    await act(async () => { tab('My Feed').click() })
+    await flush()
+    expect(repo.getFieldActivities.mock.calls.at(-1)[1]).toMatchObject({ staffId: 'me' })
+  })
+
+  it('counts exactly on the server for each tab', async () => {
+    await mount({ role: 'Manager', perms: getPerms('Manager') })
+    expect(repo.countFieldActivities).toHaveBeenCalledWith('brand-1', { staffId: 'me' })
+    expect(repo.countFieldActivities).toHaveBeenCalledWith('brand-1', {})
+  })
+
+  it('exports everything the filters match from the server, not just the loaded page', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    repo.getAllFieldActivities.mockResolvedValue({ rows: [ROWS[0], ROWS[1], ROWS[2]], truncated: false })
+    await mount({ role: 'Manager', perms: getPerms('Manager') })
+    await act(async () => { tab('Team Reports').click() })
+    await flush()
+    await act(async () => { tab('Export').click() })
+    await flush()
+    expect(repo.getAllFieldActivities).toHaveBeenCalledTimes(1)
+    const [bizId, opts] = repo.getAllFieldActivities.mock.calls[0]
+    expect(bizId).toBe('brand-1')
+    expect(opts).toMatchObject({ since: null, until: null })
+    expect(opts.staffId).toBeUndefined() // Team Reports: no author narrowing
+    expect(host.textContent).toContain('Exported 3 records')
+  })
+
+  it('says so when an export hit the cap', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    repo.getAllFieldActivities.mockResolvedValue({ rows: [ROWS[0]], truncated: true })
+    await mount({ role: 'Manager', perms: getPerms('Manager') })
+    await act(async () => { tab('Export').click() })
+    await flush()
+    expect(host.textContent).toContain('narrow the dates')
   })
 })

@@ -58,3 +58,33 @@ describe('scopeTabs', () => {
     expect(scopeTabs(false)[1][1]).toBe('Shared with me')
   })
 })
+
+import { scopeQuery, dateWindow, inWindow } from './feedScope'
+
+describe('scopeQuery', () => {
+  it('maps each tab to the narrowest server query', () => {
+    expect(scopeQuery('mine', { canSeeAll: true, meStaffId: 's1' })).toEqual({ staffId: 's1' })
+    expect(scopeQuery('mine', { canSeeAll: true, meStaffId: null })).toEqual({ ownerOnly: true })
+    expect(scopeQuery('team', { canSeeAll: true, meStaffId: 's1' })).toEqual({})
+    expect(scopeQuery('team', { canSeeAll: false, meStaffId: 's1' })).toEqual({ excludeStaffId: 's1' })
+  })
+})
+
+describe('dateWindow', () => {
+  const now = new Date(2026, 9, 21, 15, 30) // Wed 21 Oct 2026, local
+  it('all time is open ended', () => {
+    expect(dateWindow('all', '', '', now)).toEqual({ since: null, until: null })
+  })
+  it('this week starts Monday 00:00; last week ends the millisecond before it', () => {
+    expect(dateWindow('week', '', '', now).since).toEqual(new Date(2026, 9, 19, 0, 0, 0, 0))
+    const lw = dateWindow('lastweek', '', '', now)
+    expect(lw.since).toEqual(new Date(2026, 9, 12))
+    expect(inWindow(new Date(2026, 9, 18, 23, 59).toISOString(), lw)).toBe(true)
+    expect(inWindow(new Date(2026, 9, 19, 0, 0).toISOString(), lw)).toBe(false)
+  })
+  it('custom is inclusive of the whole last day', () => {
+    const w = dateWindow('custom', '2026-10-01', '2026-10-05', now)
+    expect(inWindow(new Date(2026, 9, 5, 23, 59).toISOString(), w)).toBe(true)
+    expect(inWindow(new Date(2026, 9, 6, 0, 1).toISOString(), w)).toBe(false)
+  })
+})

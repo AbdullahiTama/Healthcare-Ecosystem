@@ -133,7 +133,7 @@ describe('LiveActivity log modal', () => {
     expect(button('Load older activity')).toBeTruthy()
     await act(async () => { button('Load older activity').click() })
     await flush()
-    expect(repo.getFieldActivities).toHaveBeenLastCalledWith('brand-1', { limit: 100, before: first[99].created_at })
+    expect(repo.getFieldActivities).toHaveBeenLastCalledWith('brand-1', { limit: 100, cursor: { created_at: first[99].created_at, id: first[99].id }, staffId: 'staff-1' })
     // Only the genuinely new rows had their viewers/reactions/comments fetched.
     expect(repo.getActivityViewers.mock.calls.at(-1)[0]).toEqual(['a100', 'a101'])
     // A short page means nothing older is left.

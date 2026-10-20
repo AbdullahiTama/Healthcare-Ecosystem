@@ -18,7 +18,7 @@ import NearbyBusinessPicker from '../business-directory/components/NearbyBusines
 import CheckInPanel from '../checkins/CheckInPanel.jsx'
 import TeamLocations from '../checkins/TeamLocations.jsx'
 import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
-import { filterByScope, scopeTabs } from './feedScope'
+import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow } from './feedScope'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
@@ -75,15 +75,6 @@ function pickAudioType() {
   return ''
 }
 
-function startOfWeek(d) {
-  const x = new Date(d)
-  const day = x.getDay()
-  const diff = day === 0 ? 6 : day - 1
-  x.setDate(x.getDate() - diff)
-  x.setHours(0, 0, 0, 0)
-  return x
-}
-
 function csvCell(v) {
   const s = v === null || v === undefined ? '' : String(v)
   return '"' + s.replace(/"/g, '""') + '"'
@@ -127,6 +118,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
   // has no staff row, so their "mine" would be empty — they start on 'team'.
   const [scope, setScope] = useState(isOwner ? 'team' : 'mine')
   const [counts, setCounts] = useState(null)
+  const [exporting, setExporting] = useState(false)
   const [hasOlder, setHasOlder] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [dateRange, setDateRange] = useState('all')
@@ -182,6 +174,16 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
   const mimeRef = useRef('')
 
   useEffect(() => { load() }, [brand?.id])
+
+  // load() is also called from long-lived handlers (the reconnect catch-up), so
+  // it reads the tab from a ref, never from the render it was created in.
+  const scopeRef = useRef(scope)
+  scopeRef.current = scope
+  const firstScope = useRef(true)
+  useEffect(() => {
+    if (firstScope.current) { firstScope.current = false; return }
+    load()
+  }, [scope])
 
   // Latest list for the realtime handlers below, which outlive a single render.
   const activitiesRef = useRef([])
@@ -253,7 +255,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
     setLoading(true)
     try {
       const flds = await liveActivityRepository.getActivityFields(brand.id)
-      const acts = await liveActivityRepository.getFieldActivities(brand.id)
+      const acts = await liveActivityRepository.getFieldActivities(brand.id, { limit: ACTIVITY_PAGE, ...scopeQuery(scopeRef.current, { canSeeAll: canSeeAll, meStaffId: meStaffId }) })
       const stf = await staffRepository.getAll(brand.id)
       const ters = await territoryRepository.getAll(brand.id)
       setFields(flds || [])
@@ -267,8 +269,8 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
       if (canSeeAll) {
         try {
           const [mine, team] = await Promise.all([
-            liveActivityRepository.countFieldActivities(brand.id, meStaffId),
-            liveActivityRepository.countFieldActivities(brand.id),
+            liveActivityRepository.countFieldActivities(brand.id, scopeQuery('mine', { canSeeAll: canSeeAll, meStaffId: meStaffId })),
+            liveActivityRepository.countFieldActivities(brand.id, scopeQuery('team', { canSeeAll: canSeeAll, meStaffId: meStaffId })),
           ])
           setCounts({ mine: mine, team: team })
         } catch (e) {
@@ -320,8 +322,12 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
     if (!brand || !brand.id || loadingOlder || activities.length === 0) return
     setLoadingOlder(true)
     try {
-      const oldest = activities[activities.length - 1].created_at
-      const page = await liveActivityRepository.getFieldActivities(brand.id, { limit: ACTIVITY_PAGE, before: oldest })
+      const last = activities[activities.length - 1]
+      const page = await liveActivityRepository.getFieldActivities(brand.id, {
+        limit: ACTIVITY_PAGE,
+        cursor: { created_at: last.created_at, id: last.id },
+        ...scopeQuery(scopeRef.current, { canSeeAll: canSeeAll, meStaffId: meStaffId }),
+      })
       const rows = (page || []).filter(function (r) { return !activities.some(function (a) { return a.id === r.id }) })
       setHasOlder((page || []).length >= ACTIVITY_PAGE)
       if (rows.length === 0) return
@@ -712,44 +718,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
   }
 
   function inRange(dateStr) {
-    if (dateRange === 'all') return true
-    const d = new Date(dateStr)
-    const now = new Date()
-
-    if (dateRange === 'today') {
-      const start = new Date()
-      start.setHours(0, 0, 0, 0)
-      return d >= start
-    }
-    if (dateRange === 'week') return d >= startOfWeek(now)
-    if (dateRange === 'lastweek') {
-      const thisWeek = startOfWeek(now)
-      const lastWeek = new Date(thisWeek)
-      lastWeek.setDate(lastWeek.getDate() - 7)
-      return d >= lastWeek && d < thisWeek
-    }
-    if (dateRange === 'month') {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1)
-      return d >= start
-    }
-    if (dateRange === 'year') {
-      const start = new Date(now.getFullYear(), 0, 1)
-      return d >= start
-    }
-    if (dateRange === 'custom') {
-      if (customFrom) {
-        const from = new Date(customFrom)
-        from.setHours(0, 0, 0, 0)
-        if (d < from) return false
-      }
-      if (customTo) {
-        const to = new Date(customTo)
-        to.setHours(23, 59, 59, 999)
-        if (d > to) return false
-      }
-      return true
-    }
-    return true
+    return inWindow(dateStr, dateWindow(dateRange, customFrom, customTo))
   }
 
   const permitted = filterByScope(activities, { scope: scope, canSeeAll: canSeeAll, meStaffId: meStaffId, viewersByAct: viewersByAct })
@@ -819,23 +788,45 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
     return found ? found[1] : 'All time'
   }
 
-  function exportCSV() {
-    if (visible.length === 0) {
-      showToast('Nothing to export with the current filters.', { type: 'warning' })
-      return
-    }
+  // Exports everything the current tab and filters match, fetched from the server,
+  // not just the pages already on screen. A "shared with me" view cannot be
+  // expressed as a query, so that one exports what is loaded and says so.
+  async function exportCSV() {
+    if (exporting) return
+    const serverSide = canSeeAll || scope === 'mine'
+    setExporting(true)
     try {
+      let list = visible
+      let truncated = false
+      if (serverSide) {
+        const win = dateWindow(dateRange, customFrom, customTo)
+        const base = scopeQuery(scope, { canSeeAll: canSeeAll, meStaffId: meStaffId })
+        const res = await liveActivityRepository.getAllFieldActivities(brand.id, {
+          ...base,
+          ...(filterRep !== 'all' ? { staffId: filterRep, ownerOnly: false } : {}),
+          ...(filterTerr !== 'all' ? { territoryId: filterTerr } : {}),
+          since: win.since ? win.since.toISOString() : null,
+          until: win.until ? win.until.toISOString() : null,
+        })
+        list = res.rows
+        truncated = res.truncated
+      }
+      if (list.length === 0) {
+        showToast('Nothing to export with the current filters.', { type: 'warning' })
+        return
+      }
       const header = shownColumns.map(function (c) { return csvCell(c.label) }).join(',')
-      const rows = visible.map(function (a) {
+      const rows = list.map(function (a) {
         return shownColumns.map(function (c) { return csvCell(cellValue(a, c)) }).join(',')
       })
       const csv = [header].concat(rows).join('\n')
 
-      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+      const blob = new Blob([String.fromCharCode(0xFEFF) + csv], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
 
-      const repPart = filterRep === 'all' ? 'all-reps' : (nameFor(filterRep) || 'rep').replace(/\s+/g, '-').toLowerCase()
+      const repName = (staffList.filter(function (x) { return x.id === filterRep })[0] || {}).full_name
+      const repPart = filterRep === 'all' ? 'all-reps' : (repName || 'rep').replace(/\s+/g, '-').toLowerCase()
       const datePart = rangeLabel().replace(/\s+/g, '-').toLowerCase()
       a.href = url
       a.download = 'field-activity-' + repPart + '-' + datePart + '.csv'
@@ -844,9 +835,14 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
 
-      showToast('Exported ' + visible.length + ' record' + (visible.length > 1 ? 's' : ''), { type: 'success' })
+      showToast('Exported ' + list.length + ' record' + (list.length > 1 ? 's' : '')
+        + (truncated ? '. That is the most one export holds; narrow the dates to get the rest.' : '')
+        + (serverSide ? '' : ' (the reports loaded on this page)'),
+      { type: truncated || !serverSide ? 'warning' : 'success' })
     } catch (e) {
       showToast('Could not export: ' + e.message, { type: 'error' })
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -907,7 +903,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
           }).map(function (t) {
             const on = scope === t[0]
             const label = t[2] != null
-              ? t[1] + ' (' + (t[2] >= 1000 ? '1000+' : t[2]) + ')'
+              ? t[1] + ' (' + t[2] + ')'
               : t[1]
             return (
               <button key={t[0]} onClick={function () { setScope(t[0]) }}
@@ -995,16 +991,16 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
             </button>
           )}
 
-          <button onClick={exportCSV}
+          <button onClick={exportCSV} disabled={exporting} aria-busy={exporting}
             style={{ flexShrink: 0, border: 'none', background: navy, color: 'white', borderRadius: '8px', padding: '10px 16px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' }}>
-            Export
+            {exporting ? 'Exporting...' : 'Export'}
           </button>
         </div>
 
         <div style={{ fontSize: '11.5px', color: gray400, marginTop: '10px' }}>
           Showing <strong style={{ color: navy }}>{visible.length}</strong> record{visible.length !== 1 ? 's' : ''} · {rangeLabel()}
           {filterRep !== 'all' ? ' · ' + nameFor(filterRep) : ''}
-          . Export downloads exactly what you see here, as a spreadsheet.
+          . Export downloads every report matching these filters, as a spreadsheet.
         </div>
       </Card>
 
