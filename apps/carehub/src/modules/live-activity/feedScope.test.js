@@ -88,3 +88,36 @@ describe('dateWindow', () => {
     expect(inWindow(new Date(2026, 9, 6, 0, 1).toISOString(), w)).toBe(false)
   })
 })
+
+import { mergeActivities, affectedActivityIds } from './feedScope'
+
+describe('mergeActivities', () => {
+  const r = (id, t) => ({ id, created_at: t })
+  it('never lists a row twice when a push and a catch-up deliver the same one', () => {
+    const out = mergeActivities([r('a', '2026-10-20T10:00:00Z')], [r('a', '2026-10-20T10:00:00Z'), r('b', '2026-10-20T11:00:00Z')])
+    expect(out.map((x) => x.id)).toEqual(['b', 'a'])
+  })
+  it('orders newest first and breaks timestamp ties by id, the same order the server pages in', () => {
+    const t = '2026-10-20T10:00:00Z'
+    const out = mergeActivities([r('a', t), r('c', t)], [r('b', t), r('z', '2026-10-20T09:00:00Z')])
+    expect(out.map((x) => x.id)).toEqual(['c', 'b', 'a', 'z'])
+  })
+  it('keeps older pages the person already loaded', () => {
+    const out = mergeActivities([r('old', '2026-01-01T00:00:00Z')], [r('new', '2026-10-20T00:00:00Z')])
+    expect(out.map((x) => x.id)).toEqual(['new', 'old'])
+  })
+})
+
+describe('affectedActivityIds', () => {
+  const loaded = ['a1', 'a2']
+  it('an insert touches only its report, and only if it is on screen', () => {
+    expect(affectedActivityIds({ eventType: 'INSERT', new: { activity_id: 'a2' } }, loaded)).toEqual({ all: false, ids: ['a2'] })
+    expect(affectedActivityIds({ eventType: 'INSERT', new: { activity_id: 'elsewhere' } }, loaded)).toEqual({ all: false, ids: [] })
+  })
+  it('a delete does not say which report, so every loaded one is rechecked', () => {
+    expect(affectedActivityIds({ eventType: 'DELETE', old: { id: 'r1' } }, loaded).all).toBe(true)
+  })
+  it('an event with no payload is treated the same way', () => {
+    expect(affectedActivityIds(undefined, loaded).all).toBe(true)
+  })
+})

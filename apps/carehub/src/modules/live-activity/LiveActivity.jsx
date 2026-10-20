@@ -18,7 +18,7 @@ import NearbyBusinessPicker from '../business-directory/components/NearbyBusines
 import CheckInPanel from '../checkins/CheckInPanel.jsx'
 import TeamLocations from '../checkins/TeamLocations.jsx'
 import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
-import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow } from './feedScope'
+import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivities, affectedActivityIds } from './feedScope'
 import { newActivityId } from './activityId'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
@@ -74,6 +74,15 @@ function pickAudioType() {
     } catch (e) {}
   }
   return ''
+}
+
+// Replace the grouped rows for `ids` with `list`, leaving every other report's
+// entries (older pages the person loaded) alone.
+function regroup(prev, ids, list) {
+  const next = { ...prev }
+  ids.forEach(function (id) { delete next[id] })
+  ;(list || []).forEach(function (x) { (next[x.activity_id] = next[x.activity_id] || []).push(x) })
+  return next
 }
 
 function csvCell(v) {
@@ -183,8 +192,8 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
 
   useEffect(() => { load() }, [brand?.id])
 
-  // load() is also called from long-lived handlers (the reconnect catch-up), so
-  // it reads the tab from a ref, never from the render it was created in.
+  // load() and the realtime catch-up are also called from long-lived handlers, so
+  // they read the tab from a ref, never from the render they were created in.
   const scopeRef = useRef(scope)
   scopeRef.current = scope
   const firstScope = useRef(true)
@@ -193,64 +202,103 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
     load()
   }, [scope])
 
-  // Latest list for the realtime handlers below, which outlive a single render.
+  // Latest list and handlers for the realtime callbacks below, which outlive a render.
   const activitiesRef = useRef([])
   useEffect(() => { activitiesRef.current = activities })
-  const prevLiveRef = useRef('connecting')
+  const liveHandlers = useRef({})
+
+  // Fetch viewers, reactions and comments for these reports and fold them in.
+  async function hydrate(ids) {
+    if (!ids || ids.length === 0) return
+    const [vs, rs, cs] = await Promise.all([
+      liveActivityRepository.getActivityViewers(ids),
+      liveActivityRepository.getActivityReactions(ids),
+      liveActivityRepository.getActivityComments(ids),
+    ])
+    setViewersByAct(function (prev) { return regroup(prev, ids, vs) })
+    setReactionsByAct(function (prev) { return regroup(prev, ids, rs) })
+    setCommentsByAct(function (prev) { return regroup(prev, ids, cs) })
+  }
+
+  // Reactions and comments change a report that is already on screen, so only
+  // those two lists are refetched, and only for the reports that changed.
+  async function refreshEngagement(ids) {
+    if (!ids || ids.length === 0) return
+    const [rs, cs] = await Promise.all([
+      liveActivityRepository.getActivityReactions(ids),
+      liveActivityRepository.getActivityComments(ids),
+    ])
+    setReactionsByAct(function (prev) { return regroup(prev, ids, rs) })
+    setCommentsByAct(function (prev) { return regroup(prev, ids, cs) })
+  }
+
+  // Realtime never replays what happened while it was not connected, and a report
+  // saved between the first fetch and the subscription being confirmed is missed
+  // the same way. So every time the connection is confirmed, fetch the newest
+  // page for the current tab and fold in whatever is not already on screen. It
+  // merges (never replaces), so it neither blanks the feed nor shows a card twice.
+  async function catchUp() {
+    if (!brand || !brand.id) return
+    const page = await liveActivityRepository.getFieldActivities(brand.id, {
+      limit: ACTIVITY_PAGE,
+      ...scopeQuery(scopeRef.current, { canSeeAll: canSeeAll, meStaffId: meStaffId }),
+    })
+    const known = new Set(activitiesRef.current.map(function (a) { return a.id }))
+    const fresh = (page || []).filter(function (a) { return !known.has(a.id) })
+    if (fresh.length === 0) return
+    setActivities(function (prev) { return mergeActivities(prev, fresh) })
+    await hydrate(fresh.map(function (a) { return a.id }))
+  }
+  liveHandlers.current = { catchUp: catchUp, hydrate: hydrate, refreshEngagement: refreshEngagement }
 
   useEffect(() => {
     if (!brand || !brand.id) return
+    const timers = []
     const stop = watchTable('field_activities', brand.id, function (row) {
-      setActivities(function (prev) {
-        if (prev.some(function (a) { return a.id === row.id })) return prev
-        return [row].concat(prev)
-      })
+      setActivities(function (prev) { return mergeActivities(prev, [row]) })
+      // Who a report is shared with is written just after the report itself, so
+      // fetch that (and any early reactions) a moment later.
+      if (row.staff_id !== meStaffId) {
+        timers.push(setTimeout(function () {
+          liveHandlers.current.hydrate([row.id]).catch(function (e) { console.error('Could not load the new report details:', e) })
+        }, 1200))
+      }
     }, function (status) {
       setLiveStatus(status)
-      // Rows that arrived while the connection was down are not replayed, so
-      // catch up with one refetch the moment it is live again.
-      if (status === 'live' && prevLiveRef.current === 'disconnected') load()
-      prevLiveRef.current = status
+      if (status === 'live') {
+        liveHandlers.current.catchUp().catch(function (e) { console.error('Live catch-up failed:', e) })
+      }
     })
     return function () {
+      timers.forEach(clearTimeout)
       stop()
     }
   }, [brand?.id])
 
-  // Reactions and comments change a row that is already on screen, so there is
-  // nothing to insert: refetch just those two lists (newest 100 activities, to
-  // keep the request URL short), debounced so a burst is one request. These
-  // tables only deliver if they are in the supabase_realtime publication
-  // (carehub_20261127_realtime_activity_tables.sql); without it nothing breaks,
-  // the lists simply refresh on the person's own actions as before.
+  // Reactions and comments only deliver if their tables are in the
+  // supabase_realtime publication (they are, on the live project); without it
+  // nothing breaks, the lists simply refresh on the person's own actions. Events
+  // are gathered for 600 ms so a burst is one request.
   useEffect(() => {
     if (!brand || !brand.id) return
     let timer = null
-    const refresh = function () {
+    let all = false
+    const pending = new Set()
+    const onEvent = function (payload) {
+      const hit = affectedActivityIds(payload, activitiesRef.current.map(function (a) { return a.id }))
+      if (hit.all) all = true
+      hit.ids.forEach(function (id) { pending.add(id) })
+      if (!all && pending.size === 0) return
       if (timer) clearTimeout(timer)
-      timer = setTimeout(async function () {
-        const ids = activitiesRef.current.slice(0, 100).map(function (a) { return a.id })
-        if (ids.length === 0) return
-        try {
-          const [rs, cs] = await Promise.all([
-            liveActivityRepository.getActivityReactions(ids),
-            liveActivityRepository.getActivityComments(ids),
-          ])
-          const group = function (list) {
-            const m = {}
-            ;(list || []).forEach(function (x) { (m[x.activity_id] = m[x.activity_id] || []).push(x) })
-            return m
-          }
-          // Keep entries for older pages the person loaded; replace the refreshed ones.
-          setReactionsByAct(function (prev) { const n = { ...prev }; ids.forEach(function (i) { delete n[i] }); return Object.assign(n, group(rs)) })
-          setCommentsByAct(function (prev) { const n = { ...prev }; ids.forEach(function (i) { delete n[i] }); return Object.assign(n, group(cs)) })
-        } catch (e) {
-          console.error('Live refresh of reactions/comments failed:', e)
-        }
+      timer = setTimeout(function () {
+        const ids = all ? activitiesRef.current.slice(0, 100).map(function (a) { return a.id }) : Array.from(pending)
+        all = false
+        pending.clear()
+        liveHandlers.current.refreshEngagement(ids).catch(function (e) { console.error('Live refresh of reactions/comments failed:', e) })
       }, 600)
     }
-    const stopR = subscribeChanges({ table: 'activity_reactions', event: '*' }, refresh)
-    const stopC = subscribeChanges({ table: 'activity_comments', event: '*' }, refresh)
+    const stopR = subscribeChanges({ table: 'activity_reactions', event: '*' }, onEvent)
+    const stopC = subscribeChanges({ table: 'activity_comments', event: '*' }, onEvent)
     return function () {
       if (timer) clearTimeout(timer)
       stopR()
@@ -747,7 +795,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
     try {
       if (existing) await liveActivityRepository.unreactToActivity(existing.id)
       else await liveActivityRepository.reactToActivity(actId, meStaffId, meName)
-      load()
+      await refreshEngagement([actId])
     } catch (e) {
       showToast('Could not react: ' + e.message, { type: 'error' })
     }
@@ -771,7 +819,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
         next[actId] = ''
         return next
       })
-      load()
+      await refreshEngagement([actId])
     } catch (e) {
       showToast('Could not comment: ' + e.message, { type: 'error' })
     }
@@ -910,16 +958,16 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
     <>
       <PageHeader
         title={<>Live Field Activity{liveStatus === 'live' ? (
-          <span data-live-status={liveStatus} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: '800', color: danger, background: dangerBg, padding: '3px 9px', borderRadius: '20px', border: `1px solid ${danger}`, marginLeft: '8px', verticalAlign: 'middle' }}>
+          <span data-live-status={liveStatus} title='Connected. New reports you are allowed to see appear here. Reload if one seems to be missing.' style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: '800', color: danger, background: dangerBg, padding: '3px 9px', borderRadius: '20px', border: `1px solid ${danger}`, marginLeft: '8px', verticalAlign: 'middle' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: danger }} />
-            LIVE
+            UPDATES ON
           </span>
         ) : (
-          <span data-live-status={liveStatus} title={liveStatus === 'connecting' ? 'Connecting to live updates' : 'Live updates are off. Reload to reconnect.'} style={{ display: 'inline-flex', alignItems: 'center', fontSize: '10px', fontWeight: '800', padding: '3px 9px', borderRadius: '20px', border: '1px solid currentColor', marginLeft: '8px', verticalAlign: 'middle', opacity: 0.6 }}>
-            {liveStatus === 'connecting' ? 'CONNECTING' : 'NOT LIVE'}
+          <span data-live-status={liveStatus} title={liveStatus === 'connecting' ? 'Connecting to live updates' : 'Live updates are paused and reconnecting by itself. Anything saved meanwhile appears when it is back.'} style={{ display: 'inline-flex', alignItems: 'center', fontSize: '10px', fontWeight: '800', padding: '3px 9px', borderRadius: '20px', border: '1px solid currentColor', marginLeft: '8px', verticalAlign: 'middle', opacity: 0.6 }}>
+            {liveStatus === 'connecting' ? 'CONNECTING' : 'UPDATES PAUSED'}
           </span>
         )}</>}
-        description="Reps log what happens in the field. Tagged managers see it the moment it lands, and can reply."
+        description="Reps log what happens in the field. New reports appear here as they are saved, and managers can reply."
         secondaryActions={[
           ...(isOwner ? [{ label: 'Set up fields', variant: 'ghost', onClick: function () { setSettingUp(true) } }] : []),
           ...(!isOwner ? [{ label: 'Who sees my activity', variant: 'ghost', onClick: openViewerPicker }] : []),

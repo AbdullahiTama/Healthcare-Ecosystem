@@ -140,20 +140,23 @@ describe('LiveActivity log modal', () => {
     expect(button('Load older activity')).toBeFalsy()
   })
 
-  it('refetches once when the realtime connection comes back after a drop', async () => {
+  it('catches up each time the realtime connection is confirmed, first connection included', async () => {
     await act(async () => { root.render(<MemoryRouter><LiveActivity brand={BRAND} /></MemoryRouter>) })
     await flush()
     const onStatus = watchTable.mock.calls[0][3]
     const loadsBefore = repo.getFieldActivities.mock.calls.length
-    await act(async () => { onStatus('live') })           // first connection: nothing missed
-    expect(repo.getFieldActivities.mock.calls.length).toBe(loadsBefore)
-    await act(async () => { onStatus('disconnected') })
-    expect(host.textContent).toContain('NOT LIVE')
-    await act(async () => { onStatus('live') })           // back: catch up
+    // A report saved between the first fetch and the subscription being confirmed
+    // would otherwise never show until a reload.
+    await act(async () => { onStatus('live') })
     await flush()
     expect(repo.getFieldActivities.mock.calls.length).toBe(loadsBefore + 1)
-    expect(host.textContent).toContain('LIVE')
-    expect(host.textContent).not.toContain('NOT LIVE')
+    await act(async () => { onStatus('disconnected') })
+    expect(host.textContent).toContain('UPDATES PAUSED')
+    await act(async () => { onStatus('live') })           // back: catch up again
+    await flush()
+    expect(repo.getFieldActivities.mock.calls.length).toBe(loadsBefore + 2)
+    expect(host.textContent).toContain('UPDATES ON')
+    expect(host.textContent).not.toContain('UPDATES PAUSED')
   })
 
   it('refreshes only reactions and comments when they change live, debounced', async () => {

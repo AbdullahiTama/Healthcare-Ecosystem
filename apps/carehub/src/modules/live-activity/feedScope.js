@@ -79,3 +79,27 @@ export function inWindow(dateStr, win) {
   if (win.until && d > win.until) return false
   return true
 }
+
+// Fold freshly fetched or pushed rows into the loaded list: no row appears twice
+// (a live push and a catch-up fetch can deliver the same one), and the order is
+// the feed's order, newest first with id as the tie-breaker.
+export function mergeActivities(current, incoming) {
+  const byId = new Map()
+  current.forEach(function (a) { byId.set(a.id, a) })
+  incoming.forEach(function (a) { byId.set(a.id, a) })
+  return Array.from(byId.values()).sort(function (a, b) {
+    if (a.created_at !== b.created_at) return a.created_at < b.created_at ? 1 : -1
+    return a.id < b.id ? 1 : a.id > b.id ? -1 : 0
+  })
+}
+
+// Which loaded reports a reaction/comment event touches. A DELETE carries only
+// the row's own key (not its activity_id), and an event with no payload says
+// nothing either, so those mean "check them all". Events for reports that are
+// not on screen are ignored.
+export function affectedActivityIds(payload, loadedIds) {
+  const row = payload && payload.new
+  const id = row && row.activity_id
+  if (!payload || payload.eventType === 'DELETE' || !id) return { all: true, ids: [] }
+  return { all: false, ids: loadedIds.indexOf(id) >= 0 ? [id] : [] }
+}
