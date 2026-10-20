@@ -23,6 +23,7 @@ import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivi
 import { newActivityId } from './activityId'
 import { effectiveFields, fieldLabel, missingRequired } from './reportFields'
 import { captureLocation } from '../checkins/locationCapture'
+import { saveDraft, loadDraft, clearDraft, hasContent } from './draftStore'
 import { describeReportLocation, describeArea } from './locationStatus'
 import { OSM_ATTRIBUTION, OSM_COPYRIGHT_URL } from './areaLookup'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
@@ -184,6 +185,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
   const submitLock = useRef(false)
   const draftRef = useRef(null)
   const [retryNote, setRetryNote] = useState('')
+  const [restoredAt, setRestoredAt] = useState(null) // when the restored unsent draft was saved
   const [notifyPending, setNotifyPending] = useState(null)
   const [notifying, setNotifying] = useState(false)
 
@@ -202,6 +204,16 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
   const mimeRef = useRef('')
 
   useEffect(() => { load() }, [brand?.id])
+
+  // Remember the unsent form (typed answers and territory only) so a reload or an
+  // accidental close does not lose it. Once a send has been attempted the report may
+  // already exist on the server, so nothing is kept: restoring it later would log it twice.
+  useEffect(() => {
+    if (!logging || !brand || !brand.id) return undefined
+    if (draftRef.current && draftRef.current.sent) return undefined
+    const t = setTimeout(function () { saveDraft(brand.id, meStaffId, { values: values, terrId: terrId }) }, 400)
+    return function () { clearTimeout(t) }
+  }, [logging, values, terrId])
 
   // load() and the realtime catch-up are also called from long-lived handlers, so
   // they read the tab from a ref, never from the render they were created in.
@@ -599,8 +611,15 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
   function openLogger() {
     draftRef.current = null
     setRetryNote('')
-    setValues({})
-    setTerrId('')
+    const saved = brand && brand.id ? loadDraft(brand.id, meStaffId) : null
+    const known = new Set(reportFields.map(function (f) { return f.id }))
+    const keptValues = {}
+    if (saved) Object.keys(saved.values).forEach(function (k) { if (known.has(k)) keptValues[k] = saved.values[k] })
+    const keptTerr = saved && territories.some(function (t) { return t.id === saved.terrId }) ? saved.terrId : ''
+    const restore = !!saved && hasContent({ values: keptValues, terrId: keptTerr })
+    setValues(restore ? keptValues : {})
+    setTerrId(restore ? keptTerr : '')
+    setRestoredAt(restore ? saved.savedAt : null)
     setOverrideViewers(null)
     setVoiceBlob(null)
     setVoicePreview(null)
@@ -724,12 +743,15 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
           ...(confirmedBiz ? { directory_business_id: confirmedBiz.id, directory_business_name: confirmedBiz.name } : {}),
         }
         draft.sent = true // from here the request may have reached the server
+        clearDraft(brand.id, meStaffId)
       }
 
       setSaveStatus(retryNote ? 'Retrying...' : 'Saving...')
       const res = await liveActivityRepository.logActivity(draft.activity, draft.viewers)
 
       draftRef.current = null
+      clearDraft(brand.id, meStaffId)
+      setRestoredAt(null)
       setRetryNote('')
       setLogging(false)
       if (res && res.notification === 'failed') {
@@ -741,7 +763,7 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
       load()
     } catch (e) {
       if (draftRef.current && draftRef.current.sent) {
-        setRetryNote('This report may already be saved. Press Retry to finish: it is sent exactly as you submitted it and cannot create a second report. To change it, cancel and edit it afterwards.')
+        setRetryNote('This report may already be saved. Press Retry to finish: it is sent exactly as you submitted it and cannot create a second report. To change it, cancel, then check your feed before logging it again.')
       }
       showToast('Could not finish saving: ' + e.message, { type: 'error' })
     } finally {
@@ -749,6 +771,13 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
       setSaveStatus('')
       setSaving(false)
     }
+  }
+
+  function discardDraft() {
+    clearDraft(brand.id, meStaffId)
+    setValues({})
+    setTerrId('')
+    setRestoredAt(null)
   }
 
   async function retryNotify() {
@@ -1373,6 +1402,16 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
           <GhostBtn onClick={function () { setLogging(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
           <TealBtn onClick={submitActivity} disabled={saving} aria-busy={saving} style={{ flex: 2, padding: '12px' }}>{saving ? 'Saving...' : (retryNote ? 'Retry' : 'Log It')}</TealBtn>
         </>}>
+            {restoredAt && (
+              <div aria-live='polite' style={{ padding: '10px 12px', borderRadius: '8px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '16px', fontSize: '12px', color: warning, display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ flex: '1 1 200px', fontWeight: '600' }}>Restored your unsent draft from {fmtStamp(restoredAt)}. Your location and place are captured fresh.</span>
+                <button type='button' onClick={discardDraft}
+                  style={{ background: 'none', border: `1px solid ${warning}`, color: warning, borderRadius: '8px', padding: '5px 10px', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer' }}>
+                  Discard draft
+                </button>
+              </div>
+            )}
+
             <div aria-live='polite' style={{ padding: '10px 12px', borderRadius: '8px', background: bg, border: `1px solid ${gray100}`, marginBottom: '16px' }}>
               <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Your location</div>
               <div style={{ fontSize: '12.5px', color: loc.tone === 'ok' ? tealDeep : loc.tone === 'warn' ? warning : gray500, fontWeight: loc.tone === 'ok' ? '700' : '500', marginTop: '2px' }}>
