@@ -6,7 +6,7 @@ import {
 import { theme } from '../../styles/theme'
 import { territoryRepository } from '../territories/repositories'
 import { directoryRepository } from './repositories'
-import { PLATFORM } from './services/constants'
+import { PLATFORM, NIGERIA_STATES, DATA_SOURCE } from './services/constants'
 import { useDirectoryLookups } from './components/useDirectoryLookups'
 import { VerificationBadge, SourceBadge } from './components/BusinessBadges'
 import BusinessForm from './components/BusinessForm'
@@ -15,7 +15,6 @@ import ImportWizard from './components/ImportWizard'
 import CategoryManager from './components/CategoryManager'
 import { createDedupIndex, addToIndex, classify, findDuplicatePairs, buildMergePatch, pairKey } from './services/deduplication'
 import { toExportRow, exportRows } from './services/exportService'
-import { NIGERIA_STATES, DATA_SOURCE } from './services/constants'
 
 const { navy, gray500, gray600, border, tealDeep, danger } = theme
 const PAGE_SIZE = 50
@@ -71,7 +70,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
     return indexRef.current
   }, [repo, scopeId])
 
-  useEffect(() => { indexRef.current = null; setPage(0); if (platformScope) setTab((t) => (t === 'businesses' || t === 'import' ? t : 'businesses')) }, [scopeId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { indexRef.current = null; setPage(0); if (platformScope) setTab((t) => (t === 'businesses' || t === 'import' ? t : 'businesses')) }, [scopeId]) // dependencies deliberately limited (no react-hooks lint plugin: docs/architecture/Linting.md, section 5)
   useEffect(() => { const t = setTimeout(() => { setDebounced(filters); setPage(0) }, 300); return () => clearTimeout(t) }, [filters])
 
   const load = useCallback(async () => {

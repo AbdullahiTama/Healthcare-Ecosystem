@@ -71,7 +71,7 @@ export default function DiscoveryMap({ markers, center, radiusKm, selectedId, on
     if (!map.current || !selectedId) return
     const m = markers.find((x) => x.id === selectedId)
     if (m) map.current.panTo([m.lat, m.lng])
-  }, [selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedId]) // dependencies deliberately limited (no react-hooks lint plugin: docs/architecture/Linting.md, section 5)
 
   return <div ref={el} role='application' aria-label='Map of search results' style={{ height: 460, borderRadius: 12, border: `1px solid ${theme.border}`, overflow: 'hidden' }} />
 }
