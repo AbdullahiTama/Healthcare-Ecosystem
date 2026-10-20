@@ -2,13 +2,23 @@ import { sbFetch, sbFetchWithCount, sbUpload } from '../../../services/supabase'
 import { newActivityId } from '../activityId'
 import { lookupArea } from '../areaLookup'
 
-// Internal notify helper: one notification row per recipient. Returns true when
-// they were written (or there was nobody to tell) and false when they were not,
-// so the caller can say so. It never throws: a failed notification must not break
-// the action that triggered it, but it must not be invisible either.
+// Did the database REFUSE this write (a policy or a missing grant), as opposed to
+// the request failing in transit? A refusal will be refused again, so retrying it
+// is pointless; a network or server failure is worth retrying.
+export function isPermissionRefusal(error) {
+  const text = String(error && error.message ? error.message : error)
+  return /\((401|403)\)|42501|row-level security|permission denied/i.test(text)
+}
+
+// Internal notify helper: one notification row per recipient. Returns
+//   'sent'     they were written (or there was nobody to tell)
+//   'refused'  the database policy does not let this caller write them
+//   'failed'   the request failed (network, server); worth trying again
+// It never throws: a failed notification must not break the action that triggered
+// it, but it must not be invisible either.
 async function notify(request, businessId, recipients, kind, title, body, link) {
   try {
-    if (!recipients || recipients.length === 0) return true
+    if (!recipients || recipients.length === 0) return 'sent'
     const rows = recipients.map(function (r) {
       return {
         business_id: businessId,
@@ -20,10 +30,10 @@ async function notify(request, businessId, recipients, kind, title, body, link) 
       }
     })
     await request('staff_notifications', { method: 'POST', body: JSON.stringify(rows), prefer: 'return=minimal' })
-    return true
+    return 'sent'
   } catch (e) {
     console.error('Notification failed:', e)
-    return false
+    return isPermissionRefusal(e) ? 'refused' : 'failed'
   }
 }
 
@@ -55,7 +65,7 @@ export function buildActivityQuery(businessId, { limit = 100, cursor = null, sta
 }
 
 export function createLiveActivityRepository({ request = sbFetch, requestWithCount = sbFetchWithCount } = {}) {
-  // Tell the people a report was shared with. Returns true when written.
+  // Tell the people a report was shared with: 'sent', 'refused' or 'failed' (see notify).
   function notifyViewers(activity, viewers) {
     return notify(
       request,
@@ -151,9 +161,9 @@ export function createLiveActivityRepository({ request = sbFetch, requestWithCou
     //    arrived) is the same single row, never a second report.
     //  * Viewers are read first and only the missing ones added: the table has no
     //    unique (activity_id, staff_id), so blindly re-inserting would duplicate.
-    //  * Only newly added viewers are notified, and a notification failure does not
-    //    fail the save; it is reported as notification: 'failed' so the page can
-    //    offer a retry (notifyViewers).
+    //  * Only newly added viewers are notified, and a notification problem does not
+    //    fail the save; it is reported as notification: 'failed' (worth a retry through
+    //    notifyViewers) or 'refused' (the database does not allow it; a retry cannot help).
     // If the activity is written but a later step throws, the report exists; calling
     // again with the same id finishes the job.
     async logActivity(activity, viewers) {
@@ -171,7 +181,7 @@ export function createLiveActivityRepository({ request = sbFetch, requestWithCou
         if (missing.length > 0) {
           const payload = missing.map(function (v) { return { ...v, activity_id: id } })
           await request('activity_viewers', { method: 'POST', body: JSON.stringify(payload), prefer: 'return=minimal' })
-          result.notification = (await notifyViewers({ ...activity, id }, missing)) ? 'sent' : 'failed'
+          result.notification = await notifyViewers({ ...activity, id }, missing)
         }
       }
       return result

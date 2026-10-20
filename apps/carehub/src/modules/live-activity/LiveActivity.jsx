@@ -757,6 +757,10 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
       if (res && res.notification === 'failed') {
         setNotifyPending({ activity: draft.activity, viewers: draft.viewers })
         showToast('Activity saved. The people you share it with were not notified yet; use Retry notifying on the page.', { type: 'warning', duration: 8000 })
+      } else if (res && res.notification === 'refused') {
+        // The database does not let this person write alerts for colleagues, so there is
+        // nothing to retry. Say what is true: it is saved, shared, and findable.
+        showToast('Activity logged. The people you shared it with can see it under Shared with me; in-app alerts to them are not available yet.', { type: 'info', duration: 8000 })
       } else {
         showToast('Activity logged', { type: 'success' })
       }
@@ -784,10 +788,13 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
     if (!notifyPending || notifying) return
     setNotifying(true)
     try {
-      const ok = await liveActivityRepository.notifyViewers(notifyPending.activity, notifyPending.viewers)
-      if (ok) {
+      const outcome = await liveActivityRepository.notifyViewers(notifyPending.activity, notifyPending.viewers)
+      if (outcome === 'sent') {
         setNotifyPending(null)
         showToast('Notified.', { type: 'success' })
+      } else if (outcome === 'refused') {
+        setNotifyPending(null)
+        showToast('In-app alerts to colleagues are not available yet, so this cannot be retried. The report is saved and they can find it under Shared with me.', { type: 'info', duration: 8000 })
       } else {
         showToast('Still could not notify them. The report is saved and they can find it under Shared with me.', { type: 'warning' })
       }

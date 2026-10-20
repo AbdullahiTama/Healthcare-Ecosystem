@@ -67,7 +67,7 @@ beforeEach(() => {
   repo.getActivityComments.mockResolvedValue([])
   repo.getDefaultViewers.mockResolvedValue([{ viewer_staff_id: 'm1', viewer_name: 'Mo Manager' }])
   repo.logActivity.mockResolvedValue({ id: 'x', notification: 'sent' })
-  repo.notifyViewers.mockResolvedValue(true)
+  repo.notifyViewers.mockResolvedValue('sent')
   territoryRepository.getAll.mockResolvedValue([])
   staffRepository.getAll.mockResolvedValue([])
   host = document.createElement('div')
@@ -163,13 +163,39 @@ describe('notification outcome', () => {
 
   it('keeps the notice when notifying fails again', async () => {
     repo.logActivity.mockResolvedValue({ id: 'x', notification: 'failed' })
-    repo.notifyViewers.mockResolvedValue(false)
+    repo.notifyViewers.mockResolvedValue('failed')
     await openAndFill()
     await act(async () => { button('Log It').click() })
     await flush()
     await act(async () => { button('Retry notifying').click() })
     await flush()
     expect(host.textContent).toContain('nobody has been notified yet')
+  })
+
+  it('refused by the database: no retry is offered, because it cannot work, and what is true is said', async () => {
+    repo.logActivity.mockResolvedValue({ id: 'x', notification: 'refused' })
+    await openAndFill()
+    await act(async () => { button('Log It').click() })
+    await flush()
+    expect(dialog()).toBeNull()                           // saved
+    expect(button('Retry notifying')).toBeUndefined()
+    expect(host.textContent).not.toContain('nobody has been notified yet')
+    expect(host.textContent).toContain('Shared with me')
+    expect(host.textContent).toContain('not available yet')
+    expect(repo.notifyViewers).not.toHaveBeenCalled()
+  })
+
+  it('a retry that turns out to be refused clears the notice instead of leaving a button that cannot work', async () => {
+    repo.logActivity.mockResolvedValue({ id: 'x', notification: 'failed' })
+    repo.notifyViewers.mockResolvedValue('refused')
+    await openAndFill()
+    await act(async () => { button('Log It').click() })
+    await flush()
+    await act(async () => { button('Retry notifying').click() })
+    await flush()
+    expect(button('Retry notifying')).toBeUndefined()
+    expect(host.textContent).not.toContain('nobody has been notified yet')
+    expect(host.textContent).toContain('cannot be retried')
   })
 
   it('a clean save shows no notice', async () => {

@@ -153,10 +153,39 @@ describe('liveActivityRepository.logActivity: retry-safe save', () => {
     expect(res.notification).toBe('failed')
   })
 
+  it('a database refusal is told apart from a network failure, because retrying a refusal cannot help', async () => {
+    const refusals = [
+      'Supabase error (403): new row violates row-level security policy for table "staff_notifications"',
+      'Supabase error (401): permission denied for table staff_notifications',
+      'Supabase error (400): {"code":"42501"}',
+    ]
+    for (const message of refusals) {
+      const calls = []
+      const repo = createLiveActivityRepository({
+        request: async (path, opts = {}) => {
+          calls.push(path)
+          if (path.startsWith('staff_notifications')) throw new Error(message)
+          return []
+        },
+      })
+      expect(await repo.notifyViewers(ACT, V)).toBe('refused')
+      expect((await repo.logActivity(ACT, V)).notification).toBe('refused')
+    }
+    const down = createLiveActivityRepository({ request: async (path) => { if (path.startsWith('staff_notifications')) throw new TypeError('Failed to fetch'); return [] } })
+    expect(await down.notifyViewers(ACT, V)).toBe('failed')   // network trouble: worth retrying
+    const busy = createLiveActivityRepository({ request: async (path) => { if (path.startsWith('staff_notifications')) throw new Error('Supabase error (503): upstream'); return [] } })
+    expect(await busy.notifyViewers(ACT, V)).toBe('failed')
+  })
+
+  it('notifying nobody is a success, not a failure', async () => {
+    const { repo } = backend()
+    expect(await repo.notifyViewers(ACT, [])).toBe('sent')
+  })
+
   it('notifyViewers can be retried on its own', async () => {
     const { repo, calls } = backend()
     const ok = await repo.notifyViewers(ACT, V)
-    expect(ok).toBe(true)
+    expect(ok).toBe('sent')
     const note = calls.find((c) => c.path.startsWith('staff_notifications'))
     expect(note.body).toHaveLength(2)
   })
