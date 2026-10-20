@@ -201,6 +201,15 @@ export function isManagerRole(role) {
   return /manager/i.test(role || '')
 }
 
+// Who may read ALL field activity of a business. Mirrors the database's
+// caller_sees_all_activity(): the owner, a manager role, or a role the owner
+// granted directory management (carehub_20261131_field_activity_access.sql).
+// This only decides what the UI offers; the RESTRICTIVE select policy remains
+// the security boundary, so a mismatch here can hide rows but never expose any.
+export function canSeeAllActivity({ isOwner = false, role, perms } = {}) {
+  return !!isOwner || isManagerRole(role) || !!(perms && perms.canManageDirectory)
+}
+
 // ── Module registry ───────────────────────────────────────────────────────────
 // Single source of truth for which modules exist and which business types may
 // use them. Everything that lists modules — the sidebar, the route guards and

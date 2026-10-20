@@ -17,7 +17,8 @@ import FieldWorkSwitch from '../field-work/FieldWorkSwitch'
 import NearbyBusinessPicker from '../business-directory/components/NearbyBusinessPicker'
 import CheckInPanel from '../checkins/CheckInPanel.jsx'
 import TeamLocations from '../checkins/TeamLocations.jsx'
-import { isManagerRole } from '../../lib/permissions'
+import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
+import { filterByScope, scopeTabs } from './feedScope'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
@@ -88,7 +89,7 @@ function csvCell(v) {
   return '"' + s.replace(/"/g, '""') + '"'
 }
 
-export default function LiveActivity({ brand, allowedModules = [] }) {
+export default function LiveActivity({ brand, allowedModules = [], perms }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const authData = readAuth()
   const meStaffId = (authData && authData.staff && authData.staff.id) ? authData.staff.id : null
@@ -103,6 +104,11 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
   // isManagerRole is the shared definition — the facility-review recipient
   // lookup in places.js uses the same one.
   const isManager = isOwner || isManagerRole(authData.staff && authData.staff.role)
+  // Who may read every report. Same rule as the database's caller_sees_all_activity,
+  // so a custom role granted directory management gets Team Reports too. isManager
+  // above stays for what the database still decides by manager role alone: facility
+  // review and the team check-in overview.
+  const canSeeAll = canSeeAllActivity({ isOwner, role: authData.staff && authData.staff.role, perms })
 
   const [fields, setFields] = useState([])
   const [activities, setActivities] = useState([])
@@ -258,7 +264,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
 
       // Tab badges for managers. Non-fatal: a failed count just hides the
       // numbers, it must not blank the feed.
-      if (isManager) {
+      if (canSeeAll) {
         try {
           const [mine, team] = await Promise.all([
             liveActivityRepository.countFieldActivities(brand.id, meStaffId),
@@ -746,13 +752,7 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
     return true
   }
 
-  const permitted = activities.filter(function (a) {
-    if (isManager && scope === 'mine') return a.staff_id === meStaffId
-    if (isOwner) return true
-    if (a.staff_id === meStaffId) return true
-    const vs = viewersByAct[a.id] || []
-    return vs.some(function (v) { return v.staff_id === meStaffId })
-  })
+  const permitted = filterByScope(activities, { scope: scope, canSeeAll: canSeeAll, meStaffId: meStaffId, viewersByAct: viewersByAct })
 
   const visible = permitted.filter(function (a) {
     if (!inRange(a.created_at)) return false
@@ -900,12 +900,11 @@ export default function LiveActivity({ brand, allowedModules = [] }) {
         </div>
       )}
 
-      {isManager && (
-        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
-          {[
-            ['mine', 'My Feed', counts ? counts.mine : null],
-            ['team', 'Team Reports', counts ? counts.team : null],
-          ].map(function (t) {
+      {(
+        <div role='group' aria-label='Which reports to show' style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+          {scopeTabs(canSeeAll).map(function (tab) {
+            return [tab[0], tab[1], canSeeAll && counts ? counts[tab[0]] : null]
+          }).map(function (t) {
             const on = scope === t[0]
             const label = t[2] != null
               ? t[1] + ' (' + (t[2] >= 1000 ? '1000+' : t[2]) + ')'
