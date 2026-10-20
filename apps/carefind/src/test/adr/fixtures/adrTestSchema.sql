@@ -62,6 +62,15 @@ create table public.staff (
 );
 alter table public.staff enable row level security;
 
+-- Custom business roles (mirrors the live `roles` table columns the ADR
+-- recipient rule reads: business_id, name, permissions).
+create table public.roles (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid,
+  name text,
+  permissions jsonb
+);
+
 create table public.admin_audit_log (
   id bigint primary key generated always as identity,
   actor_admin_id uuid,
