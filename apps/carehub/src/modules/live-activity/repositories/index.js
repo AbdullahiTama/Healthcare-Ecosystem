@@ -93,6 +93,38 @@ export function createLiveActivityRepository({
     )
   }
 
+  // Does this error mean "the project has not deployed log_field_activity"? Only that answers a
+  // fallback; every other failure (a refusal, a dropped connection) stays a failure.
+  function isMissingFunction(e) {
+    const text = String(e && e.message ? e.message : e)
+    return /log_field_activity/.test(text) && /PGRST202|Could not find the function|\(404\)/i.test(text)
+  }
+  // Set once the project is seen not to have the function, so the page asks one time, not on every save.
+  let oneStepUnavailable = false
+
+  // The original route: the activity under its id with ignore-duplicates, then only the viewers not already
+  // there, then the alerts. Two transactions, but safe to repeat.
+  async function saveInTwoSteps(activity, viewers) {
+    const id = activity.id
+    await request('field_activities', {
+      method: 'POST',
+      body: JSON.stringify(activity),
+      prefer: 'resolution=ignore-duplicates,return=minimal',
+    })
+    const result = { id, notification: 'none' }
+    if (viewers.length > 0) {
+      const existing = await request('activity_viewers?activity_id=eq.' + id + '&select=staff_id')
+      const have = new Set((Array.isArray(existing) ? existing : []).map(function (v) { return v.staff_id }))
+      const missing = viewers.filter(function (v) { return !have.has(v.staff_id) })
+      if (missing.length > 0) {
+        const payload = missing.map(function (v) { return { ...v, activity_id: id } })
+        await request('activity_viewers', { method: 'POST', body: JSON.stringify(payload), prefer: 'return=minimal' })
+        result.notification = await notifyViewers(activity, missing)
+      }
+    }
+    return result
+  }
+
   return {
     async getActivityFields(businessId) {
       return request('activity_fields?business_id=eq.' + businessId + '&order=sort_order.asc&select=*')
@@ -171,35 +203,38 @@ export function createLiveActivityRepository({
 
     // Saves a report and tells the people it is shared with, safely to repeat.
     //
-    //  * The activity goes in under a client-chosen id with ignore-duplicates, so
-    //    sending it again (a double tap, or a retry after a response that never
-    //    arrived) is the same single row, never a second report.
-    //  * Viewers are read first and only the missing ones added: the table has no
-    //    unique (activity_id, staff_id), so blindly re-inserting would duplicate.
-    //  * Only newly added viewers are notified, and a notification problem does not
-    //    fail the save; it is reported as notification: 'failed' (worth a retry through
-    //    notifyViewers) or 'refused' (the database does not allow it; a retry cannot help).
-    // If the activity is written but a later step throws, the report exists; calling
-    // again with the same id finishes the job.
+    // First choice: ONE request to log_field_activity (carehub_20261020_log_field_activity, a draft until
+    // approved), which saves the report and its viewers in a single transaction, so a tagged person already
+    // has access when the report becomes visible. If the project does not have the function yet, the
+    // two-request route is used instead (and remembered). Any other failure is a failure, never a reason to
+    // switch routes: a retry must take the same idempotent route as the first attempt.
+    //
+    // Either way: the same id twice is one report, only viewers not already present are added, and a
+    // notification problem never fails the save. It is reported as notification: 'sent', 'none',
+    // 'failed' (worth a retry through notifyViewers) or 'refused' (the database does not allow it).
     async logActivity(activity, viewers) {
-      const id = activity.id || newActivityId()
-      await request('field_activities', {
-        method: 'POST',
-        body: JSON.stringify({ ...activity, id }),
-        prefer: 'resolution=ignore-duplicates,return=minimal',
-      })
-      const result = { id, notification: 'none' }
-      if (viewers && viewers.length > 0) {
-        const existing = await request('activity_viewers?activity_id=eq.' + id + '&select=staff_id')
-        const have = new Set((Array.isArray(existing) ? existing : []).map(function (v) { return v.staff_id }))
-        const missing = viewers.filter(function (v) { return !have.has(v.staff_id) })
-        if (missing.length > 0) {
-          const payload = missing.map(function (v) { return { ...v, activity_id: id } })
-          await request('activity_viewers', { method: 'POST', body: JSON.stringify(payload), prefer: 'return=minimal' })
-          result.notification = await notifyViewers({ ...activity, id }, missing)
+      const full = { ...activity, id: activity.id || newActivityId() }
+      const shared = viewers || []
+      if (!oneStepUnavailable) {
+        try {
+          const out = await request('rpc/log_field_activity', {
+            method: 'POST',
+            body: JSON.stringify({ p_activity: full, p_viewers: shared }),
+          })
+          const info = out && typeof out === 'object' && !Array.isArray(out) ? out : {}
+          const result = { id: full.id, notification: 'none' }
+          // Alert only people newly added, so a retry that adds nobody alerts nobody. When the database
+          // sends the alerts itself (alerts: 'server') the browser sends none.
+          if (shared.length > 0 && Number(info.viewers_added) > 0) {
+            result.notification = info.alerts === 'server' ? 'sent' : await notifyViewers(full, shared)
+          }
+          return result
+        } catch (e) {
+          if (!isMissingFunction(e)) throw e
+          oneStepUnavailable = true
         }
       }
-      return result
+      return saveInTwoSteps(full, shared)
     },
 
     notifyViewers: notifyViewers,

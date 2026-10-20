@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { createLiveActivityRepository, buildActivityQuery } from './index.js'
 
+// What a project that has not deployed log_field_activity answers. The tests of the two-request path
+// below run against it on purpose: that is the path used until the function exists.
+const NO_RPC = 'Supabase error (404): Could not find the function public.log_field_activity(p_activity, p_viewers) in the schema cache'
+
 const recording = () => {
   const calls = []
   const counts = []
@@ -101,6 +105,7 @@ describe('liveActivityRepository.logActivity: retry-safe save', () => {
     const viewers = []
     const request = async (path, opts = {}) => {
       calls.push({ path, method: opts.method || 'GET', prefer: opts.prefer, body: opts.body ? JSON.parse(opts.body) : null })
+      if (path.startsWith('rpc/')) throw new Error(NO_RPC)
       const step = path.startsWith('field_activities') ? 'activity' : path.startsWith('activity_viewers') ? ((opts.method || 'GET') === 'GET' ? 'readViewers' : 'addViewers') : 'notify'
       if (failOn[step] && failOn[step]-- > 0) throw new Error(step + ' failed')
       if (step === 'readViewers') return viewers.map((staff_id) => ({ staff_id }))
@@ -164,6 +169,7 @@ describe('liveActivityRepository.logActivity: retry-safe save', () => {
       const repo = createLiveActivityRepository({
         request: async (path, opts = {}) => {
           calls.push(path)
+          if (path.startsWith('rpc/')) throw new Error(NO_RPC)
           if (path.startsWith('staff_notifications')) throw new Error(message)
           return []
         },
