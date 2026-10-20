@@ -339,7 +339,7 @@ After every rolled-back run the counts were read again and matched the baseline 
 0 default viewers, 3 activity alert rows, no probe rows). The security advisor snapshot after all three was
 **identical to the one taken before** (same eight finding types, none naming the new objects).
 
-**Held back on purpose: `activity_voice_private`.** The deployed app still plays voice notes from their public URLs and
+**Initially held back, then applied (see 17.1): `activity_voice_private`.** The deployed app still plays voice notes from their public URLs and
 uploads to the bucket root. Making the bucket private now would stop all 6 existing notes playing and refuse every new
 upload until the new app is deployed. It is applied last, after the branch is merged and a voice note is confirmed to
 play and upload through the new path (see `docs/architecture/pending-migrations/README.md`).
@@ -350,3 +350,30 @@ someone else's default viewers. The one-step save does nothing until the new app
 
 Still unproven on the live project: that Realtime pushes a newly saved report to a tagged non-manager (the database now
 makes the access visible at once, but no two-session test was run), and everything listed as NOT TESTED above.
+
+### 17.1 The voice bucket was applied too (version 20261020155843)
+
+After being told that applying it before the new app is deployed would stop existing voice notes playing and refuse new
+uploads in the older deployed app, the product owner chose to apply it now. It was applied as a tracked migration inside
+one transaction (its built-in verification would have rolled everything back on any mismatch).
+
+| Check | Before | After |
+|---|---|---|
+| Anonymous, signed-out request for an existing voice note (status only, nothing downloaded) | HTTP 200, `audio/mp4` | HTTP 400, JSON, no audio |
+| Anonymous upload of a test file | accepted by policy | refused: "new row violates row-level security policy" |
+| Bucket | public, no size or type limit, two policies open to `anon` | private, 10 MB, audio types only, exactly two policies, signed-in role only |
+| Files kept | 6 | 6 (nothing deleted or moved) |
+
+Rolled-back run as real users on the live policies: the owner sees all 6 existing notes; a brand-new upload is accepted
+and read back in the same step (the case that would have failed under a report-only read rule); uploads to the bucket
+root, to another company's folder, or to a made-up folder are refused; renaming existing notes changes 0 rows; an untagged
+colleague sees 0 of the owner's notes but can upload into their own company's folder; a member of another company and a
+signed-out user see 0. Afterwards 6 files, no probe files, all other counts at baseline. The security advisor snapshot
+after all four migrations is identical to the one taken before the first.
+
+**Consequence until the new app is deployed:** the older app plays voice notes from their stored public URLs, which no
+longer work, and uploads to the bucket root, which is now refused. Deploying branch `feat/live-activity-client-phases`
+fixes both. Not verified live: that a signed link actually plays in a browser (no user session was available to request
+one), and that the storage service's own upload path behaves as the replica modelled.
+
+Emergency rollback (restores the exposure) is in the header of `supabase/migrations/carehub_20261020_activity_voice_private.sql`.

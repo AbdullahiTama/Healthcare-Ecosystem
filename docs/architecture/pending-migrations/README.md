@@ -1,35 +1,24 @@
-# Pending migrations: DRAFTS, NOT APPLIED
+# Pending migrations
 
-Files here are **not** in `supabase/migrations/`, so no pipeline can pick them up. Each needs explicit approval
-before it is moved there and applied to production.
-
-Three of the four drafts written for the Live Field Activity audit
-(`docs/audits/live-field-activity-audit.md`) were **applied to production on 2026-10-20** and now live in
-`supabase/migrations/`:
+**Nothing is pending.** All four migrations drafted for the Live Field Activity audit
+(`docs/audits/live-field-activity-audit.md`) were applied to production on 2026-10-20 and now live in
+`supabase/migrations/`. This folder is kept as the place for unapproved drafts: files here are not in
+`supabase/migrations/`, so no pipeline can pick them up, and each needs explicit approval before it moves.
 
 | Applied as | Version | Fixes |
 |---|---|---|
 | `carehub_20261020_default_viewers_own_rows` | 20261020154020 | F7: any member could rewrite a colleague's default viewers |
 | `carehub_20261020_activity_server_alerts` | 20261020154138 | U2: the browser cannot alert colleagues; the database now does |
 | `carehub_20261020_log_field_activity` | 20261020154254 | F4/F6: save the report and its viewers in one transaction |
+| `carehub_20261020_activity_voice_private` | 20261020155843 | F3: voice bucket was public and anonymously writable |
 
 Section 17 of the audit records how each was verified.
 
-## Still pending: `carehub_20261020_activity_voice_private.sql`
-
-Fixes F3: the voice bucket is public and anonymously writable (anyone online can read every voice note and upload any file).
-
-**Do not apply it until the app that signs voice links is live.** The deployed app still plays notes from their stored
-public URLs and uploads to the bucket root. Once the bucket is private, every existing voice note (6 at last count)
-stops playing and every new upload is refused, for as long as that older app is deployed. The new app is written to
-work before and after (`2cb9a9e`: signed links, upload to `<business id>/<activity id>-<suffix>.<ext>` with a
-parameter-free MIME type), but it is only on branch `feat/live-activity-client-phases`.
-
-Order:
-1. Merge and deploy the branch.
-2. Check on the live project, while the bucket is still public, that a voice note plays through a signed link and a
-   new recording lands in the company folder.
-3. Apply `activity_voice_private`, then read back `storage.buckets` and `pg_policies` and re-check playback and upload.
+**Deploy the app that goes with them.** The voice bucket was made private before the app that signs voice links was
+deployed (at the product owner's instruction). Until branch `feat/live-activity-client-phases` is merged and deployed,
+the older app cannot play existing voice notes (they are served from public URLs that no longer work) and its new
+voice uploads are refused. The new app (`2cb9a9e`) plays notes through signed links and uploads into
+`<business id>/<activity id>-<suffix>.<ext>`. Emergency rollback is in the header of the voice migration.
 
 ## How to apply (this project's own rules)
 
@@ -41,9 +30,9 @@ Order:
   EXECUTE to anon and authenticated at creation, and `CREATE OR REPLACE` does not drop a differently-signed sibling.
 - To verify behaviour without leaving data behind, run an end-to-end check inside a `DO` block that impersonates real
   users with `SET LOCAL ROLE` and `request.jwt.claims`, and ends with `RAISE EXCEPTION` so it rolls back. Re-query
-  afterwards to confirm zero residue.
+  afterwards to confirm zero residue. (Storage refuses direct DELETEs, so do not include one in such a check.)
 
-## Still not covered by a draft
+## Still not covered by a migration
 
 - `manager_checkin_overview` admits only manager-role names (finding F2): a product decision.
 - Recording the realtime publication membership in a migration (it exists only as live state today).

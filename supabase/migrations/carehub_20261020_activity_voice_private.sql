@@ -1,4 +1,9 @@
--- DRAFT, NOT APPLIED. DO NOT APPLY BEFORE THE APP RELEASE DESCRIBED BELOW IS LIVE. Needs explicit approval.
+-- APPLIED TO PRODUCTION 2026-10-20 as carehub_20261020_activity_voice_private (version 20261020155843), BEFORE the app that
+-- signs voice links was deployed, at the product owner's explicit instruction after being told that the older deployed app
+-- would stop playing voice notes and fail new uploads until the new app is live. Verified by catalog read-back, anonymous
+-- HTTP checks (a public note went from 200 to 400; an anonymous upload is refused) and a rolled-back run as real users.
+-- The applied copy carries a shorter header comment; the statements are identical.
+-- The "DO NOT APPLY BEFORE THE APP RELEASE" warning below is kept as the record of why that order was recommended.
 -- Audit finding F3 (docs/audits/live-field-activity-audit.md), the highest-severity open item.
 --
 -- WHAT IS WRONG TODAY (confirmed on the live project, 2026-10-20)
