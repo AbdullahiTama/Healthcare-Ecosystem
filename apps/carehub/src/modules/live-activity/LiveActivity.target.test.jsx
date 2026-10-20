@@ -14,7 +14,7 @@ vi.mock('./repositories', () => ({
     getActivityFields: vi.fn(), getFieldActivities: vi.fn(), countFieldActivities: vi.fn(),
     getActivityViewers: vi.fn(), getActivityReactions: vi.fn(), getActivityComments: vi.fn(),
     getDefaultViewers: vi.fn(), logActivity: vi.fn(), notifyViewers: vi.fn(),
-    reverseGeocode: vi.fn(), uploadActivityVoice: vi.fn(), getAllFieldActivities: vi.fn(),
+    lookupArea: vi.fn(), uploadActivityVoice: vi.fn(), getAllFieldActivities: vi.fn(),
   },
 }))
 vi.mock('../territories/repositories', () => ({ territoryRepository: { getAll: vi.fn() } }))
@@ -87,7 +87,7 @@ beforeEach(() => {
   repo.getActivityComments.mockResolvedValue([])
   repo.getDefaultViewers.mockResolvedValue([])
   repo.logActivity.mockResolvedValue({ id: 'x', notification: 'none' })
-  repo.reverseGeocode.mockResolvedValue('Allen Avenue, Ikeja')
+  repo.lookupArea.mockResolvedValue({ status: 'ok', label: 'Allen Avenue, Ikeja' })
   nearbyHealthFacilities.mockResolvedValue({ facilities: [GENERAL, CLINIC], fromCache: false })
   territoryRepository.getAll.mockResolvedValue([])
   staffRepository.getAll.mockResolvedValue([])
@@ -163,7 +163,9 @@ describe('choosing what the report is about', () => {
     withGps(false)
     await openForm()
     expect(dialog().textContent).toContain('Your location is not available')
+    expect(dialog().textContent).toContain('Location permission was denied')
     expect(nearbyHealthFacilities).not.toHaveBeenCalled()
+    expect(repo.lookupArea).not.toHaveBeenCalled()
     await submit()
     expect(repo.logActivity).toHaveBeenCalledTimes(1)
     const saved = lastSaved()

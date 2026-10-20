@@ -1,5 +1,6 @@
 import { sbFetch, sbFetchWithCount, sbUpload } from '../../../services/supabase'
 import { newActivityId } from '../activityId'
+import { lookupArea } from '../areaLookup'
 
 // Internal notify helper: one notification row per recipient. Returns true when
 // they were written (or there was nobody to tell) and false when they were not,
@@ -204,30 +205,11 @@ export function createLiveActivityRepository({ request = sbFetch, requestWithCou
       return saved
     },
 
-    async reverseGeocode(lat, lng) {
-      try {
-        const url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&zoom=18&addressdetails=1'
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' } })
-        if (!res.ok) return null
-        const data = await res.json()
-        if (!data) return null
-        const a = data.address || {}
-        const parts = []
-        if (a.amenity) parts.push(a.amenity)
-        else if (a.building) parts.push(a.building)
-        else if (a.shop) parts.push(a.shop)
-        if (a.road) parts.push(a.road)
-        if (a.suburb) parts.push(a.suburb)
-        else if (a.neighbourhood) parts.push(a.neighbourhood)
-        if (a.city) parts.push(a.city)
-        else if (a.town) parts.push(a.town)
-        else if (a.state) parts.push(a.state)
-        if (parts.length > 0) return parts.join(', ')
-        if (data.display_name) return data.display_name
-        return null
-      } catch (e) {
-        return null
-      }
+    // The area's name for the report caption, throttled and cached (areaLookup.js).
+    // Resolves { status: 'ok', label } or { status: 'no_result' }; rejects when the
+    // service cannot be reached, which the page reports differently from "no name".
+    lookupArea(lat, lng) {
+      return lookupArea(lat, lng)
     },
 
     async uploadActivityVoice(blob) {

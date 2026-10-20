@@ -22,6 +22,9 @@ import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
 import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivities, affectedActivityIds } from './feedScope'
 import { newActivityId } from './activityId'
 import { effectiveFields, fieldLabel, missingRequired } from './reportFields'
+import { captureLocation } from '../checkins/locationCapture'
+import { describeReportLocation, describeArea } from './locationStatus'
+import { OSM_ATTRIBUTION, OSM_COPYRIGHT_URL } from './areaLookup'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
@@ -157,6 +160,11 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
   const [confirmedBiz, setConfirmedBiz] = useState(null)
   const [placeName, setPlaceName] = useState('')
   const [findingPlace, setFindingPlace] = useState(false)
+  // Why there is no position (denied, timed out ...), and the area-name lookup's own
+  // outcome. captureToken lets a late answer from an earlier open be ignored.
+  const [gpsIssue, setGpsIssue] = useState(null)
+  const [area, setArea] = useState(null)
+  const captureToken = useRef(0)
   // Facility capture (issue #1): the GPS fix drives automatic detection of the
   // nearest health facility. `facility` is the chosen facility object (or a
   // rep-added synthetic one); it replaces the old free-text `placeQuery` box.
@@ -597,28 +605,39 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
     setVoiceBlob(null)
     setVoicePreview(null)
     setGps(null)
+    setGpsIssue(null)
+    setArea(null)
     setConfirmedBiz(null)
     setPlaceName('')
     setFacility(null)
     setLogging(true)
 
-    if (navigator.geolocation) {
-      setFindingPlace(true)
-      navigator.geolocation.getCurrentPosition(
-        function (pos) {
-          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }
-          setGps(coords)
-          setFindingPlace(false)
-          // Best-effort area caption (reverse geocode). It describes the area and is
-          // shown as such; it is never taken as the place visited. The candidate
-          // places come from VisitTarget, and none is chosen for the rep.
-          liveActivityRepository.reverseGeocode(coords.lat, coords.lng).then(function (name) {
-            if (name) setPlaceName(name)
-          }).catch(function () {})
-        },
-        function () { setFindingPlace(false) },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-      )
+    captureReportLocation()
+  }
+
+  // One position, asked for because the rep opened the form (or pressed Try again);
+  // nothing is watched afterwards. A fresh fix is requested, not a cached one. Every
+  // way it can fail is kept apart (see locationStatus.js) and none blocks the report.
+  // The area name is a caption looked up afterwards; it is never the place visited.
+  async function captureReportLocation() {
+    const token = ++captureToken.current
+    setGps(null)
+    setGpsIssue(null)
+    setArea(null)
+    setFindingPlace(true)
+    const cap = await captureLocation({ timeoutMs: 15000, maximumAgeMs: 0 })
+    if (token !== captureToken.current) return
+    setFindingPlace(false)
+    if (!cap.ok) { setGpsIssue({ reason: cap.reason }); return }
+    setGps({ lat: cap.lat, lng: cap.lng, accuracy: cap.accuracyM })
+    setArea({ status: 'looking' })
+    try {
+      const found = await liveActivityRepository.lookupArea(cap.lat, cap.lng)
+      if (token !== captureToken.current) return
+      if (found && found.status === 'ok') { setPlaceName(found.label); setArea({ status: 'ok', label: found.label }) }
+      else setArea({ status: 'no_result' })
+    } catch (e) {
+      if (token === captureToken.current) setArea({ status: 'failed' })
     }
   }
 
@@ -915,6 +934,10 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
       setExporting(false)
     }
   }
+
+  const loc = describeReportLocation({ finding: findingPlace, gps: gps, issue: gpsIssue })
+  const areaText = describeArea(area)
+  const showsAreaNames = visible.some(function (a) { return !!areaLabel(a) })
 
   return (
     <>
@@ -1309,6 +1332,12 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
         </div>
       )}
 
+      {showsAreaNames && (
+        <div style={{ fontSize: '11px', color: gray400, margin: '10px 0 0' }}>
+          Area names ("Near ...") come from <a href={OSM_COPYRIGHT_URL} target='_blank' rel='noopener noreferrer' style={{ color: gray400 }}>{OSM_ATTRIBUTION}</a>.
+        </div>
+      )}
+
       {!loading && hasOlder && (
         <div style={{ textAlign: 'center', margin: '16px 0' }}>
           <GhostBtn onClick={loadOlder} disabled={loadingOlder}>{loadingOlder ? 'Loading...' : 'Load older activity'}</GhostBtn>
@@ -1344,15 +1373,26 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
           <GhostBtn onClick={function () { setLogging(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
           <TealBtn onClick={submitActivity} disabled={saving} aria-busy={saving} style={{ flex: 2, padding: '12px' }}>{saving ? 'Saving...' : (retryNote ? 'Retry' : 'Log It')}</TealBtn>
         </>}>
-            <div style={{ padding: '10px 12px', borderRadius: '8px', background: bg, border: `1px solid ${gray100}`, marginBottom: '16px' }}>
-              <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>GPS</div>
-              <div style={{ fontSize: '12.5px', color: gps ? tealDeep : gray400, fontWeight: gps ? '700' : '500', marginTop: '2px' }}>
-                {findingPlace
-                  ? 'Finding where you are...'
-                  : gps
-                    ? 'Coordinates captured'
-                    : 'Location not available'}
+            <div aria-live='polite' style={{ padding: '10px 12px', borderRadius: '8px', background: bg, border: `1px solid ${gray100}`, marginBottom: '16px' }}>
+              <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Your location</div>
+              <div style={{ fontSize: '12.5px', color: loc.tone === 'ok' ? tealDeep : loc.tone === 'warn' ? warning : gray500, fontWeight: loc.tone === 'ok' ? '700' : '500', marginTop: '2px' }}>
+                {loc.text}
               </div>
+              {loc.note && <div style={{ fontSize: '11.5px', color: warning, marginTop: '3px' }}>{loc.note}</div>}
+              {loc.canRetry && !findingPlace && (
+                <button type='button' onClick={captureReportLocation}
+                  style={{ marginTop: '6px', background: 'none', border: 'none', color: tealDeep, fontSize: '12px', fontWeight: '700', cursor: 'pointer', padding: 0 }}>
+                  Try again
+                </button>
+              )}
+              {areaText && (
+                <div style={{ fontSize: '11.5px', color: gray500, marginTop: '6px' }}>
+                  {areaText}
+                  {area && area.status === 'ok' && (
+                    <> · <a href={OSM_COPYRIGHT_URL} target='_blank' rel='noopener noreferrer' style={{ color: gray500 }}>{OSM_ATTRIBUTION}</a></>
+                  )}
+                </div>
+              )}
             </div>
 
             <VisitTarget
