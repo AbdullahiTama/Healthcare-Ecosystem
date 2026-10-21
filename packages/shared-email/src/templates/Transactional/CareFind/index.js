@@ -13,6 +13,7 @@ export const bookingCancelled = CareFind.bookingCancelled
 export const consultationBooked = CareFind.consultationBooked
 export const consultationConfirmed = CareFind.consultationConfirmed
 export const consultationCancelled = CareFind.consultationCancelled
+export const adrReportReceived = CareFind.adrReportReceived
 export const paymentSuccess = CareFind.paymentSuccess
 export const paymentFailed = CareFind.paymentFailed
 export const withdrawalRequested = CareFind.withdrawalRequested

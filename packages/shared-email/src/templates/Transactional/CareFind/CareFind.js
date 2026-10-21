@@ -207,6 +207,26 @@ export function consultationCancelled({ fullName, professionalName, scheduledAt 
   })
 }
 
+// ── Safety reports ────────────────────────────────────────────────────────────
+// Sent by the database when a public safety report is submitted (trg_adr_reporter_receipt). The payload is
+// snake_case because it comes through the email catalog. It carries the reference and the reporter's own name and
+// nothing else: no product, patient, reaction or company detail ever goes into this email.
+export function adrReportReceived(payload = {}) {
+  const fullName = payload.fullName ?? payload.recipient_name
+  const reportNumber = payload.reportNumber ?? payload.report_number
+  return email({
+    title: 'We received your safety report',
+    preheader: `Your report reference is ${reportNumber || 'in this email'}. Keep it to check progress.`,
+    body: [
+      paragraph(html`${hi(fullName)} thank you for reporting a suspected side effect. Your report has been received.`),
+      detailsTable([['Report number', reportNumber]]),
+      paragraph('Keep this number. You can use it at any time to check where your report is.'),
+      smallPrint('This email does not include the details of your report. A report does not prove that a product caused the reaction; it helps safety reviewers look for patterns. If you did not submit a report, you can safely ignore this email.'),
+    ],
+    cta: { href: siteLink(APP, `/track-report?ref=${encodeURIComponent(reportNumber || '')}`), label: 'Track your report' },
+  })
+}
+
 // ── Payments and withdrawals ─────────────────────────────────────────────────────────────────────────────────────────
 export function paymentSuccess({ fullName, amount, reference, purpose } = {}) {
   return email({

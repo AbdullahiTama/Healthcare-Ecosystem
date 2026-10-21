@@ -48,6 +48,7 @@ const FIND_TEMPLATE_MAP = {
   consultationBooked: 'consultation_booked',
   consultationConfirmed: 'consultation_confirmed',
   consultationCancelled: 'consultation_cancelled',
+  adrReportReceived: 'adr_report_received',
   paymentSuccess: 'payment_success',
   paymentFailed: 'payment_failed',
   withdrawalRequested: 'withdrawal_requested',
