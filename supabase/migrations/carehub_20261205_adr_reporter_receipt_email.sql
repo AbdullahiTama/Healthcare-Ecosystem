@@ -1,11 +1,12 @@
 -- ============================================================================
 -- Safety reports: e-mail the reporter their ADR number when the report is submitted.
 --
--- Status: DRAFT, NOT APPLIED. Needs owner approval, and the ORDER MATTERS:
---   1. deploy the app first (it contains the e-mail template `adr_report_received`);
---   2. then apply this migration.
--- If this is applied before the template is deployed, the queued e-mail is marked
--- failed permanently (EmailService: no_template) instead of being retried.
+-- Status: APPLIED to production (szdybxmgmhndoytqanfb) on 2026-10-21 with owner approval, AFTER the app with the
+--         template `adr_report_received` was deployed (both Vercel projects green for commit d0b130a).
+--         Verified live in a rolled-back transaction: one outbox row (template, subject, sender correct; payload is
+--         report_number + recipient_name only), logged as sent, a re-fire adds no second row; trigger enabled; no API
+--         role can execute the function. The 12 reports submitted earlier are not e-mailed (trigger fires only on
+--         draft -> submitted).
 --
 -- How it works
 --   * The e-mail goes through the platform's existing catalog-governed path:

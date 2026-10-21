@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 vi.setConfig({ testTimeout: 90000, hookTimeout: 300000 })
 const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 const M = (name) => read(`../../../../../supabase/migrations/${name}.sql`)
-const FIX = read('../../../../../docs/architecture/pending-migrations/carehub_20261205_adr_reporter_receipt_email.sql')
+const FIX = read('../../../../../supabase/migrations/carehub_20261205_adr_reporter_receipt_email.sql')
 const MIGRATIONS = [
   'carehub_20260810_recursive_business_ids', 'carehub_20260816_adr_reports_basic',
   'carehub_20260818_adr_reports_phase1', 'carehub_20260818_adr_phase2_hospital',
