@@ -5,12 +5,12 @@ import {
   Home, ShoppingCart, Package, Users, Calendar, Clipboard, Receipt, Landmark,
   Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
   Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map as MapIcon, Mail,
-  ClipboardList, LayoutDashboard, Layers, AlertTriangle, FileCheck, CalendarClock, Store, Compass, BookUser, Radar,
+  ClipboardList, LayoutDashboard, Layers, AlertTriangle, FileCheck, CalendarClock, Store, Compass, Radar,
 } from 'lucide-react'
 
 export const ROLES = {
   Owner: {
-    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','wallet','reports','adr-reports','pv-tracker','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','business-discovery','directory','intelligence','reception','triage','doctor','rx_inbox','lab','imaging','ecommerce'],
+    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','wallet','reports','adr-reports','pv-tracker','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','business-discovery','intelligence','reception','triage','doctor','rx_inbox','lab','imaging','ecommerce'],
     canEditPrice: true,
     canEditStock: true,
     canDelete: true,
@@ -275,7 +275,9 @@ export const MODULES = {
   activity: { label: 'Live Field Activity', icon: Radio, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   discovery: { label: 'Facility Discovery', icon: Search, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   'business-discovery': { label: 'Business Discovery', icon: Compass, types: ENTERPRISE_TYPES, section: 'ecosystem' },
-  directory: { label: 'Business Directory', icon: BookUser, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  // There is deliberately no 'directory' module here: Business Directory management is
+  // platform-admin-only (Admin console > Directory), enforced by RLS in
+  // carehub_20261201_directory_platform_only.sql. A company never manages the registry.
   intelligence: { label: 'Territory Intelligence', icon: Radar, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   orders: { label: 'Orders & LPO', icon: FileText, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   warehouses: { label: 'Warehouses & Branches', icon: Factory, types: ENTERPRISE_TYPES, section: 'ecosystem' },
@@ -312,7 +314,7 @@ const NAV_ORDER = {
     // Clinics lead with the appointment book and consultation notes.
     clinic: ['overview', 'dashboard', 'appointments', 'consultation', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
     hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
-    enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'business-discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'directory', 'intelligence', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
+    enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'business-discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'intelligence', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
 }
 
 function familyOf(businessType) {

@@ -62,13 +62,13 @@ vi.mock('../../../lib/permissions', () => {
 
 import BusinessDashboard from '../BusinessDashboard'
 
-async function mountDashboard() {
+async function mountDashboard(path = '/dashboard') {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
   await act(async () => {
     root.render(
-      <MemoryRouter initialEntries={['/dashboard']}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path='/dashboard/*' element={<BusinessDashboard />} />
         </Routes>
@@ -117,6 +117,12 @@ describe('BusinessDashboard shell migration', () => {
     const home = m.host.querySelector('[data-testid="dashboard-home"]')
     expect(home).toBeTruthy()
     expect(main.contains(home)).toBe(true)
+  })
+
+  it('a Business Admin who opens /dashboard/directory by URL is sent back to the dashboard (management is platform-only)', async () => {
+    m = await mountDashboard('/dashboard/directory')
+    expect(m.host.querySelector('[data-testid="dashboard-home"]')).toBeTruthy()
+    expect(m.host.textContent).not.toMatch(/Business Directory/i)
   })
 
   it('shows the offline strip in the topbar slot when offline', async () => {

@@ -64,31 +64,35 @@ describe('PLATFORM scope addressing', () => {
   })
 })
 
+// Directory tables are platform-write-only; a company adopts a platform listing through
+// adopt_platform_directory_listing() (proved on real Postgres in
+// apps/carefind/src/test/directory/directoryPlatformOnly.db.test.js). The repository's
+// job is to call that function with the right arguments and no direct table write.
 describe('copyFromPlatform', () => {
-  it('creates a private, UNVERIFIED copy with provenance, and never copies twice', async () => {
-    const { repo, client } = seeded()
-    const plat = (await repo.getById('plat1', PLATFORM))
-    const first = await repo.copyFromPlatform(A, { ...plat, phone: '0803', origin: 'platform', distance_km: 3, id: 'plat1' }, 'me@x.co')
-    expect(first.alreadyHad).toBe(false)
-    const copy = client.rows('directory_businesses').find((r) => r.source_detail === 'platform:plat1')
-    expect(copy).toMatchObject({ business_id: A, data_source: 'external', verification_status: 'unverified', created_by: 'me@x.co', phone: '0803' })
-    expect(copy.id).not.toBe('plat1')
-    expect(copy.origin).toBeUndefined() // UI-only fields never reach the database
-    expect(copy.distance_km).toBeUndefined()
-    const again = await repo.copyFromPlatform(A, plat, 'me@x.co')
-    expect(again.alreadyHad).toBe(true)
-    expect(client.rows('directory_businesses').filter((r) => r.source_detail === 'platform:plat1')).toHaveLength(1)
-    // the platform record itself is untouched
-    expect(client.rows('directory_businesses').find((r) => r.id === 'plat1').business_id).toBeNull()
+  function recording(ret) {
+    const calls = []
+    return { calls, repo: createDirectoryRepository(async (p, o) => { calls.push({ path: p, method: o?.method, body: o?.body ? JSON.parse(o.body) : null }); return ret }) }
+  }
+  it('asks the database function to adopt the listing and writes no table directly', async () => {
+    const { repo, calls } = recording({ id: 'copy1', already_had: false })
+    const out = await repo.copyFromPlatform(A, { id: 'plat1', name: 'x', origin: 'platform', distance_km: 3 })
+    expect(calls).toEqual([{ path: 'rpc/adopt_platform_directory_listing', method: 'POST', body: { p_business_id: A, p_platform_id: 'plat1' } }])
+    expect(out).toEqual({ copy: { id: 'copy1' }, alreadyHad: false })
   })
-  it('another company can copy the same platform business independently', async () => {
-    const { repo, client } = seeded()
-    const plat = await repo.getById('plat1', PLATFORM)
-    await repo.copyFromPlatform(A, plat)
-    await repo.copyFromPlatform(B, plat)
-    expect(client.rows('directory_businesses').filter((r) => r.source_detail === 'platform:plat1').map((r) => r.business_id).sort()).toEqual([A, B])
+  it('reports an existing copy as already had (array or object response)', async () => {
+    const { repo } = recording([{ id: 'copy1', already_had: true }])
+    expect((await repo.copyFromPlatform(A, { id: 'plat1' })).alreadyHad).toBe(true)
+  })
+  it('surfaces a refusal instead of pretending the listing was added', async () => {
+    const repo = createDirectoryRepository(async () => { throw new Error('Supabase error (403): Not authorized') })
+    await expect(repo.copyFromPlatform(A, { id: 'plat1' })).rejects.toThrow(/Not authorized/)
   })
 })
+
+async function seedCopy(repo, biz, platId) {
+  const p = await repo.getById(platId, PLATFORM)
+  return repo.create(biz, { name: p.name, name_normalized: p.name_normalized, latitude: p.latitude, longitude: p.longitude, data_source: 'external', source_detail: 'platform:' + platId, verification_status: 'unverified' })
+}
 
 describe('searchBusinesses with the platform registry', () => {
   const center = { lat: 6.5, lng: 3.4 }
@@ -105,7 +109,7 @@ describe('searchBusinesses with the platform registry', () => {
   })
   it('shows a copied platform business once, as the company\'s own record', async () => {
     const { repo } = seeded()
-    const { copy } = await repo.copyFromPlatform(A, await repo.getById('plat1', PLATFORM))
+    const copy = await seedCopy(repo, A, 'plat1')
     await repo.setActive(copy.id, A, true) // the in-memory table has no `is_active DEFAULT true` like Postgres
     const out = await searchBusinesses(repo, A, { center, radiusKm: 5, includePlatform: true })
     const names = out.results.map((r) => r.id + ':' + r.origin)
@@ -116,7 +120,7 @@ describe('searchBusinesses with the platform registry', () => {
   })
   it('an inactive or filter-hidden copy still suppresses the platform duplicate', async () => {
     const { repo, client } = seeded()
-    const { copy } = await repo.copyFromPlatform(A, await repo.getById('plat1', PLATFORM))
+    const copy = await seedCopy(repo, A, 'plat1')
     await repo.setActive(copy.id, A, false)
     const out = await searchBusinesses(repo, A, { center, radiusKm: 5, includePlatform: true })
     expect(out.results.map((r) => r.id)).not.toContain('plat1')
@@ -124,8 +128,8 @@ describe('searchBusinesses with the platform registry', () => {
   })
   it('getPlatformCopyIds is tenant-scoped', async () => {
     const { repo } = seeded()
-    await repo.copyFromPlatform(A, await repo.getById('plat1', PLATFORM))
-    await repo.copyFromPlatform(B, await repo.getById('plat2', PLATFORM))
+    await seedCopy(repo, A, 'plat1')
+    await seedCopy(repo, B, 'plat2')
     expect([...await repo.getPlatformCopyIds(A)]).toEqual(['plat1'])
     expect([...await repo.getPlatformCopyIds(B)]).toEqual(['plat2'])
   })

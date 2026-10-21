@@ -200,17 +200,17 @@ export function createDirectoryRepository(request = sbFetch) {
       return new Set(rows.map((r) => String(r.source_detail).slice('platform:'.length)))
     },
 
-    /** Copy a platform business into this company's own directory as a separate, private, UNVERIFIED record. */
-    async copyFromPlatform(businessId, platformRow, createdBy) {
-      const existing = await this.findPlatformCopy(businessId, platformRow.id)
-      if (existing) return { copy: existing, alreadyHad: true }
-      const f = ['name', 'name_normalized', 'category_id', 'subcategory_id', 'business_type', 'address', 'address_normalized', 'state', 'lga', 'city',
-        'latitude', 'longitude', 'phone', 'phone_normalized', 'email', 'website', 'website_host', 'contact_person', 'opening_hours', 'description']
-      const rec = {}
-      f.forEach((k) => { if (platformRow[k] !== undefined && platformRow[k] !== null) rec[k] = platformRow[k] })
-      // Verification belongs to the platform record; the company's copy starts unverified.
-      const created = await this.create(businessId, { ...rec, data_source: 'external', source_detail: 'platform:' + platformRow.id, verification_status: 'unverified' }, createdBy)
-      return { copy: created, alreadyHad: false }
+    /**
+     * Copy a verified platform business into this company's own directory as a separate, private, UNVERIFIED record.
+     * Goes through adopt_platform_directory_listing(): directory tables are writable by the platform team only, and
+     * the function authorises the company, re-checks the listing is verified/active and is idempotent per listing.
+     */
+    async copyFromPlatform(businessId, platformRow) {
+      const r = await request('rpc/adopt_platform_directory_listing', {
+        method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_platform_id: platformRow.id }),
+      })
+      const res = Array.isArray(r) ? r[0] : r
+      return { copy: { id: res.id }, alreadyHad: !!res.already_had }
     },
 
     // ── Import batches ─────────────────────────────────────────────────────
@@ -284,15 +284,14 @@ export function createDirectoryRepository(request = sbFetch) {
     /**
      * Bulk-assign a territory to ACTIVE businesses that have none yet, optionally
      * limited to a state. Never overwrites an existing assignment. Returns the
-     * number of rows changed. (RLS limits this to directory managers.)
+     * number of rows changed. Goes through assign_directory_territory(); directory
+     * tables are not directly writable by companies.
      */
     async assignTerritoryToUnassigned(businessId, territoryId, { state = null } = {}) {
-      const p = [`business_id=eq.${businessId}`, 'is_active=eq.true', 'territory_id=is.null']
-      if (state) p.push(`state=eq.${q(state)}`)
-      const rows = await request(`directory_businesses?${p.join('&')}&select=id`, {
-        method: 'PATCH', body: JSON.stringify({ territory_id: territoryId }),
+      const n = await request('rpc/assign_directory_territory', {
+        method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_territory_id: territoryId, p_state: state }),
       })
-      return Array.isArray(rows) ? rows.length : 0
+      return Number(Array.isArray(n) ? n[0] : n) || 0
     },
 
     // ── Reports of incorrect information ───────────────────────────────────

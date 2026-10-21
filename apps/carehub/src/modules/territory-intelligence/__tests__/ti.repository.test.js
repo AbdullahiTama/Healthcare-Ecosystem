@@ -37,34 +37,21 @@ describe('territory intelligence RPC requests', () => {
   })
 })
 
+// The write happens inside assign_directory_territory() (directory tables are platform-write-only);
+// its rules (unassigned + active + same tenant only, never overwrites, own territory only) are proved
+// on real Postgres in apps/carefind/src/test/directory/directoryPlatformOnly.db.test.js.
 describe('assignTerritoryToUnassigned', () => {
-  function seeded() {
-    const client = createInMemoryClient({
-      directory_businesses: [
-        { id: '1', business_id: A, state: 'Lagos', territory_id: null, is_active: true },
-        { id: '2', business_id: A, state: 'Lagos', territory_id: 'old', is_active: true },
-        { id: '3', business_id: A, state: 'Oyo', territory_id: null, is_active: true },
-        { id: '4', business_id: A, state: 'Lagos', territory_id: null, is_active: false },
-        { id: '5', business_id: B, state: 'Lagos', territory_id: null, is_active: true },
-      ],
-    })
-    return { client, repo: createDirectoryRepository(client) }
-  }
-  const terr = (client, id) => client.rows('directory_businesses').find((r) => r.id === id).territory_id
-
-  it('fills only unassigned, active, same-tenant rows and reports the count', async () => {
-    const { repo, client } = seeded()
+  it('calls the database function with tenant, territory and optional state, and returns the count', async () => {
+    const { repo, calls } = recording(2)
     expect(await repo.assignTerritoryToUnassigned(A, 't-new')).toBe(2)
-    expect(terr(client, '1')).toBe('t-new')
-    expect(terr(client, '3')).toBe('t-new')
-    expect(terr(client, '2')).toBe('old') // never overwrites
-    expect(terr(client, '4')).toBeNull() // inactive untouched
-    expect(terr(client, '5')).toBeNull() // other tenant untouched
+    expect(await repo.assignTerritoryToUnassigned(A, 't-new', { state: 'Oyo' })).toBe(2)
+    expect(calls.map((c) => [c.path, c.method, c.body])).toEqual([
+      ['rpc/assign_directory_territory', 'POST', { p_business_id: A, p_territory_id: 't-new', p_state: null }],
+      ['rpc/assign_directory_territory', 'POST', { p_business_id: A, p_territory_id: 't-new', p_state: 'Oyo' }],
+    ])
   })
-  it('can be limited to one state', async () => {
-    const { repo, client } = seeded()
-    expect(await repo.assignTerritoryToUnassigned(A, 't-new', { state: 'Oyo' })).toBe(1)
-    expect(terr(client, '3')).toBe('t-new')
-    expect(terr(client, '1')).toBeNull()
+  it('does not read a refusal as zero rows changed', async () => {
+    const repo = createDirectoryRepository(async () => { throw new Error('Supabase error (403): Not authorized') })
+    await expect(repo.assignTerritoryToUnassigned(A, 't-new')).rejects.toThrow(/Not authorized/)
   })
 })
