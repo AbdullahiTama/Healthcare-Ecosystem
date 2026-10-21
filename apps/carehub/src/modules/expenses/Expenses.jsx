@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus, ChevronDown } from 'lucide-react'
 import { expenseRepository } from './repositories'
+import { validateExpense, newExpenseId } from './expenseRules'
 import { fmt, todayDate, currentMonth } from '../../lib/utils'
 import { EXPENSE_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
@@ -43,6 +44,12 @@ export default function Expenses({ brand, role, perms }) {
   const [budgetInput, setBudgetInput] = useState('')
   const [budget, setBudget] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [loadError, setLoadError] = useState(null)
+  const [formErrors, setFormErrors] = useState({})
+  // One id per form session: a double-click or a retried request carries the same id, so the database refuses the second row.
+  const draftId = useRef(null)
+  const saveInFlight = useRef(false)
+  const loadSeq = useRef(0)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
@@ -56,7 +63,9 @@ export default function Expenses({ brand, role, perms }) {
   }, [brand?.id, filterMonth])
 
   async function load() {
+    const seq = ++loadSeq.current
     setLoading(true)
+    setLoadError(null)
     setExpenses([])
     setHasMore(true)
     try {
@@ -65,19 +74,27 @@ export default function Expenses({ brand, role, perms }) {
         expenseRepository.getTotals(brand.id, filterMonth || null),
         expenseRepository.getCategories(brand.id, filterMonth || null),
       ])
+      if (seq !== loadSeq.current) return // a newer load (month change, save) owns the screen
       setExpenses(page || [])
       setTotals(totalData?.[0] || { total_amount: 0, transaction_count: 0 })
       // Aggregate categories from summary rows
       const catMap = {}
       ;(catData || []).forEach(r => {
         if (!catMap[r.category]) catMap[r.category] = { category: r.category, total: 0, count: 0 }
-        catMap[r.category].total += r.category_amount || 0
+        catMap[r.category].total += Number(r.category_amount) || 0
         catMap[r.category].count += 1
       })
       setCategories(Object.values(catMap).sort((a, b) => b.total - a.total))
       setHasMore((page || []).length === PAGE_SIZE)
-    } catch (e) {}
-    setLoading(false)
+    } catch (e) {
+      if (seq !== loadSeq.current) return
+      // A failed read must never look like "no spending": say so and offer a retry.
+      console.error('[Expenses] load failed:', e?.message)
+      setLoadError(e?.message || 'Could not load expenses.')
+      setTotals({ total_amount: 0, transaction_count: 0 })
+      setCategories([])
+    }
+    if (seq === loadSeq.current) setLoading(false)
   }
 
   async function loadMore() {
@@ -87,26 +104,33 @@ export default function Expenses({ brand, role, perms }) {
       const more = await expenseRepository.getPage(brand.id, { month: filterMonth || null, offset: expenses.length, limit: PAGE_SIZE })
       setExpenses(p => [...p, ...(more || [])])
       setHasMore((more || []).length === PAGE_SIZE)
-    } catch (e) {}
+    } catch (e) { showToast('Could not load more expenses. Please try again.', { type: 'error' }) }
     setLoadingMore(false)
   }
 
   async function save() {
-    if (!form.category || !form.amount) { showToast('Please enter category and amount.', { type: 'warning' }); return }
+    if (saveInFlight.current) return
+    const check = validateExpense(form, EXPENSE_CATS)
+    setFormErrors(check.errors)
+    if (!check.ok) { showToast(Object.values(check.errors)[0], { type: 'warning' }); return }
+    saveInFlight.current = true
     setSaving(true)
+    if (!draftId.current) draftId.current = newExpenseId()
     try {
-      await expenseRepository.create(brand.id, {
-        category: form.category,
-        description: form.description || '',
-        amount: parseFloat(form.amount) || 0,
-        date: form.date || todayDate(),
-        staff_name: form.staffName || '',
-      })
+      // Resolves only once the database has confirmed the row exists for this business.
+      await expenseRepository.create(brand.id, { id: draftId.current, ...check.value })
+      draftId.current = null
       showToast('Expense logged!', { type: 'success' })
-      setForm({ date: todayDate() }); setShowAdd(false); load()
-    } catch (e) { showToast('Could not save expense. Please try again.', { type: 'error' }) }
+      setForm({ date: todayDate() }); setFormErrors({}); setShowAdd(false); load()
+    } catch (e) {
+      console.error('[Expenses] save failed:', e?.message)
+      showToast('Could not save the expense. Nothing was recorded; please try again.', { type: 'error' })
+    }
+    saveInFlight.current = false
     setSaving(false)
   }
+
+  function closeAdd() { setShowAdd(false); setForm({ date: todayDate() }); setFormErrors({}); draftId.current = null }
 
   function askDelete(e) { setDeleteTarget(e) }
   async function handleDelete() {
@@ -225,9 +249,9 @@ export default function Expenses({ brand, role, perms }) {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
-        <StatCard icon={<Receipt />} label='Total This Period' value={fmt(total)} />
-        <StatCard icon={<BarChart2 />} label='Categories' value={Object.keys(byCategory).length} />
-        <StatCard icon={<Clipboard />} label='Transactions' value={totals.transaction_count || 0} />
+        <StatCard icon={<Receipt />} label={filterMonth ? `Total for ${filterMonth}` : 'Total (all time)'} value={loadError ? '—' : fmt(total)} />
+        <StatCard icon={<BarChart2 />} label='Categories' value={loadError ? '—' : Object.keys(byCategory).length} />
+        <StatCard icon={<Clipboard />} label='Transactions' value={loadError ? '—' : (totals.transaction_count || 0)} />
       </div>
 
       {/* Category breakdown */}
@@ -252,8 +276,15 @@ export default function Expenses({ brand, role, perms }) {
         <button onClick={() => setFilterMonth('')} style={{ padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontSize: '13px', cursor: 'pointer', fontWeight: '700' }}>All time</button>
       </div>
 
-      {loading ? <Loading /> : expenses.length === 0 ? (
-        <Empty icon={<Receipt size={40} />} message='No expenses recorded yet' action='+ Log Expense' onAction={() => setShowAdd(true)} />
+      {loading ? <Loading /> : loadError ? (
+        <Card style={{ padding: '24px', textAlign: 'center' }} role='alert'>
+          <AlertCircle size={28} color={danger} />
+          <div style={{ fontWeight: '800', color: navy, margin: '8px 0 4px' }}>Expenses could not be loaded</div>
+          <div style={{ fontSize: '13px', color: gray500, marginBottom: '14px' }}>Your totals are not shown because they could not be read. Nothing has been lost.</div>
+          <TealBtn onClick={load}>Try again</TealBtn>
+        </Card>
+      ) : expenses.length === 0 ? (
+        <Empty icon={<Receipt size={40} />} message={filterMonth ? 'No expenses recorded for ' + filterMonth : 'No expenses recorded yet'} action='+ Log Expense' onAction={() => setShowAdd(true)} />
       ) : (
         <Card>
           <div style={{ overflowX: 'auto' }}>
@@ -322,19 +353,19 @@ export default function Expenses({ brand, role, perms }) {
       </Modal>
 
       {/* Add Expense Modal */}
-      <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ date: todayDate() }) }} title='Log Expense'
-        footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({ date: todayDate() }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Expense'}</TealBtn></>}>
+      <Modal show={showAdd} onClose={closeAdd} title='Log Expense'
+        footer={<><GhostBtn onClick={closeAdd} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} disabled={saving} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Expense'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {budget > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: theme.radius.md, background: overBudget ? dangerBg : tealMist, border: `1px solid ${overBudget ? danger : tealMist}`, fontSize: '12px', color: overBudget ? danger : tealDeep, fontWeight: '600' }}>
               {overBudget ? <><AlertTriangle size={13} /> Already over budget by {fmt(Math.abs(remaining))}</> : <><DollarSign size={13} /> Budget remaining this month: {fmt(remaining)}</>}
             </div>
           )}
-          <Sel label='Category *' value={form.category} onChange={v => f('category', v)} options={EXPENSE_CATS} required />
-          <Inp label='Description' value={form.description} onChange={v => f('description', v)} placeholder='What was this expense for?' />
+          <Sel label='Category *' value={form.category} onChange={v => f('category', v)} options={EXPENSE_CATS} required error={formErrors.category} />
+          <Inp label='Description' value={form.description} onChange={v => f('description', v)} placeholder='What was this expense for?' error={formErrors.description} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Inp label='Amount (₦) *' value={form.amount} onChange={v => f('amount', v)} type='number' placeholder='0' required />
-            <Inp label='Date' value={form.date} onChange={v => f('date', v)} type='date' />
+            <Inp label='Amount (₦) *' value={form.amount} onChange={v => f('amount', v)} type='number' min='0' placeholder='0' required error={formErrors.amount} />
+            <Inp label='Date' value={form.date} onChange={v => f('date', v)} type='date' error={formErrors.date} />
           </div>
           <Inp label='Recorded By' value={form.staffName} onChange={v => f('staffName', v)} placeholder='Your name' />
           {form.amount && budget > 0 && (

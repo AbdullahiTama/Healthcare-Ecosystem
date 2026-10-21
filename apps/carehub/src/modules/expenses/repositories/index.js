@@ -10,10 +10,22 @@ import { sbFetch } from '../../../services/supabase'
 // (path, options) => Promise<rows>. Production binds the real PostgREST-backed
 // sbFetch (the default); tests bind an in-memory adapter. That injected
 // transport is the seam — one interface, two adapters.
+
+// PostgREST silently caps a plain GET at 1000 rows. A report that reads
+// "everything" must page, or its totals quietly stop at the cap.
+const ALL_PAGE = 1000
+
 export function createExpenseRepository(request = sbFetch) {
   return {
     async getAll(businessId) {
-      return request(`expenses?business_id=eq.${businessId}&order=created_at.desc&select=*`)
+      const rows = []
+      for (let offset = 0; ; offset += ALL_PAGE) {
+        const page = await request(
+          `expenses?business_id=eq.${businessId}&order=created_at.desc,id.asc&select=*&limit=${ALL_PAGE}&offset=${offset}`
+        )
+        rows.push(...page)
+        if (page.length < ALL_PAGE) return rows
+      }
     },
 
     // Paginated expense list — use for table display
@@ -37,11 +49,23 @@ export function createExpenseRepository(request = sbFetch) {
       return request(`rpc/get_expense_summary?${params.join('&')}`)
     },
 
+    // Saves one expense and returns the stored row once the database confirms it.
+    // The caller supplies `expense.id` (generated once per form), which makes a
+    // double-click or a retried request idempotent: the second insert conflicts
+    // on the primary key and is ignored instead of creating a duplicate. When the
+    // insert was ignored the row is read back by id, so success is only reported
+    // for a row that really exists for this business.
     async create(businessId, expense) {
-      return request('expenses', {
+      if (!expense?.id) throw new Error('An expense needs an id before it can be saved.')
+      const inserted = await request('expenses?on_conflict=id', {
         method: 'POST',
+        prefer: 'resolution=ignore-duplicates,return=representation',
         body: JSON.stringify({ ...expense, business_id: businessId }),
       })
+      if (inserted?.length) return inserted[0]
+      const existing = await request(`expenses?id=eq.${expense.id}&business_id=eq.${businessId}&select=*`)
+      if (!existing?.length) throw new Error('The expense could not be confirmed as saved.')
+      return existing[0]
     },
 
     async delete(expenseId, businessId) {

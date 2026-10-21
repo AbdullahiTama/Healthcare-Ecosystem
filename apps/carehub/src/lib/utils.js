@@ -11,9 +11,11 @@ export const TEALC = theme.tealDeep
 
 export const fmt = (n) => '₦' + Number(n || 0).toLocaleString()
 export const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NG') : 'Not recorded'
-export const todayDate = () => new Date().toISOString().split('T')[0]
+// Local calendar date: toISOString() is UTC, which is yesterday for the first hour of a Nigerian day.
+const pad2 = (n) => String(n).padStart(2, '0')
+export const todayDate = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` }
 export const nowStr = () => new Date().toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })
-export const currentMonth = () => new Date().toISOString().slice(0, 7)
+export const currentMonth = () => todayDate().slice(0, 7)
 export const genId = (prefix = 'TXN') => prefix + Math.floor(Math.random() * 900000 + 100000)
 
 export const businessIcon = (type) => BUSINESS_TYPES.find(b => b.id === type)?.icon || '🏥'

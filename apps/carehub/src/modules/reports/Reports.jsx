@@ -7,11 +7,12 @@ import { Download, CheckCircle, AlertTriangle } from 'lucide-react'
 // the codebase.
 import { saleRepository } from '../pos/repositories'
 import { expenseRepository } from '../expenses/repositories'
+import { expenseDate, sumExpenses, sumByCategory } from '../expenses/expenseRules'
 import { purchaseRepository } from '../purchases/repositories'
 import { adrReportRepository } from '../adr/repositories'
 import { fmt, currentMonth } from '../../lib/utils'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, Loading, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, Loading, TealBtn, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, warning, bg } = theme
 
@@ -21,6 +22,7 @@ export default function Reports({ brand, role, perms, embedded = false }) {
   const [purchases, setPurchases] = useState([])
   const [adrReports, setAdrReports] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [period, setPeriod] = useState('month')
   const [customMonth, setCustomMonth] = useState(currentMonth())
   const { msg, show: showToast } = useToast()
@@ -29,6 +31,7 @@ export default function Reports({ brand, role, perms, embedded = false }) {
 
   async function load() {
     setLoading(true)
+    setLoadError(null)
     try {
       const [s, e, p, ad] = await Promise.all([
         saleRepository.getAll(brand.id),
@@ -37,13 +40,17 @@ export default function Reports({ brand, role, perms, embedded = false }) {
         adrReportRepository.getReports(brand.id),
       ])
       setSales(s || []); setExpenses(e || []); setPurchases(p || []); setAdrReports(ad || [])
-    } catch (e) {}
+    } catch (e) {
+      // Do not present a failed read as a month with no spending.
+      console.error('[Reports] load failed:', e?.message)
+      setLoadError(e?.message || 'Could not load reports.')
+    }
     setLoading(false)
   }
 
   const now = new Date()
-  const filterItem = item => {
-    const d = item.created_at || ''
+  const filterItem = (item, dateOf = i => i.created_at || '') => {
+    const d = dateOf(item)
     if (period === 'today') return d.startsWith(now.toISOString().split('T')[0])
     if (period === 'week') { const w = new Date(now - 7 * 864e5); return new Date(d) >= w }
     if (period === 'month') return d.startsWith(customMonth)
@@ -52,12 +59,13 @@ export default function Reports({ brand, role, perms, embedded = false }) {
   }
 
   const fSales = sales.filter(filterItem).filter(s => !s.is_on_hold)
-  const fExpenses = expenses.filter(filterItem)
+  // Expenses belong to the date the user recorded (same rule as the Expenses page and the database).
+  const fExpenses = expenses.filter(x => filterItem(x, expenseDate))
   const fPurchases = purchases.filter(filterItem)
   const fAdrReports = adrReports.filter(filterItem)
 
   const totalRevenue = fSales.reduce((s, x) => s + (x.total || 0), 0)
-  const totalExpenses = fExpenses.reduce((s, x) => s + (x.amount || 0), 0)
+  const totalExpenses = sumExpenses(fExpenses)
   const totalPurchases = fPurchases.reduce((s, x) => s + (x.total_cost || 0), 0)
   const netProfit = totalRevenue - totalExpenses - totalPurchases
   const creditBalance = sales.filter(s => s.is_credit && (s.balance || 0) > 0).reduce((s, x) => s + (x.balance || 0), 0)
@@ -66,8 +74,7 @@ export default function Reports({ brand, role, perms, embedded = false }) {
   const byMethod = {}
   fSales.forEach(s => { byMethod[s.payment_method] = (byMethod[s.payment_method] || 0) + (s.total || 0) })
 
-  const byExpCat = {}
-  fExpenses.forEach(e => { byExpCat[e.category] = (byExpCat[e.category] || 0) + (e.amount || 0) })
+  const byExpCat = sumByCategory(fExpenses)
 
   const dailySales = {}
   fSales.forEach(s => { const d = s.created_at?.split('T')[0] || ''; dailySales[d] = (dailySales[d] || 0) + (s.total || 0) })
@@ -143,7 +150,13 @@ export default function Reports({ brand, role, perms, embedded = false }) {
         )}
       </div>
 
-      {loading ? <Loading /> : (
+      {loading ? <Loading /> : loadError ? (
+        <Card style={{ padding: '24px', textAlign: 'center' }} role='alert'>
+          <div style={{ fontWeight: '800', color: navy, marginBottom: '4px' }}>Reports could not be loaded</div>
+          <div style={{ fontSize: '13px', color: gray500, marginBottom: '14px' }}>Figures are not shown because they could not be read, so they are not shown as zero.</div>
+          <TealBtn onClick={load}>Try again</TealBtn>
+        </Card>
+      ) : (
         <>
           {/* Summary cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '14px', marginBottom: '20px' }}>

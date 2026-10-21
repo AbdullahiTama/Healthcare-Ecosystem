@@ -133,8 +133,24 @@ export function createInMemoryClient(seed = {}) {
           }
         }
       }
-      db[table].push(...rows.map((r) => ({ ...r })))
-      return rows
+      // Primary-key conflicts, as PostgREST reports them: `?on_conflict=id` with
+      // `Prefer: resolution=ignore-duplicates` skips the existing row (and, with
+      // return=representation, returns only what was really inserted); without
+      // it a duplicate id is a 23505 error. Only enforced for caller-supplied ids.
+      const ignore = params.get('on_conflict') === 'id' && String(options.prefer || '').includes('resolution=ignore-duplicates')
+      const fresh = []
+      for (const r of rows) {
+        const exists = r.id !== undefined && db[table].some((x) => String(x.id) === String(r.id)) || fresh.some((x) => String(x.id) === String(r.id))
+        if (exists) {
+          if (ignore) continue
+          const err = new Error(`duplicate key value violates unique constraint "${table}_pkey" (23505)`)
+          err.code = '23505'
+          throw err
+        }
+        fresh.push(r)
+      }
+      db[table].push(...fresh.map((r) => ({ ...r })))
+      return fresh
     }
     if (method === 'PATCH') {
       const patch = JSON.parse(options.body)
