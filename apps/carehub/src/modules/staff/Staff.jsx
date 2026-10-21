@@ -77,7 +77,7 @@ export default function Staff({ brand, role, perms }) {
     ['canViewReports', 'View reports', 'Can open the Reports page and see business analytics.'],
     ['canExportReports', 'Export reports', 'Can download/export report data.'],
     ['canManageStaff', 'Manage staff', 'Can add, remove or change staff members and roles.'],
-    ['canManageDirectory', 'Directory-linked actions', 'Can add a platform listing to this company's Business Discovery list, assign territories in Territory Intelligence, and see every rep's field activity. Editing, importing and verifying the Business Directory itself is done only by the platform team.'],
+    ['canManageDirectory', 'Directory-linked actions', 'Can add a platform listing to the Business Discovery list of this company, assign territories in Territory Intelligence, and see all field activity of the team. Editing, importing and verifying the Business Directory itself is done only by the platform team.'],
     ['canViewFinance', 'View finance', 'Can see expenses, debts and financial figures.'],
     ['canMakeSales', 'Make sales', 'Can record sales at the POS / counter.'],
     ['canViewSettings', 'View settings', 'Can open Settings and change business configuration.'],
