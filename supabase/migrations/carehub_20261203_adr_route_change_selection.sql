@@ -1,7 +1,9 @@
 -- ============================================================================
 -- ADR routing: let a reporter change the company on their own DRAFT.
 --
--- Status: DRAFT, NOT APPLIED. Needs owner approval before it goes to production.
+-- Status: APPLIED to production (szdybxmgmhndoytqanfb) on 2026-10-21 with owner approval. Verified live in a rolled-back
+--         transaction: unknown -> company -> other company -> typed -> unknown all succeed on one route; a pharmacy is
+--         refused; another reporter and a submitted report are refused; direct route updates stay blocked; no anon EXECUTE.
 --
 -- Bug (reported 2026-10-21 from CareFind, "Could not save. Check your connection
 -- and retry."): create_adr_product_route() only ever INSERTs a route. The
