@@ -1,8 +1,10 @@
 -- ============================================================================
 -- ADR reports: a UNIQUE reference number, and a way for the reporter to track it.
 --
--- Status: DRAFT, NOT APPLIED. Needs owner approval before it goes to production.
--- It renumbers existing reports (section 2): read that section first.
+-- Status: APPLIED to production (szdybxmgmhndoytqanfb) on 2026-10-21 with owner approval. 53 existing reports were
+-- renumbered ADR-2026-000001..000053 (audit events unchanged: 84 before and after). Verified live in rolled-back
+-- transactions: owner lookup works and leaks nothing, a stranger and an unknown number both get {found:false},
+-- the 9th failed attempt is blocked, attempts persist, anon has no EXECUTE.
 --
 -- Problem (verified live 2026-10-21): generate_adr_report_number() numbers per
 -- (business_id, module_type). Public CareFind reports have business_id NULL, so
