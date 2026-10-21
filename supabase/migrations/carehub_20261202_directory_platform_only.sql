@@ -1,7 +1,8 @@
 -- ============================================================================
 -- Business Directory: management is Platform Super Admin only.
 --
--- Status: DRAFT, NOT APPLIED. Needs owner approval before it goes to production.
+-- Status: APPLIED to production (szdybxmgmhndoytqanfb) on 2026-10-21 as a tracked migration, with owner approval.
+--         Catalog verified (one overload each, no anon EXECUTE) and behaviour verified in rolled-back transactions.
 --
 -- Owner decision (2026-10-21): all directory_* writes become platform-admin-only.
 -- Before this, a company owner (and any custom role the owner ticked "Manage

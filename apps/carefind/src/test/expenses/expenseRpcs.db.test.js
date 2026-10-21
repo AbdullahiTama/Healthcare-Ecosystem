@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 
 vi.setConfig({ testTimeout: 60000, hookTimeout: 120000 })
 const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
-const FIX = read('../../../../../docs/architecture/pending-migrations/carehub_20261201_expenses_rpc_fix.sql')
+const FIX = read('../../../../../supabase/migrations/carehub_20261201_expenses_rpc_fix.sql')
 // The three original functions, extracted verbatim from the shipped migration.
 const orig = read('../../../../../supabase/migrations/carefind_20261019_red_team_fixes.sql')
 const ORIGINAL = ['get_expense_totals', 'get_expense_summary', 'get_expenses_page'].map((n) => {

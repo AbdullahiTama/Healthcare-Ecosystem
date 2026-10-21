@@ -2,7 +2,8 @@
 -- ADR routing: reviewer approval queue (policy B), auditable route review,
 -- reviewer + company notifications.
 --
--- Status: DRAFT, NOT APPLIED. Apply only with explicit owner approval.
+-- Status: APPLIED to production (szdybxmgmhndoytqanfb) on 2026-10-21 with owner approval. Verified: single overloads,
+--         no anon EXECUTE, triggers enabled, and approve/hold/redirect + notification checked in a rolled-back transaction.
 --
 -- Owner decision (2026-10-20): public reports are NOT auto-routed. A platform
 -- reviewer approves, redirects or holds every route before the responsible

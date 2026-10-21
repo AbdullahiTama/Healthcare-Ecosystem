@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 vi.setConfig({ testTimeout: 60000, hookTimeout: 180000 })
 const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 const SQL = (f) => read(`../../../../carehub/sql/${f}`)
-const FIX = read('../../../../../docs/architecture/pending-migrations/carehub_20261202_directory_platform_only.sql')
+const FIX = read('../../../../../supabase/migrations/carehub_20261202_directory_platform_only.sql')
 
 const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'

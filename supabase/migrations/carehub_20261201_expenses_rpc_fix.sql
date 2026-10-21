@@ -2,7 +2,8 @@
 -- Expenses: repair get_expenses_page and make the period filter use the date
 -- the user recorded.
 --
--- Status: DRAFT, NOT APPLIED. Needs owner approval before it goes to production.
+-- Status: APPLIED to production (szdybxmgmhndoytqanfb) on 2026-10-21 as a tracked migration, with owner approval.
+--         Catalog verified (one overload each, no anon EXECUTE) and behaviour verified in rolled-back transactions.
 --
 -- Root cause (verified live on szdybxmgmhndoytqanfb, 2026-10-21, by calling the
 -- RPCs as a business owner inside a rolled-back DO block):
