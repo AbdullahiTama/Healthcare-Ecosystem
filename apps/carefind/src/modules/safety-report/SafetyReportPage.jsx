@@ -249,6 +249,7 @@ export default function SafetyReportPage() {
           )}
           {error && <p style={s.error} role="alert">{error}</p>}
         </div>
+        <p style={s.muted}>Already reported? <Link to="/track-report">Track a report by its ADR number</Link>.</p>
         <p style={s.muted}>A basic report takes about a minute or two. Your details stay confidential and are never published.</p>
       </main>
     )
@@ -261,9 +262,11 @@ export default function SafetyReportPage() {
         <div style={s.card}>
           <p style={s.body}>Thank you. Your safety report has been recorded with reference:</p>
           <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--teal)' }} aria-label={`Report reference ${reference}`}>{reference}</p>
+          <p style={s.body}>Keep this number. You can use it at any time to check where your report is.</p>
           <p style={s.body}>What happens next: our safety team acknowledges your report inside this platform and may contact you if you agreed to a follow up. An acknowledgement here means <strong>we received it</strong>. It is not a confirmation of any regulatory submission.</p>
           <div style={{ ...s.row, marginTop: 12 }}>
-            <Link to="/feed" style={{ ...s.btnPrimary, textDecoration: 'none', textAlign: 'center' }}>Back to feed</Link>
+            <Link to={`/track-report?ref=${encodeURIComponent(reference)}`} style={{ ...s.btnPrimary, textDecoration: 'none', textAlign: 'center' }}>Track this report</Link>
+            <Link to="/feed" style={{ ...s.btnGhost, textDecoration: 'none', textAlign: 'center' }}>Back to feed</Link>
           </div>
         </div>
       </main>

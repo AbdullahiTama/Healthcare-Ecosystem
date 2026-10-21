@@ -238,6 +238,19 @@ export function createSafetyReportRepository(client = defaultClient) {
       if (error) throw error
       return unwrapSingle(data)
     },
+
+    // Status lookup by ADR number (track_adr_report). Returns stage names only.
+    // `contact` (the e-mail or phone the report was made with) is needed only when
+    // the caller is not the signed-in reporter. Resolves to { found:false } for any
+    // mismatch; rejects for sign-in, rate-limit and network problems.
+    async trackReport(reportNumber, contact = null) {
+      const { data, error } = await client.rpc('track_adr_report', {
+        p_report_number: reportNumber,
+        p_contact: blankToNull(contact),
+      })
+      if (error) throw error
+      return data
+    },
   }
 }
 

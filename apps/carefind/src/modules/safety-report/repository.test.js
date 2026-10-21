@@ -146,4 +146,19 @@ describe('safetyReportRepository', () => {
     expect(client.calls.find((c) => c.rpc === 'search_eligible_product_companies').args)
       .toEqual({ p_query: 'fidson', p_limit: 20 })
   })
+
+  it('tracks a report by ADR number through the lookup RPC, sending blank contact as null', async () => {
+    const client = makeClient({ rpcData: { track_adr_report: { found: true, report_number: 'ADR-2026-000007', products: [] } } })
+    const repo = createSafetyReportRepository(client)
+    const res = await repo.trackReport('ADR-2026-000007', '  ')
+    expect(res.found).toBe(true)
+    expect(client.calls.find((c) => c.rpc === 'track_adr_report').args).toEqual({ p_report_number: 'ADR-2026-000007', p_contact: null })
+    await repo.trackReport('ADR-2026-000007', 'a@example.com')
+    expect(client.calls.filter((c) => c.rpc === 'track_adr_report')[1].args.p_contact).toBe('a@example.com')
+  })
+
+  it('a failed lookup rejects instead of looking like "not found"', async () => {
+    const client = { ...makeClient(), rpc: async () => ({ data: null, error: new Error('too_many_attempts') }) }
+    await expect(createSafetyReportRepository(client).trackReport('ADR-2026-000007')).rejects.toThrow(/too_many_attempts/)
+  })
 })
