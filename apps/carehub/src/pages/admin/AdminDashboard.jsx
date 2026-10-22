@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   RefreshCw, Bell, Building2, Hourglass, CheckCircle, Users, Check, X, Pause, Play, Search, Download, Store, Shield, UserCog, FileText, Wallet, Landmark, MapPin, AlertTriangle, Trash2, Eye, ExternalLink, ArrowRight, Filter, LayoutDashboard, Command as CommandIcon, ChevronLeft, ChevronRight, Sparkles, TrendingUp, Menu, PanelLeftClose, PanelLeftOpen, ShieldAlert, Activity, ScrollText, Inbox
 } from 'lucide-react'
@@ -26,6 +26,7 @@ import { PLATFORM_PERMISSIONS, PLATFORM_NAV, normalizePlatformPermissions, navCa
 import { toBusinessCsv, downloadCsv, buildStatementHtml, openPrintWindow } from '../../lib/carefindhubExports'
 import { buildCommandList, scoreCommand } from './commandRegistry'
 import { adrReportRepository } from '../../modules/adr/repositories'
+import { parseReviewHash } from '../../modules/adr/reviewLink'
 
 // Lazy-loaded admin sub-panels for code splitting
 const ReferralCoveragePanel = lazy(() => import('./referral/AdminReferralPanels').then(m => ({ default: m.CoveragePanel })))
@@ -1463,6 +1464,17 @@ export default function AdminDashboard() {
     adrReportRepository.getRouteReviewQueue('open').then((r) => { if (live) setPvQueueCount(r.length) }).catch(() => {})
     return () => { live = false }
   }, [tab])
+  // Deep link from the reviewer alert ('/admin#adr-<report_id>'): open PV Routing on that report.
+  // The focus is dropped when the reviewer leaves the tab so returning later does not re-scroll.
+  const location = useLocation()
+  const [focusReportId, setFocusReportId] = useState(null)
+  useEffect(() => { if (tab !== 'pv-routing') setFocusReportId(null) }, [tab])
+  useEffect(() => {
+    const reportId = parseReviewHash(location.hash)
+    if (!reportId) return
+    setFocusReportId(reportId)
+    setTab('pv-routing')
+  }, [location.hash])
   const [platformPerms, setPlatformPerms] = useState(null)
   const { msg: toastMsg, show: showToast } = useToast()
   const navigate = useNavigate()
@@ -1721,6 +1733,13 @@ export default function AdminDashboard() {
         </div>
 
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: 20, width: '100%', flex: 1 }}>
+          {pvQueueCount > 0 && tab!=='pv-routing' && isPermitted('Compliance') && (
+            <div role="status" style={{ marginBottom: 16, padding:'12px 16px', borderRadius:12, background: 'var(--amber-bg)', border:'1px solid var(--amber)', display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+              <FileText size={18} color="var(--amber)" style={{ flexShrink:0 }} aria-hidden="true" />
+              <div style={{ fontWeight:700, color: 'var(--amber)', fontSize:13, flex:1, minWidth:200 }}>{pvQueueCount} safety report route{pvQueueCount===1?'':'s'} waiting for routing review. Companies cannot see these cases until they are routed.</div>
+              <button onClick={()=>setTab('pv-routing')} style={{ padding:'7px 12px', borderRadius:8, border:'1px solid var(--amber)', background:'transparent', color:'var(--amber)', fontWeight:700, fontSize:12, cursor:'pointer' }}>Open PV Routing</button>
+            </div>
+          )}
           {pendingCount > 0 && tab==='dashboard' && (
             <div style={{ marginBottom: 16, padding:'12px 16px', borderRadius:12, background: 'var(--amber-bg)', border:'1px solid var(--amber)', display:'flex', alignItems:'center', gap:10 }}>
               <Bell size={18} color="var(--amber)" style={{ flexShrink:0 }} />
@@ -1763,8 +1782,8 @@ export default function AdminDashboard() {
               {tab==='trust' && (isPermitted('Trust') ? <Suspense fallback={<PanelLoading />}><TrustPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Trust" />)}
               {tab==='growth' && (isPermitted('Growth') ? <Suspense fallback={<PanelLoading />}><GrowthPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Growth" />)}
               {tab==='ops' && (isPermitted('Ops') ? <Suspense fallback={<PanelLoading />}><SupportInbox /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Ops" />)}
-              {tab==='compliance' && (isPermitted('Compliance') ? <Suspense fallback={<PanelLoading />}><Compliance /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Compliance" />)}
-              {tab==='pv-routing' && (isPermitted('Compliance') ? <Suspense fallback={<PanelLoading />}><RouteReviewQueue /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to PV Routing" />)}
+              {tab==='compliance' && (isPermitted('Compliance') ? <Suspense fallback={<PanelLoading />}><Compliance /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Compliance" />)}
+              {tab==='pv-routing' && (isPermitted('Compliance') ? <Suspense fallback={<PanelLoading />}><RouteReviewQueue focusReportId={focusReportId} /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to PV Routing" />)}
               {tab==='directory' && (isPermitted('Directory') ? <Suspense fallback={<PanelLoading />}><BusinessDirectory brand={null} perms={{ canManageDirectory: true }} platformMode /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Directory" />)}
             </>
           )}
