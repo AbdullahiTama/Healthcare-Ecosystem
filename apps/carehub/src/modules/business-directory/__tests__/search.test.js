@@ -1,68 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { searchBusinesses, sortResults, findNearbyBusinesses, radiusForAccuracy, NEARBY_LABELS } from '../services/search'
+import { sortResults, findNearbyBusinesses, radiusForAccuracy, NEARBY_LABELS } from '../services/search'
 import { createDirectoryRepository } from '../repositories'
-import { createInMemoryClient } from '../../../test/inMemoryClient'
-
-const A = 'biz-A'
-const mk = (id, lat, lng, extra = {}) => ({ id, business_id: A, name: id, name_normalized: id, latitude: lat, longitude: lng, is_active: true, verification_status: 'unverified', created_at: '2026-01-01', ...extra })
-
-function repoWith(rows) {
-  const client = createInMemoryClient({ directory_businesses: rows })
-  return { repo: createDirectoryRepository(client), client }
-}
-
-describe('searchBusinesses', () => {
-  const rows = [
-    mk('near', 6.5, 3.4, { verification_status: 'verified', category_id: 'ph' }),
-    mk('mid', 6.52, 3.4, { category_id: 'ph' }),
-    mk('edge', 6.54, 3.4, { category_id: 'ph' }), // ≈ 4.4 km
-    mk('outside', 6.6, 3.4, { category_id: 'ph' }), // ≈ 11 km
-    mk('nocoords', null, null, { category_id: 'ph' }),
-    mk('wrongcat', 6.5, 3.4001, { category_id: 'hosp' }),
-  ]
-
-  it('radius search trims the bounding box to the true circle and sorts nearest first', async () => {
-    const { repo } = repoWith(rows)
-    const out = await searchBusinesses(repo, A, { center: { lat: 6.5, lng: 3.4 }, radiusKm: 5, categoryId: 'ph' })
-    expect(out.mode).toBe('radius')
-    expect(out.results.map((r) => r.id)).toEqual(['near', 'mid', 'edge'])
-    expect(out.results[0].distance_km).toBeCloseTo(0, 3)
-  })
-
-  it('never returns a business with no coordinates in a radius search', async () => {
-    const { repo } = repoWith(rows)
-    const out = await searchBusinesses(repo, A, { center: { lat: 6.5, lng: 3.4 }, radiusKm: 50 })
-    expect(out.results.find((r) => r.id === 'nocoords')).toBeUndefined()
-  })
-
-  it('quantity caps the list but reports the true total', async () => {
-    const { repo } = repoWith(rows)
-    const out = await searchBusinesses(repo, A, { center: { lat: 6.5, lng: 3.4 }, radiusKm: 5, categoryId: 'ph', quantity: 2 })
-    expect(out.results).toHaveLength(2)
-    expect(out.total).toBe(3)
-    expect(out.truncated).toBe(true)
-  })
-
-  it('quantity picks the nearest N even when displayed alphabetically', async () => {
-    const { repo } = repoWith([mk('zulu', 6.5, 3.4), mk('alpha', 6.52, 3.4), mk('mike', 6.54, 3.4)])
-    const out = await searchBusinesses(repo, A, { center: { lat: 6.5, lng: 3.4 }, radiusKm: 10, quantity: 2, sort: 'alpha' })
-    expect(out.results.map((r) => r.id)).toEqual(['alpha', 'zulu']) // nearest two, then A–Z
-  })
-
-  it('says nothing was found rather than inventing results', async () => {
-    const { repo } = repoWith(rows)
-    const out = await searchBusinesses(repo, A, { center: { lat: 9, lng: 9 }, radiusKm: 1 })
-    expect(out.results).toEqual([])
-  })
-
-  it('falls back to place-name text matching, without distances', async () => {
-    const { repo } = repoWith([mk('s1', null, null, { lga: 'Surulere' }), mk('s2', 6, 3, { city: 'Ikeja' })])
-    const out = await searchBusinesses(repo, A, { placeName: 'surulere' })
-    expect(out.mode).toBe('place_text')
-    expect(out.results.map((r) => r.id)).toEqual(['s1'])
-    expect(out.results[0].distance_km).toBeNull()
-  })
-})
 
 describe('sortResults', () => {
   const r = [
@@ -80,25 +18,38 @@ describe('sortResults', () => {
 })
 
 describe('findNearbyBusinesses (Live Field Report matcher)', () => {
-  it('returns hints within the GPS uncertainty only, nearest first', async () => {
-    const { repo } = repoWith([mk('here', 6.5, 3.4), mk('next', 6.5008, 3.4), mk('far', 6.52, 3.4)])
-    const out = await findNearbyBusinesses(repo, A, { lat: 6.5, lng: 3.4, accuracy: 30 })
+  const row = (id, distance_km) => ({ id, name: id, address: '1 Road', business_type: 'pharmacy', verification_status: 'verified', distance_km })
+  const repoReturning = (rows, seen = []) => ({ nearbyBusinesses: async (args) => { seen.push(args); return rows } })
+
+  it('asks for the GPS fix, a radius that honours its uncertainty, and the limit, and returns nearest first', async () => {
+    const seen = []
+    const out = await findNearbyBusinesses(repoReturning([row('next', 0.09), row('here', 0.001)], seen), { lat: 6.5, lng: 3.4, accuracy: 30 })
+    expect(seen).toEqual([{ lat: 6.5, lng: 3.4, radiusKm: radiusForAccuracy(30), limit: 5 }])
     expect(out.candidates.map((c) => c.id)).toEqual(['here', 'next'])
+    expect(out.radiusKm).toBe(radiusForAccuracy(30))
   })
+
+  it('never shows more than the requested limit, and treats a missing answer as nothing nearby', async () => {
+    const many = Array.from({ length: 8 }, (_, i) => row('r' + i, i / 100))
+    expect((await findNearbyBusinesses(repoReturning(many), { lat: 6.5, lng: 3.4, accuracy: 20, limit: 3 })).candidates).toHaveLength(3)
+    expect((await findNearbyBusinesses(repoReturning(null), { lat: 6.5, lng: 3.4, accuracy: 20 })).candidates).toEqual([])
+  })
+
   it('radius widens with a poor fix but is bounded', () => {
     expect(radiusForAccuracy(10)).toBe(0.2)
     expect(radiusForAccuracy(400)).toBeCloseTo(0.6)
     expect(radiusForAccuracy(5000)).toBe(1)
     expect(radiusForAccuracy(undefined)).toBe(0.2)
   })
+
   it('never claims a visit', () => {
     expect(Object.values(NEARBY_LABELS).join(' ').toLowerCase()).not.toMatch(/visited|checked in|arrived/)
   })
-  it('is read-only: it only issues GETs', async () => {
-    const methods = []
-    const repo = createDirectoryRepository(async (p, o) => { methods.push(o?.method || 'GET'); return [] })
-    await findNearbyBusinesses(repo, A, { lat: 6.5, lng: 3.4, accuracy: 20 })
-    await searchBusinesses(repo, A, { center: { lat: 6.5, lng: 3.4 }, radiusKm: 3 })
-    expect(new Set(methods)).toEqual(new Set(['GET']))
+
+  it('goes through the bounded database function and nothing else', async () => {
+    const calls = []
+    const repo = createDirectoryRepository(async (path, opts) => { calls.push([path, opts?.method || 'GET', opts?.body]); return [] })
+    await findNearbyBusinesses(repo, { lat: 6.5, lng: 3.4, accuracy: 20 })
+    expect(calls).toEqual([['rpc/nearby_directory_businesses', 'POST', JSON.stringify({ p_lat: 6.5, p_lng: 3.4, p_radius_km: radiusForAccuracy(20), p_limit: 5 })]])
   })
 })

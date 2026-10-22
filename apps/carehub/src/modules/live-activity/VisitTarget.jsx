@@ -6,7 +6,7 @@ const { gray400, gray500, border, bg, danger } = theme
 
 // The ONE place a rep says what the report is about. Two sources can suggest a
 // place, and they are labelled as such:
-//   - your company directory (a business your company already tracks)
+//   - the CareHub directory (verified businesses kept by the platform team)
 //   - map data (OpenStreetMap health facilities, or one a colleague added)
 // A suggestion is just that. Nothing is recorded as the place visited until the
 // rep chooses it, and choosing one replaces the other: a report names at most one
@@ -34,12 +34,12 @@ export default function VisitTarget({ gps, findingPlace, businessId, createdBy, 
       )}
 
       {gps && business && (
-        <NearbyBusinessPicker businessId={businessId} gps={gps} selected={business} onSelect={chooseBusiness} />
+        <NearbyBusinessPicker gps={gps} selected={business} onSelect={chooseBusiness} />
       )}
 
       {gps && !business && (
         <>
-          {!facility && <NearbyBusinessPicker businessId={businessId} gps={gps} selected={null} onSelect={chooseBusiness} />}
+          {!facility && <NearbyBusinessPicker gps={gps} selected={null} onSelect={chooseBusiness} />}
           <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em', margin: '2px 0 6px' }}>
             From map data
           </div>
