@@ -280,6 +280,19 @@ describe('staff confirming pickup-station receipt', () => {
     expect(await ledger(o.vendor, 'shop_release')).toHaveLength(0)
   })
 
+  it('still respects a live refund: the receipt is recorded but money that is being refunded is not released', async () => {
+    const o = await paidOrder()
+    const rf = (await one('select request_refund($1,$2,$3,null,null,$4,$5) r', ['shop_return', 'shop_order', o.id, false, 100_000])).r
+    expect(rf.outcome).toBe('requested')
+    const r = await receive(o.id, itemsFor(o), { by: uid() })
+    expect(r.ok).toBe(true)
+    expect(r.credit_status).toBe('held')
+    expect(r.release.reason).toBe('refund_in_flight')
+    // requesting the refund already recovered the vendor's pro rata share from held; the point here is that nothing was released
+    expect((await wallet(o.vendor)).avail).toBe(0)
+    expect(await ledger(o.vendor, 'shop_release')).toHaveLength(0)
+  })
+
   it('reports WHY nothing was released, so staff are not left guessing', async () => {
     const o = await paidOrder()
     await db.query(

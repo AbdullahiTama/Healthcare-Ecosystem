@@ -43,7 +43,9 @@ export const MUTANTS = [
   { id: 'M18', what: 'a service-role return request is no longer tied to the customer it names (anyone can return another customer order)', file: `${MIG}carefind_20261018_shop_return_service_caller.sql`,
     find: "if v_order.customer_id is distinct from v_actor then raise exception 'Not authorized'; end if;", replace: '', run: vendor },
   // ---------------------------------------------------------------- vendor release
-  { id: 'M10', what: 'the release sweep ignores a live refund and releases money that is being refunded', file: `${MIG}carefind_20261012_shop_vendor_payouts.sql`,
+  // The sweep was redefined (new signature, old one dropped) by carefind_20261105_release_on_delivery, so that is the file whose guard is live.
+  // M10 used to mutate the 20261012 copy, which no longer exists once every migration is replayed: it could never be killed.
+  { id: 'M10', what: 'the release sweep ignores a live refund and releases money that is being refunded', file: `${MIG}carefind_20261105_release_on_delivery.sql`,
     find: "if exists (select 1 from public.refunds f where f.entity_type = 'shop_order' and f.entity_id = o.id and f.status in ('requested', 'processing')) then continue; end if;",
     replace: 'if false then continue; end if;', run: vendor },
   // ---------------------------------------------------------------- withdrawals, commissions, config
@@ -88,6 +90,8 @@ export const MUTANTS = [
     find: 'if v_items_n = 0 or v_items_total <> o.subtotal_kobo then', replace: 'if false then', run: { cwd: APP, files: [`${T}redTeam.db.test.js`] } },
   { id: 'M30', what: 'complete_appointment_and_release is not limited to its own business', file: `${MIG}carefind_20261019_red_team_fixes.sql`,
     find: "if not (v_business_id in (select current_business_ids()) or is_platform_admin()) then return 'forbidden'; end if;", replace: '', run: { cwd: APP, files: [`${T}redTeam.db.test.js`] } },
+  { id: 'M31', what: 'recording a pickup receipt releases vendor money that is being refunded (the receipt path has its own refund guard)', file: `${MIG}carefind_20261113_pickup_receipt_release.sql`,
+    find: "if exists (select 1 from public.refunds f where f.entity_type = 'shop_order' and f.entity_id = o.id and f.status in ('requested', 'processing')) then", replace: 'if false then', run: { cwd: APP, files: [`${T}pickupReceipt.db.test.js`] } },
   // ---------------------------------------------------------------- H01-H06 payment security hardening
   { id: "H01", what: "the per-IP one-time-code cap is not enforced", file: `${MIG}carefind_20261028_otp_hardening.sql`,
     find: "if v_count >= v_ip_cap then", replace: "if false then", run: { cwd: APP, files: [`${T}otpHardening.db.test.js`] } },
