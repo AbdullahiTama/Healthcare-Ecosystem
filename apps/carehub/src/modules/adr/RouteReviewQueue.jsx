@@ -6,9 +6,12 @@ import { reviewAnchorId } from './reviewLink'
 import { Card, Loading, Empty, ErrorState, Button, Input, Textarea, useToast } from '../../components/ui'
 
 // ── Reviewer routing queue (platform reviewers) ─────────────────────────────
-// Public safety reports are not routed automatically. A reviewer approves,
-// redirects or holds each product route; only then can the responsible company
-// see the case. Everything shown here is routing metadata: no patient or
+// A public report whose reporter picked a registered company is routed
+// automatically at submission (20261206). What lands here is what the database
+// cannot route on its own: a typed or unknown company, a selection that is no
+// longer eligible, or a route a reviewer put on hold. A reviewer approves,
+// redirects or holds each of those; only then can the responsible company see
+// the case. Everything shown here is routing metadata: no patient or
 // reporter details. Match evidence and suggestions are advice, not routing.
 // Authorisation is enforced by the database (is_platform_admin() inside every
 // RPC); this screen only shapes the request.
@@ -236,7 +239,7 @@ export default function RouteReviewQueue({ repository = defaultRepository, focus
         <div>
           <div style={{ fontSize: 18, fontWeight: 800 }}>Safety report routing</div>
           <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
-            Public reports wait here until a reviewer routes them. Approval shares the case with that company; it does not submit anything to a regulator.
+            Reports where the reporter chose a registered company are routed automatically. Reports wait here when no registered company was chosen, the company is no longer eligible, or a reviewer put them on hold. Routing shares the case with that company; it does not submit anything to a regulator.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -278,7 +281,7 @@ export default function RouteReviewQueue({ repository = defaultRepository, focus
       )}
 
       {rows.length === 0 ? (
-        <Empty title={state === 'held' ? 'Nothing on hold' : 'No reports awaiting routing'} description={state === 'held' ? 'Held routes appear here until they are approved or redirected.' : 'New public reports appear here after they pass validation.'} />
+        <Empty title={state === 'held' ? 'Nothing on hold' : 'No reports awaiting routing'} description={state === 'held' ? 'Held routes appear here until they are approved or redirected.' : 'Reports that could not be routed automatically appear here after they pass validation.'} />
       ) : (
         <div role="list" aria-label="Routes awaiting review" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {rows.map((row) => (
