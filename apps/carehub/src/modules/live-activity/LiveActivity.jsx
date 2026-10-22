@@ -16,7 +16,6 @@ import LocationMatchBadge from './LocationMatchBadge.jsx'
 import VoicePlayer from './VoicePlayer.jsx'
 import { areaLabel, directoryName, facilityName, facilitySourceLabel, targetLabel } from './activityTarget'
 // Business Directory: optional nearby-business suggestion + the Field Work switcher.
-import FieldWorkSwitch from '../field-work/FieldWorkSwitch'
 import CheckInPanel from '../checkins/CheckInPanel.jsx'
 import TeamLocations from '../checkins/TeamLocations.jsx'
 import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
@@ -97,7 +96,7 @@ function csvCell(v) {
   return '"' + s.replace(/"/g, '""') + '"'
 }
 
-export default function LiveActivity({ brand, allowedModules = [], perms }) {
+export default function LiveActivity({ brand, perms }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const authData = readAuth()
   const meStaffId = (authData && authData.staff && authData.staff.id) ? authData.staff.id : null
@@ -1004,7 +1003,6 @@ export default function LiveActivity({ brand, allowedModules = [], perms }) {
       />
       <div style={{ padding: '24px', maxWidth: '1100px' }}>
         <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
-        <FieldWorkSwitch current='activity' allowed={allowedModules} />
 
       <CheckInPanel businessId={brand && brand.id} />
       {isManager && <TeamLocations businessId={brand && brand.id} />}

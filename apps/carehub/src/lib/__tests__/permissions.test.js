@@ -248,7 +248,7 @@ describe('module registry (business type → modules)', () => {
     // Counts reflect wallet + mastercatalog + ecommerce being ALL_TYPES (added after initial registry) + discovery for enterprise + pv-tracker for enterprise.
     expect(ALL_NAV_DEFAULT.length).toBe(20)
     expect(ALL_NAV_HOSPITAL.length).toBe(24)
-    expect(ALL_NAV_ENTERPRISE.length).toBe(20) // 18 + Business Discovery + Territory Intelligence (Business Directory is platform-admin-only)
+    expect(ALL_NAV_ENTERPRISE.length).toBe(18) // the Business Directory, Business Discovery and Territory Intelligence are platform-admin-only
     expect(ALL_NAV_ENTERPRISE.map(([id]) => id)).toContain('pv-tracker')
     expect(ALL_NAV_DEFAULT[0]).toEqual(['overview', expect.anything(), 'Overview'])
     expect(ALL_NAV_DEFAULT[2]).toEqual(['pos', expect.anything(), 'POS / Sales'])
@@ -273,7 +273,7 @@ describe('signup taxonomy (config/constants.js BUSINESS_TYPES)', () => {
   const ids = (type) => getModulesForType(type).map(([id]) => id)
   const ownerNav = (type) => getNavItems('Owner', type).map(([id]) => id)
   const CLINICAL = ['reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging']
-  const ENTERPRISE = ['activity', 'discovery', 'business-discovery', 'intelligence', 'orders', 'warehouses', 'stock', 'territories', 'messages', 'pv-tracker']
+  const ENTERPRISE = ['activity', 'discovery', 'orders', 'warehouses', 'stock', 'territories', 'messages', 'pv-tracker']
 
   it('resolves every registered signup type to a working owner nav', () => {
     for (const { id } of BUSINESS_TYPES) {
@@ -440,52 +440,37 @@ describe('reports hub (EXPERIENCE.md §2 tab taxonomy)', () => {
   })
 })
 
-describe('Business Discovery / Territory Intelligence modules; Directory is not a business module', () => {
+describe('The Business Directory is platform-admin only: no company module for it', () => {
   const nav = (role, type, custom) => getNavItems(role, type, custom).map(([id]) => id)
+  const REMOVED = ['directory', 'business-discovery', 'intelligence']
+  const TYPES = ['manufacturer_importer', 'wholesale', 'pharmacy', 'hospital', 'clinic', 'laboratory', 'aesthetic', 'spa', 'cosmetics', 'other']
 
-  it('are enterprise-only', () => {
-    ;['business-discovery'].forEach((m) => {
-      expect(nav('Owner', 'manufacturer_importer')).toContain(m)
-      expect(nav('Owner', 'wholesale')).toContain(m)
-      expect(nav('Owner', 'pharmacy')).not.toContain(m)
-      expect(nav('Owner', 'hospital')).not.toContain(m)
-    })
-  })
-
-  it('Live Field Activity stays available alongside them', () => {
-    expect(nav('Owner', 'manufacturer_importer')).toContain('activity')
-  })
-
-  it('Business Directory management is not offered to any business role or type', () => {
-    const types = ['manufacturer_importer', 'wholesale', 'pharmacy', 'hospital', 'clinic', 'laboratory', 'aesthetic', 'spa', 'cosmetics', 'other']
-    for (const t of types) {
-      for (const r of ['Owner', 'Manager', 'Regional Rep']) expect(nav(r, t), `${r}/${t}`).not.toContain('directory')
-      // an owner-built custom role cannot tick a module that does not exist
-      expect(nav('Custom', t, { Custom: { nav: ['directory', 'overview'] } }), `custom/${t}`).not.toContain('directory')
+  it('is offered to no business role or type, including an owner-built custom role that ticks it', () => {
+    for (const t of TYPES) {
+      for (const r of ['Owner', 'Manager', 'Regional Rep']) {
+        for (const m of REMOVED) expect(nav(r, t), `${r}/${t}/${m}`).not.toContain(m)
+      }
+      expect(nav('Custom', t, { Custom: { nav: [...REMOVED, 'overview'] } }), `custom/${t}`).not.toEqual(expect.arrayContaining(REMOVED))
+      for (const m of REMOVED) expect(nav('Custom', t, { Custom: { nav: [m, 'overview'] } }), `custom/${t}/${m}`).not.toContain(m)
     }
   })
 
-  it('reps and managers can search; only the Owner holds the directory-linked actions by default', () => {
-    expect(nav('Manager', 'manufacturer_importer')).toContain('business-discovery')
-    expect(nav('Regional Rep', 'manufacturer_importer')).toContain('business-discovery')
+  it('is not a registered module at all', () => {
+    const registered = TYPES.flatMap((t) => getModulesForType(t).map(([id]) => id))
+    for (const m of REMOVED) expect(registered).not.toContain(m)
+  })
+
+  it('Live Field Activity stays available to enterprise companies', () => {
+    expect(nav('Owner', 'manufacturer_importer')).toContain('activity')
+    expect(nav('Owner', 'wholesale')).toContain('activity')
+    expect(nav('Owner', 'pharmacy')).not.toContain('activity')
+  })
+
+  it('the legacy canManageDirectory key still exists and now means “see all field activity”', () => {
     expect(getPerms('Owner').canManageDirectory).toBe(true)
     expect(getPerms('Manager').canManageDirectory).toBeFalsy()
     expect(getPerms('Regional Rep').canManageDirectory).toBe(false)
-  })
-
-  it('a custom role only gets the directory-linked actions when the Owner says so', () => {
-    expect(buildCustomPerms({ nav: ['directory'] }).canManageDirectory).toBe(false)
-    expect(buildCustomPerms({ nav: ['directory'], canManageDirectory: true }).canManageDirectory).toBe(true)
-  })
-})
-
-describe('Territory Intelligence module', () => {
-  const nav = (role, type) => getNavItems(role, type).map(([id]) => id)
-  it('is enterprise-only and available to Owner and Manager, not to a plain rep', () => {
-    expect(nav('Owner', 'manufacturer_importer')).toContain('intelligence')
-    expect(nav('Owner', 'wholesale')).toContain('intelligence')
-    expect(nav('Owner', 'pharmacy')).not.toContain('intelligence')
-    expect(nav('Manager', 'manufacturer_importer')).toContain('intelligence')
-    expect(nav('Regional Rep', 'manufacturer_importer')).not.toContain('intelligence')
+    expect(buildCustomPerms({ nav: ['overview'] }).canManageDirectory).toBe(false)
+    expect(buildCustomPerms({ nav: ['overview'], canManageDirectory: true }).canManageDirectory).toBe(true)
   })
 })

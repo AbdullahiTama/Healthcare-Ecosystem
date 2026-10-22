@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createDirectoryRepository, PLATFORM } from '../repositories'
 import { createInMemoryClient } from '../../../test/inMemoryClient'
-import { searchBusinesses } from '../services/search'
 import { commitImport, analyseImport } from '../services/importService'
 import { RESOLUTION } from '../services/deduplication'
 import { toExportRow } from '../services/exportService'
@@ -61,96 +60,6 @@ describe('PLATFORM scope addressing', () => {
     const rows = client.rows('directory_businesses')
     expect(rows.find((r) => r.id === 'own1').verification_status).toBe('verified')
     expect(rows.find((r) => r.id === 'plat1').is_active).toBe(false)
-  })
-})
-
-// Directory tables are platform-write-only; a company adopts a platform listing through
-// adopt_platform_directory_listing() (proved on real Postgres in
-// apps/carefind/src/test/directory/directoryPlatformOnly.db.test.js). The repository's
-// job is to call that function with the right arguments and no direct table write.
-describe('copyFromPlatform', () => {
-  function recording(ret) {
-    const calls = []
-    return { calls, repo: createDirectoryRepository(async (p, o) => { calls.push({ path: p, method: o?.method, body: o?.body ? JSON.parse(o.body) : null }); return ret }) }
-  }
-  it('asks the database function to adopt the listing and writes no table directly', async () => {
-    const { repo, calls } = recording({ id: 'copy1', already_had: false })
-    const out = await repo.copyFromPlatform(A, { id: 'plat1', name: 'x', origin: 'platform', distance_km: 3 })
-    expect(calls).toEqual([{ path: 'rpc/adopt_platform_directory_listing', method: 'POST', body: { p_business_id: A, p_platform_id: 'plat1' } }])
-    expect(out).toEqual({ copy: { id: 'copy1' }, alreadyHad: false })
-  })
-  it('reports an existing copy as already had (array or object response)', async () => {
-    const { repo } = recording([{ id: 'copy1', already_had: true }])
-    expect((await repo.copyFromPlatform(A, { id: 'plat1' })).alreadyHad).toBe(true)
-  })
-  it('surfaces a refusal instead of pretending the listing was added', async () => {
-    const repo = createDirectoryRepository(async () => { throw new Error('Supabase error (403): Not authorized') })
-    await expect(repo.copyFromPlatform(A, { id: 'plat1' })).rejects.toThrow(/Not authorized/)
-  })
-})
-
-async function seedCopy(repo, biz, platId) {
-  const p = await repo.getById(platId, PLATFORM)
-  return repo.create(biz, { name: p.name, name_normalized: p.name_normalized, latitude: p.latitude, longitude: p.longitude, data_source: 'external', source_detail: 'platform:' + platId, verification_status: 'unverified' })
-}
-
-describe('searchBusinesses with the platform registry', () => {
-  const center = { lat: 6.5, lng: 3.4 }
-  it('merges own and platform results, tagging each with its origin', async () => {
-    const { repo } = seeded()
-    const out = await searchBusinesses(repo, A, { center, radiusKm: 5, includePlatform: true })
-    expect(Object.fromEntries(out.results.map((r) => [r.id, r.origin]))).toEqual({ own1: 'own', plat1: 'platform', plat2: 'platform' })
-    expect(out.platformUnavailable).toBe(false)
-  })
-  it('is own-only unless asked', async () => {
-    const { repo } = seeded()
-    const out = await searchBusinesses(repo, A, { center, radiusKm: 5 })
-    expect(out.results.map((r) => r.id)).toEqual(['own1'])
-  })
-  it('shows a copied platform business once, as the company\'s own record', async () => {
-    const { repo } = seeded()
-    const copy = await seedCopy(repo, A, 'plat1')
-    await repo.setActive(copy.id, A, true) // the in-memory table has no `is_active DEFAULT true` like Postgres
-    const out = await searchBusinesses(repo, A, { center, radiusKm: 5, includePlatform: true })
-    const names = out.results.map((r) => r.id + ':' + r.origin)
-    expect(names.filter((n) => n.startsWith('plat1'))).toEqual([]) // the platform duplicate is hidden
-    expect(out.results.filter((r) => r.source_detail === 'platform:plat1')).toHaveLength(1)
-    expect(out.results.find((r) => r.source_detail === 'platform:plat1').origin).toBe('own')
-    expect(out.results.some((r) => r.id === 'plat2')).toBe(true)
-  })
-  it('an inactive or filter-hidden copy still suppresses the platform duplicate', async () => {
-    const { repo, client } = seeded()
-    const copy = await seedCopy(repo, A, 'plat1')
-    await repo.setActive(copy.id, A, false)
-    const out = await searchBusinesses(repo, A, { center, radiusKm: 5, includePlatform: true })
-    expect(out.results.map((r) => r.id)).not.toContain('plat1')
-    expect(client.rows('directory_businesses').find((r) => r.id === copy.id).is_active).toBe(false)
-  })
-  it('getPlatformCopyIds is tenant-scoped', async () => {
-    const { repo } = seeded()
-    await seedCopy(repo, A, 'plat1')
-    await seedCopy(repo, B, 'plat2')
-    expect([...await repo.getPlatformCopyIds(A)]).toEqual(['plat1'])
-    expect([...await repo.getPlatformCopyIds(B)]).toEqual(['plat2'])
-  })
-  it('a failing platform lookup never takes down the company\'s own results', async () => {
-    const { repo } = seeded()
-    const flaky = { ...repo, searchWithinBox: async (id, ...a) => { if (id === PLATFORM) throw new Error('boom'); return repo.searchWithinBox(id, ...a) } }
-    const out = await searchBusinesses(flaky, A, { center, radiusKm: 5, includePlatform: true })
-    expect(out.results.map((r) => r.id)).toEqual(['own1'])
-    expect(out.platformUnavailable).toBe(true)
-  })
-  it('works for place-name and no-location searches too', async () => {
-    const { repo } = seeded()
-    const out = await searchBusinesses(repo, A, { includePlatform: true })
-    expect(out.mode).toBe('filters')
-    expect(out.results.map((r) => r.origin).sort()).toEqual(['own', 'platform', 'platform'])
-  })
-  it('only ever reads', async () => {
-    const methods = []
-    const repo = createDirectoryRepository(async (p, o) => { methods.push(o?.method || 'GET'); return [] })
-    await searchBusinesses(repo, A, { center, radiusKm: 3, includePlatform: true })
-    expect(new Set(methods)).toEqual(new Set(['GET']))
   })
 })
 

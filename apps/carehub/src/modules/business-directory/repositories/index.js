@@ -24,9 +24,10 @@ const q = encodeURIComponent
 const PAGE = 1000
 
 // Two scopes share the same tables (sql/20261012): a company's private directory
-// (business_id = its id) and the PLATFORM registry (business_id IS NULL), curated
-// by platform admins and readable by every company when verified. Pass PLATFORM
-// where a business id is expected to address the platform registry.
+// (business_id = its id) and the PLATFORM registry (business_id IS NULL). Since
+// carehub_20261208 the whole directory is readable and writable by platform admins
+// only; a company reaches it through nearbyBusinesses() and nothing else. Pass
+// PLATFORM where a business id is expected to address the platform registry.
 export { PLATFORM }
 const scope = (id) => (id === PLATFORM ? 'business_id=is.null' : `business_id=eq.${id}`)
 const ownerOf = (id) => (id === PLATFORM ? null : id)
@@ -185,32 +186,14 @@ export function createDirectoryRepository(request = sbFetch) {
       return this.update(id, businessId, { verification_status: status })
     },
 
-    // ── Platform registry → my directory ───────────────────────────────────
-    // Provenance: a copy carries source_detail = 'platform:<platform id>', so the
-    // same platform business is never copied twice and Discovery can hide the
-    // platform duplicate of something the company already has.
-    async findPlatformCopy(businessId, platformId) {
-      const rows = await request(`directory_businesses?business_id=eq.${businessId}&source_detail=eq.${q('platform:' + platformId)}&select=id,name,is_active&limit=1`)
-      return rows[0] || null
-    },
-
-    /** Ids of the platform businesses this company has already copied (active or not, whatever the search filters). */
-    async getPlatformCopyIds(businessId) {
-      const rows = await pagedQuery(request, `directory_businesses?business_id=eq.${businessId}&source_detail=ilike.${q('platform:')}*&order=id.asc&select=source_detail`, { pageSize: PAGE })
-      return new Set(rows.map((r) => String(r.source_detail).slice('platform:'.length)))
-    },
-
-    /**
-     * Copy a verified platform business into this company's own directory as a separate, private, UNVERIFIED record.
-     * Goes through adopt_platform_directory_listing(): directory tables are writable by the platform team only, and
-     * the function authorises the company, re-checks the listing is verified/active and is idempotent per listing.
-     */
-    async copyFromPlatform(businessId, platformRow) {
-      const r = await request('rpc/adopt_platform_directory_listing', {
-        method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_platform_id: platformRow.id }),
+    // ── Live Field Report suggestion (the one thing a company keeps) ────────
+    // Directory tables are platform-admin only (carehub_20261208). This is a bounded
+    // SECURITY DEFINER function: verified platform listings within 1 km, at most 10,
+    // name / address / type / verification / distance and no contact details.
+    async nearbyBusinesses({ lat, lng, radiusKm, limit }) {
+      return request('rpc/nearby_directory_businesses', {
+        method: 'POST', body: JSON.stringify({ p_lat: lat, p_lng: lng, p_radius_km: radiusKm, p_limit: limit }),
       })
-      const res = Array.isArray(r) ? r[0] : r
-      return { copy: { id: res.id }, alreadyHad: !!res.already_had }
     },
 
     // ── Import batches ─────────────────────────────────────────────────────
@@ -252,56 +235,7 @@ export function createDirectoryRepository(request = sbFetch) {
       })
     },
 
-    // ── Territory intelligence (read-only RPCs; see sql/20261011) ───────────
-    // SECURITY INVOKER functions: the caller's RLS decides what they can see.
-    async coverageSummary(businessId, since, group, { categoryId = null, state = null, unassignedOnly = false } = {}) {
-      return request('rpc/directory_coverage_summary', {
-        method: 'POST',
-        body: JSON.stringify({ p_business_id: businessId, p_since: since, p_group: group, p_category_id: categoryId, p_state: state, p_unassigned_only: unassignedOnly }),
-      })
-    },
-
-    // total_count rides on every row (window function), so one call pages and counts.
-    async unvisited(businessId, since, { territoryId = null, unassignedOnly = false, state = null, categoryId = null, limit = 50, offset = 0 } = {}) {
-      return request('rpc/directory_unvisited', {
-        method: 'POST',
-        body: JSON.stringify({
-          p_business_id: businessId, p_since: since, p_territory_id: territoryId, p_unassigned_only: unassignedOnly,
-          p_state: state, p_category_id: categoryId, p_limit: limit, p_offset: offset,
-        }),
-      })
-    },
-
-    async visitTotals(businessId, since) {
-      const rows = await request('rpc/directory_visit_totals', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_since: since }) })
-      return rows[0] || null
-    },
-
-    async repActivity(businessId, since) {
-      return request('rpc/directory_rep_activity', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_since: since }) })
-    },
-
-    /**
-     * Bulk-assign a territory to ACTIVE businesses that have none yet, optionally
-     * limited to a state. Never overwrites an existing assignment. Returns the
-     * number of rows changed. Goes through assign_directory_territory(); directory
-     * tables are not directly writable by companies.
-     */
-    async assignTerritoryToUnassigned(businessId, territoryId, { state = null } = {}) {
-      const n = await request('rpc/assign_directory_territory', {
-        method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_territory_id: territoryId, p_state: state }),
-      })
-      return Number(Array.isArray(n) ? n[0] : n) || 0
-    },
-
-    // ── Reports of incorrect information ───────────────────────────────────
-    async reportIncorrect(businessId, directoryBusinessId, message, reportedBy) {
-      return request('directory_reports', {
-        method: 'POST', prefer: 'return=minimal',
-        body: JSON.stringify({ business_id: businessId, directory_business_id: directoryBusinessId, message: String(message).trim(), reported_by: reportedBy || null }),
-      })
-    },
-
+    // ── Reports of incorrect information (read and resolved by the platform team) ──
     async getOpenReports(businessId) {
       return request(`directory_reports?${scope(businessId)}&status=eq.open&order=created_at.desc&select=*`)
     },

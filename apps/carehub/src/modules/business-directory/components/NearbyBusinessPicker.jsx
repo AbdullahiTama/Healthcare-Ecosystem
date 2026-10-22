@@ -9,36 +9,45 @@ import { VerificationBadge } from './BusinessBadges'
 const { navy, gray400, gray500, gray600, border, tealDeep, tealMist, danger } = theme
 
 /**
- * Live Field Report helper: lists directory businesses near the captured GPS
- * fix and lets the representative CONFIRM which one (if any) the report is
- * about.
+ * Live Field Report helper: lists CareHub directory businesses near the captured
+ * GPS fix and lets the representative CONFIRM which one (if any) the report is
+ * about. The suggestions come from nearby_directory_businesses(): verified
+ * platform listings only, no contact details (carehub_20261208).
  *
  *   - Nothing here is saved until the rep submits the report.
  *   - Proximity is a suggestion, never proof of a visit: nothing is
  *     pre-selected, and the wording says "possible", not "visited".
- *   - A failure (offline, directory not set up) degrades to nothing; it must
- *     never get in the way of logging the activity.
+ *   - Nothing nearby is not worth a box, so an empty result stays hidden. A FAILED
+ *     lookup says so in one quiet line (it used to vanish, which looked like a
+ *     broken feature) and never gets in the way of logging the activity.
  */
-export default function NearbyBusinessPicker({ businessId, gps, selected, onSelect, repo = directoryRepository }) {
+export default function NearbyBusinessPicker({ gps, selected, onSelect, repo = directoryRepository }) {
   const [state, setState] = useState({ status: 'idle', candidates: [], radiusKm: null })
 
   useEffect(() => {
-    if (!gps || !businessId) { setState({ status: 'idle', candidates: [], radiusKm: null }); return undefined }
+    if (!gps) { setState({ status: 'idle', candidates: [], radiusKm: null }); return undefined }
     let cancelled = false
     setState((s) => ({ ...s, status: 'loading' }))
-    findNearbyBusinesses(repo, businessId, { lat: gps.lat, lng: gps.lng, accuracy: gps.accuracy })
+    findNearbyBusinesses(repo, { lat: gps.lat, lng: gps.lng, accuracy: gps.accuracy })
       .then((r) => { if (!cancelled) setState({ status: 'done', candidates: r.candidates, radiusKm: r.radiusKm }) })
       .catch(() => { if (!cancelled) setState({ status: 'error', candidates: [], radiusKm: null }) })
     return () => { cancelled = true }
-  }, [gps?.lat, gps?.lng, gps?.accuracy, businessId, repo])
+  }, [gps?.lat, gps?.lng, gps?.accuracy, repo])
 
-  if (!gps || state.status === 'idle' || state.status === 'error') return null
+  if (!gps || state.status === 'idle') return null
+  if (state.status === 'error' && !selected) {
+    return (
+      <div role='status' style={{ fontSize: 12, color: gray500, marginBottom: 16 }}>
+        Nearby businesses could not be loaded. You can still log this report.
+      </div>
+    )
+  }
   if (state.status === 'done' && state.candidates.length === 0 && !selected) return null
 
   return (
     <div style={{ padding: '10px 12px', borderRadius: 8, border: `1px solid ${border}`, marginBottom: 16, background: 'white' }}>
       <div style={{ fontSize: 10, fontWeight: 800, color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        {(selected ? NEARBY_LABELS.selected : NEARBY_LABELS.candidates) + ' · from your company directory'}
+        {(selected ? NEARBY_LABELS.selected : NEARBY_LABELS.candidates) + ' · from the CareHub directory'}
       </div>
 
       {selected ? (
@@ -50,7 +59,7 @@ export default function NearbyBusinessPicker({ businessId, gps, selected, onSele
           </button>
         </div>
       ) : state.status === 'loading' ? (
-        <div role='status' style={{ fontSize: 12.5, color: gray500, marginTop: 4 }}>Checking your Business Directory…</div>
+        <div role='status' style={{ fontSize: 12.5, color: gray500, marginTop: 4 }}>Looking for businesses near you…</div>
       ) : (
         <>
           <div style={{ fontSize: 12, color: gray500, margin: '2px 0 6px' }}>

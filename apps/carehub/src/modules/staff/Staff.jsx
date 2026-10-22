@@ -77,7 +77,9 @@ export default function Staff({ brand, role, perms }) {
     ['canViewReports', 'View reports', 'Can open the Reports page and see business analytics.'],
     ['canExportReports', 'Export reports', 'Can download/export report data.'],
     ['canManageStaff', 'Manage staff', 'Can add, remove or change staff members and roles.'],
-    ['canManageDirectory', 'Directory-linked actions', 'Can add a platform listing to the Business Discovery list of this company, assign territories in Territory Intelligence, and see all field activity of the team. Editing, importing and verifying the Business Directory itself is done only by the platform team.'],
+    // The key stays `canManageDirectory`: the database (can_manage_directory / caller_sees_all_activity) reads it from
+    // the role JSON. Since the Business Directory became platform-admin only, all it grants is team-wide field activity.
+    ['canManageDirectory', 'See all field activity', 'Can see the Live Field Activity of the whole team, not only their own reports and ones they are tagged in. Owners and manager roles can always do this.'],
     ['canViewFinance', 'View finance', 'Can see expenses, debts and financial figures.'],
     ['canMakeSales', 'Make sales', 'Can record sales at the POS / counter.'],
     ['canViewSettings', 'View settings', 'Can open Settings and change business configuration.'],
@@ -560,7 +562,7 @@ export default function Staff({ brand, role, perms }) {
           <div>
             <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Actions</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {FLAG_META.filter(([key]) => key !== 'canManageDirectory' || (typeModuleIds.includes('business-discovery') || typeModuleIds.includes('intelligence'))).map(([key, label, desc]) => (
+              {FLAG_META.filter(([key]) => key !== 'canManageDirectory' || typeModuleIds.includes('activity')).map(([key, label, desc]) => (
                 <label key={key} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}>
                   <input type='checkbox' checked={!!roleForm.flags[key]} onChange={e => setRoleForm(p => ({ ...p, flags: { ...p.flags, [key]: e.target.checked } }))} style={{ marginTop: '2px', accentColor: tealDeep }} />
                   <span>

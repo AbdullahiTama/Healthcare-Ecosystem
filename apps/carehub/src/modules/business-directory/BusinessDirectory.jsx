@@ -199,7 +199,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
         <div>
           <h1 style={{ fontSize: 18, fontWeight: 900, color: navy, margin: 0 }}>Business Directory</h1>
           <div style={{ fontSize: 13, color: gray500, marginTop: 2 }}>
-            The central list of pharmacies, facilities and companies your team can search in Business Discovery. Managing it never creates field activity.
+            The central list of pharmacies, facilities and companies kept by the platform team. Representatives in the field are offered verified entries as nearby suggestions in Live Field Activity. Managing it never creates field activity.
           </div>
         </div>
         {canManage && tab === 'businesses' && <TealBtn onClick={() => setEditing({})}>+ Add business</TealBtn>}
@@ -363,7 +363,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
           onClose={() => setViewing(null)} onToast={showToast} />
       )}
       <ConfirmDialog show={!!confirm} onClose={() => setConfirm(null)} title={`Deactivate ${confirm?.name || ''}?`}
-        consequence='It will stop appearing in Business Discovery. Field activity already logged against it is kept. You can reactivate it at any time.'
+        consequence='It will stop being suggested to representatives in Live Field Activity. Field activity already logged against it is kept. You can reactivate it at any time.'
         confirmLabel='Deactivate'
         onConfirm={() => { const r = confirm; setConfirm(null); act(() => repo.setActive(r.id, scopeId, false), 'Deactivated') }} />
     </div>
