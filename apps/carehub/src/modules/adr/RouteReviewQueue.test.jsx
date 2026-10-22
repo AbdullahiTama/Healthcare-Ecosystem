@@ -56,6 +56,15 @@ describe('QueueCard', () => {
     expect(html).toContain('confirm licence')
   })
 
+  it('carries the alert deep-link anchor and highlight only when asked', () => {
+    const plain = render(row())
+    expect(plain).not.toContain('id="adr-')
+    expect(plain).not.toContain('aria-current')
+    const linked = renderToString(<QueueCard row={row()} repository={{}} onDecided={() => {}} highlighted anchorId="adr-r1" />)
+    expect(linked).toContain('id="adr-r1"')
+    expect(linked).toContain('aria-current="true"')
+  })
+
   it('does not render any patient or reporter fields', () => {
     const html = render(row({ patient_identifier: 'AB-PATIENT', reporter_name: 'Ada Okoro', reporter_phone: '0803' }))
     expect(html).not.toMatch(/AB-PATIENT|Ada Okoro|0803/)

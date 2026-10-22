@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { adrReportRepository as defaultRepository } from './repositories'
 import { availableActions, validateReviewInput, selectionBasis, reviewActionLabel } from './routeReview'
+import { reviewAnchorId } from './reviewLink'
 import { Card, Loading, Empty, ErrorState, Button, Input, Textarea, useToast } from '../../components/ui'
 
 // ── Reviewer routing queue (platform reviewers) ─────────────────────────────
@@ -116,12 +117,14 @@ function ReviewForm({ row, repository, onDone }) {
   )
 }
 
-export function QueueCard({ row, repository, onDecided }) {
+// `anchorId` is set on one card per linked report (a report can have several
+// product routes) so the alert deep link has exactly one DOM target.
+export function QueueCard({ row, repository, onDecided, highlighted = false, anchorId }) {
   const [open, setOpen] = useState(false)
   const ev = row.match_evidence || {}
   return (
-    <Card style={{ padding: '12px 14px' }}>
-      <div role="listitem">
+    <Card style={{ padding: '12px 14px', ...(highlighted ? { outline: '2px solid var(--teal)', outlineOffset: 2 } : null) }}>
+      <div role="listitem" id={anchorId} tabIndex={anchorId ? -1 : undefined} aria-current={highlighted ? 'true' : undefined}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <strong style={{ fontSize: 15 }}>{row.report_number || row.report_id}</strong>
           <span style={{ fontSize: 12, color: 'var(--muted)' }}>
@@ -164,7 +167,7 @@ export function QueueCard({ row, repository, onDecided }) {
   )
 }
 
-export default function RouteReviewQueue({ repository = defaultRepository }) {
+export default function RouteReviewQueue({ repository = defaultRepository, focusReportId = null }) {
   const { show: showToast } = useToast()
   const [state, setState] = useState('open')
   const [rows, setRows] = useState(null)
@@ -189,6 +192,17 @@ export default function RouteReviewQueue({ repository = defaultRepository }) {
   }, [repository, state])
 
   useEffect(() => { setRows(null); load() }, [load])
+
+  // Deep link from the reviewer alert: bring the linked report into view once
+  // the rows are on screen. Re-runs only when the link or the loaded rows change.
+  const focusRow = focusReportId && rows ? rows.find((r) => r.report_id === focusReportId) : null
+  useEffect(() => {
+    if (!focusRow) return
+    const el = document.getElementById(reviewAnchorId(focusReportId))
+    if (!el) return
+    if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.focus({ preventScroll: true })
+  }, [focusRow, focusReportId])
 
   function decided(row, out) {
     const failed = out?.notification?.failed > 0
@@ -256,11 +270,22 @@ export default function RouteReviewQueue({ repository = defaultRepository }) {
         ))}
       </div>
 
+      {focusReportId && !focusRow && (
+        <div role="status" style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13 }}>
+          The report from that alert is not in this view. It may already be routed, or it may be on hold.
+          {state === 'open' && <> {' '}<Button size="sm" variant="secondary" onClick={() => setState('held')}>Check on hold</Button></>}
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <Empty title={state === 'held' ? 'Nothing on hold' : 'No reports awaiting routing'} description={state === 'held' ? 'Held routes appear here until they are approved or redirected.' : 'New public reports appear here after they pass validation.'} />
       ) : (
         <div role="list" aria-label="Routes awaiting review" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {rows.map((row) => <QueueCard key={row.route_id} row={row} repository={repository} onDecided={decided} />)}
+          {rows.map((row) => (
+            <QueueCard key={row.route_id} row={row} repository={repository} onDecided={decided}
+              highlighted={!!focusReportId && row.report_id === focusReportId}
+              anchorId={focusRow && row.route_id === focusRow.route_id ? reviewAnchorId(row.report_id) : undefined} />
+          ))}
         </div>
       )}
     </div>
