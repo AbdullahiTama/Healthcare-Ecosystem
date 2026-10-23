@@ -378,3 +378,67 @@ URLs, which no longer worked, and uploaded to the bucket root, which was refused
 one), and that the storage service's own upload path behaves as the replica modelled.
 
 Emergency rollback (restores the exposure) is in the header of `supabase/migrations/carehub_20261020_activity_voice_private.sql`.
+
+## 18. Hardening, 2026-10-23 (branch `feat/live-activity-hardening`)
+
+Design: `docs/superpowers/specs/2026-10-23-live-field-activity-hardening-design.md`. Plan:
+`docs/superpowers/plans/2026-10-23-live-field-activity-hardening.md`.
+
+### 18.1 What a read-only check of the live project showed (2026-10-23)
+
+- No report has been saved since 2026-10-19 (12 reports), so the one-step save, the signed voice links, the private
+  bucket and the server-side alerts had not been used by a real person after the 2026-10-20 deploy.
+- `supabase_realtime` publishes `field_activities`, `activity_comments`, `activity_reactions` and
+  `staff_notifications` (the bell subscribes to the last). This was live-only state; it is now written down as an
+  idempotent draft migration.
+- U3 is resolved: `20261012_directory_platform_scope` is applied.
+
+### 18.2 What was built, and what is only drafted
+
+| Item | State |
+|---|---|
+| Offline outbox: a dropped connection keeps the report (and an un-uploaded voice note or photos) on the device and sends it later under the same id; a refusal is never queued; a refused or missing-bucket upload is parked with a Retry; the queue shows on the page and runs on every dashboard page | Built, tested in a simulated browser. The real IndexedDB backend has **no automated test** (`fake-indexeddb` was not installed without approval) and has **not been run in a real browser**. |
+| Sign-out | A deliberate sign-out removes unsent offline reports from the device; an expired session keeps them. **Consequence to decide on:** a person who signs out while reports are still unsent loses them. Consider a warning. |
+| Location match judged with GPS accuracy ("Location uncertain" for a fix worse than 100 m) | Built. Storing the accuracy needs `carehub_20261023_activity_gps_accuracy` (draft). Until then the value is sent and ignored. |
+| Proof photos (up to 3, resized, GPS stripped, private, shown on the report) | Built. Needs `carehub_20261024_activity_photos` (draft). **Until it is applied a photo upload gets 404, the report is parked or the form says nothing was saved; reports without photos are unaffected.** |
+| Notice of when location is captured | Built (`LocationNotice`); retention wording stays neutral until the company sets a period. |
+| F20 own check-in staleness, F21 dead code | Built. |
+
+Drafts in `docs/architecture/pending-migrations/` (apply in this order, one at a time, each with explicit approval,
+each verified by catalog read-back plus a rolled-back run as real users):
+
+1. `carehub_20261023_realtime_publication.sql`: records the realtime membership. No behaviour change.
+2. `carehub_20261023_activity_gps_accuracy.sql`: column + `log_field_activity` replaced (same signature).
+3. `carehub_20261024_activity_photos.sql`: private bucket, `photo_paths`, `log_field_activity` replaced again. Refuses
+   to run before item 2.
+4. `carehub_20261025_purge_old_report_coordinates.sql`: **not to be scheduled** until the owner sets the period.
+
+PGlite database tests (`scripts/db-tests/activity.pglite.mjs`): 214 passed, 0 failed, with the live policies copied
+from the catalog. Not proven by them: Supabase Storage's own upload path, PostgREST's handling of the new calls, and
+Realtime delivery.
+
+### 18.3 Verification checklist (nobody has run this yet)
+
+Needs two signed-in people (an owner and a non-manager staff member) on the deployed or a preview build. Record each
+result with the time and what was seen. A failure is a finding and blocks release.
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Staff logs a report tagged to the owner and to a second non-manager: it appears live for both, with no reload | NOT RUN |
+| 2 | The tagged person's bell shows the server-created alert live | NOT RUN |
+| 3 | A voice note records, uploads under `<business id>/`, and plays through a signed link; an anonymous request for the stored URL is refused | NOT RUN |
+| 4 | (After migration 3) A photo uploads, an anonymous request for it is refused, and the feed thumbnail loads | NOT RUN |
+| 5 | Offline: go offline, log a report, close the tab, reopen online: exactly one report appears and the strip clears | NOT RUN (the browser tool was not connected) |
+| 6 | A deliberate sign-out with a queued report empties the queue for the next person; an expired session keeps it | NOT RUN |
+| 7 | Reconnect: drop the network for 60 s with the feed open; on return the missed report appears | NOT RUN |
+
+### 18.4 Known gaps and decisions still open
+
+- Retention: the period for report positions is undecided. Check-in positions have **no retention**: those rows must
+  carry coordinates and the table is append-only by trigger, so removing them needs an audited exception to a security
+  control (see `docs/privacy/field-activity-location.md`).
+- The NDPA lawful basis for location capture has not been reviewed. The privacy document says so and asserts nothing.
+- Whether the owner can in fact correct or remove a report is unverified; the notice tells people to ask their owner.
+- `LiveActivity.draft.test.jsx` "after a failed send, editing the form again does not put a draft back" is a timing
+  test (fixed 450 ms wait) that failed once or twice under heavy machine load and passes alone.
+- F2 and F10 still need owner decisions (section 12).
