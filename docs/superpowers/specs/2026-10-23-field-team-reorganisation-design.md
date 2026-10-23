@@ -22,9 +22,11 @@ login shows eleven enterprise modules, and "manager" means "any role whose name 
 - A rep lands on **Field** (their field home) after signing in, not the general dashboard.
 - Their menu is **Field, Orders, Messages**. The other enterprise modules leave a rep's default menu. An owner can
   still grant more on the role (the Roles screen already allows it).
-- A built-in role template **Field Rep** gives exactly that. The fallback for an unrecognised staff role
-  (`DEFAULT_STAFF_PERMS`, which the live "Medical sales rep" uses today) changes to the same Field, Orders,
-  Messages set.
+- A built-in role template **Field Rep** gives exactly that. For a manufacturer or wholesaler, an unrecognised staff
+  role (one with no preset and no custom role, which the live "Medical sales rep" is) gets the same Field, Orders,
+  Messages set, **unless its name marks it a manager** (the live "Regional Manager"), which keeps today's menu so no
+  manager loses screens. Other business types keep today's fallback unchanged (corrected while planning: changing the
+  shared fallback would have emptied menus for non-enterprise types).
 - **Field** holds what reps already have, moved out of the mixed page: check in/out, log a visit (place, notes,
   voice, photos, offline queue), My reports, Shared with me, Who sees my activity.
 
@@ -53,13 +55,20 @@ login shows eleven enterprise modules, and "manager" means "any role whose name 
 
 ### 4. Who is a field manager (explicit, closes audit F2)
 
-- New role permission **Manage field team** (`canManageField`), shown in the Roles editor. Built-in template
-  **Field Manager** has it. The owner always has it.
-- Database: a new `is_field_manager(bid)` = owner or platform admin, OR the caller's role grants `canManageField`,
-  OR the existing `is_business_manager(bid)` (name rule) so nobody who has access today loses it.
-  `caller_sees_all_activity` and `manager_checkin_overview` use it. `is_business_manager` itself is NOT changed: other
-  features (facility review) depend on it.
-- The UI uses the same rule (`canManageField` or the existing name rule) for the Field team section.
+- **Corrected while planning (2026-10-23): the permission already exists.** The Roles editor has
+  `canManageDirectory`, labelled "See all field activity", and the database's `caller_sees_all_activity(bid)` already
+  grants whole-team access for it (platform admin OR `is_business_manager` (the name rule) OR `can_manage_directory`,
+  which is owner-level or a role granting that key). A second flag would duplicate it. So:
+  - the key stays `canManageDirectory` (stored role data and the database read it); its label becomes
+    **Manage field team**;
+  - the field-manager check is the existing `caller_sees_all_activity(bid)` in the database and the existing
+    `canSeeAllActivity()` in the app; nobody who has access today loses it;
+  - built-in template **Field Manager** grants it; the owner always has it;
+  - the only database change here: `manager_checkin_overview` uses `caller_sees_all_activity` instead of
+    `is_business_manager`, so a role granted the permission also sees team check-ins (closes F2).
+    `is_business_manager` itself is not changed: facility review depends on it.
+  - Side effect to know: the same key also authorises two narrow directory RPCs
+    (`adopt_platform_directory_listing`, `assign_directory_territory`) whose company screens were removed.
 
 ### 5. Orders authorisation (found during this design, 2026-10-23)
 
@@ -98,7 +107,7 @@ browser. Fix, as part of this work:
 - Rep landing: Field is the landing page for a person whose menu includes Field and does not include the dashboard.
 - Module keys (author's call): the rep's Field keeps the existing `activity` key (relabelled "Field"), so stored role
   permissions keep working. The Field team section is NOT a nav entry stored on roles: it shows for anyone who is a
-  field manager (owner, `canManageField`, or the name rule), so there is one switch, not two.
+  field manager (owner, the "Manage field team" permission, or the name rule), so there is one switch, not two.
 - "X of Y reps checked in" (author's call): Y = active staff whose menu includes Field and who are not field
   managers; the owner is not counted.
 - Orders' child tables (`order_items`, `order_files`, `order_events`, `order_watchers`) follow the visibility of their
