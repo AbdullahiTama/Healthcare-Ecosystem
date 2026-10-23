@@ -13,6 +13,7 @@ Apply in this order, each as its own tracked migration, each only with the owner
 |---|---|---|
 | `carehub_20261023_realtime_publication.sql` | Which tables push live changes (live-only state until now). Idempotent, removes nothing. | No |
 | `carehub_20261023_activity_gps_accuracy.sql` | Adds `field_activities.gps_accuracy_m` and replaces `log_field_activity` (same signature) to store it. Safe before or after the app. | No |
+| `carehub_20261024_activity_photos.sql` | Private `activity-photos` bucket (5 MB, images), `field_activities.photo_paths` (max 3), `log_field_activity` replaced again. Refuses to run before the gps_accuracy draft. Safe before or after the app. | No |
 
 ## Already applied
 

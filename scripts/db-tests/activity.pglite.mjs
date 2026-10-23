@@ -420,4 +420,65 @@ ok("the replacement still saves viewers in the same call", await (async () => {
   return r.created === true && r.viewers_added === 1 && r.alerts === "server"
 })())
 
+// ---- proof photos (carehub_20261024_activity_photos, DRAFT): column, private bucket, function ------------------------
+// The live storage.buckets also has a NOT NULL name column, which the stand-in above omits.
+await db.exec("ALTER TABLE storage.buckets ADD COLUMN IF NOT EXISTS name text")
+const hasPhotoCol = async () => (await sup("select count(*)::int c from information_schema.columns where table_schema='public' and table_name='field_activities' and column_name='photo_paths'")).rows[0].c === 1
+ok("BEFORE: no photo_paths column and no photo bucket", !(await hasPhotoCol()) && (await sup("select count(*)::int c from storage.buckets where id='activity-photos'")).rows[0].c === 0)
+
+await applyMigrations(["carehub_20261024_activity_photos.sql"])
+ok("AFTER: the column exists and defaults to no photos", (await hasPhotoCol()) && (await sup("select photo_paths p from field_activities where id=$1", ["55555555-5555-4555-8555-555555555564"])).rows[0].p.length === 0)
+const pb = (await sup("select public, file_size_limit, allowed_mime_types from storage.buckets where id='activity-photos'")).rows[0]
+ok("the photo bucket is private, 5 MB, images only", pb.public === false && Number(pb.file_size_limit) === 5242880 && pb.allowed_mime_types.every((m) => m.startsWith("image/")), JSON.stringify(pb))
+const photoPolicies = async () => (await sup("select count(*)::int c from pg_policies where schemaname='storage' and tablename='objects' and (coalesce(qual,'')||coalesce(with_check,'')) like '%activity-photos%'")).rows[0].c
+ok("exactly two policies guard it, none for anon or public", (await photoPolicies()) === 2 && (await sup("select count(*)::int c from pg_policies where schemaname='storage' and tablename='objects' and (coalesce(qual,'')||coalesce(with_check,'')) like '%activity-photos%' and roles && array['anon','public']::name[]")).rows[0].c === 0)
+ok("the voice bucket's own policies were left alone", (await sup("select count(*)::int c from pg_policies where schemaname='storage' and tablename='objects' and (coalesce(qual,'')||coalesce(with_check,'')) like '%activity-voice%'")).rows[0].c === 2)
+
+const phs = async (who) => (await as(who, "select name from storage.objects where bucket_id='activity-photos' order by name")).rows.map((r) => r.name)
+await expectError("anonymous cannot upload a photo", () => as("anon", "insert into storage.objects (bucket_id, name) values ('activity-photos',$1)", [S.A + "/x.jpg"]), "42501")
+ok("a member uploads into their own company's folder and reads it straight back", (await as("repA1", "insert into storage.objects (bucket_id, name) values ('activity-photos',$1) returning id", [S.A + "/p1.jpg"])).rows.length === 1 && (await phs("repA1")).includes(S.A + "/p1.jpg"))
+ok("...but a colleague and a manager cannot see it until a report names it", !(await phs("repA2")).includes(S.A + "/p1.jpg") && !(await phs("mgrA")).includes(S.A + "/p1.jpg"))
+await expectError("not into another company's folder", () => as("repA1", "insert into storage.objects (bucket_id, name) values ('activity-photos',$1)", [S.B + "/x.jpg"]), "42501")
+await expectError("not to the bucket root", () => as("repA1", "insert into storage.objects (bucket_id, name) values ('activity-photos','flat.jpg')"), "42501")
+await expectError("not into a folder that is not a company id", () => as("repA1", "insert into storage.objects (bucket_id, name) values ('activity-photos','evil/x.jpg')"), "42501")
+
+const PH1 = "55555555-5555-4555-8555-55555555556b"
+const PH2 = "55555555-5555-4555-8555-55555555556c"
+// owner_id is NULL on purpose: as() leaves the last user's claims on the session, so a default would make
+// the previous user the "uploader" and they could read the file for that reason alone.
+await sup("insert into storage.objects (bucket_id, name, owner_id) values ('activity-photos',$1,NULL), ('activity-photos',$2,NULL), ('activity-photos',$3,NULL)", [S.A + "/r1-0.jpg", S.A + "/r1-1.jpg", S.A + "/orphan.jpg"])
+const rp = await logFn("repA1", payload({ id: PH1, photo_paths: [S.A + "/r1-0.jpg", S.A + "/r1-1.jpg"] }), viewersJson)
+ok("the function stores the photo paths with the report", rp.created === true && JSON.stringify((await sup("select photo_paths p from field_activities where id=$1", [PH1])).rows[0].p) === JSON.stringify([S.A + "/r1-0.jpg", S.A + "/r1-1.jpg"]))
+ok("the author and the tagged colleague can read them; an untagged colleague cannot", (await phs("repA1")).includes(S.A + "/r1-0.jpg") && (await phs("repA2")).includes(S.A + "/r1-1.jpg"))
+await sup("delete from activity_viewers where activity_id=$1", [PH1])
+ok("...untagging the colleague takes the photos away again (they are exactly as visible as the report)", !(await phs("repA2")).includes(S.A + "/r1-0.jpg"))
+ok("a manager can read them, like the report", (await phs("mgrA")).includes(S.A + "/r1-0.jpg"))
+ok("another company cannot", (await phs("repB1")).length === 0 && (await phs("b")).length === 0)
+ok("a file no report names is readable by no member but its uploader", !(await phs("mgrA")).includes(S.A + "/orphan.jpg") && !(await phs("repA1")).includes(S.A + "/orphan.jpg"))
+
+// A report that lists another company's file must not lend its viewers a way to read it.
+await as("repB1", "insert into storage.objects (bucket_id, name) values ('activity-photos',$1)", [S.B + "/secret.jpg"])
+await logFn("repA1", payload({ id: PH2, photo_paths: [S.B + "/secret.jpg"] }))
+ok("a report naming ANOTHER company's file grants no read of it", !(await phs("repA1")).includes(S.B + "/secret.jpg") && !(await phs("mgrA")).includes(S.B + "/secret.jpg"))
+ok("...and the company that owns it still can", (await phs("repB1")).includes(S.B + "/secret.jpg"))
+
+await expectError("a fourth photo is refused by the CHECK", () => logFn("repA1", payload({ id: "55555555-5555-4555-8555-55555555556d", photo_paths: ["a/1", "a/2", "a/3", "a/4"] })), "23514")
+ok("...and left no half-saved report", (await sup("select count(*)::int c from field_activities where id='55555555-5555-4555-8555-55555555556d'")).rows[0].c === 0)
+await expectError("photo_paths that is not a list is refused", () => logFn("repA1", payload({ id: "55555555-5555-4555-8555-55555555556e", photo_paths: "oops" })), "22023")
+await logFn("repA1", payload({ id: PH1, photo_paths: [S.A + "/other.jpg"] }), viewersJson)
+ok("a retry cannot change a saved report's photos", JSON.stringify((await sup("select photo_paths p from field_activities where id=$1", [PH1])).rows[0].p) === JSON.stringify([S.A + "/r1-0.jpg", S.A + "/r1-1.jpg"]))
+ok("the replacement kept the accuracy column", await (async () => {
+  const id = "55555555-5555-4555-8555-55555555556f"
+  await logFn("repA1", payload({ id, gps_accuracy_m: 42, photo_paths: [] }))
+  return (await accOf(id)) === 42
+})())
+ok("photos are records: no one deletes or renames one", (await as("repA1", "delete from storage.objects where name=$1 returning id", [S.A + "/r1-0.jpg"])).rows.length === 0 && (await as("repA1", "update storage.objects set name='moved.jpg' where name=$1 returning id", [S.A + "/r1-0.jpg"])).rows.length === 0)
+
+await applyMigrations(["carehub_20261024_activity_photos.sql"])
+ok("the draft can be applied twice: still two policies, one overload, one CHECK", (await photoPolicies()) === 2
+  && (await sup("select count(*)::int c from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='log_field_activity'")).rows[0].c === 1
+  && (await sup("select count(*)::int c from pg_constraint where conrelid='public.field_activities'::regclass and conname='field_activities_photo_paths_check'")).rows[0].c === 1)
+const lfAcl3 = await aclOf("public.log_field_activity(jsonb, jsonb)")
+ok("ACL after the second replacement: signed-in yes, anonymous no", lfAcl3.a === false && lfAcl3.u === true, JSON.stringify(lfAcl3))
+
 finish()
