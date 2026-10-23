@@ -25,6 +25,32 @@ export function formatAge(minutes) {
   return Math.floor(h / 24) + ' days ago'
 }
 
+// The same limit manager_checkin_overview uses for freshness 'current' (60 minutes, see
+// carehub_20261130_staff_checkins.sql): a position older than this is shown to managers as OLD.
+export const STALE_AFTER_MINUTES = 60
+
+/**
+ * The person's own latest record -> what their screen says, or null when there is none. It applies the rule
+ * managers see: an old position is called old. A failed attempt holds no position, so it is never "stale".
+ * `now` is for tests. A missing or unreadable time gives no age and no stale warning, never a guess.
+ */
+export function describeOwnRecord(last, now = Date.now()) {
+  if (!last) return null
+  const label = EVENT_LABEL[last.event_type] || 'Checked in'
+  const at = Date.parse(last.created_at)
+  const minutes = Number.isFinite(at) ? (now - at) / 60000 : null
+  const age = minutes == null ? '' : ' ' + formatAge(minutes)
+  if (last.status === 'failed') {
+    return { stale: false, text: label + age + ', failed (' + (FAILURE_TEXT[last.failure_reason] || 'no position') + ', nothing saved).' }
+  }
+  const accuracy = last.accuracy_m != null ? ', accuracy about ' + last.accuracy_m + ' m' : ''
+  const stale = minutes != null && minutes > STALE_AFTER_MINUTES
+  return {
+    stale,
+    text: label + age + accuracy + '.' + (stale ? ' Your managers see this as an old position, because it is more than an hour old.' : ''),
+  }
+}
+
 /**
  * One manager-overview row -> what to show. `tone` drives colour; the text
  * never calls a stale or missing position "current", and never says a person
