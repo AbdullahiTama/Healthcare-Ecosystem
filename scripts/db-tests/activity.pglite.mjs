@@ -481,4 +481,41 @@ ok("the draft can be applied twice: still two policies, one overload, one CHECK"
 const lfAcl3 = await aclOf("public.log_field_activity(jsonb, jsonb)")
 ok("ACL after the second replacement: signed-in yes, anonymous no", lfAcl3.a === false && lfAcl3.u === true, JSON.stringify(lfAcl3))
 
+// ---- retention: purge_old_report_coordinates (carehub_20261025, DRAFT, not scheduled) ------------------------------
+const PG = ["66666666-6666-4666-8666-666666666661", "66666666-6666-4666-8666-666666666662", "66666666-6666-4666-8666-666666666663", "66666666-6666-4666-8666-666666666664"]
+const seedPurge = (id, source, ageDays, withCoords = true) => sup(
+  `insert into field_activities (id, business_id, staff_id, rep_name, lat, lng, gps_accuracy_m, facility_source, facility_lat, facility_lng, place_coords, facility_name, location_label, facility_verified, created_at)
+   values ($1,$2,$3,'Purge Rep',$4,$5,$6,$7,$8,$9,$10,'Lagos General','Ikeja',true, now() - make_interval(days => $11))`,
+  [id, S.A, S.repA1, withCoords ? 6.5 : null, withCoords ? 3.4 : null, withCoords ? 30 : null, source, withCoords ? 6.6 : null, withCoords ? 3.5 : null, withCoords ? '{"lat":6.6,"lng":3.5}' : null, ageDays])
+await seedPurge(PG[0], "detected", 400)
+await seedPurge(PG[1], "rep_added", 400)
+await seedPurge(PG[2], "rep_added", 40)
+await seedPurge(PG[3], "detected", 400, false)
+await applyMigrations(["carehub_20261025_purge_old_report_coordinates.sql"])
+const prow = async (id) => (await sup("select lat, lng, gps_accuracy_m, facility_lat, facility_lng, place_coords, facility_name, location_label, facility_verified, rep_name from field_activities where id=$1", [id])).rows[0]
+await expectError("signed-in users cannot run the purge", () => as("repA1", "select purge_old_report_coordinates(12)"), "42501")
+await expectError("nor can anonymous", () => as("anon", "select purge_old_report_coordinates(12)"), "42501")
+ok("ACL: only the service role may run it", await (async () => {
+  const r = (await sup("select has_function_privilege('anon','public.purge_old_report_coordinates(integer)','execute') a, has_function_privilege('authenticated','public.purge_old_report_coordinates(integer)','execute') u, has_function_privilege('service_role','public.purge_old_report_coordinates(integer)','execute') s")).rows[0]
+  return r.a === false && r.u === false && r.s === true
+})())
+for (const bad of [0, -3, null]) {
+  await expectError("a period of " + bad + " months is refused, so a typo cannot wipe everything", () => sup("select purge_old_report_coordinates($1::int)", [bad]), "22023")
+}
+ok("refused calls changed nothing", (await prow(PG[0])).lat === 6.5)
+const purged = (await sup("select purge_old_report_coordinates(12) n")).rows[0].n
+ok("it changes exactly the two old reports that held a position", purged === 2, String(purged))
+const p0 = await prow(PG[0])
+ok("an old report loses the person's position and the fix accuracy", p0.lat === null && p0.lng === null && p0.gps_accuracy_m === null)
+ok("...but keeps the place, the area caption, the outcome and the author", p0.facility_name === "Lagos General" && p0.location_label === "Ikeja" && p0.facility_verified === true && p0.rep_name === "Purge Rep")
+ok("a place from map data keeps its own coordinates (they are the place, not the person)", p0.facility_lat === 6.6 && p0.facility_lng === 3.5 && p0.place_coords !== null)
+const p1 = await prow(PG[1])
+ok("a place the rep added sits at the rep's own pin, so its coordinates go too", p1.facility_lat === null && p1.facility_lng === null && p1.place_coords === null && p1.lat === null)
+const p2 = await prow(PG[2])
+ok("a report newer than the cutoff (40 days vs 12 months) is untouched", p2.lat === 6.5 && p2.gps_accuracy_m === 30 && p2.facility_lat === 6.6)
+ok("running it again changes nothing", (await sup("select purge_old_report_coordinates(12) n")).rows[0].n === 0)
+ok("a shorter period reaches the recent report too (cutoff is the argument, not a constant)", (await sup("select purge_old_report_coordinates(1) n")).rows[0].n === 1 && (await prow(PG[2])).lat === null)
+await applyMigrations(["carehub_20261025_purge_old_report_coordinates.sql"])
+ok("the draft can be applied twice and leaves exactly one function", (await sup("select count(*)::int c from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='purge_old_report_coordinates'")).rows[0].c === 1)
+
 finish()

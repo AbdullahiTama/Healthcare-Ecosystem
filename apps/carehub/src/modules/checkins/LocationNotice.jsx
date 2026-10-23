@@ -33,7 +33,7 @@ export default function LocationNotice({ context, retentionMonths = LOCATION_RET
           <li>When: only when you press a check-in button or open the report form. Never in the background, and never between those moments.</li>
           <li>Who sees it: the company owner and your managers. A colleague sees a report's position only if it was shared with them. Each time a manager looks at check-in positions, that is logged.</li>
           <li>{retention}</li>
-          <li>Your records: you can see your own reports and check-ins. To correct or remove one, ask your company owner.</li>
+          <li>Your records: you can see your own reports and check-ins. If one looks wrong, ask your company owner about it.</li>
         </ul>
       )}
     </div>
