@@ -79,8 +79,8 @@ export default function Staff({ brand, role, perms }) {
     ['canExportReports', 'Export reports', 'Can download/export report data.'],
     ['canManageStaff', 'Manage staff', 'Can add, remove or change staff members and roles.'],
     // The key stays `canManageDirectory`: the database (can_manage_directory / caller_sees_all_activity) reads it from
-    // the role JSON. Since the Business Directory became platform-admin only, all it grants is team-wide field activity.
-    ['canManageDirectory', 'See all field activity', 'Can see the Live Field Activity of the whole team, not only their own reports and ones they are tagged in. Owners and manager roles can always do this.'],
+    // the role JSON. Since the Business Directory became platform-admin only, all it grants is managing the field team.
+    ['canManageDirectory', 'Manage field team', 'Opens the Field team section: everyone\'s field reports, team check-ins, order approvals and places to confirm. Owners and manager roles can always do this.'],
     ['canViewFinance', 'View finance', 'Can see expenses, debts and financial figures.'],
     ['canMakeSales', 'Make sales', 'Can record sales at the POS / counter.'],
     ['canViewSettings', 'View settings', 'Can open Settings and change business configuration.'],
