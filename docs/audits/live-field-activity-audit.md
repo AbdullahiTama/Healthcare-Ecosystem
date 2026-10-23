@@ -177,11 +177,11 @@ FIXED = changed and tested in this branch. OPEN = needs a decision or a database
 |---|---|---|
 | F1 Team Reports filtered by tags | FIXED | `feedScope.js`, role-matrix tests |
 | F2 "Manager" defined three ways | PARTIAL | Page now uses the database's rule. `manager_checkin_overview` still admits only manager-role names, so a directory-only role sees Team Reports but not Team check-ins. Needs a database decision. |
-| F3 Voice bucket public, anon can upload | **OPEN, needs approval** | Highest-severity item left. |
-| F4 Save not atomic, failure invites duplicate | PARTIAL | Retry can no longer duplicate, and the partial state is recoverable. Still two requests, not one transaction (needs a function). |
+| F3 Voice bucket public, anon can upload | **FIXED (applied 2026-10-20)** | Bucket private; section 17.1. (Was the highest-severity item.) |
+| F4 Save not atomic, failure invites duplicate | **FIXED (applied 2026-10-20)** | `log_field_activity` saves the report and its viewers in one transaction; section 17. |
 | F5 Double submit | FIXED | |
-| F6 Tagged non-managers miss the live push | **OPEN** | Needs the activity and its viewers committed together. Mitigated by catch-up and a delayed viewer fetch; the person still gets it on the next catch-up or reload, not as a push. |
-| F7 Default viewers writable for anyone's staff id | **OPEN, needs approval** | Restrictive policy needed. Table is empty today. |
+| F6 Tagged non-managers miss the live push | **FIXED in the database; live push UNVERIFIED** | The report and its viewers now commit together, so a tagged person can see it at once. Whether Realtime then pushes it to a tagged non-manager has not been observed: see the verification checklist, section 18.3. |
+| F7 Default viewers writable for anyone's staff id | **FIXED (applied 2026-10-20)** | Restrictive policies; section 17. |
 | F8 Nearest place pre-selected | FIXED | |
 | F9 Duplicate columns for one fact | PARTIAL | `facility_*` is the source of truth; `place_*` still written for compatibility. |
 | F10 Coverage ignores facility-only reports | OPEN, product decision | See "Decisions needed". |
@@ -192,10 +192,10 @@ FIXED = changed and tested in this branch. OPEN = needs a decision or a database
 | F15 Count capped at 1000 | FIXED | |
 | F16 Export covers loaded rows only | FIXED | Capped at 10,000 rows and says so. "Shared with me" exports only what is loaded and says so. |
 | F17 First report blocked | FIXED | |
-| F18 GPS failure collapsed | FIXED | Accuracy is shown at capture but not stored (no column). |
+| F18 GPS failure collapsed | FIXED; accuracy storage DRAFTED | Accuracy is shown at capture. The app now sends it with the report and judges the location match with it ("Location uncertain" for a poor fix); the column that stores it is a draft awaiting approval (section 18). |
 | F19 Nominatim use | FIXED for this module | `lib/nigeriaGeo.js` still calls Nominatim directly without throttling or attribution. |
-| F20 Check-in self view has no staleness | OPEN, low | Manager view labels it correctly. |
-| F21 Dead duplicate `logActivity`/`uploadActivityVoice` in `services/supabase.js` | OPEN, low | No callers. Left alone to keep this branch to one module. |
+| F20 Check-in self view has no staleness | **FIXED** | The person's own screen labels a check-in older than 60 minutes as old, the same limit managers see (section 18). |
+| F21 Dead duplicate `logActivity`/`uploadActivityVoice` in `services/supabase.js` | **FIXED** | Removed; nothing imported them (section 18). |
 | F22 Whitespace passes required | FIXED | |
 | F23 Missing tests | FIXED | |
 
@@ -240,7 +240,7 @@ PASS means a test that was run passed. "Replica" means PGlite with the live poli
 
 **Provider dependencies.** OpenStreetMap Nominatim (area names): at most one request per second, cached about 110 m, attribution shown. Overpass/OSM for nearby facilities (existing).
 
-## 11. Database work that remains (nothing here has been applied; each needs explicit approval)
+## 11. Database work that remained at the time of the original audit (items 1-4 and 6 have since been applied or superseded; see sections 17 and 18)
 
 In suggested order:
 
@@ -291,7 +291,7 @@ Be precise about this: the last complete run of everything is older than the las
 
 The dedup timing test fails on its own as well (11.8 s against its limit), and failed before this work began; it is unrelated to these changes but keeps the full suite red. A complete re-run of the whole suite at the final commit is still owed and should be done on a machine with free memory.
 
-## 16. Drafted database fixes (written and tested, NOT applied)
+## 16. Drafted database fixes (written and tested; at the time NOT applied. All four were applied on 2026-10-20: section 17)
 
 The four items from section 11 that the product owner asked to be drafted now exist as files in
 `docs/architecture/pending-migrations/` (outside `supabase/migrations/`, so nothing can apply them by accident).
@@ -371,9 +371,10 @@ colleague sees 0 of the owner's notes but can upload into their own company's fo
 signed-out user see 0. Afterwards 6 files, no probe files, all other counts at baseline. The security advisor snapshot
 after all four migrations is identical to the one taken before the first.
 
-**Consequence until the new app is deployed:** the older app plays voice notes from their stored public URLs, which no
-longer work, and uploads to the bucket root, which is now refused. Deploying branch `feat/live-activity-client-phases`
-fixes both. Not verified live: that a signed link actually plays in a browser (no user session was available to request
+**Consequence until the new app is deployed (historical):** the older app played voice notes from their stored public
+URLs, which no longer worked, and uploaded to the bucket root, which was refused. Branch
+`feat/live-activity-client-phases` fixed both and was merged to `main` as `86d7434` and deployed the same day
+(`Production – carehub` deployment 7204795572). Not verified live: that a signed link actually plays in a browser (no user session was available to request
 one), and that the storage service's own upload path behaves as the replica modelled.
 
 Emergency rollback (restores the exposure) is in the header of `supabase/migrations/carehub_20261020_activity_voice_private.sql`.
