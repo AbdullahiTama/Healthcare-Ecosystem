@@ -105,6 +105,13 @@ describe('CheckInPanel', () => {
     expect(text()).toContain('not an active member')
     expect(text()).not.toContain('shared once')
   })
+  it('tells the person, before they press anything, when their position is taken and offers the details', async () => {
+    const asked = vi.fn(); geo(asked)
+    await mount(fakeRepo())
+    expect(text()).toContain('only when you press Check in or Check out')
+    expect(host.querySelector('button[aria-expanded="false"]')).toBeTruthy()
+    expect(asked).not.toHaveBeenCalled()
+  })
   it('shows an error state when history cannot load', async () => {
     await mount(fakeRepo({ mine: vi.fn().mockRejectedValue(new Error('offline')) }))
     expect(text()).toContain('offline')

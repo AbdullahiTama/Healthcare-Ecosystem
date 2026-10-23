@@ -4,6 +4,7 @@ import { Button, Loading, ErrorState } from '../../components/ui'
 import { checkinRepository } from './repositories'
 import { captureLocation, locationMessage } from './locationCapture'
 import { EVENT_LABEL, FAILURE_TEXT } from './checkinView'
+import LocationNotice from './LocationNotice.jsx'
 
 // Explicit check-in for the signed-in person. Location is requested ONLY when a
 // button is pressed, once, and never watched afterwards. A check-in is not a
@@ -45,6 +46,7 @@ export default function CheckInPanel({ businessId, repo = checkinRepository }) {
       <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--muted)' }}>
         Press a button to share your position once with your managers. Nothing is tracked afterwards, and a check-in is not a customer visit: log those under Log Activity.
       </p>
+      <LocationNotice context="checkin" />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Button variant="primary" size="md" disabled={!!busy} onClick={() => go('workday_checkin')}><LogIn size={14} aria-hidden="true" /> {busy === 'workday_checkin' ? 'Finding your position...' : 'Check in'}</Button>
         <Button variant="ghost" size="md" disabled={!!busy} onClick={() => go('workday_checkout')}><LogOut size={14} aria-hidden="true" /> {busy === 'workday_checkout' ? 'Finding your position...' : 'Check out'}</Button>

@@ -18,6 +18,7 @@ import { areaLabel, directoryName, facilityName, facilitySourceLabel, targetLabe
 // Business Directory: optional nearby-business suggestion + the Field Work switcher.
 import CheckInPanel from '../checkins/CheckInPanel.jsx'
 import TeamLocations from '../checkins/TeamLocations.jsx'
+import LocationNotice from '../checkins/LocationNotice.jsx'
 import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
 import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivities, affectedActivityIds } from './feedScope'
 import { newActivityId } from './activityId'
@@ -1533,6 +1534,7 @@ export default function LiveActivity({ brand, perms }) {
                 </div>
               )}
             </div>
+            <LocationNotice context='report' />
 
             <VisitTarget
               gps={gps}

@@ -177,6 +177,21 @@ describe('when a position is captured', () => {
   })
 })
 
+describe('telling the person how their position is used', () => {
+  it('the report form says the position is taken once, when it opens, and offers the details', async () => {
+    geo(pos(20))
+    await open()
+    expect(dialog().textContent).toContain('captured once, when you open this form')
+    expect(dialog().querySelector('button[aria-expanded="false"]')).toBeTruthy()
+  })
+
+  it('the notice appears even when the position cannot be captured', async () => {
+    geo({ error: 1 })
+    await open()
+    expect(dialog().textContent).toContain('captured once, when you open this form')
+  })
+})
+
 describe('the area name', () => {
   it('is shown as the area, with OpenStreetMap credited and linked', async () => {
     geo(pos(20))
