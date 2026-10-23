@@ -10,6 +10,7 @@ import { expenseRepository } from '../expenses/repositories'
 import { expenseDate, sumExpenses, sumByCategory } from '../expenses/expenseRules'
 import { purchaseRepository } from '../purchases/repositories'
 import { adrReportRepository } from '../adr/repositories'
+import { inPeriod } from './periodFilter'
 import { fmt, currentMonth } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Loading, TealBtn, useToast, Toast } from '../../components/ui'
@@ -48,21 +49,13 @@ export default function Reports({ brand, role, perms, embedded = false }) {
     setLoading(false)
   }
 
-  const now = new Date()
-  const filterItem = (item, dateOf = i => i.created_at || '') => {
-    const d = dateOf(item)
-    if (period === 'today') return d.startsWith(now.toISOString().split('T')[0])
-    if (period === 'week') { const w = new Date(now - 7 * 864e5); return new Date(d) >= w }
-    if (period === 'month') return d.startsWith(customMonth)
-    if (period === 'year') return d.startsWith(String(now.getFullYear()))
-    return true
-  }
+  const inRange = (item, dateOf) => inPeriod(item, { period, month: customMonth, dateOf })
 
-  const fSales = sales.filter(filterItem).filter(s => !s.is_on_hold)
+  const fSales = sales.filter(s => inRange(s)).filter(s => !s.is_on_hold)
   // Expenses belong to the date the user recorded (same rule as the Expenses page and the database).
-  const fExpenses = expenses.filter(x => filterItem(x, expenseDate))
-  const fPurchases = purchases.filter(filterItem)
-  const fAdrReports = adrReports.filter(filterItem)
+  const fExpenses = expenses.filter(x => inRange(x, expenseDate))
+  const fPurchases = purchases.filter(p => inRange(p))
+  const fAdrReports = adrReports.filter(r => inRange(r))
 
   const totalRevenue = fSales.reduce((s, x) => s + (x.total || 0), 0)
   const totalExpenses = sumExpenses(fExpenses)
