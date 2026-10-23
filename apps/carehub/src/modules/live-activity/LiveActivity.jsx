@@ -22,6 +22,7 @@ import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
 import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivities, affectedActivityIds } from './feedScope'
 import { newActivityId } from './activityId'
 import { liveActivityOutbox } from './outbox'
+import OutboxStrip from './outbox/OutboxStrip.jsx'
 import { classifyFailure } from './outbox/failureClass'
 import { effectiveFields, fieldLabel, missingRequired } from './reportFields'
 import { captureLocation } from '../checkins/locationCapture'
@@ -1050,6 +1051,8 @@ export default function LiveActivity({ brand, perms }) {
 
       <CheckInPanel businessId={brand && brand.id} />
       {isManager && <TeamLocations businessId={brand && brand.id} />}
+
+      <OutboxStrip />
 
       {notifyPending && (
         <div role='status' style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>

@@ -18,6 +18,7 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { MOBILE_MENU_TOP, MOBILE_MENU_LEFT, MOBILE_MENU_SIZE, MOBILE_MENU_CLEAR } from '../../components/layout/shellConstants'
 import { startRolePrefetching, stopPrefetching } from '../../utils/modulePrefetch'
+import OutboxRunner from '../../modules/live-activity/outbox/OutboxRunner'
 
 // Lazy-loaded modules for code splitting
 const DashboardHome = lazy(() => import('../../modules/dashboard-home/DashboardHome'))
@@ -169,6 +170,7 @@ export default function BusinessDashboard() {
 
   return (
     <>
+      <OutboxRunner />
       <DashboardShell
         gutter={0}
         // Sidebar's literal widths (210 desktop / 64 tablet) — must stay in
