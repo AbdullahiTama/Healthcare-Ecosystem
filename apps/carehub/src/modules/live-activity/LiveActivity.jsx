@@ -23,6 +23,7 @@ import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivi
 import { newActivityId } from './activityId'
 import { liveActivityOutbox } from './outbox'
 import OutboxStrip from './outbox/OutboxStrip.jsx'
+import PhotoAttach from './PhotoAttach.jsx'
 import { classifyFailure } from './outbox/failureClass'
 import { effectiveFields, fieldLabel, missingRequired } from './reportFields'
 import { captureLocation } from '../checkins/locationCapture'
@@ -157,6 +158,8 @@ export default function LiveActivity({ brand, perms }) {
   const [terrId, setTerrId] = useState('')
   const [overrideViewers, setOverrideViewers] = useState(null)
   const [voiceBlob, setVoiceBlob] = useState(null)
+  // Proof photos for the report being written: [{ key, blob }], already resized (see photoPrep.js).
+  const [photos, setPhotos] = useState([])
   const [voicePreview, setVoicePreview] = useState(null)
   const [recording, setRecording] = useState(false)
   const [gps, setGps] = useState(null)
@@ -626,6 +629,7 @@ export default function LiveActivity({ brand, perms }) {
     setOverrideViewers(null)
     setVoiceBlob(null)
     setVoicePreview(null)
+    setPhotos([])
     setGps(null)
     setGpsIssue(null)
     setArea(null)
@@ -680,7 +684,7 @@ export default function LiveActivity({ brand, perms }) {
     submitLock.current = true
     setSaving(true)
     try {
-      const draft = draftRef.current || (draftRef.current = { id: newActivityId(), sent: false, voiceBlob: null, voiceUrl: null, activity: null, viewers: [] })
+      const draft = draftRef.current || (draftRef.current = { id: newActivityId(), sent: false, voiceBlob: null, voiceUrl: null, photoUploads: {}, activity: null, viewers: [] })
 
       // Set when the recording could not be uploaded because the connection is down: the report is then
       // kept on this device WITH the recording and sent together later, never without it.
@@ -704,6 +708,31 @@ export default function LiveActivity({ brand, perms }) {
           }
         }
         if (!voiceBlob) { draft.voiceBlob = null; draft.voiceUrl = null }
+
+        // Photos upload one by one, each remembered by its key on the draft, so a retry never uploads one twice.
+        // The same rule as the voice note: a dropped connection keeps them with the report on this device; a
+        // refusal (too large, wrong type) saves nothing and keeps the form.
+        let keepPhotosOnDevice = false
+        let photoUploadError = null
+        if (!keepVoiceOnDevice) {
+          for (let i = 0; i < photos.length; i++) {
+            if (draft.photoUploads[photos[i].key]) continue
+            setSaveStatus('Uploading photo ' + (i + 1) + ' of ' + photos.length + '...')
+            try {
+              draft.photoUploads[photos[i].key] = await liveActivityRepository.uploadActivityPhoto(photos[i].blob, { businessId: brand.id, activityId: draft.id, index: i })
+            } catch (e) {
+              if (classifyFailure(e) === 'retry') {
+                keepPhotosOnDevice = true
+                photoUploadError = e
+                break
+              }
+              showToast('A photo did not upload: ' + e.message + '. Nothing was saved. Try again, or remove the photo to log without it.', { type: 'error' })
+              return
+            }
+          }
+        }
+        const donePhotoPaths = photos.filter(function (p) { return draft.photoUploads[p.key] }).map(function (p) { return draft.photoUploads[p.key] })
+        const pendingPhotoBlobs = photos.filter(function (p) { return !draft.photoUploads[p.key] }).map(function (p) { return p.blob })
 
         const chosen = overrideViewers !== null
           ? overrideViewers
@@ -755,11 +784,17 @@ export default function LiveActivity({ brand, perms }) {
           facility_pending_review: pendingReview,
           // Only present when the rep confirmed a business; the name is a snapshot for the audit record.
           ...(confirmedBiz ? { directory_business_id: confirmedBiz.id, directory_business_name: confirmedBiz.name } : {}),
+          ...(donePhotoPaths.length > 0 ? { photo_paths: donePhotoPaths } : {}),
         }
-        if (keepVoiceOnDevice) {
-          // Not sent, so draft.sent stays false: a failed attempt to keep it retries the upload, not a send without it.
-          const notKept = await keepOnDevice(draft, voiceBlob)
-          if (notKept) showToast('The voice note did not upload: ' + voiceUploadError.message + '. It could not be kept on this device either, so nothing was saved. Try again, or remove the voice note to log without it.', { type: 'error' })
+        if (keepVoiceOnDevice || keepPhotosOnDevice) {
+          // Not sent, so draft.sent stays false: a failed attempt to keep it retries the uploads, not a send without them.
+          const notKept = await keepOnDevice(draft, keepVoiceOnDevice ? voiceBlob : null, pendingPhotoBlobs, donePhotoPaths)
+          if (notKept) {
+            showToast(keepVoiceOnDevice
+              ? 'The voice note did not upload: ' + voiceUploadError.message + '. It could not be kept on this device either, so nothing was saved. Try again, or remove the voice note to log without it.'
+              : 'A photo did not upload: ' + photoUploadError.message + '. It could not be kept on this device either, so nothing was saved. Try again, or remove the photo to log without it.',
+            { type: 'error' })
+          }
           return
         }
         draft.sent = true // from here the request may have reached the server
@@ -773,6 +808,7 @@ export default function LiveActivity({ brand, perms }) {
       clearDraft(brand.id, meStaffId)
       setRestoredAt(null)
       setRetryNote('')
+      setPhotos([])
       setLogging(false)
       if (res && res.notification === 'failed') {
         setNotifyPending({ activity: draft.activity, viewers: draft.viewers })
@@ -807,9 +843,9 @@ export default function LiveActivity({ brand, perms }) {
   // Keeps a built report (and its recording, if it has not been uploaded) on this device to be sent when the
   // connection is back. Returns null once it is kept and the form has been closed, or the error if the device
   // could not keep it, in which case nothing changes and the form stays open.
-  async function keepOnDevice(draft, voice) {
+  async function keepOnDevice(draft, voice, photoBlobs = [], photoPaths = []) {
     try {
-      await liveActivityOutbox.enqueue({ activity: draft.activity, viewers: draft.viewers, voiceBlob: voice || null })
+      await liveActivityOutbox.enqueue({ activity: draft.activity, viewers: draft.viewers, voiceBlob: voice || null, photoBlobs, photoPaths })
     } catch (err) {
       return err
     }
@@ -817,6 +853,7 @@ export default function LiveActivity({ brand, perms }) {
     clearDraft(brand.id, meStaffId)
     setRestoredAt(null)
     setRetryNote('')
+    setPhotos([])
     setLogging(false)
     showToast('The connection is down. Your report is saved on this device and will be sent when you are back online.', { type: 'info', duration: 8000 })
     return null
@@ -1585,6 +1622,14 @@ export default function LiveActivity({ brand, perms }) {
                     </button>
                   </div>
                 )}
+              </div>
+
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '2px' }}>Photos</div>
+                <div style={{ fontSize: '11px', color: gray400, marginBottom: '8px' }}>
+                  Optional proof of the visit: a shelf, a display, a signed form.
+                </div>
+                <PhotoAttach photos={photos} onChange={setPhotos} disabled={saving} />
               </div>
 
               {!isOwner && (
