@@ -1,4 +1,4 @@
-import { BadgeCheck, AlertTriangle, Clock } from 'lucide-react'
+import { BadgeCheck, AlertTriangle, Clock, HelpCircle } from 'lucide-react'
 import { FACILITY_VERIFICATION } from '../../lib/geo'
 import { theme } from '../../styles/theme'
 
@@ -11,12 +11,14 @@ const VIEW = {
   [FACILITY_VERIFICATION.VERIFIED]: { text: 'Location matches', Icon: BadgeCheck, color: success, bg: successBg },
   [FACILITY_VERIFICATION.PENDING]: { text: 'Pending review', Icon: Clock, color: info, bg: infoBg },
   [FACILITY_VERIFICATION.UNVERIFIED]: { text: 'Not matched', Icon: AlertTriangle, color: warning, bg: warningBg },
+  [FACILITY_VERIFICATION.UNCERTAIN]: { text: 'Location uncertain', Icon: HelpCircle, color: info, bg: infoBg },
 }
 
 const EXPLAIN = {
   [FACILITY_VERIFICATION.VERIFIED]: 'The GPS pin is close to this place. It compares positions only and does not prove a visit took place.',
   [FACILITY_VERIFICATION.PENDING]: 'A place added by a rep sits at their own GPS pin, so it cannot be compared until a manager reviews it.',
   [FACILITY_VERIFICATION.UNVERIFIED]: 'The GPS pin is missing or not close to this place. That does not mean no visit took place.',
+  [FACILITY_VERIFICATION.UNCERTAIN]: 'The GPS fix was too imprecise to tell whether the phone was at this place. That does not mean it was elsewhere.',
 }
 
 export default function LocationMatchBadge({ state }) {

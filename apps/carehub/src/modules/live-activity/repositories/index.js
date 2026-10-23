@@ -106,9 +106,12 @@ export function createLiveActivityRepository({
   // there, then the alerts. Two transactions, but safe to repeat.
   async function saveInTwoSteps(activity, viewers) {
     const id = activity.id
+    // This route is only taken by a project that lacks log_field_activity, which also lacks the columns added
+    // after it (gps_accuracy_m): posting an unknown column would fail the whole save, so they are left out.
+    const { gps_accuracy_m: _accuracy, ...row } = activity
     await request('field_activities', {
       method: 'POST',
-      body: JSON.stringify(activity),
+      body: JSON.stringify(row),
       prefer: 'resolution=ignore-duplicates,return=minimal',
     })
     const result = { id, notification: 'none' }

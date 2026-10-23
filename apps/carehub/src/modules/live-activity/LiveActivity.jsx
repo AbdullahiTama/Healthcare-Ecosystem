@@ -14,7 +14,7 @@ import FacilityPicker from './FacilityPicker.jsx'
 import VisitTarget from './VisitTarget.jsx'
 import LocationMatchBadge from './LocationMatchBadge.jsx'
 import VoicePlayer from './VoicePlayer.jsx'
-import { areaLabel, directoryName, facilityName, facilitySourceLabel, targetLabel } from './activityTarget'
+import { areaLabel, directoryName, facilityName, facilitySourceLabel, targetLabel, storedVerification } from './activityTarget'
 // Business Directory: optional nearby-business suggestion + the Field Work switcher.
 import CheckInPanel from '../checkins/CheckInPanel.jsx'
 import TeamLocations from '../checkins/TeamLocations.jsx'
@@ -711,7 +711,8 @@ export default function LiveActivity({ brand, perms }) {
         // confirms it. facilityVerification owns that rule.
         const facilityCoords = facility ? { lat: facility.lat, lng: facility.lng } : null
         const distanceM = (gps && facilityCoords) ? Math.round(haversineMeters(gps, facilityCoords)) : null
-        const verifyState = facilityVerification(gps, facility)
+        const gpsAccuracyM = gps && Number.isFinite(gps.accuracy) ? Math.round(gps.accuracy) : null
+        const verifyState = facilityVerification(gps, facility, undefined, gpsAccuracyM)
         const verified = verifyState === FACILITY_VERIFICATION.VERIFIED
         const pendingReview = verifyState === FACILITY_VERIFICATION.PENDING
 
@@ -726,6 +727,7 @@ export default function LiveActivity({ brand, perms }) {
           voice_url: draft.voiceUrl,
           lat: gps ? gps.lat : null,
           lng: gps ? gps.lng : null,
+          gps_accuracy_m: gpsAccuracyM,
           location_label: (facility && facility.name) || (confirmedBiz && confirmedBiz.name) || placeName || null,
           place_of_visit: (facility && facility.name) || null,
           place_coords: facilityCoords || null,
@@ -1242,7 +1244,7 @@ export default function LiveActivity({ brand, perms }) {
                         </span>
                         {a.facility_category && <span style={{ fontSize: '10px', fontWeight: '700', color: gray500 }}>{a.facility_category}</span>}
                         <span style={{ fontSize: '10px', fontWeight: '700', color: gray500 }}>{facilitySourceLabel(a.facility_source)}</span>
-                        <LocationMatchBadge state={(a.facility_verified != null ? a.facility_verified : a.place_verified) ? FACILITY_VERIFICATION.VERIFIED : a.facility_pending_review ? FACILITY_VERIFICATION.PENDING : FACILITY_VERIFICATION.UNVERIFIED} />
+                        <LocationMatchBadge state={storedVerification(a)} />
                         {/* A pending place sits at the rep's own GPS, so '0 m' is an artefact of how it
                             was created, not evidence. Only show a distance for a place positioned
                             independently of this fix. */}

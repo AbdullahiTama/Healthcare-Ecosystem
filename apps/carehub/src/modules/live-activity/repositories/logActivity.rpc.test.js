@@ -79,6 +79,20 @@ describe('logActivity through log_field_activity', () => {
     expect(calls.filter(isRpc)).toHaveLength(1)   // not asked again
   })
 
+  it('the two-request fallback leaves out columns a project without the function cannot have yet (gps_accuracy_m)', async () => {
+    const { repo, calls } = backend(() => { throw new Error(NO_RPC) })
+    await repo.logActivity({ ...ACT, gps_accuracy_m: 25 }, V)
+    const insert = calls.find((c) => c.path.startsWith('field_activities') && c.method === 'POST')
+    expect(insert.body).not.toHaveProperty('gps_accuracy_m')
+    expect(insert.body).toMatchObject({ id: 'fixed-id', rep_name: 'Ada' })
+  })
+
+  it('the function path carries gps_accuracy_m through untouched', async () => {
+    const { repo, calls } = backend(() => served())
+    await repo.logActivity({ ...ACT, gps_accuracy_m: 25 }, V)
+    expect(calls[0].body.p_activity.gps_accuracy_m).toBe(25)
+  })
+
   it('any other failure is a failure, not a reason to fall back: a retry must use the same safe path', async () => {
     const refusal = 'Supabase error (403): new row violates row-level security policy for table "field_activities"'
     const { repo, calls } = backend((n) => { if (n === 1) throw new Error(refusal); return served() })
