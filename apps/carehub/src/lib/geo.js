@@ -272,6 +272,16 @@ export const FACILITY_VERIFICATION = {
   VERIFIED: 'verified',
   UNVERIFIED: 'unverified',
   PENDING: 'pending',
+  // The GPS fix was too imprecise to decide: it may or may not have been at the place.
+  UNCERTAIN: 'uncertain',
+}
+
+// A fix worse than this (metres) is "low accuracy". Consumer GPS in dense areas drifts 50-200 m.
+export const LOW_ACCURACY_M = 100
+
+// A usable accuracy reading, or null. 0 is a real (perfect) reading; NaN, negatives and non-numbers are not.
+function knownAccuracy(accuracyM) {
+  return Number.isFinite(accuracyM) && accuracyM >= 0 ? accuracyM : null
 }
 
 /**
@@ -285,13 +295,26 @@ export const FACILITY_VERIFICATION = {
  * Until then the honest answer is 'pending', not a green tick on a name the rep
  * typed themselves.
  *
+ * `accuracyM` is the fix's reported accuracy in metres (optional). A poor fix (over LOW_ACCURACY_M)
+ * can neither confirm a match nor rule one out:
+ *   - within threshold + accuracy  -> 'uncertain'
+ *   - beyond threshold + accuracy  -> 'unverified'
+ * An unknown accuracy behaves as before, so older reports and callers that do not pass it are unchanged.
+ *
  * Never throws and never blocks a submit: no GPS, no facility, or coordinates
  * that cannot be compared all read as 'unverified'.
  */
-export function facilityVerification(gpsCoords, facility, thresholdM = FACILITY_VERIFY_THRESHOLD_M) {
+export function facilityVerification(gpsCoords, facility, thresholdM = FACILITY_VERIFY_THRESHOLD_M, accuracyM = null) {
   if (!facility) return FACILITY_VERIFICATION.UNVERIFIED
   if (facility.pendingReview) return FACILITY_VERIFICATION.PENDING
-  return verifyFacilityMatch(gpsCoords, { lat: facility.lat, lng: facility.lng }, thresholdM)
+  const target = { lat: facility.lat, lng: facility.lng }
+  const accuracy = knownAccuracy(accuracyM)
+  if (accuracy !== null && accuracy > LOW_ACCURACY_M) {
+    return verifyFacilityMatch(gpsCoords, target, thresholdM + accuracy)
+      ? FACILITY_VERIFICATION.UNCERTAIN
+      : FACILITY_VERIFICATION.UNVERIFIED
+  }
+  return verifyFacilityMatch(gpsCoords, target, thresholdM)
     ? FACILITY_VERIFICATION.VERIFIED
     : FACILITY_VERIFICATION.UNVERIFIED
 }

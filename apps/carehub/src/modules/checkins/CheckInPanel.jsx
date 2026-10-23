@@ -3,7 +3,8 @@ import { MapPin, LogIn, LogOut } from 'lucide-react'
 import { Button, Loading, ErrorState } from '../../components/ui'
 import { checkinRepository } from './repositories'
 import { captureLocation, locationMessage } from './locationCapture'
-import { EVENT_LABEL, FAILURE_TEXT } from './checkinView'
+import { EVENT_LABEL, FAILURE_TEXT, describeOwnRecord } from './checkinView'
+import LocationNotice from './LocationNotice.jsx'
 
 // Explicit check-in for the signed-in person. Location is requested ONLY when a
 // button is pressed, once, and never watched afterwards. A check-in is not a
@@ -39,12 +40,14 @@ export default function CheckInPanel({ businessId, repo = checkinRepository }) {
   }
 
   const last = recent && recent[0]
+  const own = describeOwnRecord(last)
   return (
     <section aria-labelledby="checkin-h" style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 14, background: 'var(--panel)', marginBottom: 16 }}>
       <h3 id="checkin-h" style={{ margin: '0 0 4px', fontSize: 14 }}><MapPin size={14} aria-hidden="true" /> Check in</h3>
       <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--muted)' }}>
         Press a button to share your position once with your managers. Nothing is tracked afterwards, and a check-in is not a customer visit: log those under Log Activity.
       </p>
+      <LocationNotice context="checkin" />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Button variant="primary" size="md" disabled={!!busy} onClick={() => go('workday_checkin')}><LogIn size={14} aria-hidden="true" /> {busy === 'workday_checkin' ? 'Finding your position...' : 'Check in'}</Button>
         <Button variant="ghost" size="md" disabled={!!busy} onClick={() => go('workday_checkout')}><LogOut size={14} aria-hidden="true" /> {busy === 'workday_checkout' ? 'Finding your position...' : 'Check out'}</Button>
@@ -54,9 +57,8 @@ export default function CheckInPanel({ businessId, repo = checkinRepository }) {
         {error ? <ErrorState message={error} onRetry={load} />
           : recent === null ? <Loading text="Loading..." />
           : last ? (
-            <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4 }}>
-              Your last record: {EVENT_LABEL[last.event_type]} at {new Date(last.created_at).toLocaleString()}
-              {last.status === 'failed' ? ', failed (' + (FAILURE_TEXT[last.failure_reason] || 'no position') + ', nothing saved)' : last.accuracy_m != null ? ', accuracy about ' + last.accuracy_m + ' m' : ''}.
+            <div data-stale={own.stale ? 'true' : 'false'} style={{ color: own.stale ? 'var(--warning, #b45309)' : 'var(--muted)', fontSize: 12, marginTop: 4 }}>
+              Your last record: {own.text} <span style={{ opacity: 0.8 }}>({new Date(last.created_at).toLocaleString()})</span>
             </div>
           ) : <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4 }}>You have not checked in yet.</div>}
       </div>

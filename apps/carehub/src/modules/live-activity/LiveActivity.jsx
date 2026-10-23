@@ -14,13 +14,19 @@ import FacilityPicker from './FacilityPicker.jsx'
 import VisitTarget from './VisitTarget.jsx'
 import LocationMatchBadge from './LocationMatchBadge.jsx'
 import VoicePlayer from './VoicePlayer.jsx'
-import { areaLabel, directoryName, facilityName, facilitySourceLabel, targetLabel } from './activityTarget'
+import { areaLabel, directoryName, facilityName, facilitySourceLabel, targetLabel, storedVerification } from './activityTarget'
 // Business Directory: optional nearby-business suggestion + the Field Work switcher.
 import CheckInPanel from '../checkins/CheckInPanel.jsx'
 import TeamLocations from '../checkins/TeamLocations.jsx'
+import LocationNotice from '../checkins/LocationNotice.jsx'
 import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
 import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivities, affectedActivityIds } from './feedScope'
 import { newActivityId } from './activityId'
+import { liveActivityOutbox } from './outbox'
+import OutboxStrip from './outbox/OutboxStrip.jsx'
+import PhotoAttach from './PhotoAttach.jsx'
+import PhotoThumbs from './PhotoThumbs.jsx'
+import { classifyFailure } from './outbox/failureClass'
 import { effectiveFields, fieldLabel, missingRequired } from './reportFields'
 import { captureLocation } from '../checkins/locationCapture'
 import { saveDraft, loadDraft, clearDraft, hasContent } from './draftStore'
@@ -154,6 +160,8 @@ export default function LiveActivity({ brand, perms }) {
   const [terrId, setTerrId] = useState('')
   const [overrideViewers, setOverrideViewers] = useState(null)
   const [voiceBlob, setVoiceBlob] = useState(null)
+  // Proof photos for the report being written: [{ key, blob }], already resized (see photoPrep.js).
+  const [photos, setPhotos] = useState([])
   const [voicePreview, setVoicePreview] = useState(null)
   const [recording, setRecording] = useState(false)
   const [gps, setGps] = useState(null)
@@ -623,6 +631,7 @@ export default function LiveActivity({ brand, perms }) {
     setOverrideViewers(null)
     setVoiceBlob(null)
     setVoicePreview(null)
+    setPhotos([])
     setGps(null)
     setGpsIssue(null)
     setArea(null)
@@ -677,8 +686,12 @@ export default function LiveActivity({ brand, perms }) {
     submitLock.current = true
     setSaving(true)
     try {
-      const draft = draftRef.current || (draftRef.current = { id: newActivityId(), sent: false, voiceBlob: null, voiceUrl: null, activity: null, viewers: [] })
+      const draft = draftRef.current || (draftRef.current = { id: newActivityId(), sent: false, voiceBlob: null, voiceUrl: null, photoUploads: {}, activity: null, viewers: [] })
 
+      // Set when the recording could not be uploaded because the connection is down: the report is then
+      // kept on this device WITH the recording and sent together later, never without it.
+      let keepVoiceOnDevice = false
+      let voiceUploadError = null
       if (!draft.sent) {
         // Nothing has reached the server yet, so the form may still change.
         if (voiceBlob && draft.voiceBlob !== voiceBlob) {
@@ -687,11 +700,41 @@ export default function LiveActivity({ brand, perms }) {
             draft.voiceUrl = await liveActivityRepository.uploadActivityVoice(voiceBlob, { businessId: brand.id, activityId: draft.id })
             draft.voiceBlob = voiceBlob
           } catch (e) {
-            showToast('The voice note did not upload: ' + e.message + '. Nothing was saved. Try again, or remove the voice note to log without it.', { type: 'error' })
-            return
+            if (classifyFailure(e) === 'retry') {
+              keepVoiceOnDevice = true
+              voiceUploadError = e
+            } else {
+              showToast('The voice note did not upload: ' + e.message + '. Nothing was saved. Try again, or remove the voice note to log without it.', { type: 'error' })
+              return
+            }
           }
         }
         if (!voiceBlob) { draft.voiceBlob = null; draft.voiceUrl = null }
+
+        // Photos upload one by one, each remembered by its key on the draft, so a retry never uploads one twice.
+        // The same rule as the voice note: a dropped connection keeps them with the report on this device; a
+        // refusal (too large, wrong type) saves nothing and keeps the form.
+        let keepPhotosOnDevice = false
+        let photoUploadError = null
+        if (!keepVoiceOnDevice) {
+          for (let i = 0; i < photos.length; i++) {
+            if (draft.photoUploads[photos[i].key]) continue
+            setSaveStatus('Uploading photo ' + (i + 1) + ' of ' + photos.length + '...')
+            try {
+              draft.photoUploads[photos[i].key] = await liveActivityRepository.uploadActivityPhoto(photos[i].blob, { businessId: brand.id, activityId: draft.id, index: i })
+            } catch (e) {
+              if (classifyFailure(e) === 'retry') {
+                keepPhotosOnDevice = true
+                photoUploadError = e
+                break
+              }
+              showToast('A photo did not upload: ' + e.message + '. Nothing was saved. Try again, or remove the photo to log without it.', { type: 'error' })
+              return
+            }
+          }
+        }
+        const donePhotoPaths = photos.filter(function (p) { return draft.photoUploads[p.key] }).map(function (p) { return draft.photoUploads[p.key] })
+        const pendingPhotoBlobs = photos.filter(function (p) { return !draft.photoUploads[p.key] }).map(function (p) { return p.blob })
 
         const chosen = overrideViewers !== null
           ? overrideViewers
@@ -711,7 +754,8 @@ export default function LiveActivity({ brand, perms }) {
         // confirms it. facilityVerification owns that rule.
         const facilityCoords = facility ? { lat: facility.lat, lng: facility.lng } : null
         const distanceM = (gps && facilityCoords) ? Math.round(haversineMeters(gps, facilityCoords)) : null
-        const verifyState = facilityVerification(gps, facility)
+        const gpsAccuracyM = gps && Number.isFinite(gps.accuracy) ? Math.round(gps.accuracy) : null
+        const verifyState = facilityVerification(gps, facility, undefined, gpsAccuracyM)
         const verified = verifyState === FACILITY_VERIFICATION.VERIFIED
         const pendingReview = verifyState === FACILITY_VERIFICATION.PENDING
 
@@ -726,6 +770,7 @@ export default function LiveActivity({ brand, perms }) {
           voice_url: draft.voiceUrl,
           lat: gps ? gps.lat : null,
           lng: gps ? gps.lng : null,
+          gps_accuracy_m: gpsAccuracyM,
           location_label: (facility && facility.name) || (confirmedBiz && confirmedBiz.name) || placeName || null,
           place_of_visit: (facility && facility.name) || null,
           place_coords: facilityCoords || null,
@@ -741,6 +786,18 @@ export default function LiveActivity({ brand, perms }) {
           facility_pending_review: pendingReview,
           // Only present when the rep confirmed a business; the name is a snapshot for the audit record.
           ...(confirmedBiz ? { directory_business_id: confirmedBiz.id, directory_business_name: confirmedBiz.name } : {}),
+          ...(donePhotoPaths.length > 0 ? { photo_paths: donePhotoPaths } : {}),
+        }
+        if (keepVoiceOnDevice || keepPhotosOnDevice) {
+          // Not sent, so draft.sent stays false: a failed attempt to keep it retries the uploads, not a send without them.
+          const notKept = await keepOnDevice(draft, keepVoiceOnDevice ? voiceBlob : null, pendingPhotoBlobs, donePhotoPaths)
+          if (notKept) {
+            showToast(keepVoiceOnDevice
+              ? 'The voice note did not upload: ' + voiceUploadError.message + '. It could not be kept on this device either, so nothing was saved. Try again, or remove the voice note to log without it.'
+              : 'A photo did not upload: ' + photoUploadError.message + '. It could not be kept on this device either, so nothing was saved. Try again, or remove the photo to log without it.',
+            { type: 'error' })
+          }
+          return
         }
         draft.sent = true // from here the request may have reached the server
         clearDraft(brand.id, meStaffId)
@@ -753,6 +810,7 @@ export default function LiveActivity({ brand, perms }) {
       clearDraft(brand.id, meStaffId)
       setRestoredAt(null)
       setRetryNote('')
+      setPhotos([])
       setLogging(false)
       if (res && res.notification === 'failed') {
         setNotifyPending({ activity: draft.activity, viewers: draft.viewers })
@@ -766,15 +824,41 @@ export default function LiveActivity({ brand, perms }) {
       }
       load()
     } catch (e) {
+      // A dropped connection is not a failure to lose the report over: keep it on this device and send it
+      // later (same id, so it cannot be saved twice). A refusal is never kept: it would be refused again.
+      let notKept = null
+      if (draftRef.current && draftRef.current.sent && classifyFailure(e) === 'retry') {
+        notKept = await keepOnDevice(draftRef.current, null)
+        if (!notKept) return
+      }
       if (draftRef.current && draftRef.current.sent) {
         setRetryNote('This report may already be saved. Press Retry to finish: it is sent exactly as you submitted it and cannot create a second report. To change it, cancel, then check your feed before logging it again.')
       }
-      showToast('Could not finish saving: ' + e.message, { type: 'error' })
+      showToast('Could not finish saving: ' + e.message + (notKept ? '. It also could not be kept on this device, so it is not queued.' : ''), { type: 'error' })
     } finally {
       submitLock.current = false
       setSaveStatus('')
       setSaving(false)
     }
+  }
+
+  // Keeps a built report (and its recording, if it has not been uploaded) on this device to be sent when the
+  // connection is back. Returns null once it is kept and the form has been closed, or the error if the device
+  // could not keep it, in which case nothing changes and the form stays open.
+  async function keepOnDevice(draft, voice, photoBlobs = [], photoPaths = []) {
+    try {
+      await liveActivityOutbox.enqueue({ activity: draft.activity, viewers: draft.viewers, voiceBlob: voice || null, photoBlobs, photoPaths })
+    } catch (err) {
+      return err
+    }
+    draftRef.current = null
+    clearDraft(brand.id, meStaffId)
+    setRestoredAt(null)
+    setRetryNote('')
+    setPhotos([])
+    setLogging(false)
+    showToast('The connection is down. Your report is saved on this device and will be sent when you are back online.', { type: 'info', duration: 8000 })
+    return null
   }
 
   function discardDraft() {
@@ -972,6 +1056,7 @@ export default function LiveActivity({ brand, perms }) {
   }
 
   const resolveVoice = function (url) { return liveActivityRepository.signedVoiceUrl(url) }
+  const resolvePhoto = function (path) { return liveActivityRepository.signedPhotoUrl(path) }
   const loc = describeReportLocation({ finding: findingPlace, gps: gps, issue: gpsIssue })
   const areaText = describeArea(area)
   const showsAreaNames = visible.some(function (a) { return !!areaLabel(a) })
@@ -1006,6 +1091,8 @@ export default function LiveActivity({ brand, perms }) {
 
       <CheckInPanel businessId={brand && brand.id} />
       {isManager && <TeamLocations businessId={brand && brand.id} />}
+
+      <OutboxStrip />
 
       {notifyPending && (
         <div role='status' style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1242,7 +1329,7 @@ export default function LiveActivity({ brand, perms }) {
                         </span>
                         {a.facility_category && <span style={{ fontSize: '10px', fontWeight: '700', color: gray500 }}>{a.facility_category}</span>}
                         <span style={{ fontSize: '10px', fontWeight: '700', color: gray500 }}>{facilitySourceLabel(a.facility_source)}</span>
-                        <LocationMatchBadge state={(a.facility_verified != null ? a.facility_verified : a.place_verified) ? FACILITY_VERIFICATION.VERIFIED : a.facility_pending_review ? FACILITY_VERIFICATION.PENDING : FACILITY_VERIFICATION.UNVERIFIED} />
+                        <LocationMatchBadge state={storedVerification(a)} />
                         {/* A pending place sits at the rep's own GPS, so '0 m' is an artefact of how it
                             was created, not evidence. Only show a distance for a place positioned
                             independently of this fix. */}
@@ -1283,6 +1370,13 @@ export default function LiveActivity({ brand, perms }) {
                   <div style={{ marginTop: '10px' }}>
                     <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Voice note</div>
                     <VoicePlayer url={a.voice_url} resolve={resolveVoice} />
+                  </div>
+                )}
+
+                {Array.isArray(a.photo_paths) && a.photo_paths.length > 0 && (
+                  <div style={{ marginTop: '10px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Photos</div>
+                    <PhotoThumbs paths={a.photo_paths} resolve={resolvePhoto} label={targetLabel(a) || undefined} />
                   </div>
                 )}
 
@@ -1440,6 +1534,7 @@ export default function LiveActivity({ brand, perms }) {
                 </div>
               )}
             </div>
+            <LocationNotice context='report' />
 
             <VisitTarget
               gps={gps}
@@ -1538,6 +1633,14 @@ export default function LiveActivity({ brand, perms }) {
                     </button>
                   </div>
                 )}
+              </div>
+
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '2px' }}>Photos</div>
+                <div style={{ fontSize: '11px', color: gray400, marginBottom: '8px' }}>
+                  Optional proof of the visit: a shelf, a display, a signed form.
+                </div>
+                <PhotoAttach photos={photos} onChange={setPhotos} disabled={saving} />
               </div>
 
               {!isOwner && (

@@ -21,6 +21,7 @@ const h = vi.hoisted(() => ({
   signOut: vi.fn(async () => {}),
   onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
   resolveAccountByEmail: vi.fn(),
+  purgeUnsentReports: vi.fn(async () => true),
 }))
 
 vi.mock('./lib/sentry', () => ({
@@ -41,7 +42,17 @@ vi.mock('./services/supabase', () => ({ resolveAccountByEmail: h.resolveAccountB
 // Lazy routes: stubbed so the harness never pulls the full dashboard tree into
 // jsdom (these suites must stay fast and deterministic).
 vi.mock('./pages/auth/Login', () => ({ default: () => <div data-testid="login" /> }))
-vi.mock('./pages/dashboard/BusinessDashboard', () => ({ default: () => <div data-testid="dashboard" /> }))
+// The stub carries a real sign-out button wired to the app's own logout.
+vi.mock('./pages/dashboard/BusinessDashboard', async () => {
+  const { useAuth } = await import('./providers/AuthProvider')
+  return {
+    default: () => {
+      const { logout } = useAuth()
+      return <div data-testid="dashboard"><button type="button" data-testid="signout" onClick={logout}>Sign out</button></div>
+    },
+  }
+})
+vi.mock('./modules/live-activity/outbox/purge', () => ({ purgeUnsentReports: h.purgeUnsentReports }))
 
 import App from './App'
 
@@ -59,6 +70,7 @@ describe('App session reconciliation', () => {
     h.getSession.mockReset()
     h.resolveAccountByEmail.mockReset()
     h.signOut.mockReset()
+    h.purgeUnsentReports.mockClear()
     h.refreshSession.mockResolvedValue({ data: { session: null } })
     host = document.createElement('div')
     document.body.appendChild(host)
@@ -106,6 +118,35 @@ describe('App session reconciliation', () => {
     expect(h.resolveAccountByEmail).toHaveBeenCalledWith('owner@example.com')
     expect(localStorage.getItem('carehub_auth')).not.toBe(null)
     expect(h.signOut).not.toHaveBeenCalled()
+  })
+
+  // Reports written offline and not yet sent live in IndexedDB. A person who deliberately signs out takes
+  // them off a shared device; an EXPIRED session must not destroy them, or a rep who was out of coverage
+  // loses the reports the queue exists to protect. They send after the next sign-in (queue is per person).
+  it('an expired session keeps the unsent offline reports', async () => {
+    localStorage.setItem('carehub_auth', JSON.stringify(CACHED))
+    h.getSession.mockResolvedValue({ data: { session: null } })
+
+    await mount()
+
+    expect(h.signOut).toHaveBeenCalled()
+    expect(h.purgeUnsentReports).not.toHaveBeenCalled()
+  })
+
+  it('a deliberate sign-out clears the unsent offline reports from the device', async () => {
+    localStorage.setItem('carehub_auth', JSON.stringify({ brand: { id: 'b1', name: 'Test Pharmacy' }, role: 'Owner' }))
+    h.getSession.mockResolvedValue({ data: { session: { user: { email: 'owner@example.com' } } } })
+    h.resolveAccountByEmail.mockResolvedValue({
+      biz: { id: 'b1', name: 'Test Pharmacy', status: 'active', is_platform_admin: false },
+      staff: null,
+    })
+
+    await mount()
+    await act(async () => { host.querySelector('[data-testid="signout"]').click() })
+    for (let i = 0; i < 4; i++) await act(async () => {})
+
+    expect(h.purgeUnsentReports).toHaveBeenCalledTimes(1)
+    expect(h.signOut).toHaveBeenCalled()
   })
 
   it('does nothing when there is no cached identity to invalidate', async () => {

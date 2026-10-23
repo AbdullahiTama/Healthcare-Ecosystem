@@ -8,7 +8,9 @@ function isValidLatLng(lat, lng) {
 // It is only called from a user action (a button), never on page load, and
 // never watches the position continuously.
 
-export const LOW_ACCURACY_M = 100
+// Defined in lib/geo.js so the verification rule and the capture warning share one number.
+import { LOW_ACCURACY_M } from '../../lib/geo'
+export { LOW_ACCURACY_M }
 
 const MESSAGES = {
   unsupported: 'This browser cannot share a location. Choose a state or enter a place instead.',

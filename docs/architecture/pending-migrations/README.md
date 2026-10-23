@@ -1,9 +1,22 @@
 # Pending migrations
 
-**Nothing is pending.** All four migrations drafted for the Live Field Activity audit
+The four migrations drafted for the Live Field Activity audit
 (`docs/audits/live-field-activity-audit.md`) were applied to production on 2026-10-20 and now live in
-`supabase/migrations/`. This folder is kept as the place for unapproved drafts: files here are not in
+`supabase/migrations/`. This folder is the place for unapproved drafts: files here are not in
 `supabase/migrations/`, so no pipeline can pick them up, and each needs explicit approval before it moves.
+
+## Pending (Live Field Activity hardening, `docs/superpowers/plans/2026-10-23-live-field-activity-hardening.md`)
+
+Apply in this order, each as its own tracked migration, each only with the owner's approval.
+
+| Draft | Records / fixes | Needs the app first? |
+|---|---|---|
+| `carehub_20261023_realtime_publication.sql` | Which tables push live changes (live-only state until now). Idempotent, removes nothing. | No |
+| `carehub_20261023_activity_gps_accuracy.sql` | Adds `field_activities.gps_accuracy_m` and replaces `log_field_activity` (same signature) to store it. Safe before or after the app. | No |
+| `carehub_20261024_activity_photos.sql` | Private `activity-photos` bucket (5 MB, images), `field_activities.photo_paths` (max 3), `log_field_activity` replaced again. Refuses to run before the gps_accuracy draft. Safe before or after the app. | No |
+| `carehub_20261025_purge_old_report_coordinates.sql` | `purge_old_report_coordinates(months)` for report positions, service role only, NOT scheduled; retention period is the owner's decision. Check-ins are deliberately not covered (append-only guard). Refuses to run before the gps_accuracy draft. | No |
+
+## Already applied
 
 | Applied as | Version | Fixes |
 |---|---|---|

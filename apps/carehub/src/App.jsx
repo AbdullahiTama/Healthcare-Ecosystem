@@ -4,6 +4,7 @@ import { initSentry, Sentry } from './lib/sentry'
 import { authClient } from './lib/authClient'
 import { resolveAccountByEmail } from './services/supabase'
 import { clearAllDraftBackups } from './modules/adr/draftBackup'
+import { purgeUnsentReports } from './modules/live-activity/outbox/purge'
 import AuthProvider from './providers/AuthProvider'
 
 // Lazy-loaded pages for code splitting
@@ -72,7 +73,10 @@ export default function App() {
 
 let loggingOut = false
 
-  const logout = async () => {
+  // `keepUnsentReports` is for the forced sign-out of an expired session: field reports written offline
+  // must survive it and send after the next sign-in. A deliberate sign-out (the Sign Out buttons pass a
+  // click event, never this option) takes them off a shared device.
+  const logout = async (options) => {
     if (loggingOut) return
     loggingOut = true
     setAuth(null)
@@ -80,6 +84,9 @@ let loggingOut = false
     // ADR draft backups carry full patient/reporter rows: a shared device
     // must not retain them after sign-out. Never throws (logout proceeds).
     try { clearAllDraftBackups() } catch (e) {}
+    if (!(options && options.keepUnsentReports === true)) {
+      try { await purgeUnsentReports() } catch (e) {}
+    }
     try { await authClient.auth.signOut() } catch (e) {}
     loggingOut = false
     window.location.href = '/login'
@@ -94,6 +101,7 @@ let loggingOut = false
     setAgent(null)
     localStorage.removeItem('carehub_agent_auth')
     try { clearAllDraftBackups() } catch (e) {}
+    try { await purgeUnsentReports() } catch (e) {}
     try { await authClient.auth.signOut() } catch (e) {}
     window.location.href = '/login'
   }
@@ -121,7 +129,7 @@ let loggingOut = false
         // denied each read with "permission denied for function
         // can_access_adr_report_row". logout() clears the cache (plus the ADR
         // draft backups) and suppresses the SIGNED_OUT bounce via loggingOut.
-        if (auth) await logout()
+        if (auth) await logout({ keepUnsentReports: true })
         return
       }
       const account = await resolveAccountByEmail(session.user.email)

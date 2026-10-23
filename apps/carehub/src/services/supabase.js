@@ -928,39 +928,6 @@ export async function geocodePlace(query) {
     .filter(Boolean)
 }
 
-export async function uploadActivityVoice(blob) {
-  const type = blob.type || 'audio/mp4'
-  let ext = 'mp4'
-  if (type.indexOf('webm') >= 0) ext = 'webm'
-  else if (type.indexOf('ogg') >= 0) ext = 'ogg'
-  else if (type.indexOf('aac') >= 0) ext = 'aac'
-  else if (type.indexOf('mpeg') >= 0) ext = 'mp3'
-
-  const path = 'voice-' + Date.now() + '-' + Math.floor(Math.random() * 100000) + '.' + ext
-  return sbUpload('activity-voice', path, blob, type, 'Voice upload failed')
-}
-
-export async function logActivity(activity, viewers) {
-  const rows = await sbFetch('field_activities', { method: 'POST', body: JSON.stringify(activity) })
-  const saved = Array.isArray(rows) ? rows[0] : rows
-  if (!saved || !saved.id) throw new Error('Activity was not saved — no id returned.')
-  if (viewers && viewers.length > 0) {
-    const payload = viewers.map(function (v) { return { ...v, activity_id: saved.id } })
-    await sbFetch('activity_viewers', { method: 'POST', body: JSON.stringify(payload), prefer: 'return=minimal' })
-
-    const targets = viewers.map(function (v) { return { staffId: v.staff_id } })
-    await notify(
-      activity.business_id,
-      targets,
-      'activity',
-      activity.rep_name + ' logged field activity',
-      activity.location_label || null,
-      'activity'
-    )
-  }
-  return saved
-}
-
 export async function reactToActivity(activityId, staffId, actorName) {
   return sbFetch('activity_reactions', { method: 'POST', body: JSON.stringify({
     activity_id: activityId, staff_id: staffId, actor_name: actorName,

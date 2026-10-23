@@ -236,3 +236,33 @@ describe('how a saved report reads', () => {
     expect(host.textContent).toContain('This changes nothing on the report')
   })
 })
+
+describe('GPS accuracy is kept with the report and weighs on the location match', () => {
+  const withAccuracy = (accuracy) => Object.defineProperty(globalThis.navigator, 'geolocation', {
+    configurable: true,
+    value: { getCurrentPosition: (ok) => ok({ coords: { latitude: 6.5, longitude: 3.4, accuracy } }) },
+  })
+  const saved = async () => { await openForm(); await act(async () => { button('Lagos General').click() }); await submit(); return lastSaved() }
+
+  it('stores the accuracy of a good fix, and the place matches', async () => {
+    withAccuracy(20)
+    const s = await saved()
+    expect(s.gps_accuracy_m).toBe(20)
+    expect(s.facility_verified).toBe(true)
+  })
+
+  it('a poor fix near the place is stored with its accuracy and is NOT recorded as a match', async () => {
+    withAccuracy(300)
+    const s = await saved()
+    expect(s.gps_accuracy_m).toBe(300)
+    expect(s.facility_verified).toBe(false)
+    expect(s.facility_pending_review).toBe(false)
+  })
+
+  it('no position means no accuracy is stored', async () => {
+    withGps(false)
+    await openForm()
+    await submit()
+    expect(lastSaved().gps_accuracy_m).toBeNull()
+  })
+})

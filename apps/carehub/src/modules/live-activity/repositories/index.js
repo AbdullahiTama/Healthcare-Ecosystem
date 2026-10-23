@@ -2,14 +2,10 @@ import { sbFetch, sbFetchWithCount, sbUpload, sbSignUrl } from '../../../service
 import { newActivityId } from '../activityId'
 import { lookupArea } from '../areaLookup'
 import { VOICE_BUCKET, voicePathFromUrl, voiceUploadInfo } from '../voiceUrl'
+import { PHOTO_BUCKET, photoUploadInfo } from '../photoUrl'
 
-// Did the database REFUSE this write (a policy or a missing grant), as opposed to
-// the request failing in transit? A refusal will be refused again, so retrying it
-// is pointless; a network or server failure is worth retrying.
-export function isPermissionRefusal(error) {
-  const text = String(error && error.message ? error.message : error)
-  return /\((401|403)\)|42501|row-level security|permission denied/i.test(text)
-}
+import { isPermissionRefusal } from '../permissionRefusal'
+export { isPermissionRefusal }
 
 // Internal notify helper: one notification row per recipient. Returns
 //   'sent'     they were written (or there was nobody to tell)
@@ -79,6 +75,8 @@ export function createLiveActivityRepository({
   // Signed playback links by stored URL: { promise, at }. In flight requests are shared;
   // a failure is dropped so the next try asks again.
   const signedLinks = new Map()
+  // The same for proof photos, keyed by storage path.
+  const signedPhotoLinks = new Map()
 
   // Tell the people a report was shared with: 'sent', 'refused' or 'failed' (see notify).
   function notifyViewers(activity, viewers) {
@@ -106,9 +104,12 @@ export function createLiveActivityRepository({
   // there, then the alerts. Two transactions, but safe to repeat.
   async function saveInTwoSteps(activity, viewers) {
     const id = activity.id
+    // This route is only taken by a project that lacks log_field_activity, which also lacks the columns added
+    // after it (gps_accuracy_m, photo_paths): posting an unknown column would fail the whole save, so they are left out.
+    const { gps_accuracy_m: _accuracy, photo_paths: _photos, ...row } = activity
     await request('field_activities', {
       method: 'POST',
-      body: JSON.stringify(activity),
+      body: JSON.stringify(row),
       prefer: 'resolution=ignore-duplicates,return=minimal',
     })
     const result = { id, notification: 'none' }
@@ -277,6 +278,30 @@ export function createLiveActivityRepository({
     async uploadActivityVoice(blob, { businessId, activityId } = {}) {
       const info = voiceUploadInfo(blob, businessId, activityId, randomSuffix())
       return upload(VOICE_BUCKET, info.path, blob, info.contentType, 'Voice upload failed')
+    },
+
+    // Stores one proof photo under '<company id>/<report id>-<index>-<suffix>.jpg' and returns its storage PATH,
+    // which is what the report keeps (the bucket is private, so there is no URL worth keeping).
+    async uploadActivityPhoto(blob, { businessId, activityId, index = 0 } = {}) {
+      const info = photoUploadInfo(businessId, activityId, index, randomSuffix())
+      await upload(PHOTO_BUCKET, info.path, blob, info.contentType, 'Photo upload failed')
+      return info.path
+    },
+
+    // A link to view a stored photo, for an hour. Resolves null when the person may not open it or signing
+    // fails: unlike a voice note there is no public URL to fall back to.
+    async signedPhotoUrl(path) {
+      if (!path) return null
+      const cached = signedPhotoLinks.get(path)
+      if (cached && now() - cached.at < SIGNED_LINK_REUSE_MS) return cached.promise
+      const promise = Promise.resolve(signUrl(PHOTO_BUCKET, path, SIGNED_LINK_SECONDS)).catch(function (e) {
+        console.error('Could not sign the photo link:', e)
+        return null
+      })
+      signedPhotoLinks.set(path, { promise: promise, at: now() })
+      const link = await promise
+      if (!link) signedPhotoLinks.delete(path)
+      return link
     },
 
     // A link to play a stored voice note. The stored URL is only used to find the file's path, so this

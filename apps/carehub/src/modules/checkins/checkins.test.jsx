@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 import { createCheckinRepository } from './repositories/index.js'
-import { describeStaffRow, formatAge } from './checkinView.js'
+import { describeStaffRow, formatAge, describeOwnRecord, STALE_AFTER_MINUTES } from './checkinView.js'
 import CheckInPanel from './CheckInPanel.jsx'
 import TeamLocations from './TeamLocations.jsx'
 
@@ -70,8 +70,50 @@ const geo = (impl) => Object.defineProperty(navigator, 'geolocation', { value: {
 beforeEach(() => { host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host) })
 afterEach(() => { act(() => root.unmount()); host.remove() })
 
+describe('describeOwnRecord: the person\'s own latest check-in, with the same staleness rule managers see', () => {
+  const NOW = Date.parse('2026-10-23T12:00:00Z')
+  const rec = (minutesAgo, over = {}) => ({ event_type: 'workday_checkin', status: 'captured', accuracy_m: 25, created_at: new Date(NOW - minutesAgo * 60000).toISOString(), ...over })
+
+  it('no record at all is null (the panel shows its own empty state)', () => {
+    expect(describeOwnRecord(null, NOW)).toBeNull()
+    expect(describeOwnRecord(undefined, NOW)).toBeNull()
+  })
+  it('a recent record says what it was, how long ago, and how accurate, with no stale warning', () => {
+    const d = describeOwnRecord(rec(5), NOW)
+    expect(d.stale).toBe(false)
+    expect(d.text).toBe('Checked in 5 min ago, accuracy about 25 m.')
+  })
+  it('exactly the managers\' limit is still current; one minute past it is stale', () => {
+    expect(STALE_AFTER_MINUTES).toBe(60)
+    expect(describeOwnRecord(rec(60), NOW).stale).toBe(false)
+    expect(describeOwnRecord(rec(61), NOW).stale).toBe(true)
+  })
+  it('a stale record says managers see it as an old position, never as where the person is now', () => {
+    const d = describeOwnRecord(rec(180), NOW)
+    expect(d.stale).toBe(true)
+    expect(d.text).toContain('3 hours ago')
+    expect(d.text).toMatch(/managers see this as an old position/i)
+  })
+  it('unknown accuracy is not invented', () => {
+    expect(describeOwnRecord(rec(5, { accuracy_m: null }), NOW).text).toBe('Checked in 5 min ago.')
+  })
+  it('a failed attempt says nothing was saved and is never "stale": there is no position', () => {
+    const d = describeOwnRecord(rec(500, { status: 'failed', failure_reason: 'denied', accuracy_m: null }), NOW)
+    expect(d.stale).toBe(false)
+    expect(d.text).toBe('Checked in 8 hours ago, failed (location permission was denied, nothing saved).')
+  })
+  it('a check-out reads as a check-out; an unknown event type is still readable', () => {
+    expect(describeOwnRecord(rec(5, { event_type: 'workday_checkout' }), NOW).text).toMatch(/^Checked out/)
+    expect(describeOwnRecord(rec(5, { event_type: 'something-new' }), NOW).text).toMatch(/^Checked in/)
+  })
+  it('a missing or unreadable time does not crash and does not claim an age', () => {
+    expect(describeOwnRecord(rec(5, { created_at: undefined }), NOW).text).toBe('Checked in, accuracy about 25 m.')
+    expect(describeOwnRecord(rec(5, { created_at: 'not a date' }), NOW).stale).toBe(false)
+  })
+})
+
 describe('CheckInPanel', () => {
-  const fakeRepo = (over = {}) => ({ mine: vi.fn().mockResolvedValue([]), record: vi.fn().mockResolvedValue({ status: 'captured' }), ...over })
+  const fakeRepo =(over = {}) => ({ mine: vi.fn().mockResolvedValue([]), record: vi.fn().mockResolvedValue({ status: 'captured' }), ...over })
   const mount = async (repo) => { await act(async () => { root.render(<CheckInPanel businessId="biz1" repo={repo} />) }); await settle() }
 
   it('does not ask for location until a button is pressed', async () => {
@@ -104,6 +146,25 @@ describe('CheckInPanel', () => {
     await click(btn('Check in')); await settle()
     expect(text()).toContain('not an active member')
     expect(text()).not.toContain('shared once')
+  })
+  it('an old last check-in is labelled as old on the person\'s own screen, a fresh one is not', async () => {
+    const old = { event_type: 'workday_checkin', status: 'captured', accuracy_m: 25, created_at: new Date(Date.now() - 3 * 3600000).toISOString() }
+    await mount(fakeRepo({ mine: vi.fn().mockResolvedValue([old]) }))
+    expect(text()).toContain('Your last record: Checked in 3 hours ago')
+    expect(text()).toMatch(/managers see this as an old position/i)
+    act(() => root.unmount()); host.remove()
+    host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host)
+    const fresh = { ...old, created_at: new Date(Date.now() - 5 * 60000).toISOString() }
+    await mount(fakeRepo({ mine: vi.fn().mockResolvedValue([fresh]) }))
+    expect(text()).toContain('Your last record: Checked in 5 min ago')
+    expect(text()).not.toMatch(/old position/i)
+  })
+  it('tells the person, before they press anything, when their position is taken and offers the details', async () => {
+    const asked = vi.fn(); geo(asked)
+    await mount(fakeRepo())
+    expect(text()).toContain('only when you press Check in or Check out')
+    expect(host.querySelector('button[aria-expanded="false"]')).toBeTruthy()
+    expect(asked).not.toHaveBeenCalled()
   })
   it('shows an error state when history cannot load', async () => {
     await mount(fakeRepo({ mine: vi.fn().mockRejectedValue(new Error('offline')) }))
