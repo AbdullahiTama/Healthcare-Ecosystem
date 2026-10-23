@@ -175,6 +175,38 @@ describe('proof photos on a report', () => {
     expect(second[0].photo_paths).toEqual(first[0].photo_paths)
   })
 
+  describe('on a saved report in the feed', () => {
+    const base = { business_id: 'brand-1', staff_id: 'staff-1', rep_name: 'Ada Rep', values_json: '{}', created_at: '2026-10-20T10:00:00Z', place_verified: false, facility_verified: false, facility_pending_review: false }
+    const showFeed = async (rows) => {
+      repo.getFieldActivities.mockResolvedValue(rows)
+      await act(async () => { root.render(<MemoryRouter><LiveActivity brand={BRAND} perms={{}} /></MemoryRouter>) })
+      await settle()
+      await settle()
+    }
+
+    it('shows the report\'s photos through signed links, named for the place', async () => {
+      repo.signedPhotoUrl.mockImplementation(async (p) => 'https://signed/' + p)
+      await showFeed([{ ...base, id: 'r1', facility_name: 'Lagos General', location_label: 'Lagos General', photo_paths: ['brand-1/r1-0.jpg', 'brand-1/r1-1.jpg'] }])
+      expect(repo.signedPhotoUrl).toHaveBeenCalledWith('brand-1/r1-0.jpg')
+      const imgs = [...host.querySelectorAll('img')]
+      expect(imgs.map((i) => i.getAttribute('src'))).toEqual(['https://signed/brand-1/r1-0.jpg', 'https://signed/brand-1/r1-1.jpg'])
+      expect(imgs[0].getAttribute('alt')).toBe('Photo 1 of Lagos General')
+    })
+
+    it('a report without photos shows no photo section and asks for no links', async () => {
+      await showFeed([{ ...base, id: 'r2' }, { ...base, id: 'r3', photo_paths: [] }])
+      expect(repo.signedPhotoUrl).not.toHaveBeenCalled()
+      expect(host.textContent).not.toContain('Photos')
+    })
+
+    it('a photo the person cannot open reads "Photo unavailable", and the rest of the report still shows', async () => {
+      repo.signedPhotoUrl.mockResolvedValue(null)
+      await showFeed([{ ...base, id: 'r4', photo_paths: ['brand-1/r4-0.jpg'] }])
+      expect(host.textContent).toMatch(/photo unavailable/i)
+      expect(host.textContent).toContain('Ada Rep')
+    })
+  })
+
   it('opening the form again starts without the previous report\'s photos', async () => {
     await openForm()
     await attach('a.jpg')

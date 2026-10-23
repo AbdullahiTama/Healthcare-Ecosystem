@@ -24,6 +24,7 @@ import { newActivityId } from './activityId'
 import { liveActivityOutbox } from './outbox'
 import OutboxStrip from './outbox/OutboxStrip.jsx'
 import PhotoAttach from './PhotoAttach.jsx'
+import PhotoThumbs from './PhotoThumbs.jsx'
 import { classifyFailure } from './outbox/failureClass'
 import { effectiveFields, fieldLabel, missingRequired } from './reportFields'
 import { captureLocation } from '../checkins/locationCapture'
@@ -1054,6 +1055,7 @@ export default function LiveActivity({ brand, perms }) {
   }
 
   const resolveVoice = function (url) { return liveActivityRepository.signedVoiceUrl(url) }
+  const resolvePhoto = function (path) { return liveActivityRepository.signedPhotoUrl(path) }
   const loc = describeReportLocation({ finding: findingPlace, gps: gps, issue: gpsIssue })
   const areaText = describeArea(area)
   const showsAreaNames = visible.some(function (a) { return !!areaLabel(a) })
@@ -1367,6 +1369,13 @@ export default function LiveActivity({ brand, perms }) {
                   <div style={{ marginTop: '10px' }}>
                     <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Voice note</div>
                     <VoicePlayer url={a.voice_url} resolve={resolveVoice} />
+                  </div>
+                )}
+
+                {Array.isArray(a.photo_paths) && a.photo_paths.length > 0 && (
+                  <div style={{ marginTop: '10px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Photos</div>
+                    <PhotoThumbs paths={a.photo_paths} resolve={resolvePhoto} label={targetLabel(a) || undefined} />
                   </div>
                 )}
 
