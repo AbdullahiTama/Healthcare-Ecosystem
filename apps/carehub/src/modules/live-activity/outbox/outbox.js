@@ -5,7 +5,8 @@ import { OutboxStoreError } from './outboxStore'
 // The queue of reports written without a connection. It sends them with the same idempotent
 // logActivity the page uses, so a report that was in fact already saved cannot be saved twice.
 //
-//   enqueue({ activity, viewers, voiceBlob })  keep a report on this device (rejects if it cannot be kept)
+//   enqueue({ activity, viewers, voiceBlob, photoBlobs, photoPaths })
+//                                              keep a report on this device (rejects if it cannot be kept)
 //   flush()                                    send what is due; never rejects, returns a summary
 //   list() / retry(id) / discard(id)           what the person sees and can do
 //   purgeAll()                                 empty the queue for everyone (sign-out)
@@ -44,7 +45,19 @@ export function createOutbox({
       voiceUrl = await repository.uploadActivityVoice(entry.voiceBlob, { businessId: entry.businessId, activityId: entry.id })
       await store.update(entry.id, { voiceUrl })   // a later failure must not upload the recording again
     }
-    const activity = voiceUrl ? { ...entry.activity, voice_url: voiceUrl } : entry.activity
+    // Photos upload one at a time, each saved on the entry as soon as it is stored, so a failure part-way
+    // (or a failure of the report itself) never uploads one again. `photoBlobs` is what is still to upload;
+    // `photoPaths` is what is done, in order, and numbering continues from it.
+    let photoPaths = entry.photoPaths || []
+    let photoBlobs = entry.photoBlobs || []
+    while (photoBlobs.length > 0) {
+      const path = await repository.uploadActivityPhoto(photoBlobs[0], { businessId: entry.businessId, activityId: entry.id, index: photoPaths.length })
+      photoPaths = [...photoPaths, path]
+      photoBlobs = photoBlobs.slice(1)
+      await store.update(entry.id, { photoPaths, photoBlobs })
+    }
+    let activity = voiceUrl ? { ...entry.activity, voice_url: voiceUrl } : entry.activity
+    if (photoPaths.length > 0) activity = { ...activity, photo_paths: photoPaths }
     await repository.logActivity(activity, entry.viewers || [])
   }
 
@@ -86,14 +99,14 @@ export function createOutbox({
   }
 
   const api = {
-    async enqueue({ activity, viewers = [], voiceBlob = null }) {
+    async enqueue({ activity, viewers = [], voiceBlob = null, photoBlobs = [], photoPaths = [] }) {
       const scope = scopeNow()
       if (!scope) throw new OutboxStoreError('invalid', 'Not signed in')
       const existing = activity && activity.id ? await store.get(activity.id) : null
       if (existing) return existing
       const entry = {
         id: activity && activity.id, businessId: scope.businessId, staffId: scope.staffId || null,
-        activity, viewers, voiceBlob, voiceUrl: null,
+        activity, viewers, voiceBlob, voiceUrl: null, photoBlobs, photoPaths,
         state: 'pending', attempts: 0, nextAttemptAt: 0, lastError: null, createdAt: now(),
       }
       await store.put(entry)
