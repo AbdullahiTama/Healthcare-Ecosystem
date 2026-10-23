@@ -183,10 +183,10 @@ describe('choosing what the report is about', () => {
 
 describe('how a saved report reads', () => {
   const base = { business_id: 'brand-1', staff_id: 'staff-1', rep_name: 'Ada Rep', values_json: '{}', created_at: '2026-10-20T10:00:00Z', place_verified: false, facility_verified: false, facility_pending_review: false }
-  const show = async (rows, role = 'Sales Rep') => {
+  const show = async (rows, role = 'Sales Rep', mode) => {
     localStorage.setItem('carehub_auth', JSON.stringify({ staff: { ...STAFF, role }, brand: { id: BRAND.id, owner: 'Boss' } }))
     repo.getFieldActivities.mockResolvedValue(rows)
-    await act(async () => { root.render(<MemoryRouter><LiveActivity brand={BRAND} perms={{}} /></MemoryRouter>) })
+    await act(async () => { root.render(<MemoryRouter><LiveActivity brand={BRAND} perms={{}} mode={mode} /></MemoryRouter>) })
     await settle()
   }
 
@@ -226,9 +226,7 @@ describe('how a saved report reads', () => {
   })
 
   it('a manager\'s read-only comparison is called a comparison, not a verification or approval', async () => {
-    await show([{ ...base, id: 'r7', staff_id: 'other', lat: 6.5, lng: 3.4, facility_name: 'Lagos General' }], 'Regional Manager')
-    await act(async () => { button('Team Reports').click() })
-    await settle()
+    await show([{ ...base, id: 'r7', staff_id: 'other', lat: 6.5, lng: 3.4, facility_name: 'Lagos General' }], 'Regional Manager', 'team')
     expect(button('Compare location')).toBeTruthy()
     expect(host.textContent).not.toContain('Verify location')
     await act(async () => { button('Compare location').click() })

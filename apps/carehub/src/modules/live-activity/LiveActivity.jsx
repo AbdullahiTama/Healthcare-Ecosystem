@@ -4,10 +4,7 @@ import { liveActivityRepository } from './repositories'
 // Pure distance helpers for the GPS-driven facility verification.
 import { facilityVerification, FACILITY_VERIFICATION, haversineMeters } from '../../lib/geo'
 // GPS-driven facility discovery (issue #1) — replaces free-text Place of Visit.
-import {
-  nearbyHealthFacilities,
-  getRepAddedFacilities,
-} from '../../lib/places.js'
+import { nearbyHealthFacilities } from '../../lib/places.js'
 import FacilityPicker from './FacilityPicker.jsx'
 import VisitTarget from './VisitTarget.jsx'
 import LocationMatchBadge from './LocationMatchBadge.jsx'
@@ -15,17 +12,14 @@ import VoicePlayer from './VoicePlayer.jsx'
 import { areaLabel, directoryName, facilityName, facilitySourceLabel, targetLabel, storedVerification } from './activityTarget'
 // Business Directory: optional nearby-business suggestion + the Field Work switcher.
 import CheckInPanel from '../checkins/CheckInPanel.jsx'
-import TeamLocations from '../checkins/TeamLocations.jsx'
 import LocationNotice from '../checkins/LocationNotice.jsx'
-import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
+import { canSeeAllActivity } from '../../lib/permissions'
 import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivities, affectedActivityIds } from './feedScope'
 import { newActivityId } from './activityId'
 import { liveActivityOutbox } from './outbox'
 import OutboxStrip from './outbox/OutboxStrip.jsx'
 import PhotoAttach from './PhotoAttach.jsx'
 import PhotoThumbs from './PhotoThumbs.jsx'
-import ReportFieldsSetup from './ReportFieldsSetup.jsx'
-import PlacesToConfirm from './PlacesToConfirm.jsx'
 import { fmtStamp } from './formatTime'
 import { classifyFailure } from './outbox/failureClass'
 import { effectiveFields, fieldLabel, missingRequired } from './reportFields'
@@ -96,7 +90,14 @@ function csvCell(v) {
   return '"' + s.replace(/"/g, '""') + '"'
 }
 
-export default function LiveActivity({ brand, perms }) {
+// One feed, two pages (field team reorganisation):
+//   mode 'rep'   the person's Field page: check in, log a visit, My Feed and Shared with me. Everyone uses it the
+//                same way, managers included; the whole team is not shown here.
+//   mode 'team'  Field team > Team reports: everyone's reports with the oversight tools (table, filters, export,
+//                compare location). The route only offers it to field managers; the database decides what rows
+//                come back either way.
+export default function LiveActivity({ brand, perms, mode = 'rep' }) {
+  const isTeamView = mode === 'team'
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const authData = readAuth()
   const meStaffId = (authData && authData.staff && authData.staff.id) ? authData.staff.id : null
@@ -107,15 +108,11 @@ export default function LiveActivity({ brand, perms }) {
     ? (authData.staff.public_title || authData.staff.role || 'Staff')
     : 'Owner'
   const isOwner = meStaffId === null
-  // Managers (and the owner) get the My Feed / Team Reports split (issue #7).
-  // isManagerRole is the shared definition — the facility-review recipient
-  // lookup in places.js uses the same one.
-  const isManager = isOwner || isManagerRole(authData.staff && authData.staff.role)
-  // Who may read every report. Same rule as the database's caller_sees_all_activity,
-  // so a custom role granted directory management gets Team Reports too. isManager
-  // above stays for what the database still decides by manager role alone: facility
-  // review and the team check-in overview.
+  // Who may read every report: the field-manager rule, the same as the database's
+  // caller_sees_all_activity (owner, a manager role, or "Manage field team").
   const canSeeAll = canSeeAllActivity({ isOwner, role: authData.staff && authData.staff.role, perms })
+  // Whether THIS page shows the whole team: only Team reports, and only for a field manager.
+  const feedSeesAll = isTeamView && canSeeAll
 
   const [fields, setFields] = useState([])
   // What the form, validation and columns use: the business's own fields, or one
@@ -136,7 +133,7 @@ export default function LiveActivity({ brand, perms }) {
   // Scope tabs (managers only): 'mine' shows the manager's own logs, 'team'
   // shows everything the business's permission model lets them see. The owner
   // has no staff row, so their "mine" would be empty — they start on 'team'.
-  const [scope, setScope] = useState(isOwner ? 'team' : 'mine')
+  const [scope, setScope] = useState(isTeamView ? 'team' : 'mine')
   const [counts, setCounts] = useState(null)
   const [exporting, setExporting] = useState(false)
   const [hasOlder, setHasOlder] = useState(false)
@@ -176,9 +173,6 @@ export default function LiveActivity({ brand, perms }) {
   // saved GPS, so a manager can independently verify what was near.
   const [reviewing, setReviewing] = useState(null)
 
-  // Manager/owner review queue for rep-added facilities (#1 spec #5).
-  const [pendingFacilities, setPendingFacilities] = useState([])
-  const [reviewOpen, setReviewOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
   // Save safety: a lock the handler checks itself (state lags a rapid second tap),
@@ -189,8 +183,6 @@ export default function LiveActivity({ brand, perms }) {
   const [restoredAt, setRestoredAt] = useState(null) // when the restored unsent draft was saved
   const [notifyPending, setNotifyPending] = useState(null)
   const [notifying, setNotifying] = useState(false)
-
-  const [settingUp, setSettingUp] = useState(false)
 
   const [pickingViewers, setPickingViewers] = useState(false)
   const [viewerDraft, setViewerDraft] = useState([])
@@ -263,7 +255,7 @@ export default function LiveActivity({ brand, perms }) {
     if (!brand || !brand.id) return
     const page = await liveActivityRepository.getFieldActivities(brand.id, {
       limit: ACTIVITY_PAGE,
-      ...scopeQuery(scopeRef.current, { canSeeAll: canSeeAll, meStaffId: meStaffId }),
+      ...scopeQuery(scopeRef.current, { canSeeAll: feedSeesAll, meStaffId: meStaffId }),
     })
     const known = new Set(activitiesRef.current.map(function (a) { return a.id }))
     const fresh = (page || []).filter(function (a) { return !known.has(a.id) })
@@ -333,7 +325,7 @@ export default function LiveActivity({ brand, perms }) {
     setLoading(true)
     try {
       const flds = await liveActivityRepository.getActivityFields(brand.id)
-      const acts = await liveActivityRepository.getFieldActivities(brand.id, { limit: ACTIVITY_PAGE, ...scopeQuery(scopeRef.current, { canSeeAll: canSeeAll, meStaffId: meStaffId }) })
+      const acts = await liveActivityRepository.getFieldActivities(brand.id, { limit: ACTIVITY_PAGE, ...scopeQuery(scopeRef.current, { canSeeAll: feedSeesAll, meStaffId: meStaffId }) })
       const stf = await staffRepository.getAll(brand.id)
       const ters = await territoryRepository.getAll(brand.id)
       setFields(flds || [])
@@ -344,11 +336,11 @@ export default function LiveActivity({ brand, perms }) {
 
       // Tab badges for managers. Non-fatal: a failed count just hides the
       // numbers, it must not blank the feed.
-      if (canSeeAll) {
+      if (feedSeesAll) {
         try {
           const [mine, team] = await Promise.all([
-            liveActivityRepository.countFieldActivities(brand.id, scopeQuery('mine', { canSeeAll: canSeeAll, meStaffId: meStaffId })),
-            liveActivityRepository.countFieldActivities(brand.id, scopeQuery('team', { canSeeAll: canSeeAll, meStaffId: meStaffId })),
+            liveActivityRepository.countFieldActivities(brand.id, scopeQuery('mine', { canSeeAll: feedSeesAll, meStaffId: meStaffId })),
+            liveActivityRepository.countFieldActivities(brand.id, scopeQuery('team', { canSeeAll: feedSeesAll, meStaffId: meStaffId })),
           ])
           setCounts({ mine: mine, team: team })
         } catch (e) {
@@ -389,7 +381,6 @@ export default function LiveActivity({ brand, perms }) {
     } catch (e) {
       showToast('Could not load activity: ' + e.message, { type: 'error' })
     }
-    loadPending()
     setLoading(false)
   }
 
@@ -404,7 +395,7 @@ export default function LiveActivity({ brand, perms }) {
       const page = await liveActivityRepository.getFieldActivities(brand.id, {
         limit: ACTIVITY_PAGE,
         cursor: { created_at: last.created_at, id: last.id },
-        ...scopeQuery(scopeRef.current, { canSeeAll: canSeeAll, meStaffId: meStaffId }),
+        ...scopeQuery(scopeRef.current, { canSeeAll: feedSeesAll, meStaffId: meStaffId }),
       })
       const rows = (page || []).filter(function (r) { return !activities.some(function (a) { return a.id === r.id }) })
       setHasOlder((page || []).length >= ACTIVITY_PAGE)
@@ -428,19 +419,6 @@ export default function LiveActivity({ brand, perms }) {
       showToast('Could not load older activity: ' + e.message, { type: 'error' })
     } finally {
       setLoadingOlder(false)
-    }
-  }
-
-  // The count on the "Review facilities" button. The list and its actions live in PlacesToConfirm.
-  async function loadPending() {
-    if (!brand || !brand.id) return
-    if (!(isManager || isOwner)) return
-    try {
-      const rows = await getRepAddedFacilities(brand.id, 'pending_review')
-      setPendingFacilities(rows || [])
-    } catch (e) {
-      console.error('Pending facilities load failed:', e)
-      setPendingFacilities([])
     }
   }
 
@@ -868,7 +846,7 @@ export default function LiveActivity({ brand, perms }) {
     return inWindow(dateStr, dateWindow(dateRange, customFrom, customTo))
   }
 
-  const permitted = filterByScope(activities, { scope: scope, canSeeAll: canSeeAll, meStaffId: meStaffId, viewersByAct: viewersByAct })
+  const permitted = filterByScope(activities, { scope: scope, canSeeAll: feedSeesAll, meStaffId: meStaffId, viewersByAct: viewersByAct })
 
   const visible = permitted.filter(function (a) {
     if (!inRange(a.created_at)) return false
@@ -939,14 +917,14 @@ export default function LiveActivity({ brand, perms }) {
   // expressed as a query, so that one exports what is loaded and says so.
   async function exportCSV() {
     if (exporting) return
-    const serverSide = canSeeAll || scope === 'mine'
+    const serverSide = feedSeesAll || scope === 'mine'
     setExporting(true)
     try {
       let list = visible
       let truncated = false
       if (serverSide) {
         const win = dateWindow(dateRange, customFrom, customTo)
-        const base = scopeQuery(scope, { canSeeAll: canSeeAll, meStaffId: meStaffId })
+        const base = scopeQuery(scope, { canSeeAll: feedSeesAll, meStaffId: meStaffId })
         const res = await liveActivityRepository.getAllFieldActivities(brand.id, {
           ...base,
           ...(filterRep !== 'all' ? { staffId: filterRep, ownerOnly: false } : {}),
@@ -1001,7 +979,7 @@ export default function LiveActivity({ brand, perms }) {
   return (
     <>
       <PageHeader
-        title={<>Live Field Activity{liveStatus === 'live' ? (
+        title={<>{isTeamView ? 'Team reports' : 'Field'}{liveStatus === 'live' ? (
           <span data-live-status={liveStatus} title='Connected. New reports you are allowed to see appear here. Reload if one seems to be missing.' style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: '800', color: danger, background: dangerBg, padding: '3px 9px', borderRadius: '20px', border: `1px solid ${danger}`, marginLeft: '8px', verticalAlign: 'middle' }}>
             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: danger }} />
             UPDATES ON
@@ -1011,27 +989,22 @@ export default function LiveActivity({ brand, perms }) {
             {liveStatus === 'connecting' ? 'CONNECTING' : 'UPDATES PAUSED'}
           </span>
         )}</>}
-        description="Reps log what happens in the field. New reports appear here as they are saved, and managers can reply."
-        secondaryActions={[
-          ...(isOwner ? [{ label: 'Set up fields', variant: 'ghost', onClick: function () { setSettingUp(true) } }] : []),
+        description={isTeamView
+          ? 'Every field report your team logs, as it is saved. Filter, export, and compare a logged location.'
+          : 'Check in, log each visit, and see your reports and the ones shared with you. Managers can reply.'}
+        secondaryActions={isTeamView ? [] : [
           ...(!isOwner ? [{ label: 'Who sees my activity', variant: 'ghost', onClick: openViewerPicker }] : []),
-          ...((isManager || isOwner) ? [{
-            label: (pendingFacilities.length ? 'Review facilities (' + pendingFacilities.length + ')' : 'Review facilities'),
-            variant: 'ghost',
-            onClick: function () { loadPending(); setReviewOpen(true) },
-          }] : []),
         ]}
-        primaryAction={{ label: 'Log Activity', onClick: openLogger }}
+        primaryAction={isTeamView ? undefined : { label: 'Log Activity', onClick: openLogger }}
       />
       <div style={{ padding: '24px', maxWidth: '1100px' }}>
         <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
 
-      <CheckInPanel businessId={brand && brand.id} />
-      {isManager && <TeamLocations businessId={brand && brand.id} />}
+      {!isTeamView && <CheckInPanel businessId={brand && brand.id} />}
 
-      <OutboxStrip />
+      {!isTeamView && <OutboxStrip />}
 
-      {notifyPending && (
+      {!isTeamView && notifyPending && (
         <div role='status' style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 240px' }}>
             <div style={{ fontSize: '13px', fontWeight: '800', color: warning }}>Your report is saved, but nobody has been notified yet</div>
@@ -1041,7 +1014,7 @@ export default function LiveActivity({ brand, perms }) {
         </div>
       )}
 
-      {!isOwner && myViewers.length === 0 && (
+      {!isTeamView && !isOwner && myViewers.length === 0 && (
         <div style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
           <div style={{ fontSize: '13px', fontWeight: '800', color: warning }}>Nobody is seeing your activity yet</div>
           <div style={{ fontSize: '12px', color: warning, marginTop: '2px' }}>
@@ -1054,15 +1027,15 @@ export default function LiveActivity({ brand, perms }) {
         <div role='status' style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
           <div style={{ fontSize: '13px', fontWeight: '800', color: warning }}>Reports use a simple note for now</div>
           <div style={{ fontSize: '12px', color: warning, marginTop: '2px' }}>
-            Your team can already log reports with one "What happened" note. Tap "Set up fields" to decide what a visit record should capture instead.
+            Your team can already log reports with one "What happened" note. Decide what a visit record should capture under Field team, Report fields.
           </div>
         </div>
       )}
 
-      {(
+      {!isTeamView && (
         <div role='group' aria-label='Which reports to show' style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
-          {scopeTabs(canSeeAll).map(function (tab) {
-            return [tab[0], tab[1], canSeeAll && counts ? counts[tab[0]] : null]
+          {scopeTabs(feedSeesAll).map(function (tab) {
+            return [tab[0], tab[1], feedSeesAll && counts ? counts[tab[0]] : null]
           }).map(function (t) {
             const on = scope === t[0]
             const label = t[2] != null
@@ -1129,14 +1102,16 @@ export default function LiveActivity({ brand, perms }) {
         )}
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div style={{ flex: 1, minWidth: '150px' }}>
-            <div style={{ fontSize: '11px', fontWeight: '700', color: gray500, marginBottom: '4px' }}>Rep</div>
-            <select value={filterRep} onChange={function (e) { setFilterRep(e.target.value) }}
-              style={{ width: '100%', padding: '9px 10px', borderRadius: '8px', border: `1px solid ${border}`, fontSize: '12.5px', background: 'white' }}>
-              <option value='all'>All reps</option>
-              {staffList.map(function (s) { return <option key={s.id} value={s.id}>{s.full_name}</option> })}
-            </select>
-          </div>
+          {isTeamView && (
+            <div style={{ flex: 1, minWidth: '150px' }}>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: gray500, marginBottom: '4px' }}>Rep</div>
+              <select value={filterRep} onChange={function (e) { setFilterRep(e.target.value) }} aria-label='Rep'
+                style={{ width: '100%', padding: '9px 10px', borderRadius: '8px', border: `1px solid ${border}`, fontSize: '12.5px', background: 'white' }}>
+                <option value='all'>All reps</option>
+                {staffList.map(function (s) { return <option key={s.id} value={s.id}>{s.full_name}</option> })}
+              </select>
+            </div>
+          )}
 
           <div style={{ flex: 1, minWidth: '150px' }}>
             <div style={{ fontSize: '11px', fontWeight: '700', color: gray500, marginBottom: '4px' }}>Territory</div>
@@ -1343,7 +1318,7 @@ export default function LiveActivity({ brand, perms }) {
                     Comment{comments.length > 0 ? ' · ' + comments.length : ''}
                   </button>
 
-                  {isManager && a.lat && a.lng && (
+                  {isTeamView && a.lat && a.lng && (
                     <button onClick={function () { setReviewing(a) }}
                       style={{ border: `1px solid ${tealDeep}`, background: tealMist, color: tealDeep, borderRadius: '20px', padding: '6px 13px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
                       Compare location
@@ -1644,11 +1619,6 @@ export default function LiveActivity({ brand, perms }) {
             )}
       </Modal>
 
-      <Modal show={settingUp} onClose={function () { setSettingUp(false) }} sheet wide title='Activity Fields'
-        footer={<GhostBtn onClick={function () { setSettingUp(false) }} style={{ width: '100%', padding: '12px' }}>Done</GhostBtn>}>
-        <ReportFieldsSetup businessId={brand.id} onChanged={load} />
-      </Modal>
-
       <Modal show={pickingViewers} onClose={function () { setPickingViewers(false) }} sheet title='Who sees my activity'
         footer={<>
           <GhostBtn onClick={function () { setPickingViewers(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
@@ -1705,14 +1675,6 @@ export default function LiveActivity({ brand, perms }) {
             </div>
           )
         })()}
-      </Modal>
-
-      {/* Manager/owner review of rep-added facilities (#1 spec #5): a rep-added
-          place is flagged for review; this queue lets a manager confirm it into a
-          normal cached entry or dismiss it. */}
-      <Modal show={reviewOpen} onClose={function () { setReviewOpen(false) }} sheet wide title='Review pending facilities'
-        footer={<GhostBtn onClick={function () { setReviewOpen(false) }} style={{ width: '100%', padding: '12px' }}>Close</GhostBtn>}>
-        <PlacesToConfirm businessId={brand.id} people={staffList} onChanged={loadPending} />
       </Modal>
       </div>
     </>
