@@ -7,8 +7,6 @@ import { facilityVerification, FACILITY_VERIFICATION, haversineMeters } from '..
 import {
   nearbyHealthFacilities,
   getRepAddedFacilities,
-  confirmRepAddedFacility,
-  dismissRepAddedFacility,
 } from '../../lib/places.js'
 import FacilityPicker from './FacilityPicker.jsx'
 import VisitTarget from './VisitTarget.jsx'
@@ -26,6 +24,9 @@ import { liveActivityOutbox } from './outbox'
 import OutboxStrip from './outbox/OutboxStrip.jsx'
 import PhotoAttach from './PhotoAttach.jsx'
 import PhotoThumbs from './PhotoThumbs.jsx'
+import ReportFieldsSetup from './ReportFieldsSetup.jsx'
+import PlacesToConfirm from './PlacesToConfirm.jsx'
+import { fmtStamp } from './formatTime'
 import { classifyFailure } from './outbox/failureClass'
 import { effectiveFields, fieldLabel, missingRequired } from './reportFields'
 import { captureLocation } from '../checkins/locationCapture'
@@ -36,15 +37,13 @@ import { OSM_ATTRIBUTION, OSM_COPYRIGHT_URL } from './areaLookup'
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
 import { watchTable, subscribeChanges } from '../../lib/realtime'
-import { Card, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
+import { Card, TealBtn, GhostBtn, Modal, useToast, Toast, Loading } from '../../components/ui'
 import { theme } from '../../styles/theme'
 import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, warning, warningBg, purple, bg } = theme
 
 // How many activities one page of the feed fetches (and the size that signals "there may be older ones").
 const ACTIVITY_PAGE = 100
-
-const FIELD_TYPES = ['text', 'long text', 'number', 'date', 'choice']
 
 const DATE_RANGES = [
   ['all', 'All time'],
@@ -55,11 +54,6 @@ const DATE_RANGES = [
   ['year', 'This year'],
   ['custom', 'Custom'],
 ]
-
-function fmtStamp(d) {
-  if (!d) return ''
-  return new Date(d).toLocaleString('en-NG', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-}
 
 function timeAgo(d) {
   if (!d) return ''
@@ -185,7 +179,6 @@ export default function LiveActivity({ brand, perms }) {
   // Manager/owner review queue for rep-added facilities (#1 spec #5).
   const [pendingFacilities, setPendingFacilities] = useState([])
   const [reviewOpen, setReviewOpen] = useState(false)
-  const [reviewLoading, setReviewLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
   // Save safety: a lock the handler checks itself (state lags a rapid second tap),
@@ -198,8 +191,6 @@ export default function LiveActivity({ brand, perms }) {
   const [notifying, setNotifying] = useState(false)
 
   const [settingUp, setSettingUp] = useState(false)
-  const [newField, setNewField] = useState({ label: '', field_type: 'text', required: false, options: '' })
-  const [fieldToRemove, setFieldToRemove] = useState(null)
 
   const [pickingViewers, setPickingViewers] = useState(false)
   const [viewerDraft, setViewerDraft] = useState([])
@@ -440,38 +431,16 @@ export default function LiveActivity({ brand, perms }) {
     }
   }
 
+  // The count on the "Review facilities" button. The list and its actions live in PlacesToConfirm.
   async function loadPending() {
     if (!brand || !brand.id) return
     if (!(isManager || isOwner)) return
-    setReviewLoading(true)
     try {
       const rows = await getRepAddedFacilities(brand.id, 'pending_review')
       setPendingFacilities(rows || [])
     } catch (e) {
       console.error('Pending facilities load failed:', e)
       setPendingFacilities([])
-    } finally {
-      setReviewLoading(false)
-    }
-  }
-
-  async function confirmPending(id) {
-    try {
-      await confirmRepAddedFacility(id, brand.id)
-      showToast('Facility confirmed. It now appears for everyone near it.', { type: 'success' })
-      loadPending()
-    } catch (e) {
-      showToast('Could not confirm: ' + e.message, { type: 'error' })
-    }
-  }
-
-  async function dismissPending(id) {
-    try {
-      await dismissRepAddedFacility(id)
-      showToast('Facility dismissed.', { type: 'info' })
-      loadPending()
-    } catch (e) {
-      showToast('Could not dismiss: ' + e.message, { type: 'error' })
     }
   }
 
@@ -484,38 +453,6 @@ export default function LiveActivity({ brand, perms }) {
     return found ? found.name : 'Unknown'
   }
 
-  async function saveField() {
-    if (!newField.label.trim()) { showToast('Give the field a name.', { type: 'warning' }); return }
-    try {
-      await liveActivityRepository.addActivityField({
-        business_id: brand.id,
-        label: newField.label.trim(),
-        field_type: newField.field_type,
-        required: newField.required,
-        options: newField.field_type === 'choice' ? (newField.options || null) : null,
-        sort_order: fields.length,
-      })
-      showToast('Field added', { type: 'success' })
-      setNewField({ label: '', field_type: 'text', required: false, options: '' })
-      load()
-    } catch (e) {
-      showToast('Could not add field: ' + e.message, { type: 'error' })
-    }
-  }
-
-  function askRemoveField(f) { setFieldToRemove(f) }
-
-  async function removeField() {
-    if (!fieldToRemove) return
-    try {
-      await liveActivityRepository.deleteActivityField(fieldToRemove.id)
-      setFieldToRemove(null)
-      showToast('Field removed', { type: 'success' })
-      load()
-    } catch (e) {
-      showToast('Could not remove: ' + e.message, { type: 'error' })
-    }
-  }
 
   function openViewerPicker() {
     setViewerDraft(myViewers.map(function (v) { return v.viewer_staff_id }))
@@ -1709,64 +1646,7 @@ export default function LiveActivity({ brand, perms }) {
 
       <Modal show={settingUp} onClose={function () { setSettingUp(false) }} sheet wide title='Activity Fields'
         footer={<GhostBtn onClick={function () { setSettingUp(false) }} style={{ width: '100%', padding: '12px' }}>Done</GhostBtn>}>
-            <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '16px' }}>
-              Decide what your reps record on every visit. Name them whatever suits your company.
-            </div>
-
-            {fields.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '18px' }}>
-                {fields.map(function (f) {
-                  return (
-                    <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}` }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: '13px', fontWeight: '700', color: navy }}>
-                          {f.label}{f.required ? ' *' : ''}
-                        </div>
-                        <div style={{ fontSize: '11px', color: gray400, textTransform: 'capitalize' }}>
-                          {f.field_type}{f.options ? ': ' + f.options : ''}
-                        </div>
-                      </div>
-                      <button onClick={function () { askRemoveField(f) }}
-                        style={{ flexShrink: 0, border: `1px solid ${danger}`, background: dangerBg, color: danger, borderRadius: '8px', padding: '6px 10px', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer' }}>
-                        Remove
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            <div style={{ padding: '14px', borderRadius: '10px', border: `1px solid ${border}`, background: bg }}>
-              <div style={{ fontSize: '12px', fontWeight: '800', color: gray600, marginBottom: '10px' }}>Add a field</div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <input value={newField.label}
-                  onChange={function (e) { setNewField({ ...newField, label: e.target.value }) }}
-                  placeholder='Field name, for example Customer, Products discussed or Outcome'
-                  style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box' }} />
-
-                <select value={newField.field_type}
-                  onChange={function (e) { setNewField({ ...newField, field_type: e.target.value }) }}
-                  style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white', textTransform: 'capitalize' }}>
-                  {FIELD_TYPES.map(function (t) { return <option key={t} value={t}>{t}</option> })}
-                </select>
-
-                {newField.field_type === 'choice' && (
-                  <input value={newField.options}
-                    onChange={function (e) { setNewField({ ...newField, options: e.target.value }) }}
-                    placeholder='Options separated by commas, for example Sold, Follow-up or No interest'
-                    style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box' }} />
-                )}
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer' }}>
-                  <input type='checkbox' checked={newField.required}
-                    onChange={function (e) { setNewField({ ...newField, required: e.target.checked }) }} />
-                  <span style={{ fontSize: '12.5px', color: gray600, fontWeight: '600' }}>Required. The rep must fill this in.</span>
-                </label>
-
-                <TealBtn onClick={saveField} style={{ width: '100%', padding: '12px' }}>Add Field</TealBtn>
-              </div>
-            </div>
+        <ReportFieldsSetup businessId={brand.id} onChanged={load} />
       </Modal>
 
       <Modal show={pickingViewers} onClose={function () { setPickingViewers(false) }} sheet title='Who sees my activity'
@@ -1798,11 +1678,6 @@ export default function LiveActivity({ brand, perms }) {
               })}
             </div>
       </Modal>
-
-      <ConfirmDialog show={!!fieldToRemove} onClose={function () { setFieldToRemove(null) }} onConfirm={removeField}
-        title={'Remove "' + (fieldToRemove ? fieldToRemove.label : '') + '"?'}
-        consequence="This field disappears from the Log Activity form for everyone. Past records that already have a value for it keep that value, but you will not be able to see or filter by it going forward unless you add the field back."
-        confirmLabel="Remove Field" />
 
       {/* Manager review (issue #1): the SAME FacilityPicker, read-only, centered
           on the logged visit's saved GPS so a manager can independently verify
@@ -1837,40 +1712,7 @@ export default function LiveActivity({ brand, perms }) {
           normal cached entry or dismiss it. */}
       <Modal show={reviewOpen} onClose={function () { setReviewOpen(false) }} sheet wide title='Review pending facilities'
         footer={<GhostBtn onClick={function () { setReviewOpen(false) }} style={{ width: '100%', padding: '12px' }}>Close</GhostBtn>}>
-        <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '14px' }}>
-          Facilities reps added because they weren't in the map. Confirm to make one a normal entry everyone near that spot will see, or dismiss it if it's wrong.
-        </div>
-        {reviewLoading ? <Loading /> : (
-          pendingFacilities.length === 0 ? (
-            <div style={{ padding: '24px', textAlign: 'center', color: gray400, fontSize: '13px' }}>No facilities awaiting review.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {pendingFacilities.map(function (f) {
-                const addedBy = (staffList.find(function (s) { return s.id === f.created_by }) || {}).full_name
-                return (
-                  <div key={f.id} style={{ padding: '12px 14px', borderRadius: '10px', border: `1px solid ${border}` }}>
-                    <div style={{ fontSize: '13.5px', fontWeight: '800', color: navy }}>{f.name}</div>
-                    <div style={{ fontSize: '11.5px', color: gray500, marginTop: '2px' }}>
-                      {f.category || 'Other health facility'}
-                      {addedBy ? ' · added by ' + addedBy : ''}
-                      {f.created_at ? ' · ' + fmtStamp(f.created_at) : ''}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                      <button onClick={function () { confirmPending(f.id) }}
-                        style={{ border: 'none', background: success, color: 'white', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' }}>
-                        Confirm
-                      </button>
-                      <button onClick={function () { dismissPending(f.id) }}
-                        style={{ border: `1px solid ${danger}`, background: dangerBg, color: danger, borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
-                        Dismiss
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        )}
+        <PlacesToConfirm businessId={brand.id} people={staffList} onChanged={loadPending} />
       </Modal>
       </div>
     </>
