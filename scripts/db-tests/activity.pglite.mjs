@@ -377,4 +377,47 @@ for (const fn of ["public.alert_activity_viewer()", "public.alert_activity_comme
 const lfAcl = await aclOf("public.log_field_activity(jsonb, jsonb)")
 ok("ACL log_field_activity: signed-in yes, anonymous no", lfAcl.a === false && lfAcl.u === true, JSON.stringify(lfAcl))
 
+// ---- GPS accuracy kept with the report (carehub_20261023_activity_gps_accuracy, DRAFT) ---------------------------
+const hasAccCol = async () => (await sup("select count(*)::int c from information_schema.columns where table_schema='public' and table_name='field_activities' and column_name='gps_accuracy_m'")).rows[0].c === 1
+ok("BEFORE: field_activities has no gps_accuracy_m, so accuracy sent by the app is simply not stored", !(await hasAccCol()))
+const ACC1 = "55555555-5555-4555-8555-555555555561"
+await logFn("repA1", payload({ id: ACC1, gps_accuracy_m: 25 }))
+ok("BEFORE: the function ignores the key it does not know and still saves the report", (await sup("select count(*)::int c from field_activities where id=$1", [ACC1])).rows[0].c === 1)
+
+await applyMigrations(["carehub_20261023_activity_gps_accuracy.sql"])
+ok("AFTER: the column exists", await hasAccCol())
+const ACC2 = "55555555-5555-4555-8555-555555555562"
+const ACC3 = "55555555-5555-4555-8555-555555555563"
+const ACC4 = "55555555-5555-4555-8555-555555555564"
+const accOf = async (id) => (await sup("select gps_accuracy_m a from field_activities where id=$1", [id])).rows[0].a
+await logFn("repA1", payload({ id: ACC2, gps_accuracy_m: 25 }))
+ok("AFTER: a whole-metre accuracy is stored", (await accOf(ACC2)) === 25)
+await logFn("repA1", payload({ id: ACC3, gps_accuracy_m: 25.6 }))
+ok("AFTER: a fractional accuracy is rounded, not refused", (await accOf(ACC3)) === 26)
+await logFn("repA1", payload({ id: ACC4 }))
+ok("AFTER: no accuracy stays NULL (every older report, and a failed GPS capture)", (await accOf(ACC4)) === null)
+const ACC5 = "55555555-5555-4555-8555-555555555565"
+await logFn("repA1", payload({ id: ACC5, gps_accuracy_m: "" }))
+ok("AFTER: an empty string is NULL, not an error", (await accOf(ACC5)) === null)
+await logFn("repA1", payload({ id: ACC2, gps_accuracy_m: 900 }))
+ok("AFTER: a retry with a different accuracy cannot change the stored value", (await accOf(ACC2)) === 25)
+await expectError("AFTER: a negative accuracy is refused by the CHECK, and nothing is half-saved", () => logFn("repA1", payload({ id: "55555555-5555-4555-8555-555555555566", gps_accuracy_m: -1 })), "23514")
+await expectError("AFTER: 1,000,001 m is refused", () => logFn("repA1", payload({ id: "55555555-5555-4555-8555-555555555567", gps_accuracy_m: 1000001 })), "23514")
+ok("AFTER: ...and the refused reports left no rows", (await sup("select count(*)::int c from field_activities where id in ('55555555-5555-4555-8555-555555555566','55555555-5555-4555-8555-555555555567')")).rows[0].c === 0)
+ok("AFTER: 0 m and 1,000,000 m are the allowed ends", await (async () => {
+  await logFn("repA1", payload({ id: "55555555-5555-4555-8555-555555555568", gps_accuracy_m: 0 }))
+  await logFn("repA1", payload({ id: "55555555-5555-4555-8555-555555555569", gps_accuracy_m: 1000000 }))
+  return (await accOf("55555555-5555-4555-8555-555555555568")) === 0 && (await accOf("55555555-5555-4555-8555-555555555569")) === 1000000
+})())
+await applyMigrations(["carehub_20261023_activity_gps_accuracy.sql"])
+ok("the draft can be applied twice and leaves exactly one log_field_activity", (await sup("select count(*)::int c from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='log_field_activity'")).rows[0].c === 1)
+ok("...and one accuracy CHECK constraint", (await sup("select count(*)::int c from pg_constraint where conrelid='public.field_activities'::regclass and conname='field_activities_gps_accuracy_m_check'")).rows[0].c === 1)
+const lfAcl2 = await aclOf("public.log_field_activity(jsonb, jsonb)")
+ok("ACL after the replacement: signed-in yes, anonymous no", lfAcl2.a === false && lfAcl2.u === true, JSON.stringify(lfAcl2))
+ok("the replacement still saves viewers in the same call", await (async () => {
+  const id = "55555555-5555-4555-8555-55555555556a"
+  const r = await logFn("repA1", payload({ id, gps_accuracy_m: 30 }), viewersJson)
+  return r.created === true && r.viewers_added === 1 && r.alerts === "server"
+})())
+
 finish()
