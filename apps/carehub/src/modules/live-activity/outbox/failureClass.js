@@ -13,8 +13,15 @@ import { isPermissionRefusal } from '../permissionRefusal'
 // afterwards; it is never retried silently in the meantime.
 const WILL_FAIL_AGAIN = /\((400|404|413|415|422)\)|\b(22P02|22023|23502|23503|23514)\b/
 
+// An expired or invalid login (401 "JWT expired", PostgREST PGRST301/PGRST303) is fixed by signing in again:
+// the report waits for that instead of being parked for the person to rescue by hand. It is checked first
+// because the 401 it arrives as would otherwise read as a refusal. A 401 that says "permission denied" is a
+// refusal and stays permanent.
+const LOGIN_PROBLEM = /\bJWT (expired|invalid)\b|\bInvalid JWT\b|\bPGRST30[13]\b/i
+
 export function classifyFailure(error) {
-  if (isPermissionRefusal(error)) return 'permanent'
   const text = String(error && error.message ? error.message : error)
+  if (LOGIN_PROBLEM.test(text)) return 'retry'
+  if (isPermissionRefusal(error)) return 'permanent'
   return WILL_FAIL_AGAIN.test(text) ? 'permanent' : 'retry'
 }
