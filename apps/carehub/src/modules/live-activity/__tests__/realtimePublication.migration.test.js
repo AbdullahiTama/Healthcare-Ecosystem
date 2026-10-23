@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 // The realtime publication was live-only state until 2026-10-23. The migration that records it must be
 // safe to run twice, must never remove anything, and must not touch tables it does not own.
 const sql = readFileSync(
-  resolve(__dirname, '../../../../../../docs/architecture/pending-migrations/carehub_20261023_realtime_publication.sql'),
+  resolve(__dirname, '../../../../../../supabase/migrations/carehub_20261023_realtime_publication.sql'),
   'utf8',
 )
 

@@ -1,3 +1,4 @@
+-- APPLIED TO PRODUCTION 2026-10-23 as carehub_20261023_activity_gps_accuracy (version 20261023160845). Verified by catalog read-back (one overload, SECURITY INVOKER, ACL without anon) and a rolled-back run as a real staff member; zero residue.
 -- carehub_20261023_activity_gps_accuracy
 --
 -- Keeps how accurate the GPS fix was with each field report, so a match to a place can be judged with it

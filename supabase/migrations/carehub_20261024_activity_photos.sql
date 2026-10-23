@@ -1,4 +1,5 @@
--- carehub_20261024_activity_photos  (DRAFT, not applied)
+-- APPLIED TO PRODUCTION 2026-10-23 as carehub_20261024_activity_photos (version 20261023161023). Verified by catalog read-back and a rolled-back run as three real users and anonymous (own upload, colleague untagged/tagged, other company, a report naming another company file); zero residue.
+-- carehub_20261024_activity_photos
 --
 -- Proof photos on a field report: up to three, stored as privately as the voice notes.
 --

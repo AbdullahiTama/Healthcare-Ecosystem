@@ -1,3 +1,4 @@
+-- APPLIED TO PRODUCTION 2026-10-23 as carehub_20261023_realtime_publication (version 20261023160811). Verified by catalog read-back.
 -- carehub_20261023_realtime_publication
 --
 -- Records which tables push live changes. Until 2026-10-23 this existed only as live state in the
