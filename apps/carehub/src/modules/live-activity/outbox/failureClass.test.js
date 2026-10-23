@@ -27,6 +27,7 @@ describe('classifyFailure', () => {
     ['an invalid parameter from the function (22023)', new Error('p_activity must be a JSON object 22023')],
     ['a bad request (400)', new Error('Supabase error (400): bad request')],
     ['an unprocessable request (422)', new Error('Supabase error (422): unprocessable')],
+    ['a missing bucket (404), e.g. photos before their migration is applied', new Error('Photo upload failed (404): Bucket not found')],
     ['a file that is too large (413)', new Error('Voice upload failed (413): too large')],
     ['a file type the bucket does not accept (415)', new Error('Voice upload failed (415): unsupported media type')],
   ])('%s will fail again, so it is permanent', (_n, e) => {

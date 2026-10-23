@@ -7,8 +7,11 @@ import { isPermissionRefusal } from '../permissionRefusal'
 //
 //   22P02 invalid input syntax   22023 invalid parameter (the function's own checks)
 //   23502 not-null   23503 foreign key   23514 check constraint
-//   400 bad request   413 file too large   415 file type refused   422 unprocessable
-const WILL_FAIL_AGAIN = /\((400|413|415|422)\)|\b(22P02|22023|23502|23503|23514)\b/
+//   400 bad request   404 not found (a bucket that does not exist yet)   413 file too large
+//   415 file type refused   422 unprocessable
+// A parked report keeps its Retry button, so one that was parked for a not-yet-applied migration can be sent
+// afterwards; it is never retried silently in the meantime.
+const WILL_FAIL_AGAIN = /\((400|404|413|415|422)\)|\b(22P02|22023|23502|23503|23514)\b/
 
 export function classifyFailure(error) {
   if (isPermissionRefusal(error)) return 'permanent'
