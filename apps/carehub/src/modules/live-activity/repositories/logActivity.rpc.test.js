@@ -87,6 +87,16 @@ describe('logActivity through log_field_activity', () => {
     expect(insert.body).toMatchObject({ id: 'fixed-id', rep_name: 'Ada' })
   })
 
+  it('the two-request fallback also leaves out photo_paths, while the function path carries it', async () => {
+    const down = backend(() => { throw new Error(NO_RPC) })
+    await down.repo.logActivity({ ...ACT, photo_paths: ['b1/fixed-id-0-x.jpg'] }, V)
+    const insert = down.calls.find((c) => c.path.startsWith('field_activities') && c.method === 'POST')
+    expect(insert.body).not.toHaveProperty('photo_paths')
+    const up = backend(() => served())
+    await up.repo.logActivity({ ...ACT, photo_paths: ['b1/fixed-id-0-x.jpg'] }, V)
+    expect(up.calls[0].body.p_activity.photo_paths).toEqual(['b1/fixed-id-0-x.jpg'])
+  })
+
   it('the function path carries gps_accuracy_m through untouched', async () => {
     const { repo, calls } = backend(() => served())
     await repo.logActivity({ ...ACT, gps_accuracy_m: 25 }, V)
