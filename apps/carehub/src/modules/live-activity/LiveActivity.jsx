@@ -21,6 +21,8 @@ import TeamLocations from '../checkins/TeamLocations.jsx'
 import { isManagerRole, canSeeAllActivity } from '../../lib/permissions'
 import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivities, affectedActivityIds } from './feedScope'
 import { newActivityId } from './activityId'
+import { liveActivityOutbox } from './outbox'
+import { classifyFailure } from './outbox/failureClass'
 import { effectiveFields, fieldLabel, missingRequired } from './reportFields'
 import { captureLocation } from '../checkins/locationCapture'
 import { saveDraft, loadDraft, clearDraft, hasContent } from './draftStore'
@@ -679,6 +681,10 @@ export default function LiveActivity({ brand, perms }) {
     try {
       const draft = draftRef.current || (draftRef.current = { id: newActivityId(), sent: false, voiceBlob: null, voiceUrl: null, activity: null, viewers: [] })
 
+      // Set when the recording could not be uploaded because the connection is down: the report is then
+      // kept on this device WITH the recording and sent together later, never without it.
+      let keepVoiceOnDevice = false
+      let voiceUploadError = null
       if (!draft.sent) {
         // Nothing has reached the server yet, so the form may still change.
         if (voiceBlob && draft.voiceBlob !== voiceBlob) {
@@ -687,8 +693,13 @@ export default function LiveActivity({ brand, perms }) {
             draft.voiceUrl = await liveActivityRepository.uploadActivityVoice(voiceBlob, { businessId: brand.id, activityId: draft.id })
             draft.voiceBlob = voiceBlob
           } catch (e) {
-            showToast('The voice note did not upload: ' + e.message + '. Nothing was saved. Try again, or remove the voice note to log without it.', { type: 'error' })
-            return
+            if (classifyFailure(e) === 'retry') {
+              keepVoiceOnDevice = true
+              voiceUploadError = e
+            } else {
+              showToast('The voice note did not upload: ' + e.message + '. Nothing was saved. Try again, or remove the voice note to log without it.', { type: 'error' })
+              return
+            }
           }
         }
         if (!voiceBlob) { draft.voiceBlob = null; draft.voiceUrl = null }
@@ -744,6 +755,12 @@ export default function LiveActivity({ brand, perms }) {
           // Only present when the rep confirmed a business; the name is a snapshot for the audit record.
           ...(confirmedBiz ? { directory_business_id: confirmedBiz.id, directory_business_name: confirmedBiz.name } : {}),
         }
+        if (keepVoiceOnDevice) {
+          // Not sent, so draft.sent stays false: a failed attempt to keep it retries the upload, not a send without it.
+          const notKept = await keepOnDevice(draft, voiceBlob)
+          if (notKept) showToast('The voice note did not upload: ' + voiceUploadError.message + '. It could not be kept on this device either, so nothing was saved. Try again, or remove the voice note to log without it.', { type: 'error' })
+          return
+        }
         draft.sent = true // from here the request may have reached the server
         clearDraft(brand.id, meStaffId)
       }
@@ -768,15 +785,40 @@ export default function LiveActivity({ brand, perms }) {
       }
       load()
     } catch (e) {
+      // A dropped connection is not a failure to lose the report over: keep it on this device and send it
+      // later (same id, so it cannot be saved twice). A refusal is never kept: it would be refused again.
+      let notKept = null
+      if (draftRef.current && draftRef.current.sent && classifyFailure(e) === 'retry') {
+        notKept = await keepOnDevice(draftRef.current, null)
+        if (!notKept) return
+      }
       if (draftRef.current && draftRef.current.sent) {
         setRetryNote('This report may already be saved. Press Retry to finish: it is sent exactly as you submitted it and cannot create a second report. To change it, cancel, then check your feed before logging it again.')
       }
-      showToast('Could not finish saving: ' + e.message, { type: 'error' })
+      showToast('Could not finish saving: ' + e.message + (notKept ? '. It also could not be kept on this device, so it is not queued.' : ''), { type: 'error' })
     } finally {
       submitLock.current = false
       setSaveStatus('')
       setSaving(false)
     }
+  }
+
+  // Keeps a built report (and its recording, if it has not been uploaded) on this device to be sent when the
+  // connection is back. Returns null once it is kept and the form has been closed, or the error if the device
+  // could not keep it, in which case nothing changes and the form stays open.
+  async function keepOnDevice(draft, voice) {
+    try {
+      await liveActivityOutbox.enqueue({ activity: draft.activity, viewers: draft.viewers, voiceBlob: voice || null })
+    } catch (err) {
+      return err
+    }
+    draftRef.current = null
+    clearDraft(brand.id, meStaffId)
+    setRestoredAt(null)
+    setRetryNote('')
+    setLogging(false)
+    showToast('The connection is down. Your report is saved on this device and will be sent when you are back online.', { type: 'info', duration: 8000 })
+    return null
   }
 
   function discardDraft() {
