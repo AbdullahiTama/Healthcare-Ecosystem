@@ -3,13 +3,8 @@ import { newActivityId } from '../activityId'
 import { lookupArea } from '../areaLookup'
 import { VOICE_BUCKET, voicePathFromUrl, voiceUploadInfo } from '../voiceUrl'
 
-// Did the database REFUSE this write (a policy or a missing grant), as opposed to
-// the request failing in transit? A refusal will be refused again, so retrying it
-// is pointless; a network or server failure is worth retrying.
-export function isPermissionRefusal(error) {
-  const text = String(error && error.message ? error.message : error)
-  return /\((401|403)\)|42501|row-level security|permission denied/i.test(text)
-}
+import { isPermissionRefusal } from '../permissionRefusal'
+export { isPermissionRefusal }
 
 // Internal notify helper: one notification row per recipient. Returns
 //   'sent'     they were written (or there was nobody to tell)
