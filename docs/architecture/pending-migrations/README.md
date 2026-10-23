@@ -1,9 +1,19 @@
 # Pending migrations
 
-**Nothing is pending.** All four migrations drafted for the Live Field Activity audit
+The four migrations drafted for the Live Field Activity audit
 (`docs/audits/live-field-activity-audit.md`) were applied to production on 2026-10-20 and now live in
-`supabase/migrations/`. This folder is kept as the place for unapproved drafts: files here are not in
+`supabase/migrations/`. This folder is the place for unapproved drafts: files here are not in
 `supabase/migrations/`, so no pipeline can pick them up, and each needs explicit approval before it moves.
+
+## Pending (Live Field Activity hardening, `docs/superpowers/plans/2026-10-23-live-field-activity-hardening.md`)
+
+Apply in this order, each as its own tracked migration, each only with the owner's approval.
+
+| Draft | Records / fixes | Needs the app first? |
+|---|---|---|
+| `carehub_20261023_realtime_publication.sql` | Which tables push live changes (live-only state until now). Idempotent, removes nothing. | No |
+
+## Already applied
 
 | Applied as | Version | Fixes |
 |---|---|---|
