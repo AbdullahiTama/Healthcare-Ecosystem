@@ -11,7 +11,7 @@ import { getProducts, cacheData, getCached } from '../../services/supabase'
 // owned by the staff module.
 import { staffRepository } from '../../modules/staff/repositories'
 import { saleRepository } from '../../modules/pos/repositories'
-import { getNavItems, getPerms, getReportTabs } from '../../lib/permissions'
+import { getNavItems, getPerms, getReportTabs, landingRoute } from '../../lib/permissions'
 import { businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
@@ -107,7 +107,10 @@ export default function BusinessDashboard() {
   // could still reach any nested route by typing the URL directly, since the
   // one guard at App.jsx's level only checked "is someone logged in," not
   // "is this specific page allowed for their role/business type."
-  const guard = (routeKey, element) => (allowedRouteKeys.includes(routeKey) ? element : <Navigate to='dashboard' replace />)
+  // A refused or unknown page sends the person to their landing page: the dashboard if they have it, else
+  // their Field page (a rep). Never to a page they cannot open, which would redirect forever.
+  const landing = landingRoute(allowedRouteKeys)
+  const guard = (routeKey, element) => (allowedRouteKeys.includes(routeKey) ? element : <Navigate to={landing} replace />)
   const [products, setProducts] = useState([])
   const [syncing, setSyncing] = useState(false)
   const { isMobile, isTablet } = useBreakpoint()
@@ -122,7 +125,7 @@ export default function BusinessDashboard() {
   // Same mobile top clearance as bareGuard so the hub's own header clears the
   // floating menu trigger.
   const reportTabs = getReportTabs(role, bType, customRoles)
-  const reportHubGuard = (element) => (reportTabs.length > 0 ? (isMobile ? <div style={{ paddingTop: MOBILE_MENU_CLEAR }}>{element}</div> : element) : <Navigate to='dashboard' replace />)
+  const reportHubGuard = (element) => (reportTabs.length > 0 ? (isMobile ? <div style={{ paddingTop: MOBILE_MENU_CLEAR }}>{element}</div> : element) : <Navigate to={landing} replace />)
   // Sidebar.jsx's own nav handler closes this after a route change on mobile.
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -265,7 +268,7 @@ export default function BusinessDashboard() {
               <Route path='rx_inbox' element={guard('rx_inbox', <><TopBar title='Prescription Inbox' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><RxInbox {...pageProps} /></div></>)} />
               <Route path='lab' element={guard('lab', <><TopBar title='Laboratory' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Lab {...pageProps} /></div></>)} />
               <Route path='imaging' element={guard('imaging', <><TopBar title='Imaging / Radiology' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Imaging {...pageProps} /></div></>)} />
-              <Route path='*' element={<Navigate to='dashboard' />} />
+              <Route path='*' element={<Navigate to={landing} />} />
             </Routes>
           </Suspense>
         </>

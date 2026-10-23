@@ -44,9 +44,15 @@ vi.mock('../../../services/supabase', async (importOriginal) => ({
   cacheData: vi.fn(),
   getCached: vi.fn(() => null),
 }))
-vi.mock('../../../lib/permissions', () => {
+vi.mock('../../../modules/live-activity/LiveActivity', () => ({
+  default: function MockField() { return <div data-testid="field-page">Field</div> },
+}))
+// The nav is stubbed per test; landingRoute is the real one, so the redirect rule under test is production code.
+vi.mock('../../../lib/permissions', async (importOriginal) => {
+  const real = await importOriginal()
   const StubIcon = () => null
   return {
+    landingRoute: real.landingRoute,
     getNavItems: vi.fn(() => [['dashboard'], ['pos'], ['inventory'], ['expenses'], ['reports']]),
     getPerms: vi.fn(() => ({ nav: ['dashboard', 'pos', 'inventory', 'expenses', 'reports'] })),
     getReportTabs: vi.fn(() => ['reports']),
@@ -61,6 +67,7 @@ vi.mock('../../../lib/permissions', () => {
 })
 
 import BusinessDashboard from '../BusinessDashboard'
+import { getNavItems, getPerms } from '../../../lib/permissions'
 
 async function mountDashboard(path = '/dashboard') {
   const host = document.createElement('div')
@@ -134,5 +141,40 @@ describe('BusinessDashboard shell migration', () => {
   it('does not show the offline strip when online', async () => {
     m = await mountDashboard()
     expect(m.host.textContent).not.toContain('You are offline.')
+  })
+})
+
+describe('where a field rep lands', () => {
+  let m
+  const REP_NAV = [['activity'], ['orders'], ['messages']]
+  afterEach(async () => {
+    if (m) { await m.unmount(); m = null }
+    getNavItems.mockReset()
+    getNavItems.mockImplementation(() => [['dashboard'], ['pos'], ['inventory'], ['expenses'], ['reports']])
+  })
+
+  it('a rep (no dashboard in their menu) opening /dashboard lands on Field, not in a redirect loop', async () => {
+    getNavItems.mockReturnValue(REP_NAV)
+    m = await mountDashboard('/dashboard')
+    expect(m.host.querySelector('[data-testid="field-page"]')).toBeTruthy()
+    expect(m.host.querySelector('[data-testid="dashboard-home"]')).toBeNull()
+  })
+
+  it('a rep who types the URL of a page they do not have lands on Field', async () => {
+    getNavItems.mockReturnValue(REP_NAV)
+    m = await mountDashboard('/dashboard/pos')
+    expect(m.host.querySelector('[data-testid="field-page"]')).toBeTruthy()
+  })
+
+  it('an unknown path sends a rep to Field too', async () => {
+    getNavItems.mockReturnValue(REP_NAV)
+    m = await mountDashboard('/dashboard/no-such-page')
+    expect(m.host.querySelector('[data-testid="field-page"]')).toBeTruthy()
+  })
+
+  it('someone with the dashboard still lands on the dashboard', async () => {
+    getNavItems.mockReturnValue([['dashboard'], ['activity']])
+    m = await mountDashboard('/dashboard')
+    expect(m.host.querySelector('[data-testid="dashboard-home"]')).toBeTruthy()
   })
 })

@@ -3,7 +3,7 @@ import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus, 
 import { staffRepository } from './repositories'
 import { provisionStaffAuth } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
-import { rolesForType, getModulesForType } from '../../lib/permissions'
+import { rolesForType, getModulesForType, isRoleGrantable } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
 import { getTemplatesForBusinessType, applyTemplate } from '../../lib/roleTemplates'
 import { theme } from '../../styles/theme'
@@ -66,8 +66,9 @@ export default function Staff({ brand, role, perms }) {
   const customRoleNames = roles.map(r => r.name)
   const roleOptions = [...rolesForType(bType), ...customRoleNames]
   // Modules the Roles & Permissions editor may offer: only what this business
-  // type can actually use, straight from the registry.
-  const typeModules = getModulesForType(bType || 'skincare')
+  // type can actually use, straight from the registry, and never an access-ruled
+  // page (the Field team pages follow "Manage field team", not a switch).
+  const typeModules = getModulesForType(bType || 'skincare').filter(m => isRoleGrantable(m[0]))
   const typeModuleIds = typeModules.map(m => m[0])
 
   const FLAG_META = [
