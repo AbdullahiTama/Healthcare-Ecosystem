@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { theme } from '../../styles/theme'
 import FacilityPicker from './FacilityPicker.jsx'
 import NearbyBusinessPicker from '../business-directory/components/NearbyBusinessPicker'
+import SuggestBusiness from '../business-directory/suggestions/SuggestBusiness.jsx'
 
-const { gray400, gray500, border, bg, danger } = theme
+const { gray400, gray500, border, bg, danger, tealDeep } = theme
 
 // The ONE place a rep says what the report is about. Two sources can suggest a
 // place, and they are labelled as such:
@@ -12,7 +14,10 @@ const { gray400, gray500, border, bg, danger } = theme
 // rep chooses it, and choosing one replaces the other: a report names at most one
 // target, so the feed, table, export and coverage figures cannot disagree about it.
 // A GPS position near a place is evidence of where the phone was, never of a visit.
-export default function VisitTarget({ gps, findingPlace, businessId, createdBy, facility, onFacility, business, onBusiness }) {
+// A business the directory does not know can be suggested to the CareHub team from here; that is separate from
+// the report and changes nothing about it.
+export default function VisitTarget({ gps, findingPlace, businessId, createdBy, facility, onFacility, business, onBusiness, areaLabel }) {
+  const [suggesting, setSuggesting] = useState(false)
   const chooseFacility = function (f) { onFacility(f); if (f) onBusiness(null) }
   const chooseBusiness = function (c) { onBusiness(c); if (c) onFacility(null) }
 
@@ -48,6 +53,14 @@ export default function VisitTarget({ gps, findingPlace, businessId, createdBy, 
             <button type='button' onClick={function () { chooseFacility(null) }}
               style={{ marginTop: '6px', background: 'none', border: 'none', color: danger, fontSize: '12px', fontWeight: '700', cursor: 'pointer', padding: 0 }}>
               Clear this choice
+            </button>
+          )}
+          {suggesting ? (
+            <SuggestBusiness businessId={businessId} gps={gps} areaLabel={areaLabel} onClose={function () { setSuggesting(false) }} />
+          ) : (
+            <button type='button' onClick={function () { setSuggesting(true) }}
+              style={{ display: 'block', marginTop: '10px', background: 'none', border: 'none', color: tealDeep, fontSize: '12px', fontWeight: '700', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+              Business not in the CareHub directory? Suggest it
             </button>
           )}
         </>

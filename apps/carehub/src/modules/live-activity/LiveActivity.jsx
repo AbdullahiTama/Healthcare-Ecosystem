@@ -17,6 +17,7 @@ import LocationNotice from '../checkins/LocationNotice.jsx'
 import { canSeeAllActivity } from '../../lib/permissions'
 import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivities, affectedActivityIds } from './feedScope'
 import MyCustomers from './customers/MyCustomers.jsx'
+import SuggestionsList from '../business-directory/suggestions/SuggestionsList.jsx'
 import { newActivityId } from './activityId'
 import { liveActivityOutbox } from './outbox'
 import OutboxStrip from './outbox/OutboxStrip.jsx'
@@ -107,6 +108,7 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const authData = readAuth()
   const meStaffId = (authData && authData.staff && authData.staff.id) ? authData.staff.id : null
+  const meEmail = (authData && authData.staff && authData.staff.email) || ''
   const meName = (authData && authData.staff && authData.staff.full_name)
     ? authData.staff.full_name
     : ((authData && authData.brand && authData.brand.owner) ? authData.brand.owner : 'Owner')
@@ -1107,7 +1109,9 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
       )}
 
       {scope === 'customers' ? (
-        <MyCustomers brand={brand} staffId={meStaffId} onLogVisit={openLogger} onRaiseOrder={raiseOrderFor} />
+        <MyCustomers brand={brand} staffId={meStaffId} onLogVisit={openLogger} onRaiseOrder={raiseOrderFor}>
+          <SuggestionsList email={meEmail} />
+        </MyCustomers>
       ) : (<>
       <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
         {[['feed', 'Feed'], ['table', 'Table']].map(function (v) {
@@ -1520,6 +1524,7 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
 
             <VisitTarget
               gps={gps}
+              areaLabel={placeName}
               findingPlace={findingPlace}
               businessId={brand.id}
               createdBy={meStaffId}

@@ -17,6 +17,7 @@ vi.mock('./repositories', () => ({
   },
 }))
 vi.mock('./customers/repository.js', () => ({ customerRepository: { list: vi.fn(), visits: vi.fn() } }))
+vi.mock('../business-directory/suggestions/repository.js', () => ({ SUGGESTION_TYPES: [['retail', 'Retail shop']], suggestionRepository: { listMine: vi.fn(), create: vi.fn() } }))
 vi.mock('../territories/repositories', () => ({ territoryRepository: { getAll: vi.fn() } }))
 vi.mock('../staff/repositories', () => ({ staffRepository: { getAll: vi.fn() } }))
 vi.mock('../../lib/realtime', () => ({ watchTable: vi.fn(() => () => {}), subscribeChanges: vi.fn(() => () => {}) }))
@@ -31,11 +32,12 @@ vi.mock('../../services/supabase', () => ({ sbFetch: vi.fn(async () => []), sbUp
 import LiveActivity from './LiveActivity.jsx'
 import { liveActivityRepository as repo } from './repositories'
 import { customerRepository } from './customers/repository.js'
+import { suggestionRepository } from '../business-directory/suggestions/repository.js'
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
 
 const BRAND = { id: 'brand-1' }
-const STAFF = { id: 'staff-1', full_name: 'Ada Rep', role: 'Sales Rep' }
+const STAFF = { id: 'staff-1', full_name: 'Ada Rep', role: 'Sales Rep', email: 'ada@a.test' }
 const daysAgo = (d) => new Date(Date.now() - d * 86400000).toISOString()
 // About 2 km north of where the phone is (6.5, 3.4).
 const FAR = { key: 'f:allen@6.518,3.400', kind: 'facility', name: 'Allen Pharmacy', address: '1 Marina', category: 'pharmacy', lat: 6.518, lng: 3.4, source: 'detected', last_visit_at: daysAgo(3), visits_total: 2, visits_30d: 2 }
@@ -94,6 +96,8 @@ beforeEach(() => {
   repo.logActivity.mockResolvedValue({ id: 'x', notification: 'none' })
   repo.lookupArea.mockResolvedValue({ status: 'ok', label: 'Allen Avenue, Ikeja' })
   customerRepository.list.mockResolvedValue([DIRECTORY, FAR, NEAR_ADDED])
+  suggestionRepository.listMine.mockResolvedValue([{ id: 's1', name: 'Kemi Stores', status: 'pending' }])
+  suggestionRepository.create.mockResolvedValue({ id: 's2', status: 'pending' })
   territoryRepository.getAll.mockResolvedValue([])
   staffRepository.getAll.mockResolvedValue([])
   host = document.createElement('div')
@@ -101,6 +105,32 @@ beforeEach(() => {
   root = createRoot(host)
 })
 afterEach(() => { act(() => root.unmount()); host.remove(); localStorage.clear() })
+
+describe('suggesting a missing business', () => {
+  it('My customers shows their own suggestions below the list', async () => {
+    await openMyCustomers()
+    expect(suggestionRepository.listMine).toHaveBeenCalledWith('ada@a.test')
+    expect(host.textContent).toContain('Your suggestions')
+    expect(host.textContent).toContain('Waiting for review')
+  })
+
+  it('the log form offers to suggest a business, pre-filled with the area, sent with the position, report unaffected', async () => {
+    await render()
+    await act(async () => { button('Log Activity').click() })
+    await settle()
+    await act(async () => { button('Business not in the CareHub directory? Suggest it').click() })
+    const name = host.querySelector('[aria-label="Business name"]')
+    expect(host.querySelector('[aria-label="Address"]').value).toBe('Allen Avenue, Ikeja')
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(name, 'Kemi Stores'); name.dispatchEvent(new Event('input', { bubbles: true })) })
+    const type = host.querySelector('[aria-label="Type"]')
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(type, 'retail'); type.dispatchEvent(new Event('change', { bubbles: true })) })
+    await act(async () => { button('Send suggestion').click() })
+    await flush()
+    expect(suggestionRepository.create).toHaveBeenCalledWith('brand-1', expect.objectContaining({ name: 'Kemi Stores', business_type: 'retail', latitude: 6.5, longitude: 3.4 }))
+    expect(host.textContent).toContain('Thanks. The CareHub team will review it.')
+    expect(repo.logActivity).not.toHaveBeenCalled()
+  })
+})
 
 describe('My customers on the Field page', () => {
   it('a staff member gets the tab, and it lists their own customers', async () => {
