@@ -50,7 +50,9 @@ login shows eleven enterprise modules, and "manager" means "any role whose name 
   - **Team check-ins**: the existing team check-in view.
   - **Order approvals**: orders waiting for this person's approval (the existing Orders page, filtered).
   - **Report fields**: what a visit report asks for (owner).
-  - **Places to confirm**: places reps added (existing review).
+  - **Places to confirm**: places reps added (existing review). Shown to the owner and roles named as a manager
+    only, the same rule the database applies (is_business_manager); "Manage field team" alone does not reach it
+    (final review I5).
 - These leave the rep's page entirely.
 
 ### 4. Who is a field manager (explicit, closes audit F2)
