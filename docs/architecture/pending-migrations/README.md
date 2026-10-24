@@ -1,14 +1,25 @@
 # Pending migrations
 
 Drafts only. Files here are not in `supabase/migrations/`, so no pipeline can pick them up, and each needs
-explicit approval before it moves there. Everything drafted for the Live Field Activity work so far has been
-applied except the one row below.
+explicit approval before it moves there.
 
 ## Pending (Live Field Activity hardening, `docs/superpowers/plans/2026-10-23-live-field-activity-hardening.md`)
 
 | Draft | Records / fixes | Status |
 |---|---|---|
 | `carehub_20261025_purge_old_report_coordinates.sql` | `purge_old_report_coordinates(months)` for report positions, service role only, NOT scheduled. Check-ins are deliberately not covered (append-only guard). Refuses to run before the gps_accuracy migration (now applied). | **Held**: the retention period is the owner's decision. Do not schedule it until that is made. |
+
+## Pending (field team reorganisation, `docs/superpowers/plans/2026-10-23-field-team-reorganisation.md`)
+
+Apply in this order, each as its own tracked migration, each only with the owner's approval. Tested on PGlite with the
+live policies copied from the catalog (`scripts/db-tests/checkins.pglite.mjs`, `scripts/db-tests/orders.pglite.mjs`).
+
+| Order | Draft | Fixes | Status |
+|---|---|---|---|
+| 1 | `carehub_20261026_checkin_overview_field_manager.sql` | F2: team check-ins follow the field-manager rule, so a role granted "Manage field team" sees them. Body = live definition with one line changed. | Ready |
+| 2 | `carehub_20261026_orders_field_activity_link.sql` | `orders.field_activity_id` (an order started from a visit); a link to another company's report, or one the caller cannot see, is refused. | Ready. The app saves the order without the link until this is applied. |
+| 3 | `carehub_20261026_orders_authorisation.sql` | Found 2026-10-23: any member could approve their own order, delete any order, raise one in a colleague's name, or create one already approved. Enforced in the database now. | Ready |
+| - | `carehub_20261026_orders_read_scope.sql` | Narrows who reads orders (creator, approver, watchers, field managers, owner). | **Held**: warehouse staff would lose sight of orders they process. Owner decides (a) give them "Manage field team", (b) add a warehouse path, or (c) keep reading as is. |
 
 ## Already applied (files in `supabase/migrations/`)
 
