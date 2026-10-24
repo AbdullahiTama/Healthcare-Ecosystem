@@ -315,9 +315,15 @@ export default function Orders({ brand, view = 'all' }) {
     }
   }
 
+  // The person who raised an order never approves it or moves it through the warehouse; someone else does (the
+  // database refuses it too: orders_guard). The Owner may do either.
+  function raisedByMe(o) {
+    return !isOwner && o.created_by_staff_id === meStaffId
+  }
+
   // Only the tagged approver (or the Owner) can approve or reject.
   function canApprove(o) {
-    if (o.status !== 'submitted') return false
+    if (o.status !== 'submitted' || raisedByMe(o)) return false
     if (isOwner) return true
     return o.approver_staff_id === meStaffId
   }
@@ -342,7 +348,7 @@ export default function Orders({ brand, view = 'all' }) {
   })
 
   const awaitingMe = orders.filter(function (o) {
-    return o.status === 'submitted' && (isOwner || o.approver_staff_id === meStaffId)
+    return canApprove(o)
   })
 
   function terrName(id) {
@@ -413,7 +419,7 @@ export default function Orders({ brand, view = 'all' }) {
         }
         count={`${visible.length} order${visible.length !== 1 ? 's' : ''}`}
         rowStyle={function (o) {
-          const mine = o.status === 'submitted' && (isOwner || o.approver_staff_id === meStaffId)
+          const mine = canApprove(o)
           return { borderLeft: mine ? `3px solid ${warning}` : '3px solid transparent' }
         }}
         renderCard={function (o) {
@@ -791,19 +797,25 @@ export default function Orders({ brand, view = 'all' }) {
                     </div>
                   )}
 
-                  {openOrder.status === 'approved' && (
+                  {raisedByMe(openOrder) && ['approved', 'processing', 'dispatched'].includes(openOrder.status) && (
+                    <div style={{ padding: '12px 14px', borderRadius: '8px', background: bg, fontSize: '12px', color: gray500, textAlign: 'center' }}>
+                      You raised this order, so someone else in the company moves it on.
+                    </div>
+                  )}
+
+                  {openOrder.status === 'approved' && !raisedByMe(openOrder) && (
                     <TealBtn onClick={function () { act(openOrder, 'processing', null) }} style={{ width: '100%', padding: '12px' }}>
                       {acting ? 'Working...' : 'Send to Warehouse'}
                     </TealBtn>
                   )}
 
-                  {openOrder.status === 'processing' && (
+                  {openOrder.status === 'processing' && !raisedByMe(openOrder) && (
                     <TealBtn onClick={function () { act(openOrder, 'dispatched', { dispatched_at: new Date().toISOString() }) }} style={{ width: '100%', padding: '12px' }}>
                       {acting ? 'Working...' : 'Mark Dispatched'}
                     </TealBtn>
                   )}
 
-                  {openOrder.status === 'dispatched' && (
+                  {openOrder.status === 'dispatched' && !raisedByMe(openOrder) && (
                     <TealBtn onClick={function () { act(openOrder, 'delivered', { delivered_at: new Date().toISOString() }) }} style={{ width: '100%', padding: '12px' }}>
                       {acting ? 'Working...' : 'Mark Delivered'}
                     </TealBtn>
