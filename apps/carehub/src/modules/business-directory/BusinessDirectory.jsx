@@ -10,6 +10,8 @@ import { PLATFORM, NIGERIA_STATES, DATA_SOURCE } from './services/constants'
 import { useDirectoryLookups } from './components/useDirectoryLookups'
 import { VerificationBadge, SourceBadge } from './components/BusinessBadges'
 import BusinessForm from './components/BusinessForm'
+import SuggestionsTab from './suggestions/SuggestionsTab.jsx'
+import { suggestionRepository } from './suggestions/repository.js'
 import BusinessProfile from './components/BusinessProfile'
 import ImportWizard from './components/ImportWizard'
 import CategoryManager from './components/CategoryManager'
@@ -18,7 +20,9 @@ import { toExportRow, exportRows } from './services/exportService'
 
 const { navy, gray500, gray600, border, tealDeep, danger } = theme
 const PAGE_SIZE = 50
-const TABS = [['businesses', 'Businesses'], ['import', 'Import'], ['duplicates', 'Duplicates'], ['categories', 'Categories'], ['reports', 'Reports']]
+const TABS = [['businesses', 'Businesses'], ['import', 'Import'], ['duplicates', 'Duplicates'], ['categories', 'Categories'], ['reports', 'Reports'], ['suggestions', 'Suggestions']]
+// Tabs of the shared platform registry (admin console); Suggestions exists only there.
+const PLATFORM_TABS = ['businesses', 'import', 'suggestions']
 
 function readAuth() {
   try { return JSON.parse(localStorage.getItem('carehub_auth') || '{}') } catch (e) { return {} }
@@ -54,7 +58,10 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
   const [territories, setTerritories] = useState([])
 
   const [viewing, setViewing] = useState(null)
-  const [editing, setEditing] = useState(null) // null | {} (new) | record
+  const [editing, setEditing] = useState(null) // null | {} (new) | record | { fromSuggestion, ...prefill }
+  // Suggestions whose listing was created but which could not be marked accepted: { suggestionId: listingId }.
+  const [unmarked, setUnmarked] = useState({})
+  const [suggestionsReload, setSuggestionsReload] = useState(0)
   const [confirm, setConfirm] = useState(null)
   const [exporting, setExporting] = useState(false)
 
@@ -70,7 +77,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
     return indexRef.current
   }, [repo, scopeId])
 
-  useEffect(() => { indexRef.current = null; setPage(0); if (platformScope) setTab((t) => (t === 'businesses' || t === 'import' ? t : 'businesses')) }, [scopeId]) // dependencies deliberately limited (no react-hooks lint plugin: docs/architecture/Linting.md, section 5)
+  useEffect(() => { indexRef.current = null; setPage(0); if (platformScope) setTab((t) => (PLATFORM_TABS.includes(t) ? t : 'businesses')) }, [scopeId]) // dependencies deliberately limited (no react-hooks lint plugin: docs/architecture/Linting.md, section 5)
   useEffect(() => { const t = setTimeout(() => { setDebounced(filters); setPage(0) }, 300); return () => clearTimeout(t) }, [filters])
 
   const load = useCallback(async () => {
@@ -111,6 +118,18 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
       const created = await repo.create(scopeId, rec, actor)
       if (indexRef.current && created) addToIndex(indexRef.current, created)
       showToast('Business added', { type: 'success' })
+      // Added from a rep's suggestion: close it. The listing exists either way, so a failure here keeps the
+      // suggestion open with "Mark as added" instead of risking a second listing.
+      if (editing?.fromSuggestion && created?.id) {
+        const suggestionId = editing.fromSuggestion
+        try {
+          await suggestionRepository.markAccepted(suggestionId, created.id)
+          setSuggestionsReload((n) => n + 1)
+        } catch (e) {
+          setUnmarked((m) => ({ ...m, [suggestionId]: created.id }))
+          showToast('The listing was added but the suggestion is still open. Use Mark as added.', { type: 'warning' })
+        }
+      }
     }
     if (pendingSub) lookups.reload()
     setEditing(null)
@@ -216,7 +235,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
       )}
 
       <div role='tablist' aria-label='Directory sections' style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-        {TABS.filter(([id]) => (canManage || id === 'businesses' || id === 'categories') && !(platformScope && !['businesses', 'import'].includes(id))).map(([id, label]) => (
+        {TABS.filter(([id]) => (canManage || id === 'businesses' || id === 'categories') && (platformScope ? PLATFORM_TABS.includes(id) : id !== 'suggestions')).map(([id, label]) => (
           <button key={id} role='tab' aria-selected={tab === id} onClick={() => setTab(id)}
             style={{ fontSize: 12.5, fontWeight: 800, padding: '9px 16px', borderRadius: 10, cursor: 'pointer', border: `1px solid ${tab === id ? tealDeep : border}`, background: tab === id ? navy : 'white', color: tab === id ? 'white' : gray500 }}>
             {label}
@@ -346,8 +365,13 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
         ))
       )}
 
+      {tab === 'suggestions' && platformScope && canManage && (
+        <SuggestionsTab repo={repo} suggestionRepo={suggestionRepository} scopeId={scopeId} unmarked={unmarked} reloadKey={suggestionsReload}
+          onAdd={(prefill) => setEditing(prefill)} />
+      )}
+
       {editing && (
-        <BusinessForm key={editing.id || 'new'} show initial={editing.id ? editing : null}
+        <BusinessForm key={editing.id || editing.fromSuggestion || 'new'} show initial={editing.id || editing.fromSuggestion ? editing : null}
           categories={lookups.categories} subcategories={lookups.subcategories} territories={platformScope ? [] : territories}
           onClose={() => setEditing(null)} onSave={saveBusiness}
           checkDuplicate={(rec, ignoreId) => {
