@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { filterCustomers, NOT_VISITED_CHOICES, LIST_LIMIT } from '../customerFilter.js'
+import { filterCustomers, NOT_VISITED_CHOICES, LIST_LIMIT, lastSeenText } from '../customerFilter.js'
 
 const NOW = new Date(2026, 9, 24, 12, 0, 0).getTime()
 const daysAgo = (d) => new Date(NOW - d * 86400000).toISOString()
@@ -40,5 +40,14 @@ describe('filterCustomers', () => {
     expect(NOT_VISITED_CHOICES.map((c) => c[0])).toEqual([0, 14, 30, 60, 90])
     expect(NOT_VISITED_CHOICES[0][1]).toBe('Any time')
     expect(LIST_LIMIT).toBe(500)
+  })
+})
+
+describe('lastSeenText', () => {
+  it('says today, yesterday, or how many days ago', () => {
+    expect(lastSeenText(new Date(NOW - 3600000).toISOString(), NOW)).toBe('today')
+    expect(lastSeenText(daysAgo(1), NOW)).toBe('yesterday')
+    expect(lastSeenText(daysAgo(2), NOW)).toBe('2 days ago')
+    expect(lastSeenText(null, NOW)).toBe('')
   })
 })

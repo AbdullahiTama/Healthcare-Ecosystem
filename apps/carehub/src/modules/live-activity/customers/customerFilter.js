@@ -22,3 +22,13 @@ export function filterCustomers(rows, { search = '', territoryId = '', staffId =
     return true
   })
 }
+
+// "today", "yesterday", "N days ago": whole days since the last visit.
+export function lastSeenText(iso, now = Date.now()) {
+  const t = Date.parse(iso)
+  if (!Number.isFinite(t)) return ''
+  const days = Math.max(0, Math.floor((now - t) / DAY_MS))
+  if (days === 0) return 'today'
+  if (days === 1) return 'yesterday'
+  return days + ' days ago'
+}

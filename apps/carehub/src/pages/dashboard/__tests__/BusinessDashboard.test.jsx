@@ -52,6 +52,7 @@ vi.mock('../../../modules/orders/Orders', () => ({
   default: function MockOrders({ view }) { return <div data-testid="orders" data-view={view || 'all'} /> },
 }))
 vi.mock('../../../modules/live-activity/PlacesToConfirm', () => ({ default: () => <div data-testid="places" /> }))
+vi.mock('../../../modules/live-activity/customers/CustomersPage', () => ({ default: () => <div data-testid="customers" /> }))
 vi.mock('../../../modules/live-activity/ReportFieldsSetup', () => ({ default: () => <div data-testid="report-fields" /> }))
 // The nav is stubbed per test; landingRoute is the real one, so the redirect rule under test is production code.
 vi.mock('../../../lib/permissions', async (importOriginal) => {
@@ -187,7 +188,7 @@ describe('where a field rep lands', () => {
 
 describe('the Field team pages', () => {
   let m
-  const MANAGER_NAV = [['dashboard'], ['activity'], ['field-reports'], ['field-checkins'], ['field-approvals'], ['field-places'], ['field-fields']]
+  const MANAGER_NAV = [['dashboard'], ['activity'], ['field-reports'], ['field-customers'], ['field-checkins'], ['field-approvals'], ['field-places'], ['field-fields']]
   afterEach(async () => {
     if (m) { await m.unmount(); m = null }
     getNavItems.mockReset()
@@ -198,6 +199,9 @@ describe('the Field team pages', () => {
   it('Team reports is the activity feed in team mode', async () => {
     const host = await at('/dashboard/field-team/reports')
     expect(host.querySelector('[data-testid="field-page"]').getAttribute('data-mode')).toBe('team')
+  })
+  it('Customers has its own page', async () => {
+    expect((await at('/dashboard/field-team/customers')).querySelector('[data-testid="customers"]')).toBeTruthy()
   })
   it('Team check-ins shows the team check-in view', async () => {
     expect((await at('/dashboard/field-team/checkins')).querySelector('[data-testid="team-checkins"]')).toBeTruthy()
