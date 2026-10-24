@@ -44,6 +44,20 @@ beforeEach(() => {
 afterEach(() => { act(() => root.unmount()); host.remove() })
 
 describe('FieldTeamToday', () => {
+  it('a slower, older load never overwrites a newer one (e.g. the company changes while loading)', async () => {
+    let releaseOld
+    checkinRepository.overview
+      .mockImplementationOnce(() => new Promise((r) => { releaseOld = () => r({ rows: [{ staff_id: 'x', name: 'Old Company Rep', role: 'Medical sales rep', last_checkin: null }] }) }))
+      .mockResolvedValueOnce({ rows: [{ staff_id: 'y', name: 'New Company Rep', role: 'Medical sales rep', last_checkin: null }] })
+    await act(async () => { root.render(<MemoryRouter><FieldTeamToday brand={BRAND} role='Owner' customRoles={{}} now={NOW} /></MemoryRouter>) })
+    await show({ brand: { id: 'biz-2', business_type: 'manufacturer_importer' } })
+    expect(host.textContent).toContain('New Company Rep')
+    await act(async () => { releaseOld() })
+    await flush(); await flush()
+    expect(host.textContent).toContain('New Company Rep')
+    expect(host.textContent).not.toContain('Old Company Rep')
+  })
+
   it('a rep who checked out is shown as checked out, and not counted as checked in', async () => {
     checkinRepository.overview.mockResolvedValue({ rows: [
       { staff_id: 's1', name: 'Ada Okafor', role: 'Medical sales rep', last_checkin: { event_type: 'workday_checkout', at: ago(30), location_label: 'Ikeja' } },

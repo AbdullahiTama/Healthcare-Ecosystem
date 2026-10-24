@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { checkinRepository } from '../checkins/repositories'
 import { liveActivityRepository } from '../live-activity/repositories'
@@ -32,8 +32,14 @@ const NO_CUSTOM_ROLES = {}
 export default function FieldTeamToday({ brand, role, staffId = null, customRoles = NO_CUSTOM_ROLES, now }) {
   const [state, setState] = useState(null) // null = loading
   const isOwner = role === 'Owner'
+  // Only the latest load may show its result: an older one that answers late (a retry, or the company changing
+  // while loading) is dropped, and nothing is set after the card is gone.
+  const latest = useRef(0)
+  useEffect(() => () => { latest.current = -1 }, [])
 
   const load = useCallback(async () => {
+    const request = latest.current + 1
+    latest.current = request
     setState(null)
     const at = now != null ? now : Date.now()
     const since = new Date(at)
@@ -44,6 +50,7 @@ export default function FieldTeamToday({ brand, role, staffId = null, customRole
       orderRepository.listAwaitingApproval(brand.id, { approverStaffId: staffId, isOwner }),
       getRepAddedFacilities(brand.id, 'pending_review'),
     ])
+    if (latest.current !== request) return
     const value = (r, pick) => (r.status === 'fulfilled' ? pick(r.value) : [])
     const reason = (r) => (r.status === 'rejected' ? (r.reason && r.reason.message) || 'request failed' : '')
     setState({
