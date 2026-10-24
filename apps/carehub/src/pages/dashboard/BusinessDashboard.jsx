@@ -11,7 +11,7 @@ import { getProducts, cacheData, getCached } from '../../services/supabase'
 // owned by the staff module.
 import { staffRepository } from '../../modules/staff/repositories'
 import { saleRepository } from '../../modules/pos/repositories'
-import { getNavItems, getPerms, getReportTabs, landingRoute } from '../../lib/permissions'
+import { getNavItems, getPerms, getReportTabs, landingRoute, ROLES } from '../../lib/permissions'
 import { businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
@@ -79,17 +79,22 @@ export default function BusinessDashboard() {
   const staffUser = auth?.staff
   const role = staffUser?.role || 'Owner'
   const [customRoles, setCustomRoles] = useState({})
+  const [rolesLoaded, setRolesLoaded] = useState(false)
   // Custom business-defined roles (Staff.jsx → roles table): name → permissions
   // jsonb. getPerms/getNavItems override presets with these so custom-role
   // staff see exactly the modules their owner configured.
   useEffect(() => {
-    if (!brand?.id) return
+    if (!brand?.id) { setRolesLoaded(true); return }
     staffRepository.getRoles(brand.id).then(r => {
       const map = {}
       ;(r || []).forEach(x => { map[x.name] = x.permissions || {} })
       setCustomRoles(map)
-    }).catch(() => {})
+    }).catch(() => {}).finally(() => setRolesLoaded(true))
   }, [brand?.id])
+  // A role that is neither the owner nor a preset can only be judged once its custom permissions have loaded.
+  // Judging it earlier treats it as the fallback menu for a moment, and the guard's redirect remounts the whole
+  // tree (App keys <Routes> on location.key), which fetches the roles again: an endless redirect.
+  const waitingForRoles = role !== 'Owner' && !ROLES[role] && !rolesLoaded
   const perms = getPerms(role, customRoles)
   const navigate = useNavigate()
   // Same business-type resolution Sidebar.jsx uses — kept identical so the
@@ -113,7 +118,7 @@ export default function BusinessDashboard() {
   // A refused or unknown page sends the person to their landing page: the dashboard if they have it, else
   // their Field page (a rep). Never to a page they cannot open, which would redirect forever.
   const landing = landingRoute(allowedRouteKeys)
-  const guard = (routeKey, element) => (allowedRouteKeys.includes(routeKey) ? element : <Navigate to={landing} replace />)
+  const guard = (routeKey, element) => (allowedRouteKeys.includes(routeKey) ? element : <Navigate to={'/dashboard/' + landing} replace />)
   const [products, setProducts] = useState([])
   const [syncing, setSyncing] = useState(false)
   const { isMobile, isTablet } = useBreakpoint()
@@ -128,7 +133,7 @@ export default function BusinessDashboard() {
   // Same mobile top clearance as bareGuard so the hub's own header clears the
   // floating menu trigger.
   const reportTabs = getReportTabs(role, bType, customRoles)
-  const reportHubGuard = (element) => (reportTabs.length > 0 ? (isMobile ? <div style={{ paddingTop: MOBILE_MENU_CLEAR }}>{element}</div> : element) : <Navigate to={landing} replace />)
+  const reportHubGuard = (element) => (reportTabs.length > 0 ? (isMobile ? <div style={{ paddingTop: MOBILE_MENU_CLEAR }}>{element}</div> : element) : <Navigate to={'/dashboard/' + landing} replace />)
   // Sidebar.jsx's own nav handler closes this after a route change on mobile.
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -218,6 +223,7 @@ export default function BusinessDashboard() {
       >
         <>
           <Suspense fallback={<Loading text='Loading module...' />}>
+            {waitingForRoles ? <Loading text='Loading your workspace...' /> : (
             <Routes>
               {/* Overview renders its own full-bleed header (cross-branch stats),
                   so it skips the generic TopBar — see Overview.jsx. Owner-only. */}
@@ -277,8 +283,9 @@ export default function BusinessDashboard() {
               <Route path='rx_inbox' element={guard('rx_inbox', <><TopBar title='Prescription Inbox' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><RxInbox {...pageProps} /></div></>)} />
               <Route path='lab' element={guard('lab', <><TopBar title='Laboratory' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Lab {...pageProps} /></div></>)} />
               <Route path='imaging' element={guard('imaging', <><TopBar title='Imaging / Radiology' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Imaging {...pageProps} /></div></>)} />
-              <Route path='*' element={<Navigate to={landing} />} />
+              <Route path='*' element={<Navigate to={'/dashboard/' + landing} replace />} />
             </Routes>
+            )}
           </Suspense>
         </>
       </DashboardShell>
