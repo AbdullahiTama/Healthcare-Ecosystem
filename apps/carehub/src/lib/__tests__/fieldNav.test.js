@@ -44,11 +44,19 @@ describe('the Field team section', () => {
     for (const id of [...FIELD_TEAM, 'field-fields']) expect(got).toContain(id)
   })
 
-  it('a custom role granted "Manage field team" (canManageDirectory) gets the four manager pages', () => {
+  it('a custom role granted "Manage field team" (canManageDirectory) gets the team pages, but not Places to confirm', () => {
     const custom = { 'Area Lead': { nav: ['activity'], canManageDirectory: true } }
     const got = ids('Area Lead', 'manufacturer_importer', custom)
-    for (const id of FIELD_TEAM) expect(got).toContain(id)
+    for (const id of ['field-reports', 'field-checkins', 'field-approvals']) expect(got).toContain(id)
     expect(got).not.toContain('field-fields')
+    // Confirming a place is decided by the database's is_business_manager (owner, or a role named as a manager);
+    // offering the page to anyone else would only produce buttons that silently do nothing.
+    expect(got).not.toContain('field-places')
+  })
+
+  it('a role named as a manager gets Places to confirm, like the owner', () => {
+    expect(ids('Regional Manager', 'manufacturer_importer')).toContain('field-places')
+    expect(ids('Owner', 'wholesale')).toContain('field-places')
   })
 
   it('a custom role WITHOUT the permission gets none, even if its stored nav lists them', () => {

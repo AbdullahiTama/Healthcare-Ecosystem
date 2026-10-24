@@ -281,7 +281,7 @@ export const MODULES = {
   'field-reports': { label: 'Team reports', icon: ClipboardList, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/reports', access: 'field-manager' },
   'field-checkins': { label: 'Team check-ins', icon: MapPin, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/checkins', access: 'field-manager' },
   'field-approvals': { label: 'Order approvals', icon: FileCheck, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/approvals', access: 'field-manager' },
-  'field-places': { label: 'Places to confirm', icon: ListChecks, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/places', access: 'field-manager' },
+  'field-places': { label: 'Places to confirm', icon: ListChecks, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/places', access: 'place-reviewer' },
   'field-fields': { label: 'Report fields', icon: Sliders, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/fields', access: 'owner' },
   discovery: { label: 'Facility Discovery', icon: Search, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   // There is deliberately no 'directory', 'business-discovery' or 'intelligence' module here: the
@@ -378,9 +378,12 @@ export const ALL_NAV_ENTERPRISE = NAV_ORDER.enterprise.filter(isRoleGrantable).m
 export const FIELD_REP_NAV = ['activity', 'orders', 'messages']
 
 // A module with an `access` rule is decided by that rule alone; a role's nav list neither grants nor
-// removes it. 'field-manager' is the same rule that decides who sees the whole team's activity.
+// removes it. 'field-manager' is the same rule that decides who sees the whole team's activity. 'place-reviewer'
+// mirrors the database's is_business_manager (the owner, or a role named as a manager), which alone may confirm or
+// dismiss a place a rep added; "Manage field team" does not reach it.
 function accessAllows(module, { role, perms }) {
   if (module.access === 'owner') return role === 'Owner'
+  if (module.access === 'place-reviewer') return role === 'Owner' || isManagerRole(role)
   if (module.access === 'field-manager') return canSeeAllActivity({ isOwner: role === 'Owner', role, perms })
   return false
 }
