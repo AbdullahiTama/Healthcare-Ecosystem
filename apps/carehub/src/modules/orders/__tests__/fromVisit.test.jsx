@@ -31,13 +31,24 @@ const setValue = async (el, value) => {
   await act(async () => { setter.call(el, value); el.dispatchEvent(new Event('input', { bubbles: true })) })
 }
 function StateProbe() { lastState = useLocation().state; return null }
+// As App.jsx does: the whole tree remounts on every navigation (<Routes key={location.key}>).
+let navigations
+function Keyed() {
+  const location = useLocation()
+  navigations.push(location.key)
+  return (
+    <Routes key={location.key}>
+      <Route path='/dashboard/orders' element={<><Orders brand={{ id: 'biz-1' }} /><StateProbe /></>} />
+    </Routes>
+  )
+}
 
 async function open(state) {
   localStorage.setItem('carehub_auth', JSON.stringify({ staff: { id: 'rep', full_name: 'Ada Rep', role: 'Field Rep' }, brand: { id: 'biz-1', owner: 'Boss' } }))
   await act(async () => {
     root.render(
       <MemoryRouter initialEntries={[{ pathname: '/dashboard/orders', state }]}>
-        <Routes><Route path='/dashboard/orders' element={<><Orders brand={{ id: 'biz-1' }} /><StateProbe /></>} /></Routes>
+        <Keyed />
       </MemoryRouter>
     )
   })
@@ -56,6 +67,8 @@ async function completeAndSubmit() {
 beforeEach(() => {
   vi.clearAllMocks()
   lastState = undefined
+  navigations = []
+  vi.spyOn(window.history, 'replaceState')
   repo.getAll.mockResolvedValue([])
   repo.getItems.mockResolvedValue([])
   repo.getWatchers.mockResolvedValue([])
@@ -65,7 +78,7 @@ beforeEach(() => {
   document.body.appendChild(host)
   root = createRoot(host)
 })
-afterEach(() => { act(() => root.unmount()); host.remove(); localStorage.clear() })
+afterEach(() => { act(() => root.unmount()); host.remove(); localStorage.clear(); vi.restoreAllMocks() })
 
 describe('an order started from a visit', () => {
   it('opens the order form with the customer and address from the visit, and says where it came from', async () => {
@@ -83,9 +96,13 @@ describe('an order started from a visit', () => {
     expect(repo.create.mock.calls[0][0]).toMatchObject({ customer_name: 'Allen Pharmacy', field_activity_id: 'act-1' })
   })
 
-  it('the visit is used once: the navigation state is cleared so a refresh does not reopen the form', async () => {
+  it('the visit is used once: the browser entry is cleared (so a refresh does not reopen the form) without a navigation that would remount the page', async () => {
     await open(VISIT)
-    expect(lastState == null || lastState.fromVisit == null).toBe(true)
+    expect(window.history.replaceState).toHaveBeenCalled()
+    const [state] = window.history.replaceState.mock.calls.at(-1)
+    expect(state && state.usr).toBeNull()
+    expect(new Set(navigations).size).toBe(1)
+    expect(input('e.g. St. Kizito').value).toBe('Allen Pharmacy')
   })
 
   it('an ordinary new order carries no visit link', async () => {

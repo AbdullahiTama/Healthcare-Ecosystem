@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { X, Check } from 'lucide-react'
 import { orderRepository } from './repositories'
 import { PIPELINE, STAGE_LABEL } from './stages'
@@ -90,17 +90,17 @@ export default function Orders({ brand, view = 'all' }) {
   // Set when the form was opened from a field report ("Raise order"): the order is linked to that visit.
   const [visitLink, setVisitLink] = useState(null)
   const location = useLocation()
-  const navigate = useNavigate()
 
   // "Raise order" on a report arrives here with the visit in the navigation state. Open the form prefilled
-  // once, then clear the state so a refresh or a back-navigation does not open it again.
+  // once, then clear the visit from the browser history entry so a refresh does not open it again. This must not be
+  // a router navigation: App remounts the whole tree on every navigation, which would close the form at once.
   useEffect(() => {
     const fromVisit = location.state && location.state.fromVisit
     if (!fromVisit || approvalsView) return
     openNew()
     setForm({ customer_name: fromVisit.customer_name || '', customer_address: fromVisit.customer_address || '' })
     setVisitLink({ activityId: fromVisit.activityId, customer_name: fromVisit.customer_name || '' })
-    navigate(location.pathname, { replace: true, state: null })
+    try { window.history.replaceState({ ...(window.history.state || {}), usr: null }, '') } catch (e) { /* the form still opens */ }
   }, [])
   const [uploadStatus, setUploadStatus] = useState('')
 
