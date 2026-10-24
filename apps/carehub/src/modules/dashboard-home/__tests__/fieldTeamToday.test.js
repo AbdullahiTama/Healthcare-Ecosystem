@@ -32,7 +32,10 @@ describe('summariseFieldDay', () => {
       { key: 'd', last_visit_at: minsAgo(60 * 24 * 90) },
     ] })
     expect(s.quietCustomers).toBe(2)
+    expect(s.quietCustomersAtLimit).toBe(false)
     expect(summariseFieldDay(base).quietCustomers).toBe(0)
+    const full = summariseFieldDay({ ...base, customers: Array.from({ length: 500 }, (_, i) => ({ key: 'k' + i, last_visit_at: minsAgo(60 * 24 * 40) })) })
+    expect(full.quietCustomersAtLimit).toBe(true)
   })
 
   it('counts reps who checked in today out of all reps, leaving managers and the owner out', () => {

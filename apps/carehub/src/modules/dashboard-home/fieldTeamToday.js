@@ -1,6 +1,7 @@
 import { getNavItems, getPerms, canSeeAllActivity } from '../../lib/permissions'
 import { STALE_AFTER_MINUTES } from '../checkins/checkinView'
 import { targetLabel, storedVerification } from '../live-activity/activityTarget'
+import { LIST_LIMIT } from '../live-activity/customers/customerFilter'
 
 // What "Field team today" shows on the company dashboard (layout A): who checked in, and today's visits.
 // Pure, so the counting rules are tested on their own.
@@ -61,6 +62,8 @@ export function summariseFieldDay({ checkins = [], visits = [], ordersAwaiting =
     ordersToApprove: (ordersAwaiting || []).length,
     placesToConfirm: (placesPending || []).length,
     quietCustomers: (customers || []).filter((c) => Date.parse(c.last_visit_at) < now - QUIET_AFTER_DAYS * 86400000).length,
+    // The reader returns at most LIST_LIMIT rows: at the limit there may be more.
+    quietCustomersAtLimit: (customers || []).length >= LIST_LIMIT,
     checkinRows,
     visitRows: todays.slice(0, MAX_VISIT_ROWS).map((v) => ({
       id: v.id,

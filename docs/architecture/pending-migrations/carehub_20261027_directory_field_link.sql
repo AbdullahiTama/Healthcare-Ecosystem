@@ -30,7 +30,7 @@
 --
 -- Rollback: DROP TABLE public.directory_suggestions; DROP FUNCTION public.directory_suggestions_before_insert(),
 --           public.directory_suggestions_before_update(), public.field_customer_visits(uuid, text, integer),
---           public.field_customers(uuid, uuid, integer), public.field_customer_key(uuid, text, double precision, double precision);
+--           public.field_customers(uuid, uuid, integer, integer), public.field_customer_key(uuid, text, double precision, double precision);
 
 -- ---- 1. customers -------------------------------------------------------------------------------------------------
 
@@ -50,7 +50,8 @@ AS $$
   END
 $$;
 
-CREATE OR REPLACE FUNCTION public.field_customers(p_business_id uuid, p_staff_id uuid DEFAULT NULL, p_limit integer DEFAULT 500)
+CREATE OR REPLACE FUNCTION public.field_customers(
+  p_business_id uuid, p_staff_id uuid DEFAULT NULL, p_limit integer DEFAULT 500, p_quiet_days integer DEFAULT NULL)
 RETURNS TABLE (
   key text, kind text, directory_business_id uuid, name text, address text, category text,
   lat double precision, lng double precision, source text, territory_id uuid,
@@ -61,45 +62,64 @@ LANGUAGE sql STABLE
 SECURITY INVOKER
 SET search_path TO 'public', 'pg_temp'
 AS $$
-  WITH keyed AS (
-    SELECT fa.*, public.field_customer_key(fa.directory_business_id, fa.facility_name, fa.facility_lat, fa.facility_lng) AS k
+  -- One pass over the visits: each customer's newest values come from ordered aggregates, not a re-scan per
+  -- customer. "Not visited in" (p_quiet_days) is applied BEFORE the limit, so a team with more customers than the
+  -- limit still sees every quiet one (they are the oldest, the first the limit would drop).
+  WITH v AS (
+    SELECT fa.id, fa.created_at, fa.rep_name, fa.staff_id, fa.territory_id,
+           fa.directory_business_id, fa.directory_business_name, fa.facility_name, fa.facility_address,
+           fa.facility_category, fa.facility_lat, fa.facility_lng, fa.facility_source,
+           public.field_customer_key(fa.directory_business_id, fa.facility_name, fa.facility_lat, fa.facility_lng) AS k
       FROM public.field_activities fa
      WHERE fa.business_id = p_business_id
        AND (p_staff_id IS NULL OR fa.staff_id = p_staff_id)
-  ), v AS (
-    SELECT * FROM keyed WHERE k IS NOT NULL
-  ), latest AS (
-    SELECT DISTINCT ON (v.k) v.k, v.id, v.directory_business_id, v.directory_business_name, v.facility_name,
-           v.facility_source, v.created_at, v.rep_name, v.staff_id
-      FROM v ORDER BY v.k, v.created_at DESC, v.id
-  ), agg AS (
-    SELECT v.k, count(*)::integer AS total,
+  ), c AS (
+    SELECT v.k,
+           max(v.created_at) AS last_at,
+           (array_agg(v.id ORDER BY v.created_at DESC, v.id))[1] AS last_id,
+           (array_agg(v.rep_name ORDER BY v.created_at DESC, v.id))[1] AS last_rep,
+           (array_agg(v.staff_id ORDER BY v.created_at DESC, v.id))[1] AS last_staff,
+           (array_agg(v.directory_business_id ORDER BY v.created_at DESC, v.id))[1] AS dir_id,
+           (array_agg(v.directory_business_name ORDER BY v.created_at DESC, v.id))[1] AS dir_name,
+           (array_agg(v.facility_name ORDER BY v.created_at DESC, v.id))[1] AS fac_name,
+           (array_agg(v.facility_source ORDER BY v.created_at DESC, v.id))[1] AS fac_source,
+           (array_agg(v.facility_address ORDER BY v.created_at DESC, v.id) FILTER (WHERE nullif(btrim(v.facility_address), '') IS NOT NULL))[1] AS address,
+           (array_agg(v.facility_category ORDER BY v.created_at DESC, v.id) FILTER (WHERE v.facility_category IS NOT NULL))[1] AS category,
+           (array_agg(v.facility_lat ORDER BY v.created_at DESC, v.id) FILTER (WHERE v.facility_lat IS NOT NULL))[1] AS lat,
+           (array_agg(v.facility_lng ORDER BY v.created_at DESC, v.id) FILTER (WHERE v.facility_lng IS NOT NULL))[1] AS lng,
+           (array_agg(v.territory_id ORDER BY v.created_at DESC, v.id) FILTER (WHERE v.territory_id IS NOT NULL))[1] AS territory,
+           count(*)::integer AS total,
            (count(*) FILTER (WHERE v.created_at >= now() - interval '30 days'))::integer AS d30,
            coalesce(array_agg(DISTINCT v.staff_id) FILTER (WHERE v.staff_id IS NOT NULL), '{}') AS reps
-      FROM v GROUP BY v.k
+      FROM v
+     WHERE v.k IS NOT NULL
+     GROUP BY v.k
+  ), picked AS (
+    SELECT c.*
+      FROM c
+     WHERE coalesce(p_quiet_days, 0) <= 0 OR c.last_at < now() - make_interval(days => p_quiet_days)
+     ORDER BY c.last_at DESC, c.k
+     LIMIT least(greatest(coalesce(p_limit, 500), 1), 500)
   ), last_order AS (
     SELECT DISTINCT ON (v.k) v.k, o.id, o.order_ref, o.status, o.created_at
-      FROM v JOIN public.orders o ON o.field_activity_id = v.id AND o.business_id = p_business_id
+      FROM picked p
+      JOIN v ON v.k = p.k
+      JOIN public.orders o ON o.field_activity_id = v.id AND o.business_id = p_business_id
      ORDER BY v.k, o.created_at DESC, o.id
   )
-  SELECT l.k,
-         CASE WHEN l.directory_business_id IS NOT NULL THEN 'directory' ELSE 'facility' END,
-         l.directory_business_id,
-         coalesce(nullif(btrim(l.directory_business_name), ''), btrim(l.facility_name)),
-         (SELECT x.facility_address FROM v x WHERE x.k = l.k AND nullif(btrim(x.facility_address), '') IS NOT NULL ORDER BY x.created_at DESC LIMIT 1),
-         (SELECT x.facility_category FROM v x WHERE x.k = l.k AND x.facility_category IS NOT NULL ORDER BY x.created_at DESC LIMIT 1),
-         (SELECT x.facility_lat FROM v x WHERE x.k = l.k AND x.facility_lat IS NOT NULL ORDER BY x.created_at DESC LIMIT 1),
-         (SELECT x.facility_lng FROM v x WHERE x.k = l.k AND x.facility_lng IS NOT NULL ORDER BY x.created_at DESC LIMIT 1),
-         CASE WHEN l.directory_business_id IS NULL THEN l.facility_source END,
-         (SELECT x.territory_id FROM v x WHERE x.k = l.k AND x.territory_id IS NOT NULL ORDER BY x.created_at DESC LIMIT 1),
-         l.created_at, l.rep_name, l.staff_id, l.id,
-         a.total, a.d30, a.reps,
+  SELECT p.k,
+         CASE WHEN p.dir_id IS NOT NULL THEN 'directory' ELSE 'facility' END,
+         p.dir_id,
+         coalesce(nullif(btrim(p.dir_name), ''), btrim(p.fac_name)),
+         p.address, p.category, p.lat, p.lng,
+         CASE WHEN p.dir_id IS NULL THEN p.fac_source END,
+         p.territory,
+         p.last_at, p.last_rep, p.last_staff, p.last_id,
+         p.total, p.d30, p.reps,
          lo.id, lo.order_ref, lo.status, lo.created_at
-    FROM latest l
-    JOIN agg a ON a.k = l.k
-    LEFT JOIN last_order lo ON lo.k = l.k
-   ORDER BY l.created_at DESC, l.k
-   LIMIT least(greatest(coalesce(p_limit, 500), 1), 500)
+    FROM picked p
+    LEFT JOIN last_order lo ON lo.k = p.k
+   ORDER BY p.last_at DESC, p.k
 $$;
 
 CREATE OR REPLACE FUNCTION public.field_customer_visits(p_business_id uuid, p_key text, p_limit integer DEFAULT 100)
@@ -127,10 +147,10 @@ AS $$
 $$;
 
 REVOKE ALL ON FUNCTION public.field_customer_key(uuid, text, double precision, double precision) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION public.field_customers(uuid, uuid, integer) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.field_customers(uuid, uuid, integer, integer) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.field_customer_visits(uuid, text, integer) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.field_customer_key(uuid, text, double precision, double precision) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.field_customers(uuid, uuid, integer) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.field_customers(uuid, uuid, integer, integer) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.field_customer_visits(uuid, text, integer) TO authenticated, service_role;
 
 -- ---- 2. suggestions -----------------------------------------------------------------------------------------------
@@ -273,7 +293,7 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_proc WHERE proname IN ('field_customers', 'field_customer_visits') AND prosecdef) THEN
     RAISE EXCEPTION 'the customer readers must be SECURITY INVOKER';
   END IF;
-  IF has_function_privilege('anon', 'public.field_customers(uuid, uuid, integer)', 'EXECUTE')
+  IF has_function_privilege('anon', 'public.field_customers(uuid, uuid, integer, integer)', 'EXECUTE')
      OR has_function_privilege('anon', 'public.field_customer_visits(uuid, text, integer)', 'EXECUTE') THEN
     RAISE EXCEPTION 'the customer readers must not be executable by anon';
   END IF;

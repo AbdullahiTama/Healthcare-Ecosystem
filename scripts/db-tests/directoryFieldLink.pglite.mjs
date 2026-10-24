@@ -66,6 +66,7 @@ const A3 = await visit({ staff: S.repA1, rep: 'Rep One', facility: 'Allen Pharma
 await visit({ staff: S.repA1, rep: 'Rep One', dir: DIR, dirName: 'Mercy Clinic (old)', at: ago(20) })
 await visit({ staff: S.repA1, rep: 'Rep One', dir: DIR, dirName: 'Mercy Clinic', at: ago(5) })
 await visit({ staff: S.repA1, rep: 'Rep One', at: ago(1) }) // no place: not a customer
+await visit({ staff: S.repA1, rep: 'Rep One', facility: 'Old Friend Pharmacy', lat: 6.7, lng: 3.5, at: ago(60) }) // gone quiet
 // Rep two: a private visit to Kemi Stores, shared with rep one, and one to Allen Pharmacy.
 const K = await visit({ staff: S.repA2, rep: 'Rep Two', facility: 'Kemi Stores', lat: 6.5, lng: 3.4, at: ago(3) })
 await sup('insert into activity_viewers (activity_id, staff_id, viewer_name) values ($1,$2,$3)', [K, S.repA1, 'Rep One'])
@@ -89,21 +90,26 @@ ok('customers: one customer for "Allen Pharmacy" and " allen pharmacy " in the s
 const mercy = byName(mgr, 'Mercy Clinic')
 ok('customers: two visits to the same directory listing are one customer, kind directory, name from the newest visit', !!mercy && mercy.kind === 'directory' && mercy.visits_total === 2 && mercy.directory_business_id === DIR && mercy.key === 'd:' + DIR)
 ok('customers: visits_30d counts only the last 30 days; visits_total counts all', allen.visits_30d === 3 && allen.visits_total === 4)
-ok('customers: a visit with no directory listing and no facility is not a customer', mgr.length === 3, JSON.stringify(mgr.map((r) => r.name)))
+ok('customers: a visit with no directory listing and no facility is not a customer', mgr.length === 4, JSON.stringify(mgr.map((r) => r.name)))
 ok('customers: last order is the newest order across the customer\'s visits (newest visit has none)', allen.last_order_ref === 'ORD-2' && allen.last_order_status === 'approved' && allen.last_activity_id === A3)
 ok('customers: name, territory and last visit come from the newest visit', allen.name === 'Allen Pharmacy' && allen.last_visit_rep === 'Rep One' && allen.last_visit_staff_id === S.repA1 && allen.kind === 'facility')
 ok('customers: source is the facility source of the newest visit (so a remembered place keeps it); none for a directory customer', allen.source === 'rep_added' && mercy.source === null)
 ok('customers: rep_staff_ids lists each rep who visited', allen.rep_staff_ids.length === 2 && allen.rep_staff_ids.includes(S.repA1) && allen.rep_staff_ids.includes(S.repA2))
-ok('customers: ordered by last visit, newest first', mgr[0].last_visit_at >= mgr[1].last_visit_at && mgr[1].last_visit_at >= mgr[2].last_visit_at)
+ok('customers: ordered by last visit, newest first', mgr[0].last_visit_at >= mgr[1].last_visit_at && mgr[1].last_visit_at >= mgr[2].last_visit_at && mgr[2].last_visit_at >= mgr[3].last_visit_at)
+// Final review: "not visited in" must be applied BEFORE the limit, or a big team never sees its quiet customers.
+const quiet = (await as('mgrA', 'select name from field_customers($1, null, 1, 30)', [S.A])).rows
+ok('customers: p_quiet_days keeps customers last visited more than that many days ago, before the limit', quiet.length === 1 && quiet[0].name === 'Old Friend Pharmacy', JSON.stringify(quiet))
+ok('customers: p_quiet_days null or 0 means any time', (await as('mgrA', 'select * from field_customers($1, null, 500, 0)', [S.A])).rows.length === 4)
+ok('customers: p_quiet_days still counts every visit of the customer', (await as('mgrA', 'select visits_total from field_customers($1, null, 500, 30)', [S.A])).rows[0].visits_total === 1)
 ok('customers: p_limit caps the rows', (await as('mgrA', 'select * from field_customers($1, null, 1)', [S.A])).rows.length === 1)
 
 const mine = await customers('repA1', S.repA1)
-ok('customers: p_staff_id = repA1 excludes a customer known only from repA2\'s report shared with repA1', !byName(mine, 'Kemi Stores') && mine.length === 2)
+ok('customers: p_staff_id = repA1 excludes a customer known only from repA2\'s report shared with repA1', !byName(mine, 'Kemi Stores') && mine.length === 3)
 ok('customers: p_staff_id counts only that rep\'s visits', byName(mine, 'allen pharmacy').visits_total === 3)
 const repAll = await customers('repA1')
 ok('customers: repA1 without p_staff_id sees only customers from visits RLS lets them read (own + shared, not repA2\'s private Allen visit)', !!byName(repAll, 'Kemi Stores') && byName(repAll, 'allen pharmacy').visits_total === 3)
 ok('customers: company B sees none of A\'s', (await as('b', 'select * from field_customers($1)', [S.A])).rows.length === 0 && (await as('repB1', 'select * from field_customers($1)', [S.A])).rows.length === 0)
-ok('customers: the owner sees the whole team', (await customers('a')).length === 3)
+ok('customers: the owner sees the whole team', (await customers('a')).length === 4)
 
 const visits = (await as('mgrA', 'select * from field_customer_visits($1, $2)', [S.A, allen.key])).rows
 ok('visits: field_customer_visits returns that key\'s visits newest first with their orders', visits.length === 4 && visits[0].id === A3 && visits.find((v) => v.id === A2).orders.length === 1 && visits.find((v) => v.id === A2).orders[0].order_ref === 'ORD-2' && visits.find((v) => v.id === A2).photo_count === 2 && visits[0].orders.length === 0)
@@ -148,5 +154,18 @@ const acl = (await sup(`select
   (select prosecdef from pg_proc where proname='field_customers') c_def, (select prosecdef from pg_proc where proname='field_customer_visits') v_def`)).rows[0]
 ok('suggestions: anon has no access; trigger functions not callable; readers are SECURITY INVOKER', !acl.a_sel && !acl.a_ins && !acl.t_ins && !acl.t_upd && acl.c_def === false && acl.v_def === false, JSON.stringify(acl))
 await expectError('anon cannot call the readers', () => as('anon', 'select * from field_customers($1)', [S.A]), '42501')
+
+// ---- scale (final review): one pass over the visits, not a re-scan per customer ------------------------------------
+// 3000 visits over 1000 places in company B. The per-customer re-scan took about 2.3 s here; one pass about 0.2 s.
+await sup(`insert into field_activities (business_id, staff_id, rep_name, created_at, facility_name, facility_address, facility_lat, facility_lng)
+  select $1, $2, 'r', now() - (g || ' hours')::interval, 'Place ' || (g % 1000), 'Addr ' || g, 6 + (g % 1000) * 0.01, 3 + (g % 1000) * 0.01
+    from generate_series(1, 3000) g`, [S.B, S.repB1])
+const t0 = Date.now()
+const big = (await sup('select * from field_customers($1)', [S.B])).rows
+const took = Date.now() - t0
+ok('scale: 3000 visits over 1000 places answer in under 1 s, 500 rows, newest first', took < 1000 && big.length === 500 && big[0].last_visit_at >= big[499].last_visit_at, took + ' ms')
+// Places 1..500 are the 500 most recent; the quiet ones (last visited 720+ hours ago) all lie outside them.
+const quietB = (await sup('select last_visit_at from field_customers($1, null, 500, 30)', [S.B])).rows
+ok('scale: the quiet filter reaches customers beyond the 500 most recent', quietB.length >= 280 && quietB.every((r) => new Date(r.last_visit_at) < new Date(Date.now() - 30 * 86400000)), String(quietB.length))
 
 finish()

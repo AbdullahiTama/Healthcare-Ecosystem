@@ -61,7 +61,7 @@ describe('Customers page', () => {
 
   it('lists the team\'s customers with kind, last visit, visit counts and the last order', async () => {
     await show()
-    expect(customerRepository.list).toHaveBeenCalledWith('biz-1')
+    expect(customerRepository.list).toHaveBeenCalledWith('biz-1', { quietDays: null })
     const text = host.textContent
     expect(text).toContain('Allen Pharmacy')
     expect(text).toContain('Map')
@@ -90,8 +90,17 @@ describe('Customers page', () => {
     expect(host.textContent).toContain('Mercy Clinic')
   })
 
+  it('choosing "not visited in" asks the database for those customers, so none are lost to the 500 limit', async () => {
+    await show()
+    expect(customerRepository.list).toHaveBeenLastCalledWith('biz-1', { quietDays: null })
+    await change(select('Not visited in'), '60')
+    await flush()
+    expect(customerRepository.list).toHaveBeenLastCalledWith('biz-1', { quietDays: 60 })
+  })
+
   it('?notVisited=30 opens with that filter on', async () => {
     await show('/dashboard/field-team/customers?notVisited=30')
+    expect(customerRepository.list).toHaveBeenCalledWith('biz-1', { quietDays: 30 })
     expect(select('Not visited in').value).toBe('30')
     expect(host.textContent).not.toContain('Allen Pharmacy')
   })

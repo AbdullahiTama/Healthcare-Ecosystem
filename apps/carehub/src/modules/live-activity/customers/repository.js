@@ -29,9 +29,10 @@ export function createCustomerRepository({ request = sbFetch } = {}) {
   }
 
   return {
-    // The team's customers (field managers), or one rep's own when staffId is given.
-    list(businessId, { staffId = null } = {}) {
-      return call('rpc/field_customers', { p_business_id: businessId, p_staff_id: staffId })
+    // The team's customers (field managers), or one rep's own when staffId is given. quietDays > 0 asks only for
+    // customers not visited in that many days; the database filters before its 500 limit, so none are lost.
+    list(businessId, { staffId = null, quietDays = null } = {}) {
+      return call('rpc/field_customers', { p_business_id: businessId, p_staff_id: staffId, p_quiet_days: quietDays > 0 ? quietDays : null })
     },
 
     // One customer's visits, newest first, each with the orders raised from it.

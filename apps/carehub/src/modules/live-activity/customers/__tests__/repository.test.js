@@ -20,13 +20,21 @@ describe('customerRepository', () => {
     const { repo, calls } = backend(async () => [{ key: 'f:a@1,2' }])
     const rows = await repo.list('biz-1')
     expect(rows).toEqual([{ key: 'f:a@1,2' }])
-    expect(calls[0]).toEqual({ path: 'rpc/field_customers', method: 'POST', body: { p_business_id: 'biz-1', p_staff_id: null } })
+    expect(calls[0]).toEqual({ path: 'rpc/field_customers', method: 'POST', body: { p_business_id: 'biz-1', p_staff_id: null, p_quiet_days: null } })
   })
 
   it('list narrows to one rep when a staff id is given', async () => {
     const { repo, calls } = backend()
     await repo.list('biz-1', { staffId: 'rep-1' })
-    expect(calls[0].body).toEqual({ p_business_id: 'biz-1', p_staff_id: 'rep-1' })
+    expect(calls[0].body).toEqual({ p_business_id: 'biz-1', p_staff_id: 'rep-1', p_quiet_days: null })
+  })
+
+  it('list asks the database for customers not visited in N days (filtered before its 500 limit)', async () => {
+    const { repo, calls } = backend()
+    await repo.list('biz-1', { quietDays: 30 })
+    expect(calls[0].body).toEqual({ p_business_id: 'biz-1', p_staff_id: null, p_quiet_days: 30 })
+    await repo.list('biz-1', { quietDays: 0 })
+    expect(calls[1].body.p_quiet_days).toBeNull()
   })
 
   it('visits sends the customer key', async () => {

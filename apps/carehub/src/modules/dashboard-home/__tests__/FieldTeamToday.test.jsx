@@ -50,10 +50,16 @@ describe('FieldTeamToday', () => {
   it('shows customers going quiet with a link to Customers filtered to 30 days', async () => {
     customerRepository.list.mockResolvedValue([{ key: 'a', last_visit_at: ago(60 * 24 * 40) }, { key: 'b', last_visit_at: ago(60 * 24 * 35) }, { key: 'c', last_visit_at: ago(30) }])
     await show()
-    expect(customerRepository.list).toHaveBeenCalledWith('biz-1')
+    expect(customerRepository.list).toHaveBeenCalledWith('biz-1', { quietDays: 30 })
     expect(host.textContent).toContain('2 customers not visited in 30 days')
     const link = [...host.querySelectorAll('a')].find((a) => a.textContent.includes('not visited in 30 days'))
     expect(link.getAttribute('href')).toBe('/dashboard/field-team/customers?notVisited=30')
+  })
+
+  it('at the limit the count says "500+" rather than a number that may be too low', async () => {
+    customerRepository.list.mockResolvedValue(Array.from({ length: 500 }, (_, i) => ({ key: 'k' + i, last_visit_at: ago(60 * 24 * 40) })))
+    await show()
+    expect(host.textContent).toContain('500+ customers not visited in 30 days')
   })
 
   it('one quiet customer reads in the singular', async () => {

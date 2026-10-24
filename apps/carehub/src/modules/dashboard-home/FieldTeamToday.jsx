@@ -50,7 +50,7 @@ export default function FieldTeamToday({ brand, role, staffId = null, customRole
       liveActivityRepository.getFieldActivities(brand.id, { since: since.toISOString(), limit: 100 }),
       orderRepository.listAwaitingApproval(brand.id, { approverStaffId: staffId, isOwner }),
       getRepAddedFacilities(brand.id, 'pending_review'),
-      customerRepository.list(brand.id),
+      customerRepository.list(brand.id, { quietDays: 30 }),
     ])
     if (latest.current !== request) return
     const value = (r, pick) => (r.status === 'fulfilled' ? pick(r.value) : [])
@@ -91,7 +91,7 @@ export default function FieldTeamToday({ brand, role, staffId = null, customRole
         <div style={tile}><b>{plural(s.ordersToApprove, 'order', 'orders')}</b> to approve</div>
         <div style={tile}><b>{plural(s.placesToConfirm, 'place', 'places')}</b> to confirm</div>
         {state.customersLoaded && (
-          <Link to='/dashboard/field-team/customers?notVisited=30' style={{ ...tile, textDecoration: 'none' }}><b>{plural(s.quietCustomers, 'customer', 'customers')}</b> not visited in 30 days</Link>
+          <Link to='/dashboard/field-team/customers?notVisited=30' style={{ ...tile, textDecoration: 'none' }}><b>{s.quietCustomersAtLimit ? s.quietCustomers + '+ customers' : plural(s.quietCustomers, 'customer', 'customers')}</b> not visited in 30 days</Link>
         )}
       </div>
 

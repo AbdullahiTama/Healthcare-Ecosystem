@@ -44,12 +44,14 @@ export default function CustomersPage({ brand }) {
     setRows(null)
     setError(null)
     try {
-      const r = await customerRepository.list(brand.id)
+      // "Not visited in" is asked of the database, which filters before its 500 limit: the quiet customers are the
+      // oldest, the first a client-side filter over the 500 most recent would miss.
+      const r = await customerRepository.list(brand.id, { quietDays: notVisitedDays || null })
       if (latest.current === request) setRows(r)
     } catch (e) {
       if (latest.current === request) { setError(e); setRows([]) }
     }
-  }, [brand.id])
+  }, [brand.id, notVisitedDays])
   useEffect(() => { load() }, [load])
   useEffect(() => () => { latest.current = -1 }, [])
 
