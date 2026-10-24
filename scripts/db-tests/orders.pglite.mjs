@@ -2,7 +2,8 @@
 // 2026-10-26, field team reorganisation). The "orders of own business" and "... via parent order" policies are
 // copied from the live project (pg_policies, 2026-10-24). See _harness.mjs for scope and limits.
 //   REPO_ROOT=<repo> node orders.pglite.mjs
-import { ok, expectError, finish, as, sup, db, applyMigrations, seedStaff, makeLikeLive, addDirectoryManagerStub } from './_harness.mjs'
+import fs from 'node:fs'
+import { ok, expectError, finish, as, sup, db, applyMigrations, seedStaff, makeLikeLive, addDirectoryManagerStub, migrationPath } from './_harness.mjs'
 
 await db.exec(`
   CREATE TABLE public.facilities_cache (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid, name text, source text);
@@ -136,6 +137,55 @@ const gAcl = (await sup("select has_function_privilege('anon','public.orders_gua
 ok('AFTER: nobody calls the guard directly', gAcl.a === false && gAcl.u === false, JSON.stringify(gAcl))
 ok('AFTER: the link check from the earlier draft still runs', await (async () => {
   try { await make('repA1', { field_activity_id: RB }); return false } catch (e) { return e.code === '42501' }
+})())
+
+// ---- final review I1: what was approved stays approved ----------------------------------------------------------
+const P = await make('repA1')
+ok('I1: while submitted, the creator may still correct the total', (await as('repA1', 'update orders set total_value=500 where id=$1 returning id', [P])).rows.length === 1)
+await expectError('I1: while submitted, a colleague may not change the total', () => as('repA2', 'update orders set total_value=1 where id=$1', [P]), '42501')
+await expectError('I1: nor may the approver quietly change it', () => as('mgrA', 'update orders set total_value=1 where id=$1', [P]), '42501')
+await as('mgrA', "update orders set status='approved', approved_at=now(), approval_note='ok' where id=$1", [P])
+await expectError('I1: after approval the creator cannot raise the total', () => as('repA1', 'update orders set total_value=99999 where id=$1', [P]), '42501')
+await expectError('I1: nor change the customer', () => as('repA1', "update orders set customer_name='Someone else' where id=$1", [P]), '42501')
+await expectError('I1: nor rewrite when it was approved', () => as('repA2', 'update orders set approved_at=now() where id=$1', [P]), '42501')
+ok('I1: the warehouse can still record dispatch and delivery times as it moves the order', await (async () => {
+  await setStatus('repA2', P, 'processing')
+  const r = await as('repA2', "update orders set status='dispatched', dispatched_at=now() where id=$1 returning id", [P])
+  return r.rows.length === 1
+})())
+ok('I1: the owner can still correct an approved order', (await as('a', 'update orders set notes=$2 where id=$1 returning id', [P, 'owner fix'])).rows.length === 1)
+const Q = await make('repA1')
+ok('I1: the creator adds lines to their submitted order', (await as('repA1', "insert into order_items (order_id, product_name, quantity) values ($1,'Amoxil',2) returning id", [Q])).rows.length === 1)
+await expectError('I1: a colleague cannot add lines to someone else\'s order', () => as('repA2', "insert into order_items (order_id, product_name, quantity) values ($1,'Extra',9)", [Q]), '42501')
+await as('mgrA', "update orders set status='approved' where id=$1", [Q])
+await expectError('I1: nobody but the owner adds lines after approval', () => as('repA1', "insert into order_items (order_id, product_name, quantity) values ($1,'Extra',9)", [Q]), '42501')
+await expectError('I1: nor changes a line after approval', () => as('repA1', "update order_items set quantity=999 where order_id=$1", [Q]), '42501')
+
+// ---- final review I2: the order's history cannot be forged -------------------------------------------------------
+const E = await make('repA1')
+ok('I2: the creator records the submitted event, under their real name whatever name they send', await (async () => {
+  await as('repA1', "insert into order_events (order_id, event_type, actor_name) values ($1,'submitted','Regional Manager')", [E])
+  return (await sup("select actor_name from order_events where order_id=$1 and event_type='submitted'", [E])).rows[0].actor_name === 'Rep One'
+})())
+await expectError('I2: an "approved" event cannot be written for an order that is not approved', () => as('repA1', "insert into order_events (order_id, event_type, actor_name) values ($1,'approved','Regional Manager')", [E]), '42501')
+await as('mgrA', "update orders set status='approved' where id=$1", [E])
+ok('I2: after the real approval the approver records it under their own name', await (async () => {
+  await as('mgrA', "insert into order_events (order_id, event_type, actor_name) values ($1,'approved','anything')", [E])
+  return (await sup("select actor_name from order_events where order_id=$1 and event_type='approved'", [E])).rows[0].actor_name === 'Manager A'
+})())
+ok('I2: nobody edits an event afterwards (rows are hidden from UPDATE)', (await as('mgrA', "update order_events set actor_name='x' where order_id=$1 returning id", [E])).rows.length === 0)
+ok('I2: the owner\'s own events keep the name the owner sends', await (async () => {
+  const O2 = await make('a', { created_by_staff_id: null })
+  await as('a', "insert into order_events (order_id, event_type, actor_name) values ($1,'submitted','Boss')", [O2])
+  return (await sup("select actor_name from order_events where order_id=$1", [O2])).rows[0].actor_name === 'Boss'
+})())
+ok('I3: the draft refuses to apply if a definer function that writes orders is callable by signed-in users', await (async () => {
+  await sup("create function public.sneaky_order_write() returns void language sql security definer as $f$ update public.orders set status = 'delivered' $f$")
+  await sup('grant execute on function public.sneaky_order_write() to authenticated')
+  let refused = false
+  try { await db.exec(fs.readFileSync(migrationPath('carehub_20261026_orders_authorisation.sql'), 'utf8')) } catch (e) { refused = /callable by signed-in users/.test(e.message) }
+  await sup('drop function public.sneaky_order_write()')
+  return refused
 })())
 
 // ================================================================================================
