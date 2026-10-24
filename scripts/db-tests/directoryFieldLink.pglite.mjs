@@ -11,7 +11,7 @@ await db.exec(`
     ADD COLUMN territory_id uuid, ADD COLUMN facility_name text, ADD COLUMN facility_address text, ADD COLUMN facility_category text,
     ADD COLUMN facility_lat double precision, ADD COLUMN facility_lng double precision, ADD COLUMN facility_verified boolean,
     ADD COLUMN facility_pending_review boolean, ADD COLUMN place_verified boolean, ADD COLUMN facility_distance_m integer,
-    ADD COLUMN gps_accuracy_m integer, ADD COLUMN photo_paths text[], ADD COLUMN directory_business_id uuid, ADD COLUMN directory_business_name text;
+    ADD COLUMN gps_accuracy_m integer, ADD COLUMN photo_paths text[], ADD COLUMN facility_source text, ADD COLUMN directory_business_id uuid, ADD COLUMN directory_business_name text;
   CREATE TABLE public.activity_viewers (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), activity_id uuid NOT NULL REFERENCES public.field_activities(id), staff_id uuid, viewer_name text);
   CREATE TABLE public.activity_reactions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), activity_id uuid NOT NULL REFERENCES public.field_activities(id), staff_id uuid, actor_name text);
   CREATE TABLE public.activity_comments (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), activity_id uuid NOT NULL REFERENCES public.field_activities(id), staff_id uuid, actor_name text, body text);
@@ -49,10 +49,10 @@ const day = 86400000
 const ago = (days) => new Date(Date.now() - days * day).toISOString()
 const visit = (o) => sup(
   `insert into field_activities (business_id, staff_id, rep_name, created_at, facility_name, facility_address, facility_lat, facility_lng,
-     directory_business_id, directory_business_name, territory_id, photo_paths)
-   values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning id`,
+     directory_business_id, directory_business_name, territory_id, photo_paths, facility_source)
+   values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning id`,
   [o.biz || S.A, o.staff, o.rep || 'r', o.at || ago(1), o.facility || null, o.address || null, o.lat ?? null, o.lng ?? null,
-    o.dir || null, o.dirName || null, o.terr || null, o.photos || null]).then((r) => r.rows[0].id)
+    o.dir || null, o.dirName || null, o.terr || null, o.photos || null, o.source || null]).then((r) => r.rows[0].id)
 const order = (activityId, ref, at, biz = S.A) => sup('insert into orders (business_id, order_ref, customer_name, status, field_activity_id, created_at) values ($1,$2,$3,$4,$5,$6) returning id',
   [biz, ref, 'c', 'approved', activityId, at]).then((r) => r.rows[0].id)
 
@@ -62,7 +62,7 @@ const TERR = '00000000-0000-0000-0000-0000000000f1'
 // Rep one: Allen Pharmacy three times (two spellings, same ~100 m cell), Mercy Clinic (directory) twice.
 const A1 = await visit({ staff: S.repA1, rep: 'Rep One', facility: 'Allen Pharmacy', address: '1 Marina', lat: 6.45012, lng: 3.39021, at: ago(45) })
 const A2 = await visit({ staff: S.repA1, rep: 'Rep One', facility: ' allen pharmacy ', address: '1 Marina Rd', lat: 6.45031, lng: 3.39039, at: ago(10), terr: TERR, photos: ['p1', 'p2'] })
-const A3 = await visit({ staff: S.repA1, rep: 'Rep One', facility: 'Allen Pharmacy', lat: 6.4502, lng: 3.3903, at: ago(2) })
+const A3 = await visit({ staff: S.repA1, rep: 'Rep One', facility: 'Allen Pharmacy', lat: 6.4502, lng: 3.3903, at: ago(2), source: 'rep_added' })
 await visit({ staff: S.repA1, rep: 'Rep One', dir: DIR, dirName: 'Mercy Clinic (old)', at: ago(20) })
 await visit({ staff: S.repA1, rep: 'Rep One', dir: DIR, dirName: 'Mercy Clinic', at: ago(5) })
 await visit({ staff: S.repA1, rep: 'Rep One', at: ago(1) }) // no place: not a customer
@@ -92,6 +92,7 @@ ok('customers: visits_30d counts only the last 30 days; visits_total counts all'
 ok('customers: a visit with no directory listing and no facility is not a customer', mgr.length === 3, JSON.stringify(mgr.map((r) => r.name)))
 ok('customers: last order is the newest order across the customer\'s visits (newest visit has none)', allen.last_order_ref === 'ORD-2' && allen.last_order_status === 'approved' && allen.last_activity_id === A3)
 ok('customers: name, territory and last visit come from the newest visit', allen.name === 'Allen Pharmacy' && allen.last_visit_rep === 'Rep One' && allen.last_visit_staff_id === S.repA1 && allen.kind === 'facility')
+ok('customers: source is the facility source of the newest visit (so a remembered place keeps it); none for a directory customer', allen.source === 'rep_added' && mercy.source === null)
 ok('customers: rep_staff_ids lists each rep who visited', allen.rep_staff_ids.length === 2 && allen.rep_staff_ids.includes(S.repA1) && allen.rep_staff_ids.includes(S.repA2))
 ok('customers: ordered by last visit, newest first', mgr[0].last_visit_at >= mgr[1].last_visit_at && mgr[1].last_visit_at >= mgr[2].last_visit_at)
 ok('customers: p_limit caps the rows', (await as('mgrA', 'select * from field_customers($1, null, 1)', [S.A])).rows.length === 1)

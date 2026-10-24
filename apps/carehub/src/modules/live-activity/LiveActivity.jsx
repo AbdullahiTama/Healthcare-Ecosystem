@@ -16,6 +16,7 @@ import CheckInPanel from '../checkins/CheckInPanel.jsx'
 import LocationNotice from '../checkins/LocationNotice.jsx'
 import { canSeeAllActivity } from '../../lib/permissions'
 import { filterByScope, scopeTabs, scopeQuery, dateWindow, inWindow, mergeActivities, affectedActivityIds } from './feedScope'
+import MyCustomers from './customers/MyCustomers.jsx'
 import { newActivityId } from './activityId'
 import { liveActivityOutbox } from './outbox'
 import OutboxStrip from './outbox/OutboxStrip.jsx'
@@ -216,11 +217,14 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
 
   // load() and the realtime catch-up are also called from long-lived handlers, so
   // they read the tab from a ref, never from the render they were created in.
+  // My customers is not a feed: the ref keeps the last feed tab, so a realtime catch-up meanwhile reloads that feed,
+  // and opening My customers does not reload the feed at all.
   const scopeRef = useRef(scope)
-  scopeRef.current = scope
+  if (scope !== 'customers') scopeRef.current = scope
   const firstScope = useRef(true)
   useEffect(() => {
     if (firstScope.current) { firstScope.current = false; return }
+    if (scope === 'customers') return
     load()
   }, [scope])
 
@@ -539,7 +543,9 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
     setVoicePreview(null)
   }
 
-  function openLogger() {
+  // target (optional, from My customers): the place this visit is about, already chosen. Everything else is as
+  // for a new report: a fresh GPS fix is taken and the location match judged as for a place picked by hand.
+  function openLogger(target) {
     draftRef.current = null
     setRetryNote('')
     const saved = brand && brand.id ? loadDraft(brand.id, meStaffId) : null
@@ -558,9 +564,9 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
     setGps(null)
     setGpsIssue(null)
     setArea(null)
-    setConfirmedBiz(null)
+    setConfirmedBiz(target && target.business ? target.business : null)
     setPlaceName('')
-    setFacility(null)
+    setFacility(target && target.facility ? target.facility : null)
     setLogging(true)
 
     captureReportLocation()
@@ -810,6 +816,15 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
       customer_name: a.directory_business_name || a.facility_name || a.place_of_visit || '',
       customer_address: a.facility_address || '',
     } } })
+  }
+
+  // "Raise order" from My customers: the order form for that customer, not linked to any visit.
+  function raiseOrderFor(customer) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      showToast('An order needs a connection to reach your approver. Try again when you are back online.', { type: 'warning' })
+      return
+    }
+    navigate('/dashboard/orders', { state: { fromCustomer: customer } })
   }
 
   function discardDraft() {
@@ -1070,7 +1085,7 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
 
       {!isTeamView && (
         <div role='group' aria-label='Which reports to show' style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
-          {scopeTabs(feedSeesAll).map(function (tab) {
+          {scopeTabs(feedSeesAll, { withCustomers: !isTeamView && !!meStaffId }).map(function (tab) {
             return [tab[0], tab[1], feedSeesAll && counts ? counts[tab[0]] : null]
           }).map(function (t) {
             const on = scope === t[0]
@@ -1091,6 +1106,9 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
         </div>
       )}
 
+      {scope === 'customers' ? (
+        <MyCustomers brand={brand} staffId={meStaffId} onLogVisit={openLogger} onRaiseOrder={raiseOrderFor} />
+      ) : (<>
       <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
         {[['feed', 'Feed'], ['table', 'Table']].map(function (v) {
           const on = view === v[0]
@@ -1436,6 +1454,7 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
           <GhostBtn onClick={loadOlder} disabled={loadingOlder}>{loadingOlder ? 'Loading...' : 'Load older activity'}</GhostBtn>
         </div>
       )}
+      </>)}
 
       <Modal show={pickingCols} onClose={function () { setPickingCols(false) }} sheet title='Columns'
         footer={<GhostBtn onClick={function () { setPickingCols(false) }} style={{ width: '100%', padding: '12px' }}>Done</GhostBtn>}>

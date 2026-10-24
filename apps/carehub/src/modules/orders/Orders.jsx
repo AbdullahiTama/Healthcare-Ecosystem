@@ -94,12 +94,14 @@ export default function Orders({ brand, view = 'all' }) {
   // "Raise order" on a report arrives here with the visit in the navigation state. Open the form prefilled
   // once, then clear the visit from the browser history entry so a refresh does not open it again. This must not be
   // a router navigation: App remounts the whole tree on every navigation, which would close the form at once.
+  // "Raise order" from My customers arrives the same way, as fromCustomer with no visit: the order is for that
+  // customer but is not linked to any report (an earlier visit did not produce it).
   useEffect(() => {
-    const fromVisit = location.state && location.state.fromVisit
+    const fromVisit = location.state && (location.state.fromVisit || location.state.fromCustomer)
     if (!fromVisit || approvalsView) return
     openNew()
     setForm({ customer_name: fromVisit.customer_name || '', customer_address: fromVisit.customer_address || '' })
-    setVisitLink({ activityId: fromVisit.activityId, customer_name: fromVisit.customer_name || '' })
+    setVisitLink({ activityId: fromVisit.activityId || null, customer_name: fromVisit.customer_name || '' })
     try { window.history.replaceState({ ...(window.history.state || {}), usr: null }, '') } catch (e) { /* the form still opens */ }
   }, [])
   const [uploadStatus, setUploadStatus] = useState('')
@@ -479,7 +481,9 @@ export default function Orders({ brand, view = 'all' }) {
             <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '16px' }}>Raised by <strong>{meName}</strong>{meTitle ? ' · ' + meTitle : ''}</div>
             {visitLink && (
               <div role='status' style={{ fontSize: '12px', color: tealDeep, background: tealMist, borderRadius: '8px', padding: '8px 10px', marginBottom: '14px' }}>
-                From your visit to {visitLink.customer_name || 'this customer'}. The order will be linked to that report.
+                {visitLink.activityId
+                  ? 'From your visit to ' + (visitLink.customer_name || 'this customer') + '. The order will be linked to that report.'
+                  : 'For ' + (visitLink.customer_name || 'this customer') + '.'}
               </div>
             )}
 

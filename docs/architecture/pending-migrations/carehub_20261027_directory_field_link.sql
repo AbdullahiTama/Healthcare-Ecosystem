@@ -53,7 +53,7 @@ $$;
 CREATE OR REPLACE FUNCTION public.field_customers(p_business_id uuid, p_staff_id uuid DEFAULT NULL, p_limit integer DEFAULT 500)
 RETURNS TABLE (
   key text, kind text, directory_business_id uuid, name text, address text, category text,
-  lat double precision, lng double precision, territory_id uuid,
+  lat double precision, lng double precision, source text, territory_id uuid,
   last_visit_at timestamptz, last_visit_rep text, last_visit_staff_id uuid, last_activity_id uuid,
   visits_total integer, visits_30d integer, rep_staff_ids uuid[],
   last_order_id uuid, last_order_ref text, last_order_status text, last_order_at timestamptz)
@@ -70,7 +70,7 @@ AS $$
     SELECT * FROM keyed WHERE k IS NOT NULL
   ), latest AS (
     SELECT DISTINCT ON (v.k) v.k, v.id, v.directory_business_id, v.directory_business_name, v.facility_name,
-           v.created_at, v.rep_name, v.staff_id
+           v.facility_source, v.created_at, v.rep_name, v.staff_id
       FROM v ORDER BY v.k, v.created_at DESC, v.id
   ), agg AS (
     SELECT v.k, count(*)::integer AS total,
@@ -90,6 +90,7 @@ AS $$
          (SELECT x.facility_category FROM v x WHERE x.k = l.k AND x.facility_category IS NOT NULL ORDER BY x.created_at DESC LIMIT 1),
          (SELECT x.facility_lat FROM v x WHERE x.k = l.k AND x.facility_lat IS NOT NULL ORDER BY x.created_at DESC LIMIT 1),
          (SELECT x.facility_lng FROM v x WHERE x.k = l.k AND x.facility_lng IS NOT NULL ORDER BY x.created_at DESC LIMIT 1),
+         CASE WHEN l.directory_business_id IS NULL THEN l.facility_source END,
          (SELECT x.territory_id FROM v x WHERE x.k = l.k AND x.territory_id IS NOT NULL ORDER BY x.created_at DESC LIMIT 1),
          l.created_at, l.rep_name, l.staff_id, l.id,
          a.total, a.d30, a.reps,
