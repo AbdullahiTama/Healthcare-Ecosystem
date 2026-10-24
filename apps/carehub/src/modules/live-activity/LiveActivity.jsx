@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { MapPin } from 'lucide-react'
 import { liveActivityRepository } from './repositories'
 // Pure distance helpers for the GPS-driven facility verification.
@@ -21,6 +22,9 @@ import OutboxStrip from './outbox/OutboxStrip.jsx'
 import PhotoAttach from './PhotoAttach.jsx'
 import PhotoThumbs from './PhotoThumbs.jsx'
 import { fmtStamp } from './formatTime'
+// Cross-aggregate read and hand-off: the orders a visit produced, raised through the Orders module.
+import { orderRepository } from '../orders/repositories'
+import { STAGE_LABEL } from '../orders/stages'
 import { classifyFailure } from './outbox/failureClass'
 import { effectiveFields, fieldLabel, missingRequired } from './reportFields'
 import { captureLocation } from '../checkins/locationCapture'
@@ -98,6 +102,7 @@ function csvCell(v) {
 //                come back either way.
 export default function LiveActivity({ brand, perms, mode = 'rep' }) {
   const isTeamView = mode === 'team'
+  const navigate = useNavigate()
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const authData = readAuth()
   const meStaffId = (authData && authData.staff && authData.staff.id) ? authData.staff.id : null
@@ -123,6 +128,9 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
   const [viewersByAct, setViewersByAct] = useState({})
   const [reactionsByAct, setReactionsByAct] = useState({})
   const [commentsByAct, setCommentsByAct] = useState({})
+  // Orders each shown report produced ("Raise order"), keyed by report id. Not loading them is not an error
+  // worth showing: the report itself is what matters on this page.
+  const [ordersByAct, setOrdersByAct] = useState({})
   const [staffList, setStaffList] = useState([])
   const [territories, setTerritories] = useState([])
   const [myViewers, setMyViewers] = useState([])
@@ -776,6 +784,34 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
     return null
   }
 
+  useEffect(function () {
+    if (!brand || !brand.id || activities.length === 0) return
+    let alive = true
+    orderRepository.listForActivities(brand.id, activities.map(function (a) { return a.id }))
+      .then(function (rows) {
+        if (!alive) return
+        const map = {}
+        ;(rows || []).forEach(function (o) { map[o.field_activity_id] = (map[o.field_activity_id] || []).concat(o) })
+        setOrdersByAct(map)
+      })
+      .catch(function (e) { console.error('Linked orders load failed:', e) })
+    return function () { alive = false }
+  }, [brand && brand.id, activities])
+
+  // "Raise order" on a report the person wrote: open the order form for that customer, linked to the visit.
+  // Orders are not queued offline, so without a connection it says so instead of half-starting one.
+  function raiseOrder(a) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      showToast('An order needs a connection to reach your approver. Try again when you are back online.', { type: 'warning' })
+      return
+    }
+    navigate('/dashboard/orders', { state: { fromVisit: {
+      activityId: a.id,
+      customer_name: a.directory_business_name || a.facility_name || a.place_of_visit || '',
+      customer_address: a.facility_address || '',
+    } } })
+  }
+
   function discardDraft() {
     clearDraft(brand.id, meStaffId)
     setValues({})
@@ -1285,6 +1321,14 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
                   </div>
                 )}
 
+                {(ordersByAct[a.id] || []).length > 0 && (
+                  <div style={{ fontSize: '12px', color: gray500, marginTop: '10px' }}>
+                    {(ordersByAct[a.id] || []).map(function (o) {
+                      return <div key={o.id}>Order {o.order_ref || ''} · {STAGE_LABEL[o.status] || o.status}</div>
+                    })}
+                  </div>
+                )}
+
                 {Array.isArray(a.photo_paths) && a.photo_paths.length > 0 && (
                   <div style={{ marginTop: '10px' }}>
                     <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Photos</div>
@@ -1317,6 +1361,13 @@ export default function LiveActivity({ brand, perms, mode = 'rep' }) {
                     style={{ border: `1px solid ${border}`, background: 'white', color: gray500, borderRadius: '20px', padding: '6px 13px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
                     Comment{comments.length > 0 ? ' · ' + comments.length : ''}
                   </button>
+
+                  {((a.staff_id && a.staff_id === meStaffId) || (isOwner && !a.staff_id)) && (
+                    <button type='button' onClick={function () { raiseOrder(a) }}
+                      style={{ border: `1px solid ${tealDeep}`, background: 'white', color: tealDeep, borderRadius: '20px', padding: '6px 13px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+                      Raise order
+                    </button>
+                  )}
 
                   {isTeamView && a.lat && a.lng && (
                     <button onClick={function () { setReviewing(a) }}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { X, Check } from 'lucide-react'
 import { orderRepository } from './repositories'
 import { PIPELINE, STAGE_LABEL } from './stages'
@@ -86,6 +87,21 @@ export default function Orders({ brand, view = 'all' }) {
   const [watcherIds, setWatcherIds] = useState([])
   const [attachments, setAttachments] = useState([])
   const [sending, setSending] = useState(false)
+  // Set when the form was opened from a field report ("Raise order"): the order is linked to that visit.
+  const [visitLink, setVisitLink] = useState(null)
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // "Raise order" on a report arrives here with the visit in the navigation state. Open the form prefilled
+  // once, then clear the state so a refresh or a back-navigation does not open it again.
+  useEffect(() => {
+    const fromVisit = location.state && location.state.fromVisit
+    if (!fromVisit || approvalsView) return
+    openNew()
+    setForm({ customer_name: fromVisit.customer_name || '', customer_address: fromVisit.customer_address || '' })
+    setVisitLink({ activityId: fromVisit.activityId, customer_name: fromVisit.customer_name || '' })
+    navigate(location.pathname, { replace: true, state: null })
+  }, [])
   const [uploadStatus, setUploadStatus] = useState('')
 
   useEffect(() => { load() }, [brand?.id])
@@ -213,6 +229,7 @@ export default function Orders({ brand, view = 'all' }) {
     setApproverId('')
     setWatcherIds([])
     setAttachments([])
+    setVisitLink(null)
     setComposing(true)
   }
 
@@ -273,8 +290,10 @@ export default function Orders({ brand, view = 'all' }) {
         created_by_title: meTitle,
         approver_staff_id: staffIdFor(approverId),
         approver_name: nameFor(approverId),
+        ...(visitLink && visitLink.activityId ? { field_activity_id: visitLink.activityId } : {}),
       }, items, watchers, uploaded)
 
+      setVisitLink(null)
       showToast('Order submitted for approval', { type: 'success' })
       setComposing(false)
       load()
@@ -452,6 +471,11 @@ export default function Orders({ brand, view = 'all' }) {
           <TealBtn onClick={submitOrder} style={{ flex: 2, padding: '12px' }}>{sending ? 'Submitting...' : 'Submit for Approval'}</TealBtn>
         </>}>
             <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '16px' }}>Raised by <strong>{meName}</strong>{meTitle ? ' · ' + meTitle : ''}</div>
+            {visitLink && (
+              <div role='status' style={{ fontSize: '12px', color: tealDeep, background: tealMist, borderRadius: '8px', padding: '8px 10px', marginBottom: '14px' }}>
+                From your visit to {visitLink.customer_name || 'this customer'}. The order will be linked to that report.
+              </div>
+            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <Inp label='Customer Name *' value={form.customer_name} onChange={function (v) { f('customer_name', v) }} placeholder='e.g. St. Kizito Hospital Pharmacy' />

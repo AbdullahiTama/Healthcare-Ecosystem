@@ -13,7 +13,16 @@ import { sbFetch, sbUpload, notify as defaultNotify } from '../../../services/su
 //   upload  — object storage, sbUpload's shape
 //   notify  — the notification fan-out
 // Production binds the real ones (defaults); tests bind in-memory / spy adapters.
-export function createOrderRepository({ request = sbFetch, upload = sbUpload, notify = defaultNotify } = {}) {
+// Did the server refuse because orders.field_activity_id does not exist yet (draft
+// carehub_20261026_orders_field_activity_link not applied)? Only that is a reason to carry on without the link.
+function isUnknownLinkColumn(e) {
+  const text = String(e && e.message ? e.message : e)
+  return /field_activity_id/.test(text) && /PGRST204|42703|does not exist|Could not find/i.test(text)
+}
+
+// notify is bound when used, not when this module loads, so another module (field reports showing their orders)
+// can import the repository without needing the notification service at import time.
+export function createOrderRepository({ request = sbFetch, upload = sbUpload, notify = (...args) => defaultNotify(...args) } = {}) {
   const repo = {
     async getAll(businessId) {
       return request(`orders?business_id=eq.${businessId}&order=created_at.desc&select=*`)
@@ -25,6 +34,18 @@ export function createOrderRepository({ request = sbFetch, upload = sbUpload, no
       if (!businessId || (!isOwner && !approverStaffId)) return []
       const who = isOwner ? '' : `&approver_staff_id=eq.${approverStaffId}`
       return request(`orders?business_id=eq.${businessId}&status=eq.submitted${who}&order=created_at.desc&select=*`)
+    },
+
+    // The orders each shown field report produced (only what a report card needs). Before the link column exists
+    // there are none to show, so that refusal reads as "no orders"; any other failure is passed on.
+    async listForActivities(businessId, activityIds) {
+      if (!businessId || !activityIds || activityIds.length === 0) return []
+      try {
+        return await request(`orders?business_id=eq.${businessId}&field_activity_id=in.(${activityIds.join(',')})&select=id,order_ref,status,field_activity_id&order=created_at.desc`)
+      } catch (e) {
+        if (isUnknownLinkColumn(e)) return []
+        throw e
+      }
     },
 
     async getById(orderId, businessId) {
@@ -70,7 +91,15 @@ export function createOrderRepository({ request = sbFetch, upload = sbUpload, no
     // row, its items/watchers/files, a 'submitted' event, and the approval +
     // copy notifications.
     async create(order, items, watchers, files) {
-      const rows = await request('orders', { method: 'POST', body: JSON.stringify(order) })
+      let rows
+      try {
+        rows = await request('orders', { method: 'POST', body: JSON.stringify(order) })
+      } catch (e) {
+        // An order is never lost because of the visit link: before the column exists, save it without the link.
+        if (order.field_activity_id === undefined || !isUnknownLinkColumn(e)) throw e
+        const { field_activity_id: _link, ...withoutLink } = order
+        rows = await request('orders', { method: 'POST', body: JSON.stringify(withoutLink) })
+      }
       const saved = Array.isArray(rows) ? rows[0] : rows
       if (!saved || !saved.id) throw new Error('Order was not saved — no id returned.')
 
