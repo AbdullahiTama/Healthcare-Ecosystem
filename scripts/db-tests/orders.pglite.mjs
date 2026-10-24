@@ -83,4 +83,78 @@ ok('if the report goes, the order stays with no link', (await sup('select field_
 const fnAcl = (await sup("select has_function_privilege('anon','public.orders_check_field_activity()','execute') a, has_function_privilege('authenticated','public.orders_check_field_activity()','execute') u")).rows[0]
 ok('nobody calls the link check directly', fnAcl.a === false && fnAcl.u === false, JSON.stringify(fnAcl))
 
+
+// ================================================================================================
+// carehub_20261026_orders_authorisation (DRAFT): approval and the pipeline enforced by the database
+// ================================================================================================
+await sup('delete from orders')
+const make = (who, over = {}) => newOrder(who, over)
+const statusOf = async (id) => (await sup('select status from orders where id=$1', [id])).rows[0].status
+const setStatus = (who, id, status) => as(who, 'update orders set status=$2 where id=$1 returning id', [id, status])
+
+// BEFORE: each hole is real on the live policy.
+const B1 = await make('repA1')
+ok('BEFORE: the creator can approve their own order', (await setStatus('repA1', B1, 'approved')).rows.length === 1)
+const B2 = await make('repA1')
+ok('BEFORE: a colleague can delete someone else\'s order', (await as('repA2', 'delete from orders where id=$1 returning id', [B2])).rows.length === 1)
+ok('BEFORE: a rep can raise an order in a colleague\'s name', !!(await make('repA1', { created_by_staff_id: S.repA2 })))
+ok('BEFORE: a rep can create an order that is already approved', (await as('repA1', "insert into orders (business_id, customer_name, created_by_staff_id, created_by_name, status) values ($1,'X',$2,'Rep One','approved') returning id", [S.A, S.repA1])).rows.length === 1)
+await sup('delete from orders')
+
+await applyMigrations(['carehub_20261026_orders_authorisation.sql'])
+
+const O = await make('repA1')                         // raised by rep one, approver: the manager
+await expectError('AFTER: the creator cannot approve their own order', () => setStatus('repA1', O, 'approved'), '42501')
+await expectError('AFTER: nor can a colleague who is not the approver', () => setStatus('repA2', O, 'approved'), '42501')
+ok('AFTER: the tagged approver approves it', (await as('mgrA', "update orders set status='approved', approved_at=now() where id=$1 returning id", [O])).rows.length === 1 && (await statusOf(O)) === 'approved')
+await expectError('AFTER: the creator cannot push their own order on to the warehouse', () => setStatus('repA1', O, 'processing'), '42501')
+ok('AFTER: someone else (warehouse) moves it to processing, then dispatched, then delivered', await (async () => {
+  await setStatus('repA2', O, 'processing'); await setStatus('repA2', O, 'dispatched'); await setStatus('repA2', O, 'delivered')
+  return (await statusOf(O)) === 'delivered'
+})())
+const J = await make('repA1')
+await expectError('AFTER: no jumping from submitted straight to delivered, even for the owner', () => setStatus('a', J, 'delivered'), '22023')
+ok('AFTER: the owner may approve an order tagged to someone else', (await setStatus('a', J, 'approved')).rows.length === 1)
+const R = await make('repA1')
+ok('AFTER: the approver can reject', (await setStatus('mgrA', R, 'rejected')).rows.length === 1)
+await expectError('AFTER: a rejected order stays rejected', () => setStatus('a', R, 'approved'), '22023')
+const M = await make('repA1')
+await expectError('AFTER: the creator cannot re-tag the approver (e.g. to an accomplice)', () => as('repA1', 'update orders set approver_staff_id=$2 where id=$1', [M, S.repA2]), '42501')
+ok('AFTER: the owner can re-tag the approver', (await as('a', 'update orders set approver_staff_id=$2 where id=$1 returning id', [M, S.repA2])).rows.length === 1)
+await expectError('AFTER: who raised an order cannot be rewritten', () => as('a', 'update orders set created_by_staff_id=$2 where id=$1', [M, S.repA2]), '42501')
+await expectError('AFTER: nor which company it belongs to', () => as('a', 'update orders set business_id=$2 where id=$1', [M, S.B]), '42501')
+ok('AFTER: the creator can still fix the notes of a submitted order', (await as('repA1', "update orders set notes='call first' where id=$1 returning id", [M])).rows.length === 1)
+await expectError('AFTER: a rep cannot raise an order in a colleague\'s name', () => make('repA1', { created_by_staff_id: S.repA2 }), '42501')
+await expectError('AFTER: a new order starts as submitted', () => as('repA1', "insert into orders (business_id, customer_name, created_by_staff_id, created_by_name, status) values ($1,'X',$2,'Rep One','approved')", [S.A, S.repA1]), '42501')
+ok('AFTER: the owner raises an order with no staff author', !!(await make('a', { created_by_staff_id: null })))
+await expectError('AFTER: the owner cannot raise one in a staff member\'s name', () => make('a', { created_by_staff_id: S.repA1 }), '42501')
+ok('AFTER: nobody deletes an order, not even the owner (rows are hidden from DELETE)', (await as('a', 'delete from orders where id=$1 returning id', [M])).rows.length === 0 && (await as('repA1', 'delete from orders where id=$1 returning id', [M])).rows.length === 0)
+await sup("insert into order_items (order_id, product_name, quantity) values ($1,'Amoxil',2)", [M])
+ok('AFTER: nor its lines', (await as('a', 'delete from order_items where order_id=$1 returning id', [M])).rows.length === 0)
+ok('AFTER: server-side maintenance (no signed-in caller) is not blocked', (await sup("update orders set status='processing' where id=$1 returning id", [J])).rows.length === 1)
+const gAcl = (await sup("select has_function_privilege('anon','public.orders_guard()','execute') a, has_function_privilege('authenticated','public.orders_guard()','execute') u")).rows[0]
+ok('AFTER: nobody calls the guard directly', gAcl.a === false && gAcl.u === false, JSON.stringify(gAcl))
+ok('AFTER: the link check from the earlier draft still runs', await (async () => {
+  try { await make('repA1', { field_activity_id: RB }); return false } catch (e) { return e.code === '42501' }
+})())
+
+// ================================================================================================
+// carehub_20261026_orders_read_scope (DRAFT, HELD for an owner decision about warehouse staff)
+// ================================================================================================
+const W = await make('repA1')
+await sup('insert into order_watchers (order_id, staff_id, watcher_name) values ($1,$2,$3)', [W, S.repA2, 'Rep Two'])
+const OTHER = await make('repA2', { created_by_staff_id: S.repA2, approver_staff_id: S.mgrA })
+const seesOrder = async (who, id) => (await as(who, 'select id from orders where id=$1', [id])).rows.length === 1
+ok('BEFORE: a rep reads a colleague\'s order', await seesOrder('repA1', OTHER))
+await applyMigrations(['carehub_20261026_orders_read_scope.sql'])
+ok('AFTER: a rep no longer reads a colleague\'s order', !(await seesOrder('repA1', OTHER)))
+ok('AFTER: the creator still reads their own', await seesOrder('repA2', OTHER))
+ok('AFTER: the tagged approver reads it', await seesOrder('mgrA', OTHER))
+ok('AFTER: a watcher reads the order they were copied on', await seesOrder('repA2', W))
+ok('AFTER: the owner reads every order', await seesOrder('a', OTHER) && await seesOrder('a', W))
+ok('AFTER: another company reads none', !(await seesOrder('repB1', OTHER)) && !(await seesOrder('b', W)))
+await sup("insert into order_items (order_id, product_name, quantity) values ($1,'Panadol',3)", [OTHER])
+ok('AFTER: order lines follow their order', (await as('repA1', 'select id from order_items where order_id=$1', [OTHER])).rows.length === 0 && (await as('repA2', 'select id from order_items where order_id=$1', [OTHER])).rows.length === 1)
+ok('AFTER: a rep still raises and reads back a new order (insert ... returning)', !!(await make('repA1')))
+
 finish()
