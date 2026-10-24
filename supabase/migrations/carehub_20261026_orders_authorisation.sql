@@ -1,4 +1,5 @@
--- carehub_20261026_orders_authorisation  (DRAFT, not applied)
+-- carehub_20261026_orders_authorisation
+-- APPLIED 2026-10-24 to szdybxmgmhndoytqanfb as version 20261024110224.
 --
 -- Found 2026-10-23 while designing the field team reorganisation: public.orders has one permissive policy, FOR ALL to
 -- every member of the company. So any member can approve their own order, delete anyone's order, raise an order in a
