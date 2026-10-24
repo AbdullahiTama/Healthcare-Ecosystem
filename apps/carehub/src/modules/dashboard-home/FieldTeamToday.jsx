@@ -4,6 +4,7 @@ import { checkinRepository } from '../checkins/repositories'
 import { liveActivityRepository } from '../live-activity/repositories'
 import { orderRepository } from '../orders/repositories'
 import { getRepAddedFacilities } from '../../lib/places.js'
+import { customerRepository } from '../live-activity/customers/repository.js'
 import LocationMatchBadge from '../live-activity/LocationMatchBadge.jsx'
 import { SectionCard } from '../../components/ui'
 import { theme } from '../../styles/theme'
@@ -44,11 +45,12 @@ export default function FieldTeamToday({ brand, role, staffId = null, customRole
     const at = now != null ? now : Date.now()
     const since = new Date(at)
     since.setHours(0, 0, 0, 0)
-    const [checkins, visits, orders, places] = await Promise.allSettled([
+    const [checkins, visits, orders, places, customers] = await Promise.allSettled([
       checkinRepository.overview(brand.id),
       liveActivityRepository.getFieldActivities(brand.id, { since: since.toISOString(), limit: 100 }),
       orderRepository.listAwaitingApproval(brand.id, { approverStaffId: staffId, isOwner }),
       getRepAddedFacilities(brand.id, 'pending_review'),
+      customerRepository.list(brand.id),
     ])
     if (latest.current !== request) return
     const value = (r, pick) => (r.status === 'fulfilled' ? pick(r.value) : [])
@@ -59,12 +61,15 @@ export default function FieldTeamToday({ brand, role, staffId = null, customRole
         visits: value(visits, (v) => v || []),
         ordersAwaiting: value(orders, (v) => v || []),
         placesPending: value(places, (v) => v || []),
+        customers: value(customers, (v) => v || []),
         now: at,
         businessType: brand.business_type || brand.type,
         customRoles,
       }),
       checkinsError: reason(checkins),
       visitsError: reason(visits),
+      // Customers are extra: until they load (or exist) the tile is simply left out.
+      customersLoaded: customers.status === 'fulfilled',
     })
   }, [brand.id, brand.business_type, brand.type, staffId, isOwner, now, customRoles])
 
@@ -85,6 +90,9 @@ export default function FieldTeamToday({ brand, role, staffId = null, customRole
         <div style={tile}><b>{plural(s.visitsToday, 'visit', 'visits')}</b> today</div>
         <div style={tile}><b>{plural(s.ordersToApprove, 'order', 'orders')}</b> to approve</div>
         <div style={tile}><b>{plural(s.placesToConfirm, 'place', 'places')}</b> to confirm</div>
+        {state.customersLoaded && (
+          <Link to='/dashboard/field-team/customers?notVisited=30' style={{ ...tile, textDecoration: 'none' }}><b>{plural(s.quietCustomers, 'customer', 'customers')}</b> not visited in 30 days</Link>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>

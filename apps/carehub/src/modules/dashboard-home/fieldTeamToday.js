@@ -9,6 +9,7 @@ import { targetLabel, storedVerification } from '../live-activity/activityTarget
 //   visits         field reports since the start of today (any order)
 //   ordersAwaiting orders waiting for this person's approval
 //   placesPending  rep-added places awaiting review
+//   customers      rows of field_customers (places the team visited); quietCustomers = last visited over 30 days ago
 //
 // A rep is an active staff member whose menu includes Field and who is not a field manager; the owner has no
 // staff row and is never counted. "Checked in" means a captured check-in since local midnight whose latest event is
@@ -16,6 +17,7 @@ import { targetLabel, storedVerification } from '../live-activity/activityTarget
 // nor missing, and their position is not "old" because they are no longer working.
 
 const MAX_VISIT_ROWS = 8
+const QUIET_AFTER_DAYS = 30
 
 function startOfDay(now) {
   const d = new Date(now)
@@ -28,7 +30,7 @@ function isRep(role, businessType, customRoles) {
   return hasField && !canSeeAllActivity({ role, perms: getPerms(role, customRoles) })
 }
 
-export function summariseFieldDay({ checkins = [], visits = [], ordersAwaiting = [], placesPending = [], now = Date.now(), businessType, customRoles = {} } = {}) {
+export function summariseFieldDay({ checkins = [], visits = [], ordersAwaiting = [], placesPending = [], customers = [], now = Date.now(), businessType, customRoles = {} } = {}) {
   const dayStart = startOfDay(now)
 
   const checkinRows = (checkins || [])
@@ -58,6 +60,7 @@ export function summariseFieldDay({ checkins = [], visits = [], ordersAwaiting =
     visitsToday: todays.length,
     ordersToApprove: (ordersAwaiting || []).length,
     placesToConfirm: (placesPending || []).length,
+    quietCustomers: (customers || []).filter((c) => Date.parse(c.last_visit_at) < now - QUIET_AFTER_DAYS * 86400000).length,
     checkinRows,
     visitRows: todays.slice(0, MAX_VISIT_ROWS).map((v) => ({
       id: v.id,
