@@ -17,6 +17,14 @@ The other three drafts of this work were applied on 2026-10-24 (see "Already app
 |---|---|---|---|
 | - | `carehub_20261026_orders_read_scope.sql` | Narrows who reads orders (creator, approver, watchers, field managers, owner). | **Held**: warehouse staff would lose sight of orders they process. Owner decides (a) give them "Manage field team", (b) add a warehouse path, or (c) keep reading as is. |
 
+## Pending (directory x field activity, `docs/superpowers/plans/2026-10-24-directory-field-link.md`)
+
+Tested on PGlite with the live `field_activities` and `orders` policies (`scripts/db-tests/directoryFieldLink.pglite.mjs`).
+
+| Order | Draft | Adds | Status |
+|---|---|---|---|
+| 1 | `carehub_20261027_directory_field_link.sql` | Customers derived from visits (`field_customers`, `field_customer_visits`: SECURITY INVOKER, the caller's own RLS) and `directory_suggestions` (reps suggest a missing business; identity and status forced by the database; 20 per company per day; platform admin reviews). No new access to the directory. | Ready. The app shows "not available yet" until it is applied. |
+
 ## Already applied (files in `supabase/migrations/`)
 
 | Applied as | Version | Fixes |
