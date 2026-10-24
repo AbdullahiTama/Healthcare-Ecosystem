@@ -19,6 +19,14 @@ export function createOrderRepository({ request = sbFetch, upload = sbUpload, no
       return request(`orders?business_id=eq.${businessId}&order=created_at.desc&select=*`)
     },
 
+    // Orders waiting for this person's approval: the owner may approve any submitted order; anyone else only
+    // the ones they were tagged to approve. Nobody else approves, so nothing is asked for them.
+    async listAwaitingApproval(businessId, { approverStaffId = null, isOwner = false } = {}) {
+      if (!businessId || (!isOwner && !approverStaffId)) return []
+      const who = isOwner ? '' : `&approver_staff_id=eq.${approverStaffId}`
+      return request(`orders?business_id=eq.${businessId}&status=eq.submitted${who}&order=created_at.desc&select=*`)
+    },
+
     async getById(orderId, businessId) {
       const rows = await request(`orders?id=eq.${orderId}&business_id=eq.${businessId}&select=*`)
       return rows[0] || null

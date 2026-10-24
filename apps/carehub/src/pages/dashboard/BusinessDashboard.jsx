@@ -45,6 +45,9 @@ const Messages = lazy(() => import('../../modules/messages/Messages'))
 const Stock = lazy(() => import('../../modules/stock/Stock'))
 const Orders = lazy(() => import('../../modules/orders/Orders'))
 const LiveActivity = lazy(() => import('../../modules/live-activity/LiveActivity'))
+const TeamLocations = lazy(() => import('../../modules/checkins/TeamLocations'))
+const PlacesToConfirm = lazy(() => import('../../modules/live-activity/PlacesToConfirm'))
+const ReportFieldsSetup = lazy(() => import('../../modules/live-activity/ReportFieldsSetup'))
 const FacilityDiscovery = lazy(() => import('../../modules/facility-discovery/FacilityDiscovery'))
 const Reception = lazy(() => import('./hospital/Reception'))
 const Triage = lazy(() => import('./hospital/Triage'))
@@ -256,6 +259,12 @@ export default function BusinessDashboard() {
               <Route path='stock' element={bareGuard('stock', <Stock {...pageProps} />)} />
               <Route path='orders' element={bareGuard('orders', <Orders {...pageProps} />)} />
               <Route path='activity' element={bareGuard('activity', <LiveActivity {...pageProps} />)} />
+              {/* Field team: managing the field team. Each is guarded by its access-ruled module (lib/permissions.js). */}
+              <Route path='field-team/reports' element={bareGuard('field-reports', <LiveActivity {...pageProps} mode='team' />)} />
+              <Route path='field-team/checkins' element={guard('field-checkins', <><TopBar title='Team check-ins' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><TeamLocations businessId={brand?.id} /></div></>)} />
+              <Route path='field-team/approvals' element={bareGuard('field-approvals', <Orders {...pageProps} view='approvals' />)} />
+              <Route path='field-team/places' element={guard('field-places', <><TopBar title='Places to confirm' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><PlacesToConfirm businessId={brand?.id} /></div></>)} />
+              <Route path='field-team/fields' element={guard('field-fields', <><TopBar title='Report fields' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><ReportFieldsSetup businessId={brand?.id} /></div></>)} />
               <Route path='discovery' element={bareGuard('discovery', <FacilityDiscovery {...pageProps} />)} />
               {/* The Business Directory, Business Discovery and Territory Intelligence live only in the platform
                   admin console now; keep old bookmarks from dead-ending. */}

@@ -55,7 +55,11 @@ function readAuth() {
   try { return JSON.parse(localStorage.getItem('carehub_auth') || '{}') } catch (e) { return {} }
 }
 
-export default function Orders({ brand }) {
+// view 'all'        the Orders & LPO page: every order this person may see, and New Order.
+// view 'approvals'  Field team > Order approvals: only the submitted orders waiting for this person (any of them
+//                   for the owner), asked for on the server; no New Order.
+export default function Orders({ brand, view = 'all' }) {
+  const approvalsView = view === 'approvals'
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const authData = readAuth()
   const meStaffId = (authData && authData.staff && authData.staff.id) ? authData.staff.id : null
@@ -100,7 +104,9 @@ export default function Orders({ brand }) {
     if (!brand || !brand.id) return
     setLoading(true)
     try {
-      const o = await orderRepository.getAll(brand.id)
+      const o = approvalsView
+        ? await orderRepository.listAwaitingApproval(brand.id, { approverStaffId: meStaffId, isOwner })
+        : await orderRepository.getAll(brand.id)
       const s = await staffRepository.getAll(brand.id)
       const p = await productRepository.getAll(brand.id)
       const t = await territoryRepository.getAll(brand.id)
@@ -343,14 +349,16 @@ export default function Orders({ brand }) {
   return (
     <>
       <PageHeader
-        title="Orders & LPO"
-        description="Submit an order, tag the manager who approves it, copy anyone else who should see it."
-        primaryAction={{ label: 'New Order', onClick: openNew }}
+        title={approvalsView ? 'Order approvals' : 'Orders & LPO'}
+        description={approvalsView
+          ? 'Orders your field team raised that are waiting for you. Open one to approve or reject it.'
+          : 'Submit an order, tag the manager who approves it, copy anyone else who should see it.'}
+        primaryAction={approvalsView ? undefined : { label: 'New Order', onClick: openNew }}
       />
       <div style={{ padding: '24px', maxWidth: '900px' }}>
         <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
 
-      {awaitingMe.length > 0 && (
+      {!approvalsView && awaitingMe.length > 0 && (
         <div style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
           <div style={{ fontSize: '13px', fontWeight: '800', color: warning }}>
             {awaitingMe.length} order{awaitingMe.length > 1 ? 's are' : ' is'} waiting for your approval
@@ -359,7 +367,7 @@ export default function Orders({ brand }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '18px' }}>
+      <div style={{ display: approvalsView ? 'none' : 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '18px' }}>
         {['all'].concat(PIPELINE).concat(['rejected']).map(function (s) {
           const on = filterStage === s
           const count = s === 'all' ? orders.length : orders.filter(function (o) { return o.status === s }).length
@@ -386,12 +394,12 @@ export default function Orders({ brand }) {
         empty={
           <Card style={{ padding: '32px', textAlign: 'center' }}>
             <div style={{ fontWeight: '800', color: navy, marginBottom: '6px' }}>
-              {orders.length === 0 ? 'No orders yet' : 'Nothing at this stage'}
+              {approvalsView ? 'Nothing is waiting for your approval' : orders.length === 0 ? 'No orders yet' : 'Nothing at this stage'}
             </div>
             <div style={{ fontSize: '13px', color: gray500, marginBottom: '16px' }}>
-              {orders.length === 0 ? 'Submit your first order and tag a manager to approve it.' : 'Try another filter.'}
+              {approvalsView ? 'Orders your team tags you on appear here.' : orders.length === 0 ? 'Submit your first order and tag a manager to approve it.' : 'Try another filter.'}
             </div>
-            {orders.length === 0 && <TealBtn onClick={openNew}>+ New Order</TealBtn>}
+            {!approvalsView && orders.length === 0 && <TealBtn onClick={openNew}>+ New Order</TealBtn>}
           </Card>
         }
         count={`${visible.length} order${visible.length !== 1 ? 's' : ''}`}
