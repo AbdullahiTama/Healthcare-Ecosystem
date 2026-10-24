@@ -84,6 +84,16 @@ browser. Fix, as part of this work:
   person who created the order (unless they are the owner); later stages follow the existing pipeline order.
 - No member deletes an order; mistakes are rejected, not erased (an audit trail already exists in `order_events`).
 
+**Status as built (2026-10-24): §5 is NOT closed.** The write rules above are in the draft
+`carehub_20261026_orders_authorisation.sql` (plus, from the final review: approved content and order lines are
+frozen, the order history cannot be forged, and the person who raised an order cannot move it through the warehouse
+stages). The **Read** rule is in a separate draft, `carehub_20261026_orders_read_scope.sql`, which is HELD for the
+owner. As written it would hide orders from the warehouse staff who process them, and the database cannot tell a
+warehouse role apart. Until the owner decides, any member can still read every order of their company.
+
+**Departures from §1 (accepted by the final review):** the rep's page keeps the Feed/Table switch, the date and
+territory filters, and Export for the rep's own reports. The tab labels stay "My Feed" / "Shared with me".
+
 ## Non-goals
 
 - Pharmacies, hospitals, clinics.
