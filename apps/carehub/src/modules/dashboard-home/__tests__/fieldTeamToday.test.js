@@ -31,6 +31,18 @@ describe('summariseFieldDay', () => {
     expect(s.checkinRows.map((r) => r.name)).toEqual(['Ada', 'Musa', 'Fatima'])
   })
 
+  it('a rep whose last event today is a check-out has finished: not counted as checked in, not missing, never stale', () => {
+    const s = summariseFieldDay({ ...base, checkins: [
+      person('Ada', 'Field Rep', 20),
+      person('Bola', 'Field Rep', 0, { last_checkin: { event_type: 'workday_checkout', at: minsAgo(90), location_label: 'Yaba' } }),
+    ] })
+    expect(s.checkedIn).toBe(1)
+    expect(s.repsTotal).toBe(2)
+    const bola = s.checkinRows.find((r) => r.name === 'Bola')
+    expect(bola).toMatchObject({ checkedOut: true, missing: false, stale: false, at: minsAgo(90), area: 'Yaba' })
+    expect(s.checkinRows.find((r) => r.name === 'Ada').checkedOut).toBe(false)
+  })
+
   it('marks a check-in older than 60 minutes as stale, and a rep with none today as missing', () => {
     const rows = Object.fromEntries(summariseFieldDay(base).checkinRows.map((r) => [r.name, r]))
     expect(rows.Ada).toMatchObject({ stale: false, missing: false, area: 'Ikeja' })

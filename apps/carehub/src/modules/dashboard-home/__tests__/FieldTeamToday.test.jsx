@@ -44,6 +44,16 @@ beforeEach(() => {
 afterEach(() => { act(() => root.unmount()); host.remove() })
 
 describe('FieldTeamToday', () => {
+  it('a rep who checked out is shown as checked out, and not counted as checked in', async () => {
+    checkinRepository.overview.mockResolvedValue({ rows: [
+      { staff_id: 's1', name: 'Ada Okafor', role: 'Medical sales rep', last_checkin: { event_type: 'workday_checkout', at: ago(30), location_label: 'Ikeja' } },
+    ] })
+    await show()
+    expect(host.textContent).toContain('0 of 1')
+    expect(host.textContent).toMatch(/checked out/i)
+    expect(host.textContent).not.toMatch(/old position/i)
+  })
+
   it('shows a loading state first', async () => {
     checkinRepository.overview.mockImplementation(() => new Promise(() => {}))
     await act(async () => { root.render(<MemoryRouter><FieldTeamToday brand={BRAND} role='Owner' customRoles={{}} now={NOW} /></MemoryRouter>) })

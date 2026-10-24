@@ -91,7 +91,9 @@ export default function FieldTeamToday({ brand, role, staffId = null, customRole
               {s.checkinRows.map((r) => (
                 <div key={r.staffId || r.name} style={row}>
                   <span style={{ fontWeight: 700 }}>{r.name}</span>
-                  {r.missing ? <span style={{ color: warning }}>not checked in</span> : (
+                  {r.missing ? <span style={{ color: warning }}>not checked in</span> : r.checkedOut ? (
+                    <span style={{ color: gray500 }}>checked out {clock(r.at)}{r.area ? ' · ' + r.area : ''}</span>
+                  ) : (
                     <span style={{ color: r.stale ? warning : gray500 }}>
                       {clock(r.at)}{r.area ? ' · ' + r.area : ''}{r.stale ? ' · old position' : ''}
                     </span>

@@ -11,7 +11,9 @@ import { targetLabel, storedVerification } from '../live-activity/activityTarget
 //   placesPending  rep-added places awaiting review
 //
 // A rep is an active staff member whose menu includes Field and who is not a field manager; the owner has no
-// staff row and is never counted. "Checked in" means a captured check-in since local midnight.
+// staff row and is never counted. "Checked in" means a captured check-in since local midnight whose latest event is
+// not a check-out; a rep who checked out today has finished for the day (checkedOut), which is neither checked in
+// nor missing, and their position is not "old" because they are no longer working.
 
 const MAX_VISIT_ROWS = 8
 
@@ -34,13 +36,15 @@ export function summariseFieldDay({ checkins = [], visits = [], ordersAwaiting =
     .map((p) => {
       const at = p.last_checkin ? Date.parse(p.last_checkin.at) : NaN
       const today = Number.isFinite(at) && at >= dayStart
+      const checkedOut = today && p.last_checkin.event_type === 'workday_checkout'
       return {
         staffId: p.staff_id,
         name: p.name,
         at: today ? p.last_checkin.at : null,
         area: today ? (p.last_checkin.location_label || '') : '',
-        stale: today && (now - at) / 60000 > STALE_AFTER_MINUTES,
+        stale: today && !checkedOut && (now - at) / 60000 > STALE_AFTER_MINUTES,
         missing: !today,
+        checkedOut,
       }
     })
 
@@ -49,7 +53,7 @@ export function summariseFieldDay({ checkins = [], visits = [], ordersAwaiting =
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
 
   return {
-    checkedIn: checkinRows.filter((r) => !r.missing).length,
+    checkedIn: checkinRows.filter((r) => !r.missing && !r.checkedOut).length,
     repsTotal: checkinRows.length,
     visitsToday: todays.length,
     ordersToApprove: (ordersAwaiting || []).length,
