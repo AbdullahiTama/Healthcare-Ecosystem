@@ -3,7 +3,7 @@ import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus, 
 import { staffRepository } from './repositories'
 import { provisionStaffAuth } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
-import { rolesForType, getModulesForType } from '../../lib/permissions'
+import { rolesForType, getModulesForType, isRoleGrantable } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
 import { getTemplatesForBusinessType, applyTemplate } from '../../lib/roleTemplates'
 import { theme } from '../../styles/theme'
@@ -66,8 +66,9 @@ export default function Staff({ brand, role, perms }) {
   const customRoleNames = roles.map(r => r.name)
   const roleOptions = [...rolesForType(bType), ...customRoleNames]
   // Modules the Roles & Permissions editor may offer: only what this business
-  // type can actually use, straight from the registry.
-  const typeModules = getModulesForType(bType || 'skincare')
+  // type can actually use, straight from the registry, and never an access-ruled
+  // page (the Field team pages follow "Manage field team", not a switch).
+  const typeModules = getModulesForType(bType || 'skincare').filter(m => isRoleGrantable(m[0]))
   const typeModuleIds = typeModules.map(m => m[0])
 
   const FLAG_META = [
@@ -78,8 +79,8 @@ export default function Staff({ brand, role, perms }) {
     ['canExportReports', 'Export reports', 'Can download/export report data.'],
     ['canManageStaff', 'Manage staff', 'Can add, remove or change staff members and roles.'],
     // The key stays `canManageDirectory`: the database (can_manage_directory / caller_sees_all_activity) reads it from
-    // the role JSON. Since the Business Directory became platform-admin only, all it grants is team-wide field activity.
-    ['canManageDirectory', 'See all field activity', 'Can see the Live Field Activity of the whole team, not only their own reports and ones they are tagged in. Owners and manager roles can always do this.'],
+    // the role JSON. Since the Business Directory became platform-admin only, all it grants is managing the field team.
+    ['canManageDirectory', 'Manage field team', 'Opens the Field team section: everyone\'s field reports, team check-ins, order approvals and places to confirm. Owners and manager roles can always do this.'],
     ['canViewFinance', 'View finance', 'Can see expenses, debts and financial figures.'],
     ['canMakeSales', 'Make sales', 'Can record sales at the POS / counter.'],
     ['canViewSettings', 'View settings', 'Can open Settings and change business configuration.'],

@@ -6,6 +6,7 @@ import {
   Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
   Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map as MapIcon, Mail,
   ClipboardList, LayoutDashboard, Layers, AlertTriangle, FileCheck, CalendarClock, Store,
+  MapPin, ListChecks, Sliders,
 } from 'lucide-react'
 
 export const ROLES = {
@@ -272,7 +273,16 @@ export const MODULES = {
   // The lab bench serves hospitals and stand-alone laboratories.
   lab: { label: 'Laboratory', icon: Microscope, types: [...HOSPITAL_TYPES, 'laboratory'], section: 'clinical' },
   imaging: { label: 'Imaging', icon: Scan, types: HOSPITAL_TYPES, section: 'clinical' },
-  activity: { label: 'Live Field Activity', icon: Radio, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  // The rep's own field tool: check in, log visits, their reports. The key stays `activity` so stored role
+  // permissions keep working.
+  activity: { label: 'Field', icon: Radio, types: ENTERPRISE_TYPES, section: 'field' },
+  // The company's management of the field team. These are NOT granted through a role's nav list: `access`
+  // decides (see accessAllows), so a role editor switch can never hand a rep the manager pages.
+  'field-reports': { label: 'Team reports', icon: ClipboardList, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/reports', access: 'field-manager' },
+  'field-checkins': { label: 'Team check-ins', icon: MapPin, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/checkins', access: 'field-manager' },
+  'field-approvals': { label: 'Order approvals', icon: FileCheck, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/approvals', access: 'field-manager' },
+  'field-places': { label: 'Places to confirm', icon: ListChecks, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/places', access: 'place-reviewer' },
+  'field-fields': { label: 'Report fields', icon: Sliders, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/fields', access: 'owner' },
   discovery: { label: 'Facility Discovery', icon: Search, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   // There is deliberately no 'directory', 'business-discovery' or 'intelligence' module here: the
   // Business Directory belongs to the platform-admin console only (Admin > Directory). Reads and writes
@@ -293,6 +303,8 @@ export const MODULES = {
 // sidebar by granting odd nav subsets.
 export const NAV_SECTIONS = {
   overview: { label: 'Overview' },
+  field: { label: 'Field' },
+  'field-team': { label: 'Field team' },
   operations: { label: 'Operations' },
   patients: { label: 'Patients & Clients' },
   clinical: { label: 'Clinical' },
@@ -303,7 +315,7 @@ export const NAV_SECTIONS = {
   admin: { label: 'Admin' },
 }
 
-export const SECTION_ORDER = ['overview', 'operations', 'patients', 'clinical', 'finance', 'people', 'intelligence', 'ecosystem', 'admin']
+export const SECTION_ORDER = ['overview', 'field', 'field-team', 'operations', 'patients', 'clinical', 'finance', 'people', 'intelligence', 'ecosystem', 'admin']
 
 // Per-vertical ordering. Kept separate from the registry because the three
 // legacy nav lists ordered their modules differently and nothing should
@@ -313,7 +325,7 @@ const NAV_ORDER = {
     // Clinics lead with the appointment book and consultation notes.
     clinic: ['overview', 'dashboard', 'appointments', 'consultation', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
     hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
-    enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
+    enterprise: ['overview', 'dashboard', 'activity', 'field-reports', 'field-checkins', 'field-approvals', 'field-places', 'field-fields', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
 }
 
 function familyOf(businessType) {
@@ -355,13 +367,50 @@ export function getModulesForType(businessType) {
   return [...ordered, ...rest].map(id => [id, MODULES[id].icon, labelFor(MODULES[id], type)])
 }
 
-export const ALL_NAV_DEFAULT = NAV_ORDER.default.map(id => [id, MODULES[id].icon, MODULES[id].label])
-export const ALL_NAV_HOSPITAL = NAV_ORDER.hospital.map(id => [id, MODULES[id].icon, MODULES[id].label])
-export const ALL_NAV_ENTERPRISE = NAV_ORDER.enterprise.map(id => [id, MODULES[id].icon, MODULES[id].label])
+// The legacy role-grantable lists: access-ruled modules (the Field team pages) are not role-granted, so they
+// are not listed.
+export const ALL_NAV_DEFAULT = NAV_ORDER.default.filter(isRoleGrantable).map(id => [id, MODULES[id].icon, MODULES[id].label])
+export const ALL_NAV_HOSPITAL = NAV_ORDER.hospital.filter(isRoleGrantable).map(id => [id, MODULES[id].icon, MODULES[id].label])
+export const ALL_NAV_ENTERPRISE = NAV_ORDER.enterprise.filter(isRoleGrantable).map(id => [id, MODULES[id].icon, MODULES[id].label])
+
+// What a field rep's login offers when their role is neither a preset nor a custom role (the live "Medical
+// sales rep" is one): their field tool, orders, and messages to the office.
+export const FIELD_REP_NAV = ['activity', 'orders', 'messages']
+
+// A module with an `access` rule is decided by that rule alone; a role's nav list neither grants nor
+// removes it. 'field-manager' is the same rule that decides who sees the whole team's activity. 'place-reviewer'
+// mirrors the database's is_business_manager (the owner, or a role named as a manager), which alone may confirm or
+// dismiss a place a rep added; "Manage field team" does not reach it.
+function accessAllows(module, { role, perms }) {
+  if (module.access === 'owner') return role === 'Owner'
+  if (module.access === 'place-reviewer') return role === 'Owner' || isManagerRole(role)
+  if (module.access === 'field-manager') return canSeeAllActivity({ isOwner: role === 'Owner', role, perms })
+  return false
+}
+
+// Whether the Roles editor may offer a module as a switch. Access-ruled modules are never role-granted.
+export function isRoleGrantable(id) {
+  return !!MODULES[id] && !MODULES[id].access
+}
 
 export function getNavItems(role, businessType, customRoles = {}) {
   const perms = getPerms(role, customRoles)
-  return getModulesForType(businessType).filter(item => perms.nav.includes(item[0]))
+  // A manufacturer's or wholesaler's unrecognised staff role is a field rep unless its name marks a manager
+  // (the live "Regional Manager" keeps today's menu). Other business types keep the shared fallback.
+  const repFallback = perms === DEFAULT_STAFF_PERMS && familyOf(normalizeType(businessType)) === 'enterprise' && !isManagerRole(role)
+  const nav = repFallback ? FIELD_REP_NAV : perms.nav
+  return getModulesForType(businessType).filter(item => {
+    const module = MODULES[item[0]]
+    return module.access ? accessAllows(module, { role, perms }) : nav.includes(item[0])
+  })
+}
+
+// Where a person lands after signing in: the dashboard when they have it, else their Field page (a rep),
+// else the first page they may open. Never a page they cannot open, so the route guard cannot loop.
+export function landingRoute(allowedKeys) {
+  if (allowedKeys.includes('dashboard')) return 'dashboard'
+  if (allowedKeys.includes('activity')) return 'activity'
+  return allowedKeys[0] || 'dashboard'
 }
 
 // Grouped nav for the sidebar (docs/product/INFORMATION-ARCHITECTURE.md).

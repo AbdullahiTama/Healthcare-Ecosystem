@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { X, Check } from 'lucide-react'
 import { orderRepository } from './repositories'
+import { PIPELINE, STAGE_LABEL } from './stages'
 import { productRepository } from '../inventory/repositories'
 // Cross-aggregate reads, each through the module that owns it: an order is
 // raised for a location and a territory, and is raised/approved/watched by
@@ -13,18 +15,7 @@ import { theme } from '../../styles/theme'
 import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
 
-const PIPELINE = ['submitted', 'approved', 'processing', 'dispatched', 'delivered']
-
 const PAGE_SIZE = 25
-
-const STAGE_LABEL = {
-  submitted: 'Awaiting Approval',
-  approved: 'Approved',
-  processing: 'Warehouse Processing',
-  dispatched: 'Dispatched',
-  delivered: 'Delivered',
-  rejected: 'Rejected',
-}
 
 const STAGE_TONE = {
   submitted: { bg: warningBg, color: warning, border: warning },
@@ -55,7 +46,11 @@ function readAuth() {
   try { return JSON.parse(localStorage.getItem('carehub_auth') || '{}') } catch (e) { return {} }
 }
 
-export default function Orders({ brand }) {
+// view 'all'        the Orders & LPO page: every order this person may see, and New Order.
+// view 'approvals'  Field team > Order approvals: only the submitted orders waiting for this person (any of them
+//                   for the owner), asked for on the server; no New Order.
+export default function Orders({ brand, view = 'all' }) {
+  const approvalsView = view === 'approvals'
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const authData = readAuth()
   const meStaffId = (authData && authData.staff && authData.staff.id) ? authData.staff.id : null
@@ -92,6 +87,21 @@ export default function Orders({ brand }) {
   const [watcherIds, setWatcherIds] = useState([])
   const [attachments, setAttachments] = useState([])
   const [sending, setSending] = useState(false)
+  // Set when the form was opened from a field report ("Raise order"): the order is linked to that visit.
+  const [visitLink, setVisitLink] = useState(null)
+  const location = useLocation()
+
+  // "Raise order" on a report arrives here with the visit in the navigation state. Open the form prefilled
+  // once, then clear the visit from the browser history entry so a refresh does not open it again. This must not be
+  // a router navigation: App remounts the whole tree on every navigation, which would close the form at once.
+  useEffect(() => {
+    const fromVisit = location.state && location.state.fromVisit
+    if (!fromVisit || approvalsView) return
+    openNew()
+    setForm({ customer_name: fromVisit.customer_name || '', customer_address: fromVisit.customer_address || '' })
+    setVisitLink({ activityId: fromVisit.activityId, customer_name: fromVisit.customer_name || '' })
+    try { window.history.replaceState({ ...(window.history.state || {}), usr: null }, '') } catch (e) { /* the form still opens */ }
+  }, [])
   const [uploadStatus, setUploadStatus] = useState('')
 
   useEffect(() => { load() }, [brand?.id])
@@ -100,7 +110,9 @@ export default function Orders({ brand }) {
     if (!brand || !brand.id) return
     setLoading(true)
     try {
-      const o = await orderRepository.getAll(brand.id)
+      const o = approvalsView
+        ? await orderRepository.listAwaitingApproval(brand.id, { approverStaffId: meStaffId, isOwner })
+        : await orderRepository.getAll(brand.id)
       const s = await staffRepository.getAll(brand.id)
       const p = await productRepository.getAll(brand.id)
       const t = await territoryRepository.getAll(brand.id)
@@ -217,6 +229,7 @@ export default function Orders({ brand }) {
     setApproverId('')
     setWatcherIds([])
     setAttachments([])
+    setVisitLink(null)
     setComposing(true)
   }
 
@@ -277,8 +290,10 @@ export default function Orders({ brand }) {
         created_by_title: meTitle,
         approver_staff_id: staffIdFor(approverId),
         approver_name: nameFor(approverId),
+        ...(visitLink && visitLink.activityId ? { field_activity_id: visitLink.activityId } : {}),
       }, items, watchers, uploaded)
 
+      setVisitLink(null)
       showToast('Order submitted for approval', { type: 'success' })
       setComposing(false)
       load()
@@ -300,9 +315,15 @@ export default function Orders({ brand }) {
     }
   }
 
+  // The person who raised an order never approves it or moves it through the warehouse; someone else does (the
+  // database refuses it too: orders_guard). The Owner may do either.
+  function raisedByMe(o) {
+    return !isOwner && o.created_by_staff_id === meStaffId
+  }
+
   // Only the tagged approver (or the Owner) can approve or reject.
   function canApprove(o) {
-    if (o.status !== 'submitted') return false
+    if (o.status !== 'submitted' || raisedByMe(o)) return false
     if (isOwner) return true
     return o.approver_staff_id === meStaffId
   }
@@ -327,7 +348,7 @@ export default function Orders({ brand }) {
   })
 
   const awaitingMe = orders.filter(function (o) {
-    return o.status === 'submitted' && (isOwner || o.approver_staff_id === meStaffId)
+    return canApprove(o)
   })
 
   function terrName(id) {
@@ -343,14 +364,16 @@ export default function Orders({ brand }) {
   return (
     <>
       <PageHeader
-        title="Orders & LPO"
-        description="Submit an order, tag the manager who approves it, copy anyone else who should see it."
-        primaryAction={{ label: 'New Order', onClick: openNew }}
+        title={approvalsView ? 'Order approvals' : 'Orders & LPO'}
+        description={approvalsView
+          ? 'Orders your field team raised that are waiting for you. Open one to approve or reject it.'
+          : 'Submit an order, tag the manager who approves it, copy anyone else who should see it.'}
+        primaryAction={approvalsView ? undefined : { label: 'New Order', onClick: openNew }}
       />
       <div style={{ padding: '24px', maxWidth: '900px' }}>
         <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
 
-      {awaitingMe.length > 0 && (
+      {!approvalsView && awaitingMe.length > 0 && (
         <div style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
           <div style={{ fontSize: '13px', fontWeight: '800', color: warning }}>
             {awaitingMe.length} order{awaitingMe.length > 1 ? 's are' : ' is'} waiting for your approval
@@ -359,7 +382,7 @@ export default function Orders({ brand }) {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '18px' }}>
+      <div style={{ display: approvalsView ? 'none' : 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '18px' }}>
         {['all'].concat(PIPELINE).concat(['rejected']).map(function (s) {
           const on = filterStage === s
           const count = s === 'all' ? orders.length : orders.filter(function (o) { return o.status === s }).length
@@ -386,17 +409,17 @@ export default function Orders({ brand }) {
         empty={
           <Card style={{ padding: '32px', textAlign: 'center' }}>
             <div style={{ fontWeight: '800', color: navy, marginBottom: '6px' }}>
-              {orders.length === 0 ? 'No orders yet' : 'Nothing at this stage'}
+              {approvalsView ? 'Nothing is waiting for your approval' : orders.length === 0 ? 'No orders yet' : 'Nothing at this stage'}
             </div>
             <div style={{ fontSize: '13px', color: gray500, marginBottom: '16px' }}>
-              {orders.length === 0 ? 'Submit your first order and tag a manager to approve it.' : 'Try another filter.'}
+              {approvalsView ? 'Orders your team tags you on appear here.' : orders.length === 0 ? 'Submit your first order and tag a manager to approve it.' : 'Try another filter.'}
             </div>
-            {orders.length === 0 && <TealBtn onClick={openNew}>+ New Order</TealBtn>}
+            {!approvalsView && orders.length === 0 && <TealBtn onClick={openNew}>+ New Order</TealBtn>}
           </Card>
         }
         count={`${visible.length} order${visible.length !== 1 ? 's' : ''}`}
         rowStyle={function (o) {
-          const mine = o.status === 'submitted' && (isOwner || o.approver_staff_id === meStaffId)
+          const mine = canApprove(o)
           return { borderLeft: mine ? `3px solid ${warning}` : '3px solid transparent' }
         }}
         renderCard={function (o) {
@@ -454,6 +477,11 @@ export default function Orders({ brand }) {
           <TealBtn onClick={submitOrder} style={{ flex: 2, padding: '12px' }}>{sending ? 'Submitting...' : 'Submit for Approval'}</TealBtn>
         </>}>
             <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '16px' }}>Raised by <strong>{meName}</strong>{meTitle ? ' · ' + meTitle : ''}</div>
+            {visitLink && (
+              <div role='status' style={{ fontSize: '12px', color: tealDeep, background: tealMist, borderRadius: '8px', padding: '8px 10px', marginBottom: '14px' }}>
+                From your visit to {visitLink.customer_name || 'this customer'}. The order will be linked to that report.
+              </div>
+            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <Inp label='Customer Name *' value={form.customer_name} onChange={function (v) { f('customer_name', v) }} placeholder='e.g. St. Kizito Hospital Pharmacy' />
@@ -769,19 +797,25 @@ export default function Orders({ brand }) {
                     </div>
                   )}
 
-                  {openOrder.status === 'approved' && (
+                  {raisedByMe(openOrder) && ['approved', 'processing', 'dispatched'].includes(openOrder.status) && (
+                    <div style={{ padding: '12px 14px', borderRadius: '8px', background: bg, fontSize: '12px', color: gray500, textAlign: 'center' }}>
+                      You raised this order, so someone else in the company moves it on.
+                    </div>
+                  )}
+
+                  {openOrder.status === 'approved' && !raisedByMe(openOrder) && (
                     <TealBtn onClick={function () { act(openOrder, 'processing', null) }} style={{ width: '100%', padding: '12px' }}>
                       {acting ? 'Working...' : 'Send to Warehouse'}
                     </TealBtn>
                   )}
 
-                  {openOrder.status === 'processing' && (
+                  {openOrder.status === 'processing' && !raisedByMe(openOrder) && (
                     <TealBtn onClick={function () { act(openOrder, 'dispatched', { dispatched_at: new Date().toISOString() }) }} style={{ width: '100%', padding: '12px' }}>
                       {acting ? 'Working...' : 'Mark Dispatched'}
                     </TealBtn>
                   )}
 
-                  {openOrder.status === 'dispatched' && (
+                  {openOrder.status === 'dispatched' && !raisedByMe(openOrder) && (
                     <TealBtn onClick={function () { act(openOrder, 'delivered', { delivered_at: new Date().toISOString() }) }} style={{ width: '100%', padding: '12px' }}>
                       {acting ? 'Working...' : 'Mark Delivered'}
                     </TealBtn>

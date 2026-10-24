@@ -1,6 +1,6 @@
 // Check-in / location-history database tests. See _harness.mjs for scope and limits.
 //   node scripts/db-tests/checkins.pglite.mjs
-import { ok, expectError, finish, as, sup, db, applyMigrations, seedStaff, USERS, ADMIN, makeLikeLive } from './_harness.mjs'
+import { ok, expectError, finish, as, sup, db, applyMigrations, seedStaff, USERS, ADMIN, makeLikeLive, addDirectoryManagerStub } from './_harness.mjs'
 
 // is_business_manager() lives in the facility-review migration, which also
 // touches these two tables; minimal stand-ins let the real file apply.
@@ -147,5 +147,36 @@ await call('repA1', S.A, 'workday_checkout', GOOD)
 await call('repA1', S.A, 'location_capture', { fail: 'denied' })
 const reportsAfter = (await sup('select count(*)::int c from field_activities')).rows[0].c
 ok('check in, check out and a failed capture create no field report', reportsAfter === reportsBefore, reportsBefore + ' -> ' + reportsAfter)
+
+
+// ================================================================================================
+// carehub_20261026_checkin_overview_field_manager (DRAFT, closes audit F2): team check-ins follow the
+// field-manager rule (caller_sees_all_activity), so a role granted "Manage field team" sees them too.
+// ================================================================================================
+await db.exec(`
+  ALTER TABLE public.field_activities ADD COLUMN IF NOT EXISTS territory_id uuid;
+  CREATE TABLE IF NOT EXISTS public.activity_viewers (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), activity_id uuid NOT NULL REFERENCES public.field_activities(id), staff_id uuid, viewer_name text);
+  CREATE TABLE IF NOT EXISTS public.activity_reactions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), activity_id uuid NOT NULL REFERENCES public.field_activities(id), staff_id uuid, actor_name text);
+  CREATE TABLE IF NOT EXISTS public.activity_comments (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), activity_id uuid NOT NULL REFERENCES public.field_activities(id), staff_id uuid, actor_name text, body text);
+`)
+await addDirectoryManagerStub()
+await applyMigrations(['carehub_20261131_field_activity_access.sql'], { rerun: false })
+await sup("insert into staff (business_id,email,role,full_name,status) values ($1,'lead@a.test','Area Lead','Area Lead','active')", [S.A])
+await sup("insert into directory_managers_stub (business_id, email) values ($1,'lead@a.test')", [S.A])
+USERS.leadA = { sub: '00000000-0000-0000-0000-0000000000c8', email: 'lead@a.test' }
+
+await expectError('BEFORE: a role granted "Manage field team" (no "manager" in its name) is refused team check-ins (F2)', () => as('leadA', 'select manager_checkin_overview($1)', [S.A]), '42501')
+await applyMigrations(['carehub_20261026_checkin_overview_field_manager.sql'])
+const f2LogBefore = (await sup('select count(*)::int c from location_access_log')).rows[0].c
+const ovLead = (await as('leadA', 'select manager_checkin_overview($1) r', [S.A])).rows[0].r
+ok('AFTER: that role sees the team check-ins', Array.isArray(ovLead.rows) && ovLead.rows.length > 0)
+ok('AFTER: and the look is recorded in the access log', (await sup('select count(*)::int c from location_access_log')).rows[0].c === f2LogBefore + 1)
+ok('AFTER: a name-rule manager still sees them', Array.isArray((await as('mgrA', 'select manager_checkin_overview($1) r', [S.A])).rows[0].r.rows))
+ok('AFTER: the owner still sees them', Array.isArray((await as('a', 'select manager_checkin_overview($1) r', [S.A])).rows[0].r.rows))
+await expectError('AFTER: a plain rep is still refused', () => as('repA1', 'select manager_checkin_overview($1)', [S.A]), '42501')
+await expectError('AFTER: another company is still refused', () => as('b', 'select manager_checkin_overview($1)', [S.A]), '42501')
+await expectError('AFTER: signed out is refused', () => as('anon', 'select manager_checkin_overview($1)', [S.A]), '42501')
+const ovAcl = (await sup("select has_function_privilege('anon','public.manager_checkin_overview(uuid)','execute') a, has_function_privilege('authenticated','public.manager_checkin_overview(uuid)','execute') u, (select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='manager_checkin_overview') n")).rows[0]
+ok('AFTER: one overload, callable by signed-in users, not by anon', ovAcl.a === false && ovAcl.u === true && ovAcl.n === 1, JSON.stringify(ovAcl))
 
 finish()

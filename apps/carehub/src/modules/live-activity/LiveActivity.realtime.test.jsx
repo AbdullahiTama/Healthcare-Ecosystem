@@ -55,10 +55,9 @@ const onInsert = () => watchTable.mock.calls[0][2]
 const onStatus = () => watchTable.mock.calls[0][3]
 const engagementCb = (table) => subscribeChanges.mock.calls.find((c) => c[0].table === table)[1]
 
+// The live team feed is Field team > Team reports (team mode).
 async function mount() {
-  await act(async () => { root.render(<MemoryRouter><LiveActivity brand={BRAND} /></MemoryRouter>) })
-  await flush()
-  await act(async () => { button('Team Reports').click() })
+  await act(async () => { root.render(<MemoryRouter><LiveActivity brand={BRAND} mode='team' /></MemoryRouter>) })
   await flush()
 }
 

@@ -15,6 +15,9 @@ vi.mock('../../../hooks/queries', () => ({
   useAllSales: vi.fn(),
   useAppointments: vi.fn(),
 }))
+vi.mock('../FieldTeamToday.jsx', () => ({
+  default: function MockFieldTeamToday({ role, staffId }) { return <div data-testid="field-team-today" data-role={role} data-staff={staffId || ''} /> },
+}))
 vi.mock('../../notifications/repositories', () => ({
   notificationRepository: { notify: vi.fn(async () => {}) },
 }))
@@ -233,5 +236,28 @@ describe('DashboardHome', () => {
 
     m = await mountHome({ brand: { ...BRAND, business_type: 'pharmacy' } })
     expect(m.host.textContent).not.toContain('Hospital patient flow')
+  })
+})
+
+describe('Field team today on the dashboard home', () => {
+  let m
+  afterEach(async () => { if (m) { await m.unmount(); m = null } })
+  const panel = () => m.host.querySelector('[data-testid="field-team-today"]')
+
+  it("a manufacturer's owner sees it", async () => {
+    m = await mountHome({ brand: { ...BRAND, business_type: 'manufacturer_importer' } })
+    expect(panel()).toBeTruthy()
+  })
+  it("a wholesaler's role with Manage field team sees it", async () => {
+    m = await mountHome({ brand: { ...BRAND, business_type: 'wholesale' }, role: 'Area Lead', perms: { nav: ['dashboard'], canManageDirectory: true } })
+    expect(panel()).toBeTruthy()
+  })
+  it('a rep does not', async () => {
+    m = await mountHome({ brand: { ...BRAND, business_type: 'manufacturer_importer' }, role: 'Medical sales rep', perms: { nav: ['activity'] } })
+    expect(panel()).toBeNull()
+  })
+  it('a pharmacy does not (out of scope)', async () => {
+    m = await mountHome({ brand: { ...BRAND, business_type: 'pharmacy' } })
+    expect(panel()).toBeNull()
   })
 })

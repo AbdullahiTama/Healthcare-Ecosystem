@@ -450,3 +450,20 @@ result with the time and what was seen. A failure is a finding and blocks releas
 - `LiveActivity.draft.test.jsx` "after a failed send, editing the form again does not put a draft back" is a timing
   test (fixed 450 ms wait) that failed once or twice under heavy machine load and passes alone.
 - F2 and F10 still need owner decisions (section 12).
+
+## 19. Field team reorganisation, 2026-10-24 (branch `feat/field-team-reorganisation`)
+
+Design: `docs/superpowers/specs/2026-10-23-field-team-reorganisation-design.md`. Plan:
+`docs/superpowers/plans/2026-10-23-field-team-reorganisation.md`. Scope: manufacturers and wholesalers only (owner).
+
+- **Reps** land on Field (check in, log a visit, My Feed, Shared with me) and their default menu is Field, Orders,
+  Messages. "Raise order" on their own report opens the order form for that customer, linked to the visit.
+- **Field managers** (owner, a manager role, or "Manage field team", the existing `canManageDirectory` key) get a
+  Field team section: Team reports, Team check-ins, Order approvals, Places to confirm, Report fields (owner); and
+  "Field team today" on the dashboard home.
+- **Found and fixed in the app:** a role without the dashboard was redirected to the dashboard forever.
+- **Found, drafted, not applied:** order approval was enforced only in the browser (see the README, draft 3).
+- **F2** is closed by draft 1 once applied. **F10** still needs an owner decision.
+- **Not verified in a browser** (none was connected): the five pages, the dashboard panel and Raise order at
+  375, 768 and 1280 px. Team check-ins for a "Manage field team" role stays refused until draft 1 is applied; the
+  dashboard panel then shows the check-in error and still shows the visits.

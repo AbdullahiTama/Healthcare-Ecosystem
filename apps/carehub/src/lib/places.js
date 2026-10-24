@@ -261,11 +261,16 @@ export async function confirmRepAddedFacility(id, businessId) {
   // made every Confirm fail, so no rep-added facility could ever be promoted.
   const rows = await sbFetch('rep_added_facilities?id=eq.' + id + '&select=name,lat,lng,category')
   const f = Array.isArray(rows) ? rows[0] : rows
-  await sbFetch('rep_added_facilities?id=eq.' + id, {
+  // The returned rows say whether the update happened: the database lets only the owner or a manager review a
+  // place, and refuses anyone else by matching nothing. Then nothing may be published either.
+  const changed = await sbFetch('rep_added_facilities?id=eq.' + id, {
     method: 'PATCH',
     body: JSON.stringify({ status: 'confirmed' }),
-    prefer: 'return=minimal',
+    prefer: 'return=representation',
   })
+  if (!Array.isArray(changed) || changed.length === 0) {
+    throw new Error('This place could not be confirmed. Only the owner or a manager can confirm places, or it was already handled.')
+  }
   if (f) {
     await sbFetch('facilities_cache?on_conflict=business_id,name,lat,lng', {
       method: 'POST',
@@ -288,10 +293,14 @@ export async function confirmRepAddedFacility(id, businessId) {
  * the row — it will no longer appear in anyone's nearby list.
  */
 export async function dismissRepAddedFacility(id) {
-  return sbFetch('rep_added_facilities?id=eq.' + id, {
+  const removed = await sbFetch('rep_added_facilities?id=eq.' + id, {
     method: 'DELETE',
-    prefer: 'return=minimal',
+    prefer: 'return=representation',
   })
+  if (!Array.isArray(removed) || removed.length === 0) {
+    throw new Error('This place could not be dismissed. Only the owner or a manager can dismiss places, or it was already handled.')
+  }
+  return removed
 }
 
 // Internal CareFind facilities fetch — paged (state,lga,city) with optional category/keyword

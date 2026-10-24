@@ -189,6 +189,7 @@ describe('rep-added facility review workflow (manager confirmation)', () => {
   it('confirmRepAddedFacility flips status and promotes the facility into the cache', async () => {
     // Shape mirrors the real table: rep_added_facilities has no `address`.
     sbFetch.mockResolvedValueOnce([{ name: 'F', lat: 1, lng: 2, category: 'Hospital' }])
+    sbFetch.mockResolvedValueOnce([{ id: 'fid' }])
     await confirmRepAddedFacility('fid', 'biz')
     // Regression (issue #1): selecting a column the table does not have made
     // PostgREST reject this read, so Confirm could never succeed.
@@ -205,7 +206,24 @@ describe('rep-added facility review workflow (manager confirmation)', () => {
     expect(cachePost[1].body).toContain('F')
   })
 
+  it('confirmRepAddedFacility reports a refusal when the update changed nothing, and does not publish the place', async () => {
+    sbFetch.mockResolvedValueOnce([{ name: 'F', lat: 1, lng: 2, category: 'Hospital' }]) // read
+    sbFetch.mockResolvedValueOnce([])                                                   // PATCH matched no row
+    await expect(confirmRepAddedFacility('fid', 'biz')).rejects.toThrow(/could not be confirmed/i)
+    const patch = sbFetch.mock.calls.find(function (c) { return c[1] && c[1].method === 'PATCH' })
+    expect(patch[1].prefer).toBe('return=representation')
+    expect(sbFetch.mock.calls.some(function (c) { return String(c[0]).includes('facilities_cache') })).toBe(false)
+  })
+
+  it('dismissRepAddedFacility reports a refusal when nothing was removed', async () => {
+    sbFetch.mockResolvedValueOnce([])
+    await expect(dismissRepAddedFacility('fid')).rejects.toThrow(/could not be dismissed/i)
+    const del = sbFetch.mock.calls.find(function (c) { return c[1] && c[1].method === 'DELETE' })
+    expect(del[1].prefer).toBe('return=representation')
+  })
+
   it('dismissRepAddedFacility deletes the row', async () => {
+    sbFetch.mockResolvedValueOnce([{ id: 'fid' }])
     await dismissRepAddedFacility('fid')
     const del = sbFetch.mock.calls.find(function (c) { return c[1] && c[1].method === 'DELETE' })
     expect(del[0]).toContain('rep_added_facilities?id=eq.fid')
