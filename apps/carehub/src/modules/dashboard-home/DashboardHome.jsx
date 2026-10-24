@@ -13,12 +13,14 @@ import { fmt, businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Avatar, Empty, ErrorState, Loading, StatCard, PageHeader, MetricGrid, SectionCard, ActivityList, QuickAction } from '../../components/ui'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
+import { canSeeAllActivity } from '../../lib/permissions'
+import FieldTeamToday from './FieldTeamToday.jsx'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useTodaySales, useAllSales, useAppointments } from '../../hooks/queries'
 
 const { tealDeep, tealMist, navy, gray500, gray400, border, success, bg } = theme
 
-export default function DashboardHome({ brand, products, role, perms }) {
+export default function DashboardHome({ brand, products, role, perms, staffId = null, customRoles }) {
   const navigate = useNavigate()
   const online = useOnlineStatus()
   const { isMobile } = useBreakpoint()
@@ -26,6 +28,10 @@ export default function DashboardHome({ brand, products, role, perms }) {
   const [showAllOut, setShowAllOut] = useState(false)
   const bType = brand?.business_type || brand?.type || 'skincare'
   const isHospital = bType === 'hospital'
+  // Field team today: manufacturers and wholesalers, for whoever manages the field team (owner, a manager
+  // role, or "Manage field team").
+  const showFieldTeam = (bType === 'manufacturer_importer' || bType === 'wholesale') &&
+    canSeeAllActivity({ isOwner: role === 'Owner', role, perms })
   const canSeeAppts = !perms?.nav || perms.nav.includes('appointments')
 
   const { data: todaySales = [], isLoading: loadingToday, isError: errToday, refetch: refetchToday } = useTodaySales(brand?.id)
@@ -302,6 +308,8 @@ export default function DashboardHome({ brand, products, role, perms }) {
         {/* Hospital patient flow — no template equivalent (the reference
             mockups are pharmacy/retail), kept as its own block so hospital
             accounts don't lose real, load-bearing navigation. */}
+        {showFieldTeam && <FieldTeamToday brand={brand} role={role} staffId={staffId} customRoles={customRoles} />}
+
         {isHospital && (
           <SectionCard title="Hospital patient flow">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

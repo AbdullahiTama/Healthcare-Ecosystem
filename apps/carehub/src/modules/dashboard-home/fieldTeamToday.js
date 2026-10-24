@@ -1,0 +1,67 @@
+import { getNavItems, getPerms, canSeeAllActivity } from '../../lib/permissions'
+import { STALE_AFTER_MINUTES } from '../checkins/checkinView'
+import { targetLabel, storedVerification } from '../live-activity/activityTarget'
+
+// What "Field team today" shows on the company dashboard (layout A): who checked in, and today's visits.
+// Pure, so the counting rules are tested on their own.
+//
+//   checkins       rows of manager_checkin_overview (active staff, each with role and last_checkin)
+//   visits         field reports since the start of today (any order)
+//   ordersAwaiting orders waiting for this person's approval
+//   placesPending  rep-added places awaiting review
+//
+// A rep is an active staff member whose menu includes Field and who is not a field manager; the owner has no
+// staff row and is never counted. "Checked in" means a captured check-in since local midnight.
+
+const MAX_VISIT_ROWS = 8
+
+function startOfDay(now) {
+  const d = new Date(now)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+
+function isRep(role, businessType, customRoles) {
+  const hasField = getNavItems(role, businessType, customRoles).some((i) => i[0] === 'activity')
+  return hasField && !canSeeAllActivity({ role, perms: getPerms(role, customRoles) })
+}
+
+export function summariseFieldDay({ checkins = [], visits = [], ordersAwaiting = [], placesPending = [], now = Date.now(), businessType, customRoles = {} } = {}) {
+  const dayStart = startOfDay(now)
+
+  const checkinRows = (checkins || [])
+    .filter((p) => isRep(p.role, businessType, customRoles))
+    .map((p) => {
+      const at = p.last_checkin ? Date.parse(p.last_checkin.at) : NaN
+      const today = Number.isFinite(at) && at >= dayStart
+      return {
+        staffId: p.staff_id,
+        name: p.name,
+        at: today ? p.last_checkin.at : null,
+        area: today ? (p.last_checkin.location_label || '') : '',
+        stale: today && (now - at) / 60000 > STALE_AFTER_MINUTES,
+        missing: !today,
+      }
+    })
+
+  const todays = (visits || [])
+    .filter((v) => Date.parse(v.created_at) >= dayStart)
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+
+  return {
+    checkedIn: checkinRows.filter((r) => !r.missing).length,
+    repsTotal: checkinRows.length,
+    visitsToday: todays.length,
+    ordersToApprove: (ordersAwaiting || []).length,
+    placesToConfirm: (placesPending || []).length,
+    checkinRows,
+    visitRows: todays.slice(0, MAX_VISIT_ROWS).map((v) => ({
+      id: v.id,
+      at: v.created_at,
+      rep: v.rep_name,
+      place: targetLabel(v) || 'No place recorded',
+      badge: storedVerification(v),
+      hasPhoto: Array.isArray(v.photo_paths) && v.photo_paths.length > 0,
+    })),
+  }
+}

@@ -225,7 +225,7 @@ export default function BusinessDashboard() {
               {/* Dashboard renders its own full-bleed header (date + branch +
                   sync status + New sale), so it skips the generic TopBar and the
                   standard content padding — see DashboardHome.jsx. */}
-              <Route path='dashboard' element={guard('dashboard', <DashboardHome {...pageProps} />)} />
+              <Route path='dashboard' element={guard('dashboard', <DashboardHome {...pageProps} staffId={staffUser?.id || null} customRoles={customRoles} />)} />
               <Route path='pos' element={guard('pos', <POS {...pageProps} />)} />
               <Route path='inventory' element={guard('inventory', <><TopBar title='Stock Management' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><StockManagement {...pageProps} /></div></>)} />
               <Route path='clients' element={guard('clients', <><TopBar title={brand?.business_type === 'hospital' ? 'Patients' : 'Clients'} brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Clients {...pageProps} /></div></>)} />
