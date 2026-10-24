@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Check } from 'lucide-react'
 import { orderRepository } from './repositories'
+import { PIPELINE, STAGE_LABEL } from './stages'
 import { productRepository } from '../inventory/repositories'
 // Cross-aggregate reads, each through the module that owns it: an order is
 // raised for a location and a territory, and is raised/approved/watched by
@@ -13,18 +14,7 @@ import { theme } from '../../styles/theme'
 import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
 
-const PIPELINE = ['submitted', 'approved', 'processing', 'dispatched', 'delivered']
-
 const PAGE_SIZE = 25
-
-const STAGE_LABEL = {
-  submitted: 'Awaiting Approval',
-  approved: 'Approved',
-  processing: 'Warehouse Processing',
-  dispatched: 'Dispatched',
-  delivered: 'Delivered',
-  rejected: 'Rejected',
-}
 
 const STAGE_TONE = {
   submitted: { bg: warningBg, color: warning, border: warning },
