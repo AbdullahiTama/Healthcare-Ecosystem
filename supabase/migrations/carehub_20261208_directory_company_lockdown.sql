@@ -2,7 +2,7 @@
 -- Business Directory: platform-admin only, ALSO for reads. Live Field Activity
 -- keeps a narrow "nearby business" suggestion instead of table access.
 --
--- Status: DRAFT, NOT APPLIED. Apply only with explicit owner approval.
+-- Status: APPLIED 2026-10-22 to szdybxmgmhndoytqanfb as version 20261022151535 (header corrected 2026-10-24).
 --
 -- Owner decision (2026-10-22): the Business Directory belongs to the platform
 -- admin console only; companies do not get it on their dashboard. 20261202 made

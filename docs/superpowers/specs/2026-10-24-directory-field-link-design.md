@@ -83,7 +83,10 @@ approval. One migration: `carehub_20261027_directory_field_link.sql`.
 
 - `field_customer_key(directory_business_id, facility_name, facility_lat, facility_lng)`: IMMUTABLE SQL, the one
   definition of the key above (used by both readers, so the list and the history cannot disagree).
-- `field_customers(p_business_id, p_staff_id default null, p_limit default 500)`: **SECURITY INVOKER**. It reads
+- `field_customers(p_business_id, p_staff_id default null, p_limit default 500, p_quiet_days default null)`: **SECURITY INVOKER**.
+  `p_quiet_days` ("not visited in") is applied before the limit, so a team with more than 500 customers still
+  sees every quiet one (final review). It also returns `source`, the facility source of the newest visit, so
+  "Log a visit here" keeps a value the live `facility_source` check accepts. It reads
   `field_activities` and `orders` under the caller's own row level security, so a rep sees only customers from
   visits they may read and a manager sees the team's. `p_staff_id` narrows to one rep's visits (My customers).
   Returns no directory columns beyond the name stored on the visit.
