@@ -24,6 +24,20 @@ const base = {
 }
 
 describe('summariseFieldDay', () => {
+  it('counts customers last visited more than 30 days ago (exactly 30 is not yet quiet)', () => {
+    const s = summariseFieldDay({ ...base, customers: [
+      { key: 'a', last_visit_at: minsAgo(60 * 24 * 31) },
+      { key: 'b', last_visit_at: minsAgo(60 * 24 * 30) },
+      { key: 'c', last_visit_at: minsAgo(60) },
+      { key: 'd', last_visit_at: minsAgo(60 * 24 * 90) },
+    ] })
+    expect(s.quietCustomers).toBe(2)
+    expect(s.quietCustomersAtLimit).toBe(false)
+    expect(summariseFieldDay(base).quietCustomers).toBe(0)
+    const full = summariseFieldDay({ ...base, customers: Array.from({ length: 500 }, (_, i) => ({ key: 'k' + i, last_visit_at: minsAgo(60 * 24 * 40) })) })
+    expect(full.quietCustomersAtLimit).toBe(true)
+  })
+
   it('counts reps who checked in today out of all reps, leaving managers and the owner out', () => {
     const s = summariseFieldDay(base)
     expect(s.checkedIn).toBe(2)

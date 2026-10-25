@@ -279,6 +279,7 @@ export const MODULES = {
   // The company's management of the field team. These are NOT granted through a role's nav list: `access`
   // decides (see accessAllows), so a role editor switch can never hand a rep the manager pages.
   'field-reports': { label: 'Team reports', icon: ClipboardList, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/reports', access: 'field-manager' },
+  'field-customers': { label: 'Customers', icon: Building2, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/customers', access: 'field-manager' },
   'field-checkins': { label: 'Team check-ins', icon: MapPin, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/checkins', access: 'field-manager' },
   'field-approvals': { label: 'Order approvals', icon: FileCheck, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/approvals', access: 'field-manager' },
   'field-places': { label: 'Places to confirm', icon: ListChecks, types: ENTERPRISE_TYPES, section: 'field-team', path: '/dashboard/field-team/places', access: 'place-reviewer' },
@@ -325,7 +326,7 @@ const NAV_ORDER = {
     // Clinics lead with the appointment book and consultation notes.
     clinic: ['overview', 'dashboard', 'appointments', 'consultation', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
     hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
-    enterprise: ['overview', 'dashboard', 'activity', 'field-reports', 'field-checkins', 'field-approvals', 'field-places', 'field-fields', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
+    enterprise: ['overview', 'dashboard', 'activity', 'field-reports', 'field-customers', 'field-checkins', 'field-approvals', 'field-places', 'field-fields', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
 }
 
 function familyOf(businessType) {

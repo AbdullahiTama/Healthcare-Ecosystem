@@ -1,4 +1,5 @@
--- carehub_20261026_checkin_overview_field_manager  (DRAFT, not applied; closes audit finding F2)
+-- carehub_20261026_checkin_overview_field_manager  (closes audit finding F2)
+-- APPLIED 2026-10-24 to szdybxmgmhndoytqanfb as version 20261024105118.
 --
 -- Team check-ins (manager_checkin_overview) admitted only the name-rule manager check (is_business_manager), so a
 -- role the owner granted "Manage field team" saw everyone's field reports but not the team's check-ins. This uses

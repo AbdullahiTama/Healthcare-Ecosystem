@@ -9,12 +9,14 @@ vi.mock('../../checkins/repositories', () => ({ checkinRepository: { overview: v
 vi.mock('../../live-activity/repositories', () => ({ liveActivityRepository: { getFieldActivities: vi.fn() } }))
 vi.mock('../../orders/repositories', () => ({ orderRepository: { listAwaitingApproval: vi.fn() } }))
 vi.mock('../../../lib/places.js', () => ({ getRepAddedFacilities: vi.fn() }))
+vi.mock('../../live-activity/customers/repository.js', () => ({ customerRepository: { list: vi.fn() } }))
 
 import FieldTeamToday from '../FieldTeamToday.jsx'
 import { checkinRepository } from '../../checkins/repositories'
 import { liveActivityRepository } from '../../live-activity/repositories'
 import { orderRepository } from '../../orders/repositories'
 import { getRepAddedFacilities } from '../../../lib/places.js'
+import { customerRepository } from '../../live-activity/customers/repository.js'
 
 const BRAND = { id: 'biz-1', business_type: 'manufacturer_importer' }
 const NOW = new Date(2026, 9, 23, 12, 0, 0).getTime()
@@ -37,6 +39,7 @@ beforeEach(() => {
   liveActivityRepository.getFieldActivities.mockResolvedValue([{ id: 'v1', rep_name: 'Ada Okafor', created_at: ago(10), facility_name: 'Allen Pharmacy', facility_verified: true }])
   orderRepository.listAwaitingApproval.mockResolvedValue([{ id: 'o1' }])
   getRepAddedFacilities.mockResolvedValue([])
+  customerRepository.list.mockResolvedValue([])
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -44,6 +47,34 @@ beforeEach(() => {
 afterEach(() => { act(() => root.unmount()); host.remove() })
 
 describe('FieldTeamToday', () => {
+  it('shows customers going quiet with a link to Customers filtered to 30 days', async () => {
+    customerRepository.list.mockResolvedValue([{ key: 'a', last_visit_at: ago(60 * 24 * 40) }, { key: 'b', last_visit_at: ago(60 * 24 * 35) }, { key: 'c', last_visit_at: ago(30) }])
+    await show()
+    expect(customerRepository.list).toHaveBeenCalledWith('biz-1', { quietDays: 30 })
+    expect(host.textContent).toContain('2 customers not visited in 30 days')
+    const link = [...host.querySelectorAll('a')].find((a) => a.textContent.includes('not visited in 30 days'))
+    expect(link.getAttribute('href')).toBe('/dashboard/field-team/customers?notVisited=30')
+  })
+
+  it('at the limit the count says "500+" rather than a number that may be too low', async () => {
+    customerRepository.list.mockResolvedValue(Array.from({ length: 500 }, (_, i) => ({ key: 'k' + i, last_visit_at: ago(60 * 24 * 40) })))
+    await show()
+    expect(host.textContent).toContain('500+ customers not visited in 30 days')
+  })
+
+  it('one quiet customer reads in the singular', async () => {
+    customerRepository.list.mockResolvedValue([{ key: 'a', last_visit_at: ago(60 * 24 * 40) }])
+    await show()
+    expect(host.textContent).toContain('1 customer not visited in 30 days')
+  })
+
+  it('when customers cannot be loaded (or are not available yet) the tile is left out and the rest still shows', async () => {
+    customerRepository.list.mockRejectedValue(Object.assign(new Error('Customers are not available yet.'), { code: 'NOT_AVAILABLE' }))
+    await show()
+    expect(host.textContent).not.toMatch(/not visited in 30 days/)
+    expect(host.textContent).toContain('1 visit today')
+  })
+
   it('a slower, older load never overwrites a newer one (e.g. the company changes while loading)', async () => {
     let releaseOld
     checkinRepository.overview

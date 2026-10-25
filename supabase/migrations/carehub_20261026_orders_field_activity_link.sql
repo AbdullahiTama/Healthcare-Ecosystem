@@ -1,4 +1,5 @@
--- carehub_20261026_orders_field_activity_link  (DRAFT, not applied)
+-- carehub_20261026_orders_field_activity_link
+-- APPLIED 2026-10-24 to szdybxmgmhndoytqanfb as version 20261024110003.
 --
 -- An order can remember the field visit it came from (field team reorganisation: "start an order from the
 -- visit", the owner's choice). The rep raises it from their report; the report shows the orders it produced.

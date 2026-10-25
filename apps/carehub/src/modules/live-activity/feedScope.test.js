@@ -57,6 +57,10 @@ describe('scopeTabs', () => {
     expect(scopeTabs(true)[1][1]).toBe('Team Reports')
     expect(scopeTabs(false)[1][1]).toBe('Shared with me')
   })
+  it('adds My customers only when asked (a staff member on their own Field page)', () => {
+    expect(scopeTabs(false).map((t) => t[0])).toEqual(['mine', 'team'])
+    expect(scopeTabs(false, { withCustomers: true })).toEqual([['mine', 'My Feed'], ['team', 'Shared with me'], ['customers', 'My customers']])
+  })
 })
 
 import { scopeQuery, dateWindow, inWindow } from './feedScope'

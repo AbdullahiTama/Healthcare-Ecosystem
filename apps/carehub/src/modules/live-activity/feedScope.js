@@ -26,11 +26,14 @@ export function filterByScope(activities, { scope, canSeeAll, meStaffId, viewers
   })
 }
 
-export function scopeTabs(canSeeAll) {
-  return [
+// withCustomers: a staff member on their own Field page also gets My customers (the places they visited).
+export function scopeTabs(canSeeAll, { withCustomers = false } = {}) {
+  const tabs = [
     ['mine', 'My Feed'],
     ['team', canSeeAll ? 'Team Reports' : 'Shared with me'],
   ]
+  if (withCustomers) tabs.push(['customers', 'My customers'])
+  return tabs
 }
 
 // The server-side narrowing for a tab, so a busy team's latest page is not
