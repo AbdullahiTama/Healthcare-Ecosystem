@@ -5,7 +5,7 @@ import { getNavItems, getNavGroups, landingRoute, isRoleGrantable, MODULES, DEFA
 // reps get a focused Field login; field managers get a Field team section that is decided by the field-manager
 // rule, never by a role's nav list.
 const ids = (role, type, custom) => getNavItems(role, type, custom).map((i) => i[0])
-const FIELD_TEAM = ['field-reports', 'field-customers', 'field-checkins', 'field-approvals', 'field-places']
+const FIELD_TEAM = ['field-reports', 'field-map', 'field-customers', 'field-checkins', 'field-approvals', 'field-places']
 
 describe('the rep login', () => {
   it('an unrecognised, non-manager role at a manufacturer gets exactly Field, Orders, Messages', () => {
@@ -47,7 +47,7 @@ describe('the Field team section', () => {
   it('a custom role granted "Manage field team" (canManageDirectory) gets the team pages, but not Places to confirm', () => {
     const custom = { 'Area Lead': { nav: ['activity'], canManageDirectory: true } }
     const got = ids('Area Lead', 'manufacturer_importer', custom)
-    for (const id of ['field-reports', 'field-customers', 'field-checkins', 'field-approvals']) expect(got).toContain(id)
+    for (const id of ['field-reports', 'field-map', 'field-customers', 'field-checkins', 'field-approvals']) expect(got).toContain(id)
     expect(got).not.toContain('field-fields')
     // Confirming a place is decided by the database's is_business_manager (owner, or a role named as a manager);
     // offering the page to anyone else would only produce buttons that silently do nothing.
@@ -79,12 +79,14 @@ describe('the Field team section', () => {
     expect(order.indexOf('field-team')).toBe(order.indexOf('field') + 1)
     const team = groups.find((g) => g.id === 'field-team')
     expect(team.label).toBe('Field team')
-    expect(team.items.map((i) => i[0])).toEqual(['field-reports', 'field-customers', 'field-checkins', 'field-approvals', 'field-places', 'field-fields'])
+    expect(team.items.map((i) => i[0])).toEqual(['field-reports', 'field-map', 'field-customers', 'field-checkins', 'field-approvals', 'field-places', 'field-fields'])
   })
 
   it('each Field team page deep-links under /dashboard/field-team/', () => {
     expect(MODULES['field-reports'].path).toBe('/dashboard/field-team/reports')
     expect(MODULES['field-customers'].path).toBe('/dashboard/field-team/customers')
+    expect(MODULES['field-map'].path).toBe('/dashboard/field-team/map')
+    expect(MODULES['field-map'].label).toBe('Team map')
     expect(MODULES['field-customers'].label).toBe('Customers')
     expect(MODULES['field-checkins'].path).toBe('/dashboard/field-team/checkins')
     expect(MODULES['field-approvals'].path).toBe('/dashboard/field-team/approvals')

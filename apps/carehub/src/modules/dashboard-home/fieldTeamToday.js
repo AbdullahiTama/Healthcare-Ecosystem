@@ -26,7 +26,7 @@ function startOfDay(now) {
   return d.getTime()
 }
 
-function isRep(role, businessType, customRoles) {
+export function isRep(role, businessType, customRoles) {
   const hasField = getNavItems(role, businessType, customRoles).some((i) => i[0] === 'activity')
   return hasField && !canSeeAllActivity({ role, perms: getPerms(role, customRoles) })
 }
