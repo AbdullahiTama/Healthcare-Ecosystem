@@ -10,6 +10,15 @@
 
 export const isStockItem = (p) => (p.cat || p.category) !== 'Services'
 
+// Same thresholds computeInventoryStats uses, for a single product.
+export function stockStatus(p) {
+  if (!isStockItem(p)) return 'Service'
+  const stock = p.stock || 0
+  if (stock <= 0) return 'Out of stock'
+  if (stock <= (p.reorder_level || 5)) return 'Low stock'
+  return 'In stock'
+}
+
 export function computeInventoryStats(products = []) {
   const lowStock = []
   const outOfStock = []
