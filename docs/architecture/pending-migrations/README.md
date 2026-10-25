@@ -17,6 +17,15 @@ The other three drafts of this work were applied on 2026-10-24 (see "Already app
 |---|---|---|---|
 | - | `carehub_20261026_orders_read_scope.sql` | Narrows who reads orders (creator, approver, watchers, field managers, owner). | **Held**: warehouse staff would lose sight of orders they process. Owner decides (a) give them "Manage field team", (b) add a warehouse path, or (c) keep reading as is. |
 
+## Pending (branches, `docs/superpowers/plans/2026-10-26-branch-switching.md`)
+
+Apply in this order, only with the owner's approval. Tested on PGlite (`branchEmail.pglite.mjs`, `branchPlan.pglite.mjs`).
+
+| Order | Draft | Fixes | Status |
+|---|---|---|---|
+| 1 | `carehub_20261212_branches_without_email.sql` | Branches have no sign-in email (owner's option A); a non-admin cannot put one on a branch; ownership follows the parent chain in `orders_caller_is_owner` and `can_access_adr_report_row` via `caller_owns_business`. Without it, adding a branch is refused. | Ready |
+| 2 | `carehub_20261210_branch_plan_follows_parent.sql` | A main business's plan and expiry are copied to its branches on every change (renewals used to stop at the business that paid); backfills existing branches. | Ready |
+
 ## Already applied (files in `supabase/migrations/`)
 
 | Applied as | Version | Fixes |
