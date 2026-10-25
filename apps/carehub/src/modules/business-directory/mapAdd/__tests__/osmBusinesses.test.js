@@ -105,3 +105,13 @@ describe('safeWebsite', () => {
     expect(safeWebsite('')).toBeNull()
   })
 })
+
+describe('fetchOsmBusinesses failures say which kind they are', () => {
+  const B = { south: 6.4, west: 3.3, north: 6.6, east: 3.5 }
+  it('a 400 means OpenStreetMap could not read the search (a fault on our side), and keeps the status', async () => {
+    await expect(fetchOsmBusinesses(B, { fetchImpl: async () => ({ ok: false, status: 400 }) })).rejects.toMatchObject({ message: 'OpenStreetMap could not read this search. Please report it to the CareHub team.', status: 400 })
+  })
+  it('a refusal or overload keeps its status for diagnosis', async () => {
+    await expect(fetchOsmBusinesses(B, { fetchImpl: async () => ({ ok: false, status: 406 }) })).rejects.toMatchObject({ message: 'OpenStreetMap is busy or unreachable. Try again in a moment.', status: 406 })
+  })
+})

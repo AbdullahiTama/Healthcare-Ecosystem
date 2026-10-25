@@ -87,7 +87,13 @@ export async function fetchOsmBusinesses(bounds, { fetchImpl = fetch } = {}) {
   } catch (e) {
     throw busy
   }
-  if (!res || !res.ok) throw busy
+  if (!res || !res.ok) {
+    // 400 means Overpass could not read our query: a fault on our side, worth reporting. Anything else (406 refused,
+    // 429 rate limited, 5xx overloaded) is the service. The status is kept for diagnosis.
+    const err = res && res.status === 400 ? new Error('OpenStreetMap could not read this search. Please report it to the CareHub team.') : busy
+    err.status = res ? res.status : null
+    throw err
+  }
   return parseOsmBusinesses(await res.json())
 }
 
