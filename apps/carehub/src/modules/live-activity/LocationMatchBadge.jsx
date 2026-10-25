@@ -21,6 +21,11 @@ const EXPLAIN = {
   [FACILITY_VERIFICATION.UNCERTAIN]: 'The GPS fix was too imprecise to tell whether the phone was at this place. That does not mean it was elsewhere.',
 }
 
+// The badge's words for a location-match state, for places that show it as text (the Team map's popups).
+export function matchText(state) {
+  return (VIEW[state] || VIEW[FACILITY_VERIFICATION.UNVERIFIED]).text
+}
+
 export default function LocationMatchBadge({ state }) {
   const v = VIEW[state] || VIEW[FACILITY_VERIFICATION.UNVERIFIED]
   const key = VIEW[state] ? state : FACILITY_VERIFICATION.UNVERIFIED
