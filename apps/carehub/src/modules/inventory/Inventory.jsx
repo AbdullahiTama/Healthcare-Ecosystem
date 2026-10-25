@@ -91,6 +91,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     setExporting(true)
     try {
       await exportInventoryXlsx(filtered)
+      console.info('[inventory] excel export', { business: brand?.id, rows: filtered.length })
       showToast(`Exported ${filtered.length} product${filtered.length !== 1 ? 's' : ''} to Excel.`, { type: 'success' })
     } catch (e) {
       console.error('inventory export failed:', e)
