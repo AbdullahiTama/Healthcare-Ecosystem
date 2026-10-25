@@ -13,7 +13,7 @@ import { debtRepository } from '../debts/repositories'
 import { clientRepository } from '../clients/repositories'
 import { consultationRepository } from '../consultation/repositories'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
-import { buildReceiptHtml, buildReceiptQrDataUrl } from './receiptPrint'
+import { buildReceiptHtml, buildReceiptQrDataUrl, saleToReceipt } from './receiptPrint'
 import { buildReceiptEscpos } from './receiptEscpos'
 import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscpos, requestPrinter } from './escposUsb'
 import { theme } from '../../styles/theme'
@@ -740,25 +740,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
                     <div style={{ fontSize: '16px', fontWeight: '900', color: tealDeep }}>{fmt(s.total)}</div>
                     {s.is_credit && <Pill label='Credit' type='amber' />}
                   </div>
-                  <button onClick={() => {
-                    let splitAmounts = null
-                    try { splitAmounts = typeof s.payment_split === 'string' ? JSON.parse(s.payment_split) : s.payment_split || null } catch (e) { splitAmounts = null }
-                    const receiptData = {
-                      id: s.txn_no,
-                      client: s.client_name,
-                      items,
-                      subtotal: s.subtotal,
-                      disc: s.discount,
-                      total: s.total,
-                      method: s.payment_method,
-                      cashGiven: s.payment_method === 'Cash' && Number(s.amount_paid) >= Number(s.total) ? (Number(s.amount_paid) || 0) : 0,
-                      amtPaid: s.amount_paid,
-                      balance: s.balance,
-                      splitAmounts: s.payment_method === 'Split' ? splitAmounts : null,
-                      date: s.created_at,
-                    }
-                    printReceipt(receiptData)
-                  }} disabled={printing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '600', fontSize: '12px', cursor: printing ? 'wait' : 'pointer', opacity: printing ? 0.6 : 1 }}>
+                  <button onClick={() => printReceipt(saleToReceipt(s))} disabled={printing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '600', fontSize: '12px', cursor: printing ? 'wait' : 'pointer', opacity: printing ? 0.6 : 1 }}>
                     <Printer size={12} /> {printing ? 'Sending…' : 'Reprint'}
                   </button>
                 </div>

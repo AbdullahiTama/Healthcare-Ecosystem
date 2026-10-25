@@ -12,6 +12,33 @@ import { esc } from '../../lib/escape.js'
 import { fmt, nowStr } from '../../lib/utils.js'
 import QRCode from 'qrcode'
 
+// A stored `sales` row → the receipt shape buildReceiptHtml/buildReceiptEscpos
+// read. Used to reprint a past sale (POS Recent tab, Sales & Accounts report).
+// Change is only shown for a cash sale paid in full: amount_paid holds the
+// cash tendered there, and nowhere else.
+export function saleToReceipt(s) {
+  let items = []
+  let v = s.items
+  for (let i = 0; i < 2 && typeof v === 'string'; i++) { try { v = JSON.parse(v) } catch (e) { v = [] } }
+  if (Array.isArray(v)) items = v
+  let splitAmounts = null
+  try { splitAmounts = typeof s.payment_split === 'string' ? JSON.parse(s.payment_split) : s.payment_split || null } catch (e) { splitAmounts = null }
+  return {
+    id: s.txn_no,
+    client: s.client_name,
+    items,
+    subtotal: s.subtotal,
+    disc: s.discount,
+    total: s.total,
+    method: s.payment_method,
+    cashGiven: s.payment_method === 'Cash' && Number(s.amount_paid) >= Number(s.total) ? (Number(s.amount_paid) || 0) : 0,
+    amtPaid: s.amount_paid,
+    balance: s.balance,
+    splitAmounts: s.payment_method === 'Split' ? splitAmounts : null,
+    date: s.created_at,
+  }
+}
+
 // Display-only tax. The tax line is a computed total × rate shown on the
 // receipt for the customer's information; the stored sale total and the amount
 // charged are deliberately unchanged. Returns 0 when there is nothing to show.
