@@ -48,6 +48,7 @@ const LiveActivity = lazy(() => import('../../modules/live-activity/LiveActivity
 const TeamLocations = lazy(() => import('../../modules/checkins/TeamLocations'))
 const PlacesToConfirm = lazy(() => import('../../modules/live-activity/PlacesToConfirm'))
 const CustomersPage = lazy(() => import('../../modules/live-activity/customers/CustomersPage'))
+const TeamMapPage = lazy(() => import('../../modules/live-activity/teamMap/TeamMapPage'))
 const ReportFieldsSetup = lazy(() => import('../../modules/live-activity/ReportFieldsSetup'))
 const FacilityDiscovery = lazy(() => import('../../modules/facility-discovery/FacilityDiscovery'))
 const Reception = lazy(() => import('./hospital/Reception'))
@@ -268,6 +269,7 @@ export default function BusinessDashboard() {
               <Route path='activity' element={bareGuard('activity', <LiveActivity {...pageProps} />)} />
               {/* Field team: managing the field team. Each is guarded by its access-ruled module (lib/permissions.js). */}
               <Route path='field-team/reports' element={bareGuard('field-reports', <LiveActivity {...pageProps} mode='team' />)} />
+              <Route path='field-team/map' element={guard('field-map', <><TopBar title='Team map' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><TeamMapPage brand={brand} customRoles={customRoles} /></div></>)} />
               <Route path='field-team/customers' element={guard('field-customers', <><TopBar title='Customers' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><CustomersPage brand={brand} /></div></>)} />
               <Route path='field-team/checkins' element={guard('field-checkins', <><TopBar title='Team check-ins' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><TeamLocations businessId={brand?.id} /></div></>)} />
               <Route path='field-team/approvals' element={bareGuard('field-approvals', <Orders {...pageProps} view='approvals' />)} />
