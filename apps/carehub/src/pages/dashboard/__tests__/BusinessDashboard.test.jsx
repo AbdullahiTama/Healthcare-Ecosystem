@@ -11,9 +11,11 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 // nav slot) while keeping every module route behind the unchanged guard table.
 
 const onlineState = vi.hoisted(() => ({ value: true }))
+const homeMounts = vi.hoisted(() => ({ n: 0 }))
 
 vi.mock('../../../modules/dashboard-home/DashboardHome', () => ({
   default: function MockDashboardHome() {
+    React.useEffect(() => { homeMounts.n++ }, [])
     return <div data-testid="dashboard-home">Dashboard home</div>
   },
 }))
@@ -76,6 +78,7 @@ vi.mock('../../../lib/permissions', async (importOriginal) => {
 
 import BusinessDashboard from '../BusinessDashboard'
 import { getNavItems, getPerms } from '../../../lib/permissions'
+import { useAuth } from '../../../providers/AuthProvider'
 
 async function mountDashboard(path = '/dashboard') {
   const host = document.createElement('div')
@@ -96,6 +99,18 @@ async function mountDashboard(path = '/dashboard') {
   }
   return {
     host,
+    rerender: async () => {
+      await act(async () => {
+        root.render(
+          <MemoryRouter initialEntries={[path]}>
+            <Routes>
+              <Route path='/dashboard/*' element={<BusinessDashboard />} />
+            </Routes>
+          </MemoryRouter>
+        )
+      })
+      for (let i = 0; i < 8; i++) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    },
     unmount: async () => {
       await act(async () => { root.unmount() })
       host.remove()
@@ -229,5 +244,23 @@ describe('the Field team pages', () => {
     const page = m.host.querySelector('[data-testid="field-page"]')
     expect(page).toBeTruthy()
     expect(page.getAttribute('data-mode')).toBe('rep')
+  })
+})
+
+// Switching location swaps auth.brand without a navigation. Every module must start over for the new location, or a
+// half-built cart or form from the previous location survives the switch.
+describe('switching location', () => {
+  it('remounts the open module when the business changes, and not on an ordinary re-render', async () => {
+    const owner = (id) => ({ auth: { brand: { id, name: 'Pharma ' + id, business_type: 'pharmacy' }, staff: null, role: 'Owner' }, logout: vi.fn() })
+    useAuth.mockImplementation(() => owner('biz-1'))
+    homeMounts.n = 0
+    const m = await mountDashboard('/dashboard/dashboard')
+    expect(homeMounts.n).toBe(1)
+    await m.rerender()
+    expect(homeMounts.n).toBe(1)
+    useAuth.mockImplementation(() => owner('biz-2'))
+    await m.rerender()
+    expect(homeMounts.n).toBe(2)
+    await m.unmount()
   })
 })
