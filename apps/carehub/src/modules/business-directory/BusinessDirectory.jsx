@@ -11,6 +11,7 @@ import { useDirectoryLookups } from './components/useDirectoryLookups'
 import { VerificationBadge, SourceBadge } from './components/BusinessBadges'
 import BusinessForm from './components/BusinessForm'
 import SuggestionsTab from './suggestions/SuggestionsTab.jsx'
+import MapTab from './mapAdd/MapTab.jsx'
 import { suggestionRepository } from './suggestions/repository.js'
 import BusinessProfile from './components/BusinessProfile'
 import ImportWizard from './components/ImportWizard'
@@ -20,9 +21,9 @@ import { toExportRow, exportRows } from './services/exportService'
 
 const { navy, gray500, gray600, border, tealDeep, danger } = theme
 const PAGE_SIZE = 50
-const TABS = [['businesses', 'Businesses'], ['import', 'Import'], ['duplicates', 'Duplicates'], ['categories', 'Categories'], ['reports', 'Reports'], ['suggestions', 'Suggestions']]
-// Tabs of the shared platform registry (admin console); Suggestions exists only there.
-const PLATFORM_TABS = ['businesses', 'import', 'suggestions']
+const TABS = [['businesses', 'Businesses'], ['import', 'Import'], ['duplicates', 'Duplicates'], ['categories', 'Categories'], ['reports', 'Reports'], ['suggestions', 'Suggestions'], ['map', 'Map']]
+// Tabs of the shared platform registry (admin console); Suggestions and Map exist only there.
+const PLATFORM_TABS = ['businesses', 'import', 'suggestions', 'map']
 
 function readAuth() {
   try { return JSON.parse(localStorage.getItem('carehub_auth') || '{}') } catch (e) { return {} }
@@ -62,6 +63,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
   // Suggestions whose listing was created but which could not be marked accepted: { suggestionId: listingId }.
   const [unmarked, setUnmarked] = useState({})
   const [suggestionsReload, setSuggestionsReload] = useState(0)
+  const [mapReload, setMapReload] = useState(0)
   const [confirm, setConfirm] = useState(null)
   const [exporting, setExporting] = useState(false)
 
@@ -115,7 +117,10 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
       indexRef.current = null
       showToast('Business updated', { type: 'success' })
     } else {
+      // From the map: keep where it came from (the form has no field for it).
+      if (editing?.fromMap && editing.source_detail) rec.source_detail = editing.source_detail
       const created = await repo.create(scopeId, rec, actor)
+      if (editing?.fromMap) setMapReload((n) => n + 1)
       if (indexRef.current && created) addToIndex(indexRef.current, created)
       showToast('Business added', { type: 'success' })
       // Added from a rep's suggestion: close it. The listing exists either way, so a failure here keeps the
@@ -235,7 +240,7 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
       )}
 
       <div role='tablist' aria-label='Directory sections' style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-        {TABS.filter(([id]) => (canManage || id === 'businesses' || id === 'categories') && (platformScope ? PLATFORM_TABS.includes(id) : id !== 'suggestions')).map(([id, label]) => (
+        {TABS.filter(([id]) => (canManage || id === 'businesses' || id === 'categories') && (platformScope ? PLATFORM_TABS.includes(id) : !['suggestions', 'map'].includes(id))).map(([id, label]) => (
           <button key={id} role='tab' aria-selected={tab === id} onClick={() => setTab(id)}
             style={{ fontSize: 12.5, fontWeight: 800, padding: '9px 16px', borderRadius: 10, cursor: 'pointer', border: `1px solid ${tab === id ? tealDeep : border}`, background: tab === id ? navy : 'white', color: tab === id ? 'white' : gray500 }}>
             {label}
@@ -370,8 +375,12 @@ export default function BusinessDirectory({ brand, perms, platformMode = false }
           onAdd={(prefill) => setEditing(prefill)} />
       )}
 
+      {tab === 'map' && platformScope && canManage && (
+        <MapTab repo={repo} scopeId={scopeId} categories={lookups.categories} reloadKey={mapReload} onAdd={(prefill) => setEditing(prefill)} />
+      )}
+
       {editing && (
-        <BusinessForm key={editing.id || editing.fromSuggestion || 'new'} show initial={editing.id || editing.fromSuggestion ? editing : null}
+        <BusinessForm key={editing.id || editing.fromSuggestion || editing.fromMap || 'new'} show initial={editing.id || editing.fromSuggestion || editing.fromMap ? editing : null}
           categories={lookups.categories} subcategories={lookups.subcategories} territories={platformScope ? [] : territories}
           onClose={() => setEditing(null)} onSave={saveBusiness}
           checkDuplicate={(rec, ignoreId) => {
