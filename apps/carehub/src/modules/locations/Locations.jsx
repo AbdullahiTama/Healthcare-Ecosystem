@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Lock, BarChart2, Building2, DollarSign, Package, AlertTriangle } from 'lucide-react'
-import { useAuth } from '../../providers/AuthProvider'
 import { useNavigate } from 'react-router-dom'
+import { useLocationSwitch } from '../../components/layout/useLocationSwitch'
 // Cross-aggregate read: per-branch takings come from the POS module's sale
 // repository. Each branch is its own business row, so the branch id is what
 // gets passed as the tenant. `getSales` was imported here but never used —
@@ -17,11 +17,19 @@ import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, GhostBtn, TealBtn, 
 
 const { tealDeep, tealBright, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, success, warning, bg } = theme
 
+// The database's own words for a refusal ("Supabase error (403): <reason>" -> "<reason>").
+function reasonOf(e) {
+  const text = String((e && e.message) || e || 'request failed')
+  return text.replace(/^Supabase error \(\d+\):\s*/, '').replace(/\.$/, '')
+}
+
 export default function Locations({ brand, role }) {
-  const { auth, setAuth } = useAuth()
   const navigate = useNavigate()
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  // The shared switch (asks first when a POS cart would be lost); after a switch, open that location's dashboard.
+  const { request: requestSwitch, dialog: switchDialog } = useLocationSwitch(() => navigate('/dashboard/dashboard'))
   const [stats, setStats] = useState({})
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({})
@@ -35,30 +43,33 @@ export default function Locations({ brand, role }) {
 
   async function load() {
     setLoading(true)
+    setLoadError('')
+    let locs
     try {
-      const locs = await locationsRepository.getAll(brand.id)
-      setLocations(locs || [])
-      // Get stats for each location
-      const statsData = {}
-      for (const loc of (locs || [])) {
-        try {
-          const [today, products] = await Promise.all([
-            saleRepository.getToday(loc.id),
-            productRepository.getAll(loc.id),
-          ])
-          statsData[loc.id] = {
-            todayRevenue: (today || []).reduce((s, x) => s + (x.total || 0), 0),
-            todayCount: (today || []).length,
-            productCount: (products || []).length,
-            lowStock: (products || []).filter(p => (p.cat || p.category) !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5)).length,
-          }
-        } catch (e) {
-          statsData[loc.id] = { todayRevenue: 0, todayCount: 0, productCount: 0, lowStock: 0 }
-        }
-      }
-      setStats(statsData)
-    } catch (e) {}
+      locs = (await locationsRepository.getAll(brand.id)) || []
+      setLocations(locs)
+    } catch (e) {
+      setLocations([])
+      setLoadError(reasonOf(e))
+      setLoading(false)
+      return
+    }
     setLoading(false)
+    // Today's figures for every location at once; a location whose figures fail shows zeros.
+    const entries = await Promise.all(locs.map(async (loc) => {
+      try {
+        const [today, products] = await Promise.all([saleRepository.getToday(loc.id), productRepository.getAll(loc.id)])
+        return [loc.id, {
+          todayRevenue: (today || []).reduce((s, x) => s + (x.total || 0), 0),
+          todayCount: (today || []).length,
+          productCount: (products || []).length,
+          lowStock: (products || []).filter(p => (p.cat || p.category) !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5)).length,
+        }]
+      } catch (e) {
+        return [loc.id, { todayRevenue: 0, todayCount: 0, productCount: 0, lowStock: 0 }]
+      }
+    }))
+    setStats(Object.fromEntries(entries))
   }
 
   async function saveBranch() {
@@ -90,27 +101,29 @@ export default function Locations({ brand, role }) {
         hours: brand.hours || '',
         status: 'active',
         visible_on_carefind: true,
-        plan: brand.plan || 'growth',
+        // A branch is on its main business's plan (the database enforces it). Sent only when known; never a default.
+        ...(brand.plan ? { plan: brand.plan } : {}),
       })
       // Clone the parent's master catalog + roles into the new branch so it
       // opens ready to operate. Never blocks branch creation — a failed clone
       // still leaves a working (if empty) branch.
       const newId = Array.isArray(created) ? created[0]?.id : created?.id
-      if (newId) { locationsRepository.cloneBranchData(mainId, newId).catch(() => {}) }
-      showToast('Branch added successfully!', { type: 'success' })
-      setForm({}); setShowAdd(false); load()
-    } catch (e) { showToast('Could not add branch. Please try again.', { type: 'error' }) }
+      setForm({}); setShowAdd(false)
+      let copied = true
+      if (newId) {
+        try { await locationsRepository.cloneBranchData(mainId, newId) } catch (e) {
+          copied = false
+          showToast('The branch was added, but its products and roles were not fully copied: ' + reasonOf(e) + '. Set them up in the branch before staff use it.', { type: 'warning', duration: 10000 })
+        }
+      }
+      if (copied) showToast('Branch added successfully!', { type: 'success' })
+      load()
+    } catch (e) { showToast('Could not add the branch: ' + reasonOf(e), { type: 'error' }) }
     setSaving(false)
   }
 
-  function switchToLocation(loc) {
-    const newAuth = { ...auth, brand: loc }
-    setAuth(newAuth)
-    try { localStorage.setItem('carehub_auth', JSON.stringify(newAuth)) } catch (e) {}
-    showToast('Switched to ' + (loc.branch_name || loc.name), { type: 'success' })
-    setTimeout(() => navigate('/dashboard/dashboard'), 500)
-  }
-
+  // Main business first; the list from the server is never reordered in place.
+  const ordered = [...locations].sort((a, b) => (a.parent_business_id ? 1 : 0) - (b.parent_business_id ? 1 : 0))
   const totalRevenue = Object.values(stats).reduce((s, x) => s + (x.todayRevenue || 0), 0)
   const totalTransactions = Object.values(stats).reduce((s, x) => s + (x.todayCount || 0), 0)
   const totalProducts = Object.values(stats).reduce((s, x) => s + (x.productCount || 0), 0)
@@ -150,11 +163,17 @@ export default function Locations({ brand, role }) {
         </div>
       </div>
 
-      {loading ? <Loading /> : locations.length === 0 ? (
+      {switchDialog}
+      {loading ? <Loading /> : loadError ? (
+        <div role='alert' style={{ padding: '16px', borderRadius: theme.radius.md, background: bg, fontSize: '13px', color: danger }}>
+          Could not load your locations: {loadError}.{' '}
+          <button type='button' onClick={load} style={{ background: 'none', border: 'none', color: tealDeep, fontWeight: 700, cursor: 'pointer', padding: 0 }}>Try again</button>
+        </div>
+      ) : locations.length === 0 ? (
         <Empty icon={<Building2 size={40} />} message='No additional branches yet' action='+ Add First Branch' onAction={() => setShowAdd(true)} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {locations.sort((a, b) => (a.parent_business_id ? 1 : -1)).map(loc => {
+          {ordered.map(loc => {
             const isCurrentLocation = loc.id === brand.id
             const isMain = !loc.parent_business_id
             const s = stats[loc.id] || {}
@@ -180,7 +199,7 @@ export default function Locations({ brand, role }) {
                     </div>
                   </div>
                   {!isCurrentLocation && (
-                    <TealBtn onClick={() => switchToLocation(loc)} style={{ padding: '8px 16px', fontSize: '12px' }}>Switch to this branch →</TealBtn>
+                    <TealBtn onClick={() => requestSwitch(loc)} style={{ padding: '8px 16px', fontSize: '12px' }}>Switch to this branch →</TealBtn>
                   )}
                 </div>
               </Card>

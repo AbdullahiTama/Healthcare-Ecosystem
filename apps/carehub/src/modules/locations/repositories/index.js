@@ -37,20 +37,32 @@ export function createLocationsRepository(request = sbFetch) {
     },
 
     async cloneBranchData(parentId, branchId) {
-      const masterRows = await request(`master_products?business_id=eq.${parentId}&select=id`)
-      if (masterRows && masterRows.length > 0) {
-        await Promise.all(masterRows.map(mp =>
+      // Every product and the roles are attempted (ten products at a time, so a large catalogue does not fire
+      // hundreds of requests at once). If anything failed, one summary is thrown so the owner is told, instead of
+      // finding half a shelf and staff without roles later.
+      const problems = []
+      const masterRows = (await request(`master_products?business_id=eq.${parentId}&select=id`)) || []
+      let failed = 0
+      for (let i = 0; i < masterRows.length; i += 10) {
+        const results = await Promise.allSettled(masterRows.slice(i, i + 10).map(mp =>
           request('rpc/activate_branch_product', {
             method: 'POST',
             body: JSON.stringify({ p_branch_id: branchId, p_master_product_id: mp.id, p_override_price: null }),
-          }).catch(() => {})
+          })
         ))
+        failed += results.filter(r => r.status === 'rejected').length
       }
-      const roles = await request(`roles?business_id=eq.${parentId}&select=name,permissions`)
-      if (roles && roles.length > 0) {
-        const branchRoles = roles.map(r => ({ business_id: branchId, name: r.name, permissions: r.permissions }))
-        await request('roles', { method: 'POST', body: JSON.stringify(branchRoles), prefer: 'return=minimal' })
+      if (failed > 0) problems.push(failed + ' of ' + masterRows.length + ' products could not be copied')
+      try {
+        const roles = await request(`roles?business_id=eq.${parentId}&select=name,permissions`)
+        if (roles && roles.length > 0) {
+          const branchRoles = roles.map(r => ({ business_id: branchId, name: r.name, permissions: r.permissions }))
+          await request('roles', { method: 'POST', body: JSON.stringify(branchRoles), prefer: 'return=minimal' })
+        }
+      } catch (e) {
+        problems.push('the staff roles could not be copied')
       }
+      if (problems.length > 0) throw new Error(problems.join('; '))
     },
   }
 }
