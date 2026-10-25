@@ -72,6 +72,11 @@ export default function BusinessProfile({ business, categoryName, subcategoryNam
       <div style={{ fontSize: 13, color: gray600, marginBottom: 6 }}>
         {[categoryName, subcategoryName, b.business_type].filter(Boolean).join(' · ') || 'Uncategorised'}
       </div>
+      {String(b.source_detail || '').startsWith('OpenStreetMap ') && (
+        <div style={{ fontSize: 11.5, color: gray600, marginBottom: 6 }}>
+          Data from <a href='https://www.openstreetmap.org/copyright' target='_blank' rel='noopener noreferrer'>OpenStreetMap contributors</a> (ODbL).
+        </div>
+      )}
       {b.data_source === 'demo' && (
         <div role='note' style={{ padding: '8px 10px', borderRadius: 8, background: theme.dangerBg, color: theme.danger, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
           DEMO DATA — this is not a real business.

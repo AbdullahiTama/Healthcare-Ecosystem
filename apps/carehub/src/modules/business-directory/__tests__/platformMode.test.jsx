@@ -27,6 +27,12 @@ vi.mock('../suggestions/repository.js', () => ({
     reject: async () => ({}),
   },
 }))
+vi.mock('../mapAdd/MapTab.jsx', () => ({
+  default: ({ onAdd }) => <button type='button' onClick={() => onAdd({
+    fromMap: 'node/1', name: 'Allen Pharmacy', category_id: 'c-ph', address: '12 Allen Avenue, Ikeja', state: '', lga: '', city: 'Ikeja',
+    latitude: 6.45, longitude: 3.39, phone: '+234 801 234 5678', website: '', opening_hours: 'Mo-Sa 08:00-20:00', data_source: 'external', source_detail: 'OpenStreetMap node/1',
+  })}>mock add from map</button>,
+}))
 vi.mock('../../territories/repositories', () => ({
   territoryRepository: { getAll: async (...a) => { calls.push(['territories', ...a]); return [] } },
 }))
@@ -64,7 +70,7 @@ describe('BusinessDirectory in platform mode (admin console, platform admin with
   it('does not touch company-only data (territories, import batches) and offers Import', async () => {
     await mount(<BusinessDirectory brand={null} perms={{ canManageDirectory: true }} platformMode />)
     expect(calls.some((c) => c[0] === 'territories' || c[0] === 'getBatches')).toBe(false)
-    expect(tabs()).toEqual(['Businesses', 'Import', 'Suggestions'])
+    expect(tabs()).toEqual(['Businesses', 'Import', 'Suggestions', 'Map'])
   })
 
   it('lists platform rows when there are some', async () => {
@@ -78,6 +84,23 @@ describe('BusinessDirectory in platform mode (admin console, platform admin with
     expect(calls.some((c) => c[0] === 'list' && c[1] === 'B1')).toBe(true)
     expect(tabs()).toContain('Import')
     expect(tabs()).not.toContain('Suggestions')
+    expect(tabs()).not.toContain('Map')
+  })
+
+  it('a business added from the map is saved as external with its OpenStreetMap reference', async () => {
+    await mount(<BusinessDirectory brand={null} perms={{ canManageDirectory: true }} platformMode />)
+    await act(async () => { [...host.querySelectorAll('[role="tab"]')].find((t) => t.textContent === 'Map').click() })
+    await flush()
+    await act(async () => { [...host.querySelectorAll('button')].find((b) => b.textContent === 'mock add from map').click() })
+    await flush()
+    expect(document.body.querySelector('#bf-name').value).toBe('Allen Pharmacy')
+    expect(document.body.querySelector('#bf-category').value).toBe('c-ph')
+    const st = document.body.querySelector('#bf-state')
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(st, [...st.options].map((o) => o.value).find((v) => v)); st.dispatchEvent(new Event('change', { bubbles: true })) })
+    await act(async () => { [...document.body.querySelectorAll('button')].find((b) => /^(Save|Add business)/.test(b.textContent.trim())).click() })
+    await flush(); await flush()
+    const created = calls.find((c) => c[0] === 'create')
+    expect(created[2]).toMatchObject({ name: 'Allen Pharmacy', data_source: 'external', source_detail: 'OpenStreetMap node/1', opening_hours: 'Mo-Sa 08:00-20:00' })
   })
 
   const SUGGESTION = { id: 's1', name: 'Kemi Stores', business_type: 'retail', address: '2 Allen Ave', latitude: 6.6, longitude: 3.35, suggested_by_name: 'Ada', created_at: '2026-10-20T10:00:00Z', businesses: { name: 'Pharma Co' } }
