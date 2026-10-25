@@ -80,7 +80,13 @@ export async function buildInventoryXlsx(products, columns = INVENTORY_EXPORT_CO
   return new Blob([buf], { type: XLSX_MIME })
 }
 
-export async function exportInventoryXlsx(products) {
+// Builds the file, then gives the caller one chance to veto before it is saved
+// (beforeDownload returns false to cancel). The export audit record is written
+// there: after a successful build, before the user gets the data.
+export async function exportInventoryXlsx(products, { beforeDownload } = {}) {
+  const blob = await buildInventoryXlsx(products)
+  if (beforeDownload && (await beforeDownload()) === false) return false
   const stamp = new Date().toISOString().slice(0, 10)
-  downloadBlob(await buildInventoryXlsx(products), `CareHub_Inventory_${stamp}.xlsx`)
+  downloadBlob(blob, `CareHub_Inventory_${stamp}.xlsx`)
+  return true
 }

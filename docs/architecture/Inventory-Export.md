@@ -30,22 +30,58 @@ product list (all pages, not only the visible page) as
 - **Tenant scope:** the export uses the products already loaded for the signed-in
   business (`productRepository.getAll` is filtered by `business_id`). No new
   query or endpoint.
-- **Logging:** a `console.info` line records business id and row count on success
-  (no product data); failures log via `console.error`.
+- **Audit trail (server side):** every export is recorded in `audit_log` through
+  `record_export_audit()` (`supabase/migrations/carehub_20261209_record_export_audit.sql`),
+  the only write path. The database takes the actor from the session (the client
+  cannot name one), checks the caller is the business owner, an owner of an
+  ancestor business, or an active staff member, and re-checks the export
+  permission with the same rule as `getPerms()`: `Owner` always, otherwise the
+  business's own `roles` row must have `canExportReports = true`. A role that may
+  not export is refused (403) and nothing is written. Each row holds actor, actor
+  type, business, time, export type, row count, the filters used (the search term
+  is not stored, only that one was applied) and the actor's email.
+- **Append-only:** the same migration revokes all client write grants on
+  `audit_log` (it previously allowed UPDATE/DELETE/TRUNCATE for `anon` and
+  `authenticated`, held back only by RLS, which does not cover TRUNCATE) and adds
+  triggers that refuse UPDATE, DELETE and TRUNCATE even for the table owner.
+- **Order of operations:** file built, then audit recorded, then download. A
+  failed build leaves no audit row. If the database refuses, the download is
+  cancelled. If the record cannot be saved for any other reason (function not
+  deployed yet, network, expired session) the file is still delivered and the
+  user sees a warning, because the data is already in the browser and blocking
+  would not protect it; the warning keeps the gap visible instead of silent.
+- **What it does not do:** it records that an export was declared. It cannot stop
+  a signed-in user copying data the browser already holds, and a modified client
+  could skip the call. It is accountability, not prevention.
+- **Reading it:** the existing `audit_log` policy lets members of the business
+  (and platform admins) read its rows. There is no screen for it yet.
+- **Logging:** failures log via `console.error`; a missing audit record logs a
+  `console.warn` with its status.
 
-## Known gap / follow-up
+## Rollout
 
-There is no server-side audit trail for exports. `audit_log`
-(`supabase/migrations/carehub_20260810_audit_log.sql`) is not yet applied and its
-INSERT policy is service-role only, so the browser cannot write to it. Recording
-"who exported cost data" needs an API endpoint or RPC plus that migration. It was
-deliberately not added here because it is a production schema change.
+The migration is **not applied** to production. Until it is, exports still work
+and show the "audit record could not be saved" warning. Apply it, then run
+`scripts/db-tests/exportAudit.pglite.mjs` (needs `npm i --no-save
+@electric-sql/pglite`) against a Supabase branch first; the PGlite run proves the
+SQL and permissions, not PostgREST. Rollback steps are in the migration header.
 
 ## Test plan
 
-Automated (`inventoryExport.test.js`): value maths and status, services blank,
-header + rows with barcode kept as text and a real date cell, formula
-neutralising, empty list.
+Automated:
+- `inventoryExport.test.js`: value maths and status, services blank, header +
+  rows with barcode kept as text and a real date cell, formula neutralising,
+  empty list, and the audit hook (runs before the download; false or a throw
+  cancels it).
+- `audit/repositories/index.test.js`: RPC payload (no actor sent), and the
+  refused / unavailable / failed status mapping.
+- `scripts/db-tests/exportAudit.pglite.mjs` (37 checks on real Postgres via
+  PGlite): owner, custom-role staff, `Owner`-role staff allowed; roles without
+  the flag, inactive staff, forged business id, other company, outsider and
+  anonymous refused with nothing written; ancestor owner allowed on a branch but
+  parent-business staff not promoted; input validation; no client INSERT,
+  UPDATE, DELETE or TRUNCATE; append-only even for the table owner; tenant
+  isolation on reads.
 
 Manual / browser (done 2026-10-25 against the real Inventory component in
 Chromium with mock data, at 1280px and 390px):
@@ -56,6 +92,11 @@ Chromium with mock data, at 1280px and 390px):
 4. No products: click shows "There are no products to export." and no download.
 5. Product named `=HYPERLINK(...)` opens as text.
 6. Layout wraps cleanly at 390px; no console or page errors.
+7. Audit outcomes with the RPC intercepted (2026-10-25): recorded gives the
+   success toast and a download; a refusal gives "Your role is not allowed to
+   export data." and NO download; function missing (404) and server error (500)
+   download the file with the "audit record could not be saved" warning. The
+   request body carried business, type, row count and filters and no actor.
 
 Still worth a one-off check by a person: open the downloaded file in desktop
 Excel / Google Sheets, and export a catalogue of several thousand products to

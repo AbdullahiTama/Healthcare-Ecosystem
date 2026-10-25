@@ -8,6 +8,7 @@ import { productRepository } from './repositories'
 import { parseInventoryCsv } from './csvImport'
 import { computeInventoryStats } from './inventoryStats'
 import { exportInventoryXlsx } from './inventoryExport'
+import { auditRepository } from '../audit/repositories'
 import { fmt, todayDate } from '../../lib/utils'
 import { PRODUCT_CATS } from '../../config/constants'
 import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
@@ -86,13 +87,33 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     useMemo(() => computeInventoryStats(products), [products])
 
   // Exports the filtered list (all pages), so what the user sees is what they get.
+  // The export is recorded in the audit log before the file is saved. A refusal
+  // from the database (the role may not export) cancels the download; a missing
+  // record for any other reason still delivers the file but says so.
   async function exportExcel() {
     if (filtered.length === 0) { showToast('There are no products to export.', { type: 'warning' }); return }
     setExporting(true)
     try {
-      await exportInventoryXlsx(filtered)
-      console.info('[inventory] excel export', { business: brand?.id, rows: filtered.length })
-      showToast(`Exported ${filtered.length} product${filtered.length !== 1 ? 's' : ''} to Excel.`, { type: 'success' })
+      let audit = { status: 'failed' }
+      const saved = await exportInventoryXlsx(filtered, {
+        beforeDownload: async () => {
+          audit = await auditRepository.recordExport(brand.id, {
+            exportType: 'inventory.xlsx',
+            rowCount: filtered.length,
+            // The search term itself is not stored, only that one was applied.
+            filters: { category: catFilter === 'All' ? null : catFilter, stock: stockFilter || null, expiry: expiryFilter || null, search_applied: !!search.trim() },
+          })
+          return audit.status !== 'refused'
+        },
+      })
+      if (!saved) {
+        showToast('Your role is not allowed to export data.', { type: 'error' })
+      } else if (audit.status === 'recorded') {
+        showToast(`Exported ${filtered.length} product${filtered.length !== 1 ? 's' : ''} to Excel.`, { type: 'success' })
+      } else {
+        console.warn('[inventory] export audit record not saved:', audit.status)
+        showToast(`Exported ${filtered.length} product${filtered.length !== 1 ? 's' : ''}, but the audit record could not be saved.`, { type: 'warning' })
+      }
     } catch (e) {
       console.error('inventory export failed:', e)
       showToast('Could not export: ' + e.message, { type: 'error' })
