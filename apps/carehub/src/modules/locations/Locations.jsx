@@ -86,12 +86,9 @@ export default function Locations({ brand, role }) {
         branch_name: form.name,
         parent_business_id: mainId,
         owner: brand.owner,
-        email: brand.email,
-        // C2: businesses.password no longer exists (dropped in
-        // 20260813_purge_plaintext_password_columns.sql), and the legacy login
-        // path is gone with it. Branches get no password — a branch shares the
-        // owner's account, and Login.jsx resolves the shared email to the
-        // parent business row.
+        // No email: a branch has no sign-in of its own (owner's option A, 2026-10-25). businesses.email is the
+        // identity the database matches the signed-in person against, and the owner of a branch is the owner of its
+        // main business (carehub_20261212_branches_without_email). No password either (C2).
         phone: form.phone || brand.phone,
         whatsapp: form.whatsapp || brand.whatsapp,
         address: form.address,
@@ -212,7 +209,7 @@ export default function Locations({ brand, role }) {
         footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveBranch} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Add Branch'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep }}>
-            This branch will use the same login email and password as your main account. Inventory, sales, and staff are separate per branch.
+            A branch has no sign-in of its own: you manage it from your main account and switch to it from the top bar. Inventory, sales and staff are separate per branch.
           </div>
           <Inp label='Branch Name *' value={form.name} onChange={v => f('name', v)} placeholder='e.g. Lagos Branch, Abuja Branch' required />
           <Inp label='Branch Address *' value={form.address} onChange={v => f('address', v)} placeholder='Full address of this branch' required />

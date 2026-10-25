@@ -103,6 +103,20 @@ describe('Locations page', () => {
     expect(auth.setAuth).toHaveBeenCalled()
   })
 
+  // Owner's option A (2026-10-25): a branch has no sign-in email of its own; it belongs to the main business's owner.
+  // The database refuses an email on a branch, so none is sent, and the form says how sign-in works.
+  it('a new branch is sent without an email, and the form says it uses the main account\'s sign-in', async () => {
+    await show()
+    await act(async () => { button('+ Add Branch').click() })
+    expect(document.body.textContent).toContain('A branch has no sign-in of its own: you manage it from your main account')
+    expect(document.body.textContent).not.toContain('same login email and password')
+    await type('Lagos Branch', 'Ikeja')
+    await type('Full address', '3 Allen Avenue')
+    await act(async () => { [...document.body.querySelectorAll('button')].filter((b) => b.textContent.trim() === 'Add Branch').at(-1).click() })
+    await flush(); await flush()
+    expect(repo.addBranch.mock.calls[0][0]).not.toHaveProperty('email')
+  })
+
   it('a new branch takes the current business\'s plan (never a made-up default) and its catalogue is copied', async () => {
     await show()
     await act(async () => { button('+ Add Branch').click() })
