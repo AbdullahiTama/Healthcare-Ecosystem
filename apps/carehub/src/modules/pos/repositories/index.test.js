@@ -260,6 +260,24 @@ describe('saleRepository', () => {
     expect(offline.all()).toHaveLength(0)
   })
 
+  // Sales queued offline at one location must land at that location, even when the owner has switched (or a reload
+  // moved them) to another location before the connection came back. The queue is one list per device.
+  it('syncQueued posts each queued sale under the location it was rung up at, not the current one', async () => {
+    const { repo, client } = build({
+      queued: [{ txn_no: 'TXN-A', total: 100, business_id: A }, { txn_no: 'TXN-B', total: 200, business_id: B }],
+    })
+    const result = await repo.syncQueued(B)
+    expect(result.synced).toBe(2)
+    const byTxn = Object.fromEntries(client.rows('sales').map((s) => [s.txn_no, s.business_id]))
+    expect(byTxn).toEqual({ 'TXN-A': A, 'TXN-B': B })
+  })
+
+  it('syncQueued posts a legacy queued sale without a location under the current location, as before', async () => {
+    const { repo, client } = build({ queued: [{ txn_no: 'TXN-old', total: 50 }] })
+    await repo.syncQueued(A)
+    expect(client.rows('sales')[0].business_id).toBe(A)
+  })
+
   // A partial sync used to clear the whole queue as long as one sale landed,
   // destroying the sales that never reached the database — real money, gone.
   it('syncQueued keeps the sales that failed and drops only the ones that landed', async () => {

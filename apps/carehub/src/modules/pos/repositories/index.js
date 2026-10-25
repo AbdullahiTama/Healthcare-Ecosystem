@@ -204,8 +204,10 @@ export function createSaleRepository({
       let count = 0
       for (const sale of queue) {
         try {
+          // A sale is posted under the location it was rung up at (queued sales carry it): the owner may have
+          // switched location since. Only a sale queued by an older version without one takes the current location.
           const { _offline_id, ...data } = sale
-          await request('sales', { method: 'POST', body: JSON.stringify({ ...data, business_id: businessId }) })
+          await request('sales', { method: 'POST', body: JSON.stringify({ ...data, business_id: data.business_id || businessId }) })
           count++
         } catch (e) {
           if (isServerRejection(e)) rejected.push({ txn_no: sale.txn_no, error: e.message })
