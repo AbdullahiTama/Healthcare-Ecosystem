@@ -22,3 +22,17 @@ describe('popupContent', () => {
     for (const tone of ['current', 'earlier', 'out', 'visit', 'quiet']) expect(TONE_COLOR[tone]).toMatch(/^#|^rgb|^var|^[a-z]/i)
   })
 })
+
+import { resolveLeaflet } from '../LeafletMap.jsx'
+
+describe('resolveLeaflet', () => {
+  // Leaflet is a CommonJS bundle; depending on the bundler the dynamic import yields the library under .default or
+  // its functions directly. Either way the map must get the library, not undefined.
+  it('accepts the library under default, or the module itself', () => {
+    const lib = { map() {}, tileLayer() {} }
+    expect(resolveLeaflet({ default: lib })).toBe(lib)
+    expect(resolveLeaflet(lib)).toBe(lib)
+    const both = { ...lib, default: lib }
+    expect(resolveLeaflet(both)).toBe(lib)
+  })
+})

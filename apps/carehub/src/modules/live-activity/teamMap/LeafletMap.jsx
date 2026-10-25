@@ -13,6 +13,12 @@ export const TONE_COLOR = {
 
 const LAGOS = [6.5244, 3.3792]
 
+// Leaflet is a CommonJS bundle: depending on the bundler, import('leaflet') yields the library under .default or its
+// functions directly (CareFind's maps use the latter).
+export function resolveLeaflet(mod) {
+  return mod && mod.default && typeof mod.default.map === 'function' ? mod.default : mod
+}
+
 // A pin's popup, built from text nodes. Names and places are typed by people; an HTML string here would let a name
 // like <img onerror=...> run in the manager's session.
 export function popupContent(pin) {
@@ -42,7 +48,7 @@ export default function LeafletMap({ pins, height = 420 }) {
     let cancelled = false
     ;(async () => {
       try {
-        const L = (await import('leaflet')).default
+        const L = resolveLeaflet(await import('leaflet'))
         await import('leaflet/dist/leaflet.css')
         if (cancelled || !box.current) return
         lib.current = L
