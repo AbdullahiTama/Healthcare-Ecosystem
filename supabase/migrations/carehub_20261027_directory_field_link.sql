@@ -1,4 +1,5 @@
--- carehub_20261027_directory_field_link  (DRAFT, not applied)
+-- carehub_20261027_directory_field_link
+-- APPLIED 2026-10-25 to szdybxmgmhndoytqanfb as version 20261025010459.
 --
 -- Business Directory x Live Field Activity (docs/superpowers/specs/2026-10-24-directory-field-link-design.md).
 --

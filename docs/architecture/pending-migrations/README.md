@@ -17,14 +17,6 @@ The other three drafts of this work were applied on 2026-10-24 (see "Already app
 |---|---|---|---|
 | - | `carehub_20261026_orders_read_scope.sql` | Narrows who reads orders (creator, approver, watchers, field managers, owner). | **Held**: warehouse staff would lose sight of orders they process. Owner decides (a) give them "Manage field team", (b) add a warehouse path, or (c) keep reading as is. |
 
-## Pending (directory x field activity, `docs/superpowers/plans/2026-10-24-directory-field-link.md`)
-
-Tested on PGlite with the live `field_activities` and `orders` policies (`scripts/db-tests/directoryFieldLink.pglite.mjs`).
-
-| Order | Draft | Adds | Status |
-|---|---|---|---|
-| 1 | `carehub_20261027_directory_field_link.sql` | Customers derived from visits (`field_customers`, `field_customer_visits`: SECURITY INVOKER, the caller's own RLS) and `directory_suggestions` (reps suggest a missing business; identity and status forced by the database; 20 per company per day; platform admin reviews). No new access to the directory. | Ready. The app shows "not available yet" until it is applied. |
-
 ## Already applied (files in `supabase/migrations/`)
 
 | Applied as | Version | Fixes |
@@ -38,6 +30,7 @@ Tested on PGlite with the live `field_activities` and `orders` policies (`script
 | `carehub_20261024_activity_photos` | 20261023161023 | Private `activity-photos` bucket (5 MB, images), `photo_paths` (max 3); `log_field_activity` replaced again |
 | `carehub_20261026_checkin_overview_field_manager` | 20261024105118 | F2: team check-ins follow the field-manager rule (`caller_sees_all_activity`) |
 | `carehub_20261026_orders_field_activity_link` | 20261024110003 | `orders.field_activity_id`: an order remembers the visit it came from; links to another company's or an unseen report are refused |
+| `carehub_20261027_directory_field_link` | 20261025010459 | Customers derived from visits (`field_customers` with a before-the-limit quiet filter, `field_customer_visits`: SECURITY INVOKER) and `directory_suggestions` (identity and status forced by the database, 20 per company per day, platform admin reviews) |
 | `carehub_20261026_orders_authorisation` | 20261024110224 | Orders approval, pipeline, frozen approved content, order lines and unforgeable history enforced in the database; no signed-in deletes |
 
 The three 2026-10-23 migrations were verified by catalog read-back (one overload of `log_field_activity`, SECURITY
@@ -60,6 +53,16 @@ showed `manager_checkin_overview` unchanged since the draft was written (definit
 - security advisor: before, 115 authenticated-executable SECURITY DEFINER functions; after, 117. The two additions are
   the intended helpers `orders_caller_is_owner` and `orders_caller_staff_name`, which return only a yes/no about the
   caller and the caller's own name. No other change.
+
+`carehub_20261027_directory_field_link` (directory x field activity) was applied on 2026-10-25 after a pre-flight
+(helpers, columns and grants present; no object of the same name). Verification: catalog read-back (readers SECURITY
+INVOKER and not executable by anon; trigger functions callable by nobody; the table granted SELECT/INSERT/UPDATE to
+authenticated only, RLS on, three policies, two triggers); rolled-back runs as real users. A rep sees a facility
+visited twice as one customer, with its quiet filter and visit history. A suggestion sent with a forged status,
+name, email and review note is stored as pending under the rep's real staff id and email. A suggestion for another
+company is refused, and a rep's update affects 0 rows. Delete is refused. Another company's manager sees neither
+the suggestion nor the customers; the owner sees the suggestion. The platform admin's review records the reviewer,
+and rejected -> accepted is refused. Anon can read neither. Zero residue. Security advisor: identical before and after.
 
 **Deploy the app that goes with them.** The voice bucket was made private before the app that signs voice links was
 deployed (at the product owner's instruction). Until branch `feat/live-activity-client-phases` is merged and deployed,
