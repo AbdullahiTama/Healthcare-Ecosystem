@@ -21,7 +21,7 @@
 --      sale and its credit_sale debt.
 --   5. refund_sale(): owner or manager only; money only (no restock).
 --   6. Backfill: one ledger row per existing completed sale.
---   7. record_export_audit() learns the two sales-report export types.
+--   7. record_export_audit() learns the sales-report Excel export type.
 --
 -- "Completed sale" everywhere below: NOT is_on_hold AND status IS NULL or
 -- 'completed'. Held, resumed-but-abandoned and deleted rows are not sales.
@@ -508,10 +508,10 @@ SELECT s.business_id, s.id, 'sale', sp.method, sp.amount,
    AND NOT EXISTS (SELECT 1 FROM public.sale_payments p WHERE p.sale_id = s.id);
 
 -- ---------------------------------------------------------------------------
--- 13. Export audit: sales report export types
+-- 13. Export audit: the sales report Excel export
 -- ---------------------------------------------------------------------------
 -- Same signature as carehub_20261209 (so no sibling overload is created), the
--- allow-list gains two types and includes_cost_data is now per type: the sales
+-- allow-list gains sales_report.xlsx and includes_cost_data is now per type: the sales
 -- report carries no cost figures.
 CREATE OR REPLACE FUNCTION public.record_export_audit(
   p_business_id uuid,
@@ -541,7 +541,7 @@ BEGIN
   IF p_business_id IS NULL THEN
     RAISE EXCEPTION 'business id is required' USING ERRCODE = '22023';
   END IF;
-  IF p_export_type IS NULL OR p_export_type NOT IN ('inventory.xlsx', 'sales_report.xlsx', 'sales_report.pdf') THEN
+  IF p_export_type IS NULL OR p_export_type NOT IN ('inventory.xlsx', 'sales_report.xlsx') THEN
     RAISE EXCEPTION 'Unknown export type' USING ERRCODE = '22023';
   END IF;
   IF p_row_count IS NULL OR p_row_count < 0 THEN

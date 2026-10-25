@@ -120,8 +120,7 @@ The report cannot be built honestly on the current data. Recon found:
      backfilled). Historical collections cannot be separated from the original
      payment and stay on the sale's date. This is documented in the report's help text.
 
-4. `record_export_audit` allow-list gains `sales_report.xlsx` and
-   `sales_report.pdf`; the permission check is unchanged (Owner, or a custom
+4. `record_export_audit` allow-list gains `sales_report.xlsx`; the permission check is unchanged (Owner, or a custom
    role with `canExportReports`).
 
 Every function: pinned `search_path`, explicit membership check through

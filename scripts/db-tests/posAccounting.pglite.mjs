@@ -242,7 +242,7 @@ const exp = (who, type) => as(who, `select record_export_audit($1,$2,3,'{}'::jso
 const idSales = await exp('a', 'sales_report.xlsx')
 let meta = (await sup('select target_type, metadata from audit_log where id=$1', [idSales])).rows[0]
 ok('export: sales_report.xlsx is accepted and carries no cost data', meta.target_type === 'sales_report' && meta.metadata.includes_cost_data === false, JSON.stringify(meta))
-ok('export: sales_report.pdf is accepted', !!(await exp('a', 'sales_report.pdf')))
+await expectError('export: there is no PDF export type (print is not an export)', () => exp('a', 'sales_report.pdf'), '22023')
 meta = (await sup('select metadata from audit_log where id=$1', [await exp('a', 'inventory.xlsx')])).rows[0]
 ok('export: inventory still flags cost data', meta.metadata.includes_cost_data === true)
 await expectError('export: a cashier without canExportReports is still refused', () => exp('repA1', 'sales_report.xlsx'), '42501')
