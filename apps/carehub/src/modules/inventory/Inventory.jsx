@@ -7,6 +7,8 @@ import {
 import { productRepository } from './repositories'
 import { parseInventoryCsv } from './csvImport'
 import { computeInventoryStats } from './inventoryStats'
+import { exportInventoryXlsx } from './inventoryExport'
+import { auditRepository } from '../audit/repositories'
 import { fmt, todayDate } from '../../lib/utils'
 import { PRODUCT_CATS } from '../../config/constants'
 import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
@@ -37,6 +39,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   const [showCleanup, setShowCleanup] = useState(false)
   const [cleaningUp, setCleaningUp] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [exporting, setExporting] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   const duplicateGroups = findAllDuplicateGroups(products)
@@ -82,6 +85,41 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   // whenever the product list changes so the KPI row tracks stock live.
   const { lowStock, outOfStock, stockValue, costValue, profit, margin, missingCost, onCareFind } =
     useMemo(() => computeInventoryStats(products), [products])
+
+  // Exports the filtered list (all pages), so what the user sees is what they get.
+  // The export is recorded in the audit log before the file is saved. A refusal
+  // from the database (the role may not export) cancels the download; a missing
+  // record for any other reason still delivers the file but says so.
+  async function exportExcel() {
+    if (filtered.length === 0) { showToast('There are no products to export.', { type: 'warning' }); return }
+    setExporting(true)
+    try {
+      let audit = { status: 'failed' }
+      const saved = await exportInventoryXlsx(filtered, {
+        beforeDownload: async () => {
+          audit = await auditRepository.recordExport(brand.id, {
+            exportType: 'inventory.xlsx',
+            rowCount: filtered.length,
+            // The search term itself is not stored, only that one was applied.
+            filters: { category: catFilter === 'All' ? null : catFilter, stock: stockFilter || null, expiry: expiryFilter || null, search_applied: !!search.trim() },
+          })
+          return audit.status !== 'refused'
+        },
+      })
+      if (!saved) {
+        showToast('Your role is not allowed to export data.', { type: 'error' })
+      } else if (audit.status === 'recorded') {
+        showToast(`Exported ${filtered.length} product${filtered.length !== 1 ? 's' : ''} to Excel.`, { type: 'success' })
+      } else {
+        console.warn('[inventory] export audit record not saved:', audit.status)
+        showToast(`Exported ${filtered.length} product${filtered.length !== 1 ? 's' : ''}, but the audit record could not be saved.`, { type: 'warning' })
+      }
+    } catch (e) {
+      console.error('inventory export failed:', e)
+      showToast('Could not export: ' + e.message, { type: 'error' })
+    }
+    setExporting(false)
+  }
 
   async function reload() {
     try {
@@ -384,6 +422,11 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button onClick={downloadTemplate} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}><Download size={14} /> Template</button>
           <button onClick={() => setShowUpload(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}><Upload size={14} /> Upload CSV</button>
+          {perms?.canExportReports && (
+            <button onClick={exportExcel} disabled={exporting} aria-busy={exporting} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: exporting ? 'wait' : 'pointer', opacity: exporting ? 0.7 : 1 }}>
+              {exporting ? <Loader2 size={14} className="spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />} {exporting ? 'Exporting…' : 'Export Excel'}
+            </button>
+          )}
           {totalDuplicateItems > 0 && (
             <button onClick={() => setShowCleanup(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${warning}`, background: warningBg, color: warning, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
               <AlertTriangle size={14} /> Clean up {totalDuplicateItems} duplicate{totalDuplicateItems > 1 ? 's' : ''}
