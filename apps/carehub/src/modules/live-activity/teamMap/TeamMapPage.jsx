@@ -8,7 +8,7 @@ import { staffRepository } from '../../staff/repositories'
 import { watchTable } from '../../../lib/realtime'
 import { isRep } from '../../dashboard-home/fieldTeamToday'
 import { buildTeamMap, rangeStart, RANGES } from './teamMapModel.js'
-import LeafletMap, { TONE_COLOR } from './LeafletMap.jsx'
+import LeafletMap, { TONE_COLOR } from '../../../components/maps/LeafletMap.jsx'
 
 const { navy, gray500, gray400, border, danger, tealDeep, bg } = theme
 

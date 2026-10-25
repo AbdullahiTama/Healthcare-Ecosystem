@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { OSM_ATTRIBUTION, OSM_COPYRIGHT_URL } from '../areaLookup'
+import { OSM_ATTRIBUTION, OSM_COPYRIGHT_URL } from '../../modules/live-activity/areaLookup'
 
 // Concrete colours: Leaflet draws markers as SVG attributes, which cannot read the theme's CSS variables. The legend
 // uses the same values.

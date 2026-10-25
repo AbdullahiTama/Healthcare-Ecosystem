@@ -16,7 +16,7 @@ vi.mock('../../repositories', () => ({ liveActivityRepository: { getFieldActivit
 vi.mock('../../customers/repository.js', () => ({ customerRepository: { list: vi.fn() } }))
 vi.mock('../../../territories/repositories', () => ({ territoryRepository: { getAll: vi.fn(async () => [{ id: 't1', name: 'Lagos Island' }]) } }))
 vi.mock('../../../staff/repositories', () => ({ staffRepository: { getAll: vi.fn(async () => [{ id: 'ada', full_name: 'Ada' }]) } }))
-vi.mock('../LeafletMap.jsx', () => ({
+vi.mock('../../../../components/maps/LeafletMap.jsx', () => ({
   TONE_COLOR: { current: '#0', earlier: '#1', out: '#2', visit: '#3', quiet: '#4' },
   default: ({ pins }) => <ul data-testid='map'>{pins.map((p) => <li key={p.id} data-pin={p.id} data-tone={p.tone}>{p.title}</li>)}</ul>,
 }))
