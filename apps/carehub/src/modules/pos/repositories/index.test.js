@@ -385,3 +385,22 @@ describe('saleRepository', () => {
     expect(offline.all()).toHaveLength(1)
   })
 })
+
+describe('saleRepository payments', () => {
+  it('recordPayment calls record_sale_payment with the amount, method, note and staff name', async () => {
+    const calls = []
+    const repo = createSaleRepository({ request: async (path, opts) => { calls.push([path, opts]); return { balance: 10 } }, requestWithCount: async () => ({}) })
+    expect(await repo.recordPayment('s-1', { amount: 90, method: 'Transfer', staffName: 'Ada' })).toEqual({ balance: 10 })
+    expect(calls[0][0]).toBe('rpc/record_sale_payment')
+    expect(calls[0][1].method).toBe('POST')
+    expect(JSON.parse(calls[0][1].body)).toEqual({ p_sale_id: 's-1', p_amount: 90, p_method: 'Transfer', p_note: null, p_staff_name: 'Ada' })
+  })
+  it('getPayments reads one sale\'s history, scoped to the business', async () => {
+    const { repo, client } = build({ seed: { sale_payments: [
+      { id: 'p1', business_id: A, sale_id: 's-1', amount: 5, created_at: '2026-10-01' },
+      { id: 'p2', business_id: B, sale_id: 's-1', amount: 9, created_at: '2026-10-02' },
+      { id: 'p3', business_id: A, sale_id: 's-2', amount: 7, created_at: '2026-10-03' },
+    ] } })
+    expect((await repo.getPayments('s-1', A)).map((p) => p.id)).toEqual(['p1'])
+  })
+})

@@ -45,3 +45,18 @@ export function isDuplicateError(e) {
   return e && typeof e.message === 'string' &&
     (/Supabase error \(409\)/.test(e.message) || /duplicate key value violates unique constraint/i.test(e.message))
 }
+
+// ── Payment refusals ──────────────────────────────────────────────────────────
+// record_sale_payment / record_purchase_payment refuse with a sentence written
+// for the person at the counter ("The amount is more than the balance of
+// 7,500.00."). sbFetch wraps it as "Supabase error (400): <sentence>"; this
+// returns the sentence for those refusals (HTTP 400 / 404), the session-expired
+// message as is, and a plain retry message for anything else (network,
+// server), so an outage is never shown as a validation problem.
+export function paymentErrorMessage(error) {
+  const raw = String(error?.message || '')
+  if (raw.startsWith('Session expired')) return raw
+  const m = raw.match(/^Supabase error \((400|404)\): (.+)$/s)
+  if (m && /[.!]$/.test(m[2].trim()) && m[2].length <= 200) return m[2].trim()
+  return "We couldn't record the payment. Check your connection and try again."
+}

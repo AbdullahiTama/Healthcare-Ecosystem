@@ -119,6 +119,23 @@ export function createSaleRepository({
       return pagedQuery(request, `${q}&order=created_at.desc,id.asc&select=*`)
     },
 
+    // Records a payment against a credit sale (full or part). The database
+    // locks the sale, refuses zero, negative or more-than-the-balance amounts,
+    // updates amount_paid / balance and the linked debt, and writes a history
+    // row, all in one transaction (record_sale_payment). Returns
+    // { payment_id, amount, amount_paid, balance }.
+    async recordPayment(saleId, { amount, method = 'Cash', note = null, staffName = null }) {
+      return request('rpc/record_sale_payment', {
+        method: 'POST',
+        body: JSON.stringify({ p_sale_id: saleId, p_amount: amount, p_method: method, p_note: note, p_staff_name: staffName }),
+      })
+    },
+
+    // Payment history for one sale, newest first.
+    async getPayments(saleId, businessId) {
+      return request(`sale_payments?sale_id=eq.${saleId}&business_id=eq.${businessId}&order=created_at.desc,id.asc&select=*`)
+    },
+
     // How many sales a business has, counted by the database (no rows sent).
     async count(businessId) {
       const res = await requestWithCount(`sales?business_id=eq.${businessId}&select=id`, { head: true })

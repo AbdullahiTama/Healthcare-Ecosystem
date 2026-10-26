@@ -19,6 +19,7 @@ import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscp
 import { theme } from '../../styles/theme'
 import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, ErrorState, Loading, Skeleton } from '../../components/ui'
 import { CatalogStatusBanner, loadingLabel } from '../inventory/components/CatalogStatus'
+import CreditCollections from './CreditCollections'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useTodaySales, useOpenSales, useRecentSales, useSettings, useClients, useInvalidateSales } from '../../hooks/queries'
 
@@ -73,7 +74,7 @@ export default function POS(props) {
   return <POSErrorBoundary><POSInner {...props} /></POSErrorBoundary>
 }
 
-function POSInner({ brand, products, setProducts, role, perms, catalog }) {
+function POSInner({ brand, products, setProducts, role, perms, catalog, staffName }) {
   // Catalog load state from BusinessDashboard (inventory/hooks/useProductCatalog.js).
   const catalogStatus = catalog?.status || 'ready'
   const [view, setView] = useState('pos') // pos | held | recent | credit
@@ -117,7 +118,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const { data: todaySales = [], isLoading: loadingToday } = useTodaySales(brand?.id)
   // Held and unpaid credit sales, and the latest completed sales for the
   // Recent tab — targeted reads instead of the whole sales history.
-  const { data: openSales = [], isLoading: loadingOpen } = useOpenSales(brand?.id)
+  const { data: openSales = [], isLoading: loadingOpen, isError: openError, refetch: refetchOpen } = useOpenSales(brand?.id)
   const recentQuery = useRecentSales(brand?.id, 50)
   const invalidateSales = useInvalidateSales(brand?.id)
   const loadingSales = loadingToday || loadingOpen
@@ -499,23 +500,6 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     invalidateSales()
   }
 
-  async function collectCredit(sale, amount) {
-    const newPaid = (sale.amount_paid || 0) + parseFloat(amount)
-    const newBalance = sale.total - newPaid
-    await saleRepository.update(sale.id, brand.id, { amount_paid: newPaid, balance: Math.max(0, newBalance), is_credit: newBalance > 0 })
-    // AUTO-UPDATE matching debt. The lookup lives in the debt repository —
-    // Purchases' mark-paid needs the same one, and both used to fetch every
-    // debt in the business and scan it here.
-    try {
-      const matchDebt = await debtRepository.findOpenBySource('credit_sale', sale.txn_no, brand.id)
-      if (matchDebt) {
-        await debtRepository.update(matchDebt.id, brand.id, { amount_paid: newPaid, balance: Math.max(0, newBalance), status: newBalance <= 0 ? 'paid' : 'pending' })
-      }
-    } catch (e) {}
-    showToast('Payment collected!', { type: 'success' })
-    invalidateSales()
-  }
-
   function newSale() { finishResumedSale(); setReceipt(null); setCart([]); setClient('Walk-in'); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid('') }
 
   // Universal fallback path: render an HTML page and let the browser/OS
@@ -785,22 +769,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: bg }}>
       <div style={{ background: 'white', padding: isMobile ? '6px 16px 0' : '8px 24px 0', flexShrink: 0 }}>{tabBar('credit')}</div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-        {creditSales.length === 0 ? (
-          <Empty icon={<CreditCard size={40} strokeWidth={1.5} />} message="No outstanding credit sales" />
-        ) : creditSales.map(s => (
-          <Card key={s.id} style={{ padding: '16px', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontWeight: '800', fontSize: '15px' }}>{s.client_name || 'Walk-in'}</div>
-                <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{s.txn_no} · Total: {fmt(s.total)}</div>
-                <div style={{ fontSize: '12px', color: success, marginTop: '2px' }}>Paid: {fmt(s.amount_paid || 0)}</div>
-                <div style={{ fontSize: '13px', fontWeight: '900', color: danger, marginTop: '2px' }}>Balance: {fmt(s.balance || 0)}</div>
-                <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{s.created_at?.split('T')[0]}</div>
-              </div>
-              <CollectPayment sale={s} onCollect={collectCredit} />
-            </div>
-          </Card>
-        ))}
+        <CreditCollections brand={brand} creditSales={creditSales} loading={loadingOpen} error={openError} onRetry={() => refetchOpen()} staffName={staffName} showToast={showToast} />
       </div>
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
@@ -1145,23 +1114,3 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
 }
 
 
-function CollectPayment({ sale, onCollect }) {
-  const [amount, setAmount] = useState('')
-  const [collecting, setCollecting] = useState(false)
-
-  const handleCollect = async () => {
-    if (!amount || parseFloat(amount) <= 0) return
-    setCollecting(true)
-    await onCollect(sale, amount)
-    setAmount('')
-    setCollecting(false)
-  }
-
-  return (
-    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-      <input type='number' value={amount} onChange={e => setAmount(e.target.value)} placeholder='Amount'
-        style={{ width: '90px', padding: '6px 8px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, fontSize: '12px', outline: 'none' }} />
-      <TealBtn onClick={handleCollect} style={{ padding: '6px 12px', fontSize: '12px' }}>{collecting ? '...' : 'Collect'}</TealBtn>
-    </div>
-  )
-}

@@ -78,3 +78,35 @@ describe('purchaseRepository.getAll paging and range', () => {
     expect(await repo.getAll('biz-A', { from: '2026-10-01T00:00:00', to: '2026-11-01T00:00:00' })).toHaveLength(1000)
   })
 })
+
+describe('purchaseRepository supplier payments', () => {
+  it('recordPayment calls record_purchase_payment with amount, method, date, note and staff', async () => {
+    const calls = []
+    const repo = createPurchaseRepository(async (path, opts) => { calls.push([path, opts]); return { balance: 0, status: 'paid' } })
+    expect(await repo.recordPayment('p-1', { amount: 500, method: 'Cheque', paidOn: '2026-10-20', note: 'chq 12', staffName: 'Ada' })).toEqual({ balance: 0, status: 'paid' })
+    expect(calls[0][0]).toBe('rpc/record_purchase_payment')
+    expect(JSON.parse(calls[0][1].body)).toEqual({ p_purchase_id: 'p-1', p_amount: 500, p_method: 'Cheque', p_paid_on: '2026-10-20', p_note: 'chq 12', p_staff_name: 'Ada' })
+  })
+
+  it('getPayments reads by purchase or by supplier key, scoped to the business, newest first', async () => {
+    const client = createInMemoryClient({ purchase_payments: [
+      { id: 'a', business_id: 'biz-A', purchase_id: 'p-1', supplier_key: 'emzor ltd', created_at: '2026-10-01' },
+      { id: 'b', business_id: 'biz-A', purchase_id: 'p-2', supplier_key: 'emzor ltd', created_at: '2026-10-02' },
+      { id: 'c', business_id: 'biz-B', purchase_id: 'p-1', supplier_key: 'emzor ltd', created_at: '2026-10-03' },
+    ] })
+    const repo = createPurchaseRepository(client)
+    expect((await repo.getPayments('biz-A', { purchaseId: 'p-1' })).map((r) => r.id)).toEqual(['a'])
+    expect((await repo.getPayments('biz-A', { supplierKey: 'emzor ltd' })).map((r) => r.id).sort()).toEqual(['a', 'b'])
+  })
+
+  it('getSupplierBalances and getBySupplier call their database functions', async () => {
+    const calls = []
+    const repo = createPurchaseRepository(async (path, opts) => { calls.push([path, opts ? JSON.parse(opts.body || 'null') : null]); return [] })
+    await repo.getSupplierBalances('biz-A')
+    await repo.getBySupplier('biz-A', 'emzor ltd')
+    expect(calls).toEqual([
+      ['rpc/get_supplier_balances?p_business_id=biz-A', null],
+      ['rpc/get_supplier_purchases', { p_business_id: 'biz-A', p_supplier_key: 'emzor ltd' }],
+    ])
+  })
+})

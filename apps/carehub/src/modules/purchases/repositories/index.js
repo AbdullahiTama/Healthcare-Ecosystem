@@ -41,6 +41,46 @@ export function createPurchaseRepository(request = sbFetch) {
       return request(`rpc/get_purchase_totals?p_business_id=${businessId}`)
     },
 
+    // Records a payment to the supplier against a purchase (full or part). The
+    // database locks the purchase, refuses zero, negative, more-than-the-balance
+    // or future-dated payments, updates amount_paid / balance / status
+    // ('partial' | 'paid') and the linked debt, and writes a history row, in
+    // one transaction (record_purchase_payment).
+    async recordPayment(purchaseId, { amount, method = 'Transfer', paidOn = null, note = null, staffName = null }) {
+      return request('rpc/record_purchase_payment', {
+        method: 'POST',
+        body: JSON.stringify({ p_purchase_id: purchaseId, p_amount: amount, p_method: method, p_paid_on: paidOn || null, p_note: note, p_staff_name: staffName }),
+      })
+    },
+
+    // Payment history, newest first: for one purchase, or for every purchase
+    // from one supplier (supplierKey = lower-cased, trimmed supplier name).
+    async getPayments(businessId, { purchaseId, supplierKey } = {}) {
+      let q = `purchase_payments?business_id=eq.${businessId}`
+      if (purchaseId) q += `&purchase_id=eq.${purchaseId}`
+      if (supplierKey) q += `&supplier_key=eq.${encodeURIComponent(supplierKey)}`
+      return pagedQuery(request, `${q}&order=created_at.desc,id.asc&select=*`)
+    },
+
+    // Totals per supplier (get_supplier_balances): bought, paid, outstanding.
+    async getSupplierBalances(businessId) {
+      return request(`rpc/get_supplier_balances?p_business_id=${businessId}`)
+    },
+
+    // The purchases from one supplier, matched by the same key as the totals
+    // (case and surrounding spaces ignored), newest first.
+    async getBySupplier(businessId, supplierKey) {
+      return request('rpc/get_supplier_purchases', {
+        method: 'POST',
+        body: JSON.stringify({ p_business_id: businessId, p_supplier_key: supplierKey }),
+      })
+    },
+
+    async getById(purchaseId, businessId) {
+      const rows = await request(`purchases?id=eq.${purchaseId}&business_id=eq.${businessId}&select=*`)
+      return (Array.isArray(rows) ? rows[0] : rows) || null
+    },
+
     async create(businessId, purchase) {
       return request('purchases', {
         method: 'POST',

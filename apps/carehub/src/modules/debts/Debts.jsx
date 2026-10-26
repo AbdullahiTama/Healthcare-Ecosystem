@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck } from 'lucide-react'
 import { debtRepository } from './repositories'
+import { settleDebt } from './settleDebt'
+import { paymentErrorMessage } from '../../lib/dbErrors'
 // Cross-aggregate read: the client list belongs to the clients module, which
 // exposes it through its own repository. `getClients` is still the shared
 // services/supabase read used by POS too — repoint it when that call is
@@ -21,7 +23,7 @@ function sourceLabel(source, short) {
   return <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Icon size={11} /> {text}</span>
 }
 
-export default function Debts({ brand, role, perms }) {
+export default function Debts({ brand, role, perms, staffName }) {
   const [debts, setDebts] = useState([])
   // Shared, cached client list (React Query): one download for every page that
   // picks a client, instead of each page fetching all clients and hiding failures.
@@ -87,9 +89,15 @@ export default function Debts({ brand, role, perms }) {
 
   async function markPaid(debt) {
     try {
-      await debtRepository.update(debt.id, brand.id, { amount_paid: debt.amount, balance: 0, status: 'paid' })
-      load(); showToast('Marked as paid!', { type: 'success' })
-    } catch (e) { showToast('Could not mark as paid. Please try again.', { type: 'error' }) }
+      const { via } = await settleDebt(debt, brand.id, { staffName })
+      load()
+      showToast(via === 'sale' ? 'Marked as paid. The credit sale is settled too.'
+        : via === 'purchase' ? 'Marked as paid. The purchase is settled too.'
+        : 'Marked as paid!', { type: 'success' })
+    } catch (e) {
+      console.error('[debts] mark paid failed:', e)
+      showToast(paymentErrorMessage(e), { type: 'error' })
+    }
   }
 
   const filtered = debts.filter(d => {

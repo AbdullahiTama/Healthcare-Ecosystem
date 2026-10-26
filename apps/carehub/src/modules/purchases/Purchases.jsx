@@ -15,6 +15,7 @@ import { fmt, fmtDate, todayDate } from '../../lib/utils'
 import { purchaseExpirySummary } from './expirySummary'
 import { findDuplicate } from '../../lib/productMatches'
 import { upsertProducts } from '../inventory/productListState'
+import { PurchasePaymentModal, SupplierBalances, purchaseStatus } from './SupplierPayments'
 import { PRODUCT_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
@@ -33,8 +34,12 @@ const blankItem = () => ({ name: '', qty: '', cost: '', sell: '', batch: '', exp
 // (inventory/hooks/useProductCatalog.js). Purchased items are matched against
 // it, and the stock and products a purchase changes are written back into it,
 // so Inventory and POS show the new stock at once without a re-download.
-export default function Purchases({ brand, role, perms, products = [], setProducts, catalog }) {
+export default function Purchases({ brand, role, perms, products = [], setProducts, catalog, staffName }) {
   const [purchases, setPurchases] = useState([])
+  // 'purchases' (the list) or 'suppliers' (totals and payment history per supplier).
+  const [view, setView] = useState('purchases')
+  // The purchase whose "Record payment" dialog is open.
+  const [paying, setPaying] = useState(null)
   const inventory = products
   // Matching a purchase against a half-loaded catalog would create duplicates.
   const catalogLoading = catalog?.status === 'loading' || catalog?.status === 'error'
@@ -244,22 +249,6 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
     setSaving(false)
   }
 
-  async function markPaid(p) {
-    try {
-      await purchaseRepository.update(p.id, brand.id, { amount_paid: p.total_cost || 0, balance: 0, status: 'paid' })
-      // AUTO-UPDATE DEBT: settle the debt this purchase raised, if any. The
-      // lookup lives in the debt repository — POS's credit collection needs the
-      // same one, and the two used to scan every debt in the business by hand.
-      try {
-        const matchDebt = await debtRepository.findOpenBySource('purchase', p.id, brand.id)
-        if (matchDebt) {
-          await debtRepository.update(matchDebt.id, brand.id, { amount_paid: p.total_cost || 0, balance: 0, status: 'paid' })
-        }
-      } catch (e) {}
-      load(); showToast('Marked as paid! Debt updated automatically.', { type: 'success' })
-    } catch (e) { showToast('Could not mark as paid. Please try again.', { type: 'error' }) }
-  }
-
   const years = [...new Set(purchases.map(p => p.created_at?.slice(0, 4)).filter(Boolean))].sort().reverse()
 
   // Autocomplete suggestions for the product-name inputs: existing catalogue
@@ -269,7 +258,7 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
 
   return (
     <div>
-      <SectionHead title='Purchases' sub='Record multi-item supplier purchases' btn='+ Record Purchase' onBtn={() => setShowAdd(true)} />
+      <SectionHead title='Purchases' sub='Record supplier purchases and the payments you make on them' btn='+ Record Purchase' onBtn={() => setShowAdd(true)} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Truck />} label='Total Purchases' value={totals.purchase_count || 0} />
@@ -277,6 +266,21 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
         <StatCard icon={<Hourglass />} label='Balance Owed' value={fmt(Number(totals.total_owed) || 0)} alert={(Number(totals.total_owed) || 0) > 0} />
       </div>
 
+      <div role='tablist' aria-label='Purchases views' style={{ display: 'flex', gap: 24, borderBottom: `1px solid ${border}`, marginBottom: 16 }}>
+        {[['purchases', 'Purchases'], ['suppliers', 'Suppliers & payments']].map(([v, label]) => {
+          const on = view === v
+          return (
+            <button key={v} type='button' role='tab' aria-selected={on} onClick={() => setView(v)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '10px 2px', marginBottom: -1, fontSize: 13, fontWeight: on ? 800 : 600, color: on ? tealDeep : gray600, borderBottom: on ? `2px solid ${tealDeep}` : '2px solid transparent' }}>
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
+      {view === 'suppliers' ? (
+        <SupplierBalances brand={brand} staffName={staffName} showToast={showToast} onPaid={load} />
+      ) : (<>
       <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '180px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
           <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
@@ -319,9 +323,13 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
                     <td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}>{p.supply_date || 'Not set'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '12px', color: gray400 }}>{p.due_date || 'Not set'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}>{fmtDate(p.expiry)}</td>
-                    <td style={{ padding: '12px 12px' }}><Pill label={p.status} type={p.status === 'paid' ? 'green' : 'amber'} /></td>
+                    <td style={{ padding: '12px 12px' }}>{(() => { const st = purchaseStatus(p); return <Pill label={st.label} type={st.type} /> })()}</td>
                     <td style={{ padding: '12px 12px' }}>
-                      {p.status !== 'paid' && <button onClick={() => markPaid(p)} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Mark paid</button>}
+                      {(Number(p.balance) || 0) > 0 ? (
+                        <button type='button' onClick={() => setPaying(p)} aria-label={`Record payment to ${p.supplier_name}`} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap', minHeight: 32 }}>Record payment</button>
+                      ) : (
+                        <button type='button' onClick={() => setPaying(p)} aria-label={`Payment history for ${p.supplier_name}`} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap', minHeight: 32 }}>History</button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -338,6 +346,10 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
           )}
         </Card>
       )}
+
+      </>)}
+
+      {paying && <PurchasePaymentModal brand={brand} purchase={paying} staffName={staffName} showToast={showToast} onPaid={load} onClose={() => setPaying(null)} />}
 
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ supplyDate: todayDate(), items: [blankItem()] }) }} title='Record Purchase'
         footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({ supplyDate: todayDate(), items: [blankItem()] }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} disabled={saving || catalogLoading} title={catalogLoading ? 'Available once your products have loaded' : undefined} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : catalogLoading ? 'Loading products…' : 'Save Purchase'}</TealBtn></>}>
