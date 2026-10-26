@@ -150,3 +150,11 @@ describe('debtRepository', () => {
     }
   })
 })
+
+describe('debtRepository.getAll paging', () => {
+  it('returns every debt past the 1000-row server cap', async () => {
+    const rows = Array.from({ length: 1020 }, (_, i) => ({ id: 'd' + i, business_id: 'biz-A', created_at: '2026-10-01T00:00:00' }))
+    const repo = createDebtRepository(createInMemoryClient({ debts: rows }))
+    expect(await repo.getAll('biz-A')).toHaveLength(1020)
+  })
+})

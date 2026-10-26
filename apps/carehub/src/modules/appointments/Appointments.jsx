@@ -3,7 +3,8 @@ import { Calendar, Hourglass, CheckCircle, Search, Download, Wallet, Banknote } 
 import { appointmentRepository } from './repositories'
 // Cross-aggregate read: the client list belongs to the clients module. Still
 // the shared services/supabase read, used by several unmigrated modules too.
-import { clientRepository } from '../clients/repositories'
+import { useClients } from '../../hooks/queries'
+import ClientsLoadNote from '../clients/components/ClientsLoadNote'
 import { notificationRepository } from '../notifications/repositories'
 import { sbFetch } from '../../services/supabase'
 import { todayDate } from '../../lib/utils'
@@ -18,7 +19,10 @@ const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, bo
 
 export default function Appointments({ brand, role, perms }) {
   const [appointments, setAppointments] = useState([])
-  const [clients, setClients] = useState([])
+  // Shared, cached client list (React Query): one download for every page that
+  // picks a client, instead of each page fetching all clients and hiding failures.
+  const clientsQuery = useClients(brand?.id)
+  const clients = clientsQuery.data || []
   const [wallet, setWallet] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -72,11 +76,6 @@ export default function Appointments({ brand, role, perms }) {
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => { load() }, [brand?.id])
-  useEffect(() => {
-    let live = true
-    clientRepository.getAll(brand.id).then(c => { if (live) setClients(c || []) }).catch(() => {})
-    return () => { live = false }
-  }, [brand?.id])
 
   useEffect(() => {
     let live = true
@@ -524,6 +523,7 @@ export default function Appointments({ brand, role, perms }) {
               <datalist id='appt-clients'>
                 {clients.map(c => <option key={c.id} value={c.full_name} />)}
               </datalist>
+              <ClientsLoadNote query={clientsQuery} />
             </div>
           </div>
           <Inp label='Service' value={form.service} onChange={v => f('service', v)} placeholder='e.g. Facial Treatment, Consultation' />

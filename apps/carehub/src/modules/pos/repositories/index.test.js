@@ -15,6 +15,52 @@ function build({ seed = {}, online = true, queued = [] } = {}) {
   return { client, offline, repo }
 }
 
+describe('saleRepository targeted reads (no whole-history downloads)', () => {
+  const seed = {
+    sales: [
+      { id: 'h1', business_id: A, is_on_hold: true, is_credit: false, balance: 0, created_at: '2026-10-20T10:00:00' },
+      { id: 'c1', business_id: A, is_on_hold: false, is_credit: true, balance: 500, created_at: '2026-10-22T10:00:00' },
+      { id: 'c0', business_id: A, is_on_hold: false, is_credit: true, balance: 0, created_at: '2026-10-23T10:00:00' },
+      { id: 'hc', business_id: A, is_on_hold: true, is_credit: true, balance: 100, created_at: '2026-10-24T10:00:00' },
+      { id: 'p1', business_id: A, is_on_hold: false, is_credit: false, balance: 0, created_at: '2026-10-25T10:00:00' },
+      { id: 'x9', business_id: B, is_on_hold: true, is_credit: true, balance: 900, created_at: '2026-10-25T11:00:00' },
+    ],
+  }
+
+  it('getOpen returns held sales and credit sales with a balance, once each, newest first, own tenant only', async () => {
+    const { repo } = build({ seed })
+    const rows = await repo.getOpen(A)
+    expect(rows.map((r) => r.id)).toEqual(['hc', 'c1', 'h1'])
+  })
+
+  it('getOpen pages past the 1000-row server cap', async () => {
+    const many = Array.from({ length: 1205 }, (_, i) => ({ id: 'h' + i, business_id: A, is_on_hold: true, created_at: '2026-01-01T00:00:00' }))
+    const { repo } = build({ seed: { sales: many } })
+    expect(await repo.getOpen(A)).toHaveLength(1205)
+  })
+
+  it('getSince restricts to [from, to) and pages', async () => {
+    const { repo } = build({ seed })
+    const rows = await repo.getSince(A, '2026-10-22T00:00:00', { to: '2026-10-25T00:00:00' })
+    expect(rows.map((r) => r.id).sort()).toEqual(['c0', 'c1', 'hc'])
+    expect((await repo.getSince(A, null)).length).toBe(5)
+  })
+
+  it('getRecent returns only completed sales, limited', async () => {
+    const { repo } = build({ seed })
+    const rows = await repo.getRecent(A, 2)
+    expect(rows).toHaveLength(2)
+    expect(rows.every((r) => r.is_on_hold === false)).toBe(true)
+  })
+
+  it('count asks the database for a count, without rows', async () => {
+    const calls = []
+    const repo = createSaleRepository({ request: async () => [], requestWithCount: async (path, opts) => { calls.push([path, opts]); return { total: 4321 } } })
+    expect(await repo.count(A)).toBe(4321)
+    expect(calls).toEqual([[`sales?business_id=eq.${A}&select=id`, { head: true }]])
+  })
+})
+
 describe('saleRepository', () => {
   it('getAll returns only the calling tenant', async () => {
     const { repo } = build({

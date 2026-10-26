@@ -10,3 +10,26 @@ export function inPeriod(item, { period, month, now = new Date(), dateOf = i => 
   if (period === 'year') return d.startsWith(String(now.getFullYear()))
   return true
 }
+
+// The server-side window for a period, as ISO date-time strings: { from, to }
+// with `to` exclusive, or nulls for 'all'. Matches inPeriod (UTC dates) so a
+// screen can ask the database for just the period, then filter with inPeriod.
+export function periodRange({ period, month, now = new Date() }) {
+  const day = (d) => d.toISOString().split('T')[0]
+  if (period === 'today') {
+    const start = day(now)
+    const next = new Date(start + 'T00:00:00Z'); next.setUTCDate(next.getUTCDate() + 1)
+    return { from: start + 'T00:00:00', to: day(next) + 'T00:00:00' }
+  }
+  if (period === 'week') return { from: new Date(now - 7 * 864e5).toISOString(), to: null }
+  if (period === 'month' && /^\d{4}-\d{2}$/.test(month || '')) {
+    const [y, m] = month.split('-').map(Number)
+    const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
+    return { from: `${month}-01T00:00:00`, to: `${next}-01T00:00:00` }
+  }
+  if (period === 'year') {
+    const y = now.getFullYear()
+    return { from: `${y}-01-01T00:00:00`, to: `${y + 1}-01-01T00:00:00` }
+  }
+  return { from: null, to: null }
+}

@@ -111,3 +111,13 @@ describe('appointmentRepository', () => {
     }
   })
 })
+
+describe('appointmentRepository.getAll paging', () => {
+  it('returns every appointment past the 1000-row server cap, newest included', async () => {
+    const rows = Array.from({ length: 1150 }, (_, i) => ({ id: 'a' + String(i).padStart(4, '0'), business_id: A, date: '2026-' + (i < 1000 ? '01' : '12') + '-15' }))
+    const repo = createAppointmentRepository(createInMemoryClient({ appointments: rows }))
+    const all = await repo.getAll(A)
+    expect(all).toHaveLength(1150)
+    expect(all.some((a) => a.date.startsWith('2026-12'))).toBe(true)
+  })
+})

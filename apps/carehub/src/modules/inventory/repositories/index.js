@@ -26,6 +26,15 @@ export function createProductRepository(request = sbFetch) {
       return pagedQuery(request, `products?business_id=eq.${businessId}&order=name.asc,id.asc&select=*`, { onPage: onProgress })
     },
 
+    // Counts for a summary card (e.g. one per branch on Locations) without the
+    // full rows: only the three columns the counts need, paged. About 20x less
+    // data than getAll for a large catalog.
+    async getStockSummary(businessId) {
+      const rows = await pagedQuery(request, `products?business_id=eq.${businessId}&order=id.asc&select=id,stock,reorder_level,category`)
+      const lowStock = rows.filter(p => p.category !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5)).length
+      return { productCount: rows.length, lowStock }
+    },
+
     async getById(productId, businessId) {
       const results = await request(`products?id=eq.${productId}&business_id=eq.${businessId}&select=*`)
       return results[0] || null

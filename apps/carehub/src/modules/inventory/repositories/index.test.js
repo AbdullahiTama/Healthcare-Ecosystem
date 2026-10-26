@@ -95,6 +95,21 @@ describe('productRepository', () => {
     expect(await repo.update('9', A, { stock: 0 })).toBeNull()
   })
 
+  it('getStockSummary counts products and low stock from slim, paged rows', async () => {
+    const calls = []
+    const rows = [
+      { id: 'a', business_id: A, stock: 2, reorder_level: 5, category: 'Medicines' },
+      { id: 'b', business_id: A, stock: 50, reorder_level: 5, category: 'Medicines' },
+      { id: 'c', business_id: A, stock: 1, reorder_level: 5, category: 'Services' },
+      { id: 'd', business_id: A, stock: 0, reorder_level: 5, category: 'Medicines' },
+      { id: 'z', business_id: B, stock: 1, reorder_level: 5, category: 'Medicines' },
+    ]
+    const client = createInMemoryClient({ products: rows })
+    const repo = createProductRepository((path, o) => { calls.push(path); return client(path, o) })
+    expect(await repo.getStockSummary(A)).toEqual({ productCount: 4, lowStock: 1 })
+    expect(calls[0]).toContain('select=id,stock,reorder_level,category')
+  })
+
   it('delete scopes by id and business', async () => {
     const { repo, client } = seeded()
     await repo.delete('2', A)

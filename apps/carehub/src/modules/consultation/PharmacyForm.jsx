@@ -1,10 +1,13 @@
-import { useRef, useState, useEffect, useMemo } from 'react'
+import { useRef, useState, useMemo } from 'react'
 import { theme } from '../../styles/theme'
 import { Card, Inp, Sel, Textarea, Toggle, TealBtn, GhostBtn, useToast } from '../../components/ui'
 import SignaturePad from './SignaturePad'
 import { Chips, Pills, YesNo, SectionCard, ProductSearchPicker } from './formParts'
 import { consultationRepository } from './repositories'
 import { clientRepository } from '../clients/repositories'
+import { useQueryClient } from '@tanstack/react-query'
+import { useClients, keys } from '../../hooks/queries'
+import ClientsLoadNote from '../clients/components/ClientsLoadNote'
 import { saleRepository } from '../pos/repositories'
 import { genId } from '../../lib/utils'
 
@@ -33,7 +36,11 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
   const toast = useToast()
   const [client, setClient] = useState(initialClient)
   const [clientSearch, setClientSearch] = useState('')
-  const [allClients, setAllClients] = useState([])
+  // Shared, cached client list (React Query): one download for every page that
+  // picks a client, instead of each page fetching all clients and hiding failures.
+  const clientsQuery = useClients(brand?.id)
+  const allClients = clientsQuery.data || []
+  const queryClient = useQueryClient()
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [quick, setQuick] = useState({ fullName: '', phone: '', email: '' })
   const [saving, setSaving] = useState(false)
@@ -66,9 +73,6 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
     return { ...p, [section]: { ...p[section], [key]: cur.includes(option) ? cur.filter(x => x !== option) : [...cur, option] } }
   })
 
-  useEffect(() => {
-    clientRepository.getAll(brand.id).then(c => setAllClients(c || [])).catch(() => {})
-  }, [brand.id])
 
   const matched = useMemo(() => {
     const q = clientSearch.toLowerCase().trim()
@@ -119,7 +123,8 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
       setClient(created)
       setShowQuickAdd(false)
       setQuick({ fullName: '', phone: '', email: '' })
-      setAllClients(prev => [...prev, created])
+      // Add to the shared list so every client picker sees the new client at once.
+      if (created) queryClient.setQueryData(keys.clients(brand.id), prev => [...(prev || []), created])
       toast.show('Client added!', { type: 'success' })
     } catch (e) { toast.show('Could not add client. Please try again.', { type: 'error' }) }
   }
@@ -231,6 +236,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
       {!client ? (
         <SectionCard title='Client' hint="The consultation is saved inside the client's file. Search for an existing client or add a new one.">
           <Inp label='Search clients' value={clientSearch} onChange={setClientSearch} placeholder='Search by name or phone...' />
+          <ClientsLoadNote query={clientsQuery} />
           {matched.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {matched.map(c => (

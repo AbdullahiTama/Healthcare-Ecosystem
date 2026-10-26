@@ -14,6 +14,7 @@ import { debtRepository } from '../debts/repositories'
 import { fmt, fmtDate, todayDate } from '../../lib/utils'
 import { purchaseExpirySummary } from './expirySummary'
 import { findDuplicate } from '../../lib/productMatches'
+import { upsertProducts } from '../inventory/productListState'
 import { PRODUCT_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
@@ -28,9 +29,15 @@ const PAGE_SIZE = 50
 
 const blankItem = () => ({ name: '', qty: '', cost: '', sell: '', batch: '', expiry: '', cat: 'Medicines' })
 
-export default function Purchases({ brand, role, perms }) {
+// `products`/`setProducts`/`catalog` are the dashboard's shared catalog
+// (inventory/hooks/useProductCatalog.js). Purchased items are matched against
+// it, and the stock and products a purchase changes are written back into it,
+// so Inventory and POS show the new stock at once without a re-download.
+export default function Purchases({ brand, role, perms, products = [], setProducts, catalog }) {
   const [purchases, setPurchases] = useState([])
-  const [inventory, setInventory] = useState([])
+  const inventory = products
+  // Matching a purchase against a half-loaded catalog would create duplicates.
+  const catalogLoading = catalog?.status === 'loading' || catalog?.status === 'error'
   const [loading, setLoading] = useState(true)
   // A failed load used to be swallowed and shown as "No purchases recorded"
   // with zero totals, which hid a broken get_purchases_page for every business.
@@ -54,11 +61,6 @@ export default function Purchases({ brand, role, perms }) {
   const removeItem = (i) => setForm(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }))
 
   useEffect(() => { load() }, [brand?.id, filterMonth, filterYear, search])
-  useEffect(() => {
-    let live = true
-    productRepository.getAll(brand.id).then(p => { if (live) setInventory(p || []) }).catch(() => {})
-    return () => { live = false }
-  }, [brand?.id])
 
   async function load() {
     setLoading(true)
@@ -106,6 +108,7 @@ export default function Purchases({ brand, role, perms }) {
     if (!form.supplier) { showToast('Please enter the supplier name.', { type: 'warning' }); return }
     if (badQty) { showToast('Quantities must be whole numbers (e.g. 2, not 2.5).', { type: 'warning' }); return }
     if (validItems.length === 0) { showToast('Enter at least one item with a name, quantity and unit cost.', { type: 'warning' }); return }
+    if (catalogLoading) { showToast('Your products are still loading. Try again in a moment so items match your existing products.', { type: 'warning' }); return }
     setSaving(true)
     try {
       const total = computedTotal
@@ -152,6 +155,7 @@ export default function Purchases({ brand, role, perms }) {
       let created = 0
       let updated = 0
       let batchFailures = 0
+      const changedRows = []
       for (const { name, qty, cost, sell, cat, batch, expiry } of synced.values()) {
         const existing = findDuplicate(inventory, name, '', null)
         try {
@@ -165,8 +169,9 @@ export default function Purchases({ brand, role, perms }) {
             // leaves the current price untouched.
             const updates = { cost_price: cost }
             if (sell && sell !== existing.price) updates.price = sell
-            await productRepository.incrementStock(existing.id, brand.id, qty)
-            await productRepository.update(existing.id, brand.id, updates)
+            const newStock = await productRepository.incrementStock(existing.id, brand.id, qty)
+            const saved = await productRepository.update(existing.id, brand.id, updates)
+            changedRows.push({ ...(saved || { id: existing.id, ...updates }), ...(newStock != null ? { stock: newStock } : {}) })
             productId = existing.id
             updated++
           } else {
@@ -179,7 +184,9 @@ export default function Purchases({ brand, role, perms }) {
               reorder_level: 5,
               list_on_carefind: true,
             })
-            productId = (Array.isArray(createdRow) ? createdRow[0] : createdRow)?.id || null
+            const row = Array.isArray(createdRow) ? createdRow[0] : createdRow
+            productId = row?.id || null
+            if (row?.id) changedRows.push(row)
             created++
           }
           // BATCH/EXPIRY: only when the user supplied either. Non-fatal — a
@@ -206,9 +213,8 @@ export default function Purchases({ brand, role, perms }) {
           console.error('Inventory sync failed for:', name, e.message)
         }
       }
-      if (created > 0 || updated > 0) {
-        productRepository.getAll(brand.id).then(setInventory).catch(() => {})
-      }
+      // One update to the shared catalog with the rows the database returned.
+      if (changedRows.length > 0 && setProducts) setProducts(prev => upsertProducts(prev, changedRows))
 
       // AUTO-CREATE DEBT: if there is a balance, create a "We Owe" debt automatically
       if (balance > 0) {
@@ -334,7 +340,7 @@ export default function Purchases({ brand, role, perms }) {
       )}
 
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ supplyDate: todayDate(), items: [blankItem()] }) }} title='Record Purchase'
-        footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({ supplyDate: todayDate(), items: [blankItem()] }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Purchase'}</TealBtn></>}>
+        footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({ supplyDate: todayDate(), items: [blankItem()] }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} disabled={saving || catalogLoading} title={catalogLoading ? 'Available once your products have loaded' : undefined} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : catalogLoading ? 'Loading products…' : 'Save Purchase'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <Inp label='Supplier Name *' value={form.supplier} onChange={v => f('supplier', v)} placeholder='e.g. MedSupply Ltd' required />
 

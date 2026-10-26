@@ -22,7 +22,7 @@ vi.mock('./repositories', () => ({
   },
   isDuplicateError: () => false,
 }))
-vi.mock('../../services/supabase', () => ({ sbFetch: vi.fn(), sbUpload: vi.fn() }))
+vi.mock('../../services/supabase', () => ({ sbFetch: vi.fn(), sbFetchWithCount: vi.fn(), sbUpload: vi.fn() }))
 vi.mock('../../lib/authClient', () => ({ authClient: { auth: { getSession: vi.fn() } } }))
 
 import Clients from './Clients.jsx'

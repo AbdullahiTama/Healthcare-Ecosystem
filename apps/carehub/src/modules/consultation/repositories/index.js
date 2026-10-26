@@ -1,4 +1,5 @@
 import { sbFetch } from '../../../services/supabase'
+import { pagedQuery } from '../../../lib/pagedQuery'
 
 // ── Consultation repository ──────────────────────────────────────────────────
 // A deep module over the `consultation_forms` table — the shared skincare &
@@ -25,14 +26,16 @@ export function createConsultationRepository({
   saleRepository,
 } = {}) {
   return {
+    // Paged: a single request is capped at 1000 rows by the server, which
+    // silently dropped the rest.
     async getAll(businessId, filters = {}) {
-      let query = `consultation_forms?business_id=eq.${businessId}&order=consultation_date.desc&select=*`
+      let query = `consultation_forms?business_id=eq.${businessId}&order=consultation_date.desc,id.asc&select=*`
       if (filters.clientId) query += `&client_id=eq.${filters.clientId}`
       if (filters.type) query += `&consultation_type=eq.${filters.type}`
       if (filters.query) query += `&client_name=ilike.*${encodeURIComponent(filters.query)}*`
       if (filters.from) query += `&consultation_date=gte.${filters.from}`
       if (filters.to) query += `&consultation_date=lte.${filters.to}`
-      return request(query)
+      return pagedQuery(request, query)
     },
 
     // Per-client consultations — delegates to the client repository's history

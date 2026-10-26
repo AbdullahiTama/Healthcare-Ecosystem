@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Download, CheckCircle, AlertTriangle } from 'lucide-react'
 // Reports owns no table of its own — it is a read-only projection over three
 // aggregates that belong to other modules. So it gets no repository of its
@@ -10,7 +11,7 @@ import { expenseRepository } from '../expenses/repositories'
 import { expenseDate, sumExpenses, sumByCategory } from '../expenses/expenseRules'
 import { purchaseRepository } from '../purchases/repositories'
 import { adrReportRepository } from '../adr/repositories'
-import { inPeriod } from './periodFilter'
+import { inPeriod, periodRange } from './periodFilter'
 import { fmt, currentMonth } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Loading, TealBtn, useToast, Toast } from '../../components/ui'
@@ -18,36 +19,37 @@ import { Card, StatCard, Loading, TealBtn, useToast, Toast } from '../../compone
 const { tealDeep, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, warning, bg } = theme
 
 export default function Reports({ brand, role, perms, embedded = false }) {
-  const [sales, setSales] = useState([])
-  const [expenses, setExpenses] = useState([])
-  const [purchases, setPurchases] = useState([])
-  const [adrReports, setAdrReports] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState(null)
   const [period, setPeriod] = useState('month')
   const [customMonth, setCustomMonth] = useState(currentMonth())
   const { msg, show: showToast } = useToast()
 
-  useEffect(() => { load() }, [brand?.id])
-
-  async function load() {
-    setLoading(true)
-    setLoadError(null)
-    try {
-      const [s, e, p, ad] = await Promise.all([
-        saleRepository.getAll(brand.id),
+  // Only the selected period is read from the server (sales and purchases are
+  // filtered by date there, and every read pages past the 1000-row cap), so a
+  // business with years of history does not download all of it to show one
+  // month. Outstanding credit is all-time by definition, so it comes from the
+  // open-sales read. React Query caches each period, and an answer for a
+  // period the user has already left is never shown.
+  const reportQuery = useQuery({
+    queryKey: ['reports', brand?.id, period, period === 'month' ? customMonth : null],
+    enabled: !!brand?.id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { from, to } = periodRange({ period, month: customMonth })
+      const [sales, expenses, purchases, adrReports, openSales] = await Promise.all([
+        saleRepository.getSince(brand.id, from, { to }),
         expenseRepository.getAll(brand.id),
-        purchaseRepository.getAll(brand.id),
+        purchaseRepository.getAll(brand.id, { from, to }),
         adrReportRepository.getReports(brand.id),
-      ])
-      setSales(s || []); setExpenses(e || []); setPurchases(p || []); setAdrReports(ad || [])
-    } catch (e) {
-      // Do not present a failed read as a month with no spending.
-      console.error('[Reports] load failed:', e?.message)
-      setLoadError(e?.message || 'Could not load reports.')
-    }
-    setLoading(false)
-  }
+        saleRepository.getOpen(brand.id),
+      ]).catch((e) => { console.error('[Reports] load failed:', e?.message); throw e })
+      return { sales: sales || [], expenses: expenses || [], purchases: purchases || [], adrReports: adrReports || [], openSales: openSales || [] }
+    },
+  })
+  const loading = reportQuery.isLoading
+  // Do not present a failed read as a month with no spending.
+  const loadError = reportQuery.isError ? (reportQuery.error?.message || 'Could not load reports.') : null
+  const load = () => reportQuery.refetch()
+  const { sales = [], expenses = [], purchases = [], adrReports = [], openSales = [] } = reportQuery.data || {}
 
   const inRange = (item, dateOf) => inPeriod(item, { period, month: customMonth, dateOf })
 
@@ -61,7 +63,7 @@ export default function Reports({ brand, role, perms, embedded = false }) {
   const totalExpenses = sumExpenses(fExpenses)
   const totalPurchases = fPurchases.reduce((s, x) => s + (x.total_cost || 0), 0)
   const netProfit = totalRevenue - totalExpenses - totalPurchases
-  const creditBalance = sales.filter(s => s.is_credit && (s.balance || 0) > 0).reduce((s, x) => s + (x.balance || 0), 0)
+  const creditBalance = openSales.filter(s => s.is_credit && (s.balance || 0) > 0).reduce((s, x) => s + (x.balance || 0), 0)
   const cashCollected = fSales.filter(s => s.is_credit && s.amount_paid > 0).reduce((s, x) => s + (x.amount_paid || 0), 0)
 
   const byMethod = {}

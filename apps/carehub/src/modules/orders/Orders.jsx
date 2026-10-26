@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom'
 import { X, Check } from 'lucide-react'
 import { orderRepository } from './repositories'
 import { PIPELINE, STAGE_LABEL } from './stages'
-import { productRepository } from '../inventory/repositories'
 // Cross-aggregate reads, each through the module that owns it: an order is
 // raised for a location and a territory, and is raised/approved/watched by
 // staff. Orders now imports nothing from services/supabase.
@@ -49,7 +48,9 @@ function readAuth() {
 // view 'all'        the Orders & LPO page: every order this person may see, and New Order.
 // view 'approvals'  Field team > Order approvals: only the submitted orders waiting for this person (any of them
 //                   for the owner), asked for on the server; no New Order.
-export default function Orders({ brand, view = 'all' }) {
+// `products` is the dashboard's shared catalog (inventory/hooks/useProductCatalog.js):
+// it is only used to suggest product names, so it is not downloaded again here.
+export default function Orders({ brand, view = 'all', products = [] }) {
   const approvalsView = view === 'approvals'
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const authData = readAuth()
@@ -67,10 +68,10 @@ export default function Orders({ brand, view = 'all' }) {
   const [watchersByOrder, setWatchersByOrder] = useState({})
   const [filesByOrder, setFilesByOrder] = useState({})
   const [staffList, setStaffList] = useState([])
-  const [products, setProducts] = useState([])
   const [territories, setTerritories] = useState([])
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [filterStage, setFilterStage] = useState('all')
   const [page, setPage] = useState(0)
   useEffect(() => { setPage(0) }, [filterStage, orders.length])
@@ -111,22 +112,28 @@ export default function Orders({ brand, view = 'all' }) {
   async function load() {
     if (!brand || !brand.id) return
     setLoading(true)
+    setLoadError('')
     try {
-      const o = approvalsView
-        ? await orderRepository.listAwaitingApproval(brand.id, { approverStaffId: meStaffId, isOwner })
-        : await orderRepository.getAll(brand.id)
-      const s = await staffRepository.getAll(brand.id)
-      const p = await productRepository.getAll(brand.id)
-      const t = await territoryRepository.getAll(brand.id)
-      const l = await warehouseRepository.getAll(brand.id)
+      // Independent reads run together rather than one after another.
+      const [o, s, t, l] = await Promise.all([
+        approvalsView
+          ? orderRepository.listAwaitingApproval(brand.id, { approverStaffId: meStaffId, isOwner })
+          : orderRepository.getAll(brand.id),
+        staffRepository.getAll(brand.id),
+        territoryRepository.getAll(brand.id),
+        warehouseRepository.getAll(brand.id),
+      ])
       setOrders(o || [])
       setStaffList(s || [])
-      setProducts(p || [])
       setTerritories(t || [])
       setLocations(l || [])
 
       const ids = (o || []).map(function (x) { return x.id })
-      const its = await orderRepository.getItems(ids)
+      const [its, ws, fs] = await Promise.all([
+        orderRepository.getItems(ids),
+        orderRepository.getWatchers(ids),
+        orderRepository.getFiles(ids),
+      ])
       const imap = {}
       ;(its || []).forEach(function (i) {
         if (!imap[i.order_id]) imap[i.order_id] = []
@@ -134,7 +141,6 @@ export default function Orders({ brand, view = 'all' }) {
       })
       setItemsByOrder(imap)
 
-      const ws = await orderRepository.getWatchers(ids)
       const wmap = {}
       ;(ws || []).forEach(function (w) {
         if (!wmap[w.order_id]) wmap[w.order_id] = []
@@ -142,7 +148,6 @@ export default function Orders({ brand, view = 'all' }) {
       })
       setWatchersByOrder(wmap)
 
-      const fs = await orderRepository.getFiles(ids)
       const fmap = {}
       ;(fs || []).forEach(function (f) {
         if (!fmap[f.order_id]) fmap[f.order_id] = []
@@ -150,7 +155,9 @@ export default function Orders({ brand, view = 'all' }) {
       })
       setFilesByOrder(fmap)
     } catch (e) {
-      showToast('Could not load orders: ' + e.message, { type: 'error' })
+      // Shown in place of the list: a failed load must not read as "no orders".
+      console.error('[orders] load failed:', e)
+      setLoadError("We couldn't load your orders. Check your connection and try again.")
     }
     setLoading(false)
   }
@@ -408,6 +415,8 @@ export default function Orders({ brand, view = 'all' }) {
         pageSize={PAGE_SIZE}
         total={visible.length}
         loading={loading}
+        error={loadError || undefined}
+        onRetry={load}
         empty={
           <Card style={{ padding: '32px', textAlign: 'center' }}>
             <div style={{ fontWeight: '800', color: navy, marginBottom: '6px' }}>
