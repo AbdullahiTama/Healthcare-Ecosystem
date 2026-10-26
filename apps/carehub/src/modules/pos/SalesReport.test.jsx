@@ -8,7 +8,8 @@ import { MemoryRouter } from 'react-router-dom'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-const state = { userId: 'u1', query: null }
+const state = { userId: 'u1', query: null, mobile: false }
+vi.mock('../../hooks/useBreakpoint', () => ({ useBreakpoint: () => ({ isMobile: state.mobile }) }))
 vi.mock('./useSalesReportData', () => ({
   useAuthUserId: () => state.userId,
   useSalesReportData: () => state.query,
@@ -46,7 +47,7 @@ async function render(props = {}) {
   mounted = { host, unmount: async () => { await act(async () => root.unmount()); host.remove() } }
   return host
 }
-afterEach(async () => { if (mounted) await mounted.unmount(); mounted = null; state.userId = 'u1' })
+afterEach(async () => { if (mounted) await mounted.unmount(); mounted = null; state.userId = 'u1'; state.mobile = false })
 
 const keyFigure = (host, label) => {
   const box = [...host.querySelectorAll('[aria-label="Key figures"] > div')].find((d) => d.firstChild.textContent === label)
@@ -120,5 +121,29 @@ describe('SalesReport page', () => {
     state.query = loaded()
     const host = await render()
     expect(host.textContent).not.toMatch(/\b(profit|margin|cost)\b/i)
+  })
+
+  it('on a phone: two-column key figures and a card per sale instead of the wide table', async () => {
+    state.query = loaded()
+    state.mobile = true
+    const host = await render()
+    expect(host.querySelector('[aria-label="Key figures"]').style.gridTemplateColumns).toBe('repeat(2, 1fr)')
+    expect(host.querySelector('table')).toBeNull()
+    const cards = [...host.querySelectorAll('button[aria-label^="Receipt "]')]
+    expect(cards.map((b) => b.getAttribute('aria-label'))).toEqual(expect.arrayContaining([expect.stringContaining('TXN-1'), expect.stringContaining('TXN-2')]))
+  })
+
+  it('on desktop the wide table scrolls inside its own card, never the page', async () => {
+    state.query = loaded()
+    const host = await render()
+    const table = host.querySelector('table')
+    expect(table.style.minWidth).toBe('980px')
+    expect(table.parentElement.style.overflowX).toBe('auto')
+  })
+
+  it('the key figures stay pinned while the list scrolls', async () => {
+    state.query = loaded()
+    const host = await render()
+    expect(host.querySelector('[aria-label="Key figures"]').parentElement.style.position).toBe('sticky')
   })
 })
