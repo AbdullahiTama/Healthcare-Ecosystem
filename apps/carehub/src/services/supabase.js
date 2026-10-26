@@ -315,7 +315,6 @@ export async function getAllLocations(mainBusinessId) {
 // (1000 on this project — proven live 2026-08-11: `Content-Range: 0-999/12276`
 // on a limit=50000 request). Only offset-paging through the clamp reaches
 // every row, so the products/clients collection reads below page through it.
-export async function getProducts(businessId) { return pagedQuery(sbFetch, 'products?business_id=eq.' + businessId + '&order=name.asc,id.asc&select=*') }
 // NOTE: `searchProducts` lived here until 2026-08-21. It selected a nonexistent
 // `sku` column, so every call failed with PGRST204 and the consultation form's
 // silent catch made the picker look empty. Replaced by

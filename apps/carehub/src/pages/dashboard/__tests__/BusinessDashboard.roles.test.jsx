@@ -27,9 +27,8 @@ vi.mock('../../../components/layout/NotificationBell', () => ({ default: () => n
 vi.mock('../../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }))
 vi.mock('../../../utils/modulePrefetch', () => ({ startRolePrefetching: vi.fn(), stopPrefetching: vi.fn() }))
 vi.mock('../../../modules/pos/repositories', () => ({ saleRepository: { syncQueued: vi.fn(async () => ({ synced: 0, rejected: [] })) } }))
-vi.mock('../../../services/supabase', async (importOriginal) => ({
-  ...(await importOriginal()),
-  getProducts: vi.fn(async () => []), cacheData: vi.fn(), getCached: vi.fn(() => null),
+vi.mock('../../../modules/inventory/hooks/useProductCatalog', () => ({
+  useProductCatalog: () => ({ products: [], setProducts: vi.fn(), status: 'ready', refreshing: false, stale: false, staleReason: null, loadedCount: 0, error: null, reload: vi.fn() }),
 }))
 
 import BusinessDashboard from '../BusinessDashboard'

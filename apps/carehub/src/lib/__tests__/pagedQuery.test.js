@@ -29,6 +29,14 @@ describe('pagedQuery', () => {
     ])
   })
 
+  it('reports the running total after each page', async () => {
+    const rows = Array.from({ length: 2500 }, (_, i) => ({ id: i }))
+    const { request } = pagedTransport(rows)
+    const seen = []
+    await pagedQuery(request, 'products?select=*', { onPage: (n) => seen.push(n) })
+    expect(seen).toEqual([1000, 2000, 2500])
+  })
+
   it('issues a single request when the collection fits on one page', async () => {
     const rows = Array.from({ length: 500 }, (_, i) => ({ id: i }))
     const { request, calls } = pagedTransport(rows)
