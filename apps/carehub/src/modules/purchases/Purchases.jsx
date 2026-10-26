@@ -16,7 +16,7 @@ import { purchaseExpirySummary } from './expirySummary'
 import { findDuplicate } from '../../lib/productMatches'
 import { PRODUCT_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, bg } = theme
 
@@ -32,6 +32,9 @@ export default function Purchases({ brand, role, perms }) {
   const [purchases, setPurchases] = useState([])
   const [inventory, setInventory] = useState([])
   const [loading, setLoading] = useState(true)
+  // A failed load used to be swallowed and shown as "No purchases recorded"
+  // with zero totals, which hid a broken get_purchases_page for every business.
+  const [loadError, setLoadError] = useState('')
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [search, setSearch] = useState('')
@@ -59,6 +62,7 @@ export default function Purchases({ brand, role, perms }) {
 
   async function load() {
     setLoading(true)
+    setLoadError('')
     setPurchases([])
     setHasMore(true)
     try {
@@ -69,7 +73,11 @@ export default function Purchases({ brand, role, perms }) {
       setPurchases(page || [])
       setTotals(totalData?.[0] || { purchase_count: 0, total_paid: 0, total_owed: 0 })
       setHasMore((page || []).length === PAGE_SIZE)
-    } catch (e) {}
+    } catch (e) {
+      console.error('[purchases] load failed:', e)
+      setHasMore(false)
+      setLoadError(e?.message?.startsWith('Session expired') ? e.message : "We couldn't load your purchases. Check your connection and try again.")
+    }
     setLoading(false)
   }
 
@@ -80,7 +88,10 @@ export default function Purchases({ brand, role, perms }) {
       const more = await purchaseRepository.getPage(brand.id, { search, month: filterMonth, year: filterYear, offset: purchases.length, limit: PAGE_SIZE })
       setPurchases(p => [...p, ...(more || [])])
       setHasMore((more || []).length === PAGE_SIZE)
-    } catch (e) {}
+    } catch (e) {
+      console.error('[purchases] load more failed:', e)
+      showToast('Could not load more purchases. Please try again.', { type: 'error' })
+    }
     setLoadingMore(false)
   }
 
@@ -276,7 +287,7 @@ export default function Purchases({ brand, role, perms }) {
         {(filterMonth || filterYear) && <button onClick={() => { setFilterMonth(''); setFilterYear('') }} style={{ padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>Clear</button>}
       </div>
 
-      {loading ? <Loading /> : purchases.length === 0 ? (
+      {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : purchases.length === 0 ? (
         <Empty icon={<Truck size={40} />} message='No purchases recorded' action='+ Record Purchase' onAction={() => setShowAdd(true)} />
       ) : (
         <Card>
