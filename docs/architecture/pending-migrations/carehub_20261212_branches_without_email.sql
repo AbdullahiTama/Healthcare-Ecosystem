@@ -18,12 +18,19 @@
 --   4. The two checks that compared only the row's OWN email now use it: orders_caller_is_owner(bid) (owner approval
 --      and corrections of orders at a branch) and can_access_adr_report_row (the owner reading a branch's ADR
 --      reports). Everything else in those functions is unchanged.
+--   5. Row security on businesses: the one write policy ("own business row") matches the row's OWN email, so an
+--      email-less branch could be neither added, seen (unless active and on CareFind), changed nor removed by its
+--      owner. A second policy, "owner manages own branches", lets the owner of a branch's parent chain do exactly what
+--      "own business row" lets them do with their main business; the new parent must be theirs too, so a branch can
+--      neither be added under nor moved to another company. Found in pre-flight 2026-10-26 (the first test had no row
+--      security on businesses).
 --
 -- Security implications: no one gains access they did not have before except an owner over their own branches,
--- which current_business_ids() already granted for ordinary reads. Branches can never carry an identity email, so a
+-- which current_business_ids() already granted for ordinary reads. The branch policy grants a branch's owner the
+-- same rights on it as "own business row" grants on the main business, and nothing to staff or other companies. Branches can never carry an identity email, so a
 -- branch cannot be used to hand owner rights to someone else. Main businesses are unchanged (email required, unique).
 --
--- Rollback: ALTER TABLE public.businesses DROP CONSTRAINT businesses_main_has_email; (then, only if no branch has a
+-- Rollback: DROP POLICY "owner manages own branches" ON public.businesses; ALTER TABLE public.businesses DROP CONSTRAINT businesses_main_has_email; (then, only if no branch has a
 --           NULL email) ALTER TABLE public.businesses ALTER COLUMN email SET NOT NULL; DROP TRIGGER
 --           businesses_branch_no_email ON public.businesses; DROP FUNCTION public.businesses_branch_no_email();
 --           restore orders_caller_is_owner and can_access_adr_report_row from their previous definitions (quoted in
@@ -111,6 +118,13 @@ AS $function$
        )
 $function$;
 
+-- 5. Row security: the owner manages their branches through the parent chain.
+DROP POLICY IF EXISTS "owner manages own branches" ON public.businesses;
+CREATE POLICY "owner manages own branches" ON public.businesses
+  FOR ALL TO authenticated
+  USING (parent_business_id IS NOT NULL AND public.caller_owns_business(parent_business_id))
+  WITH CHECK (parent_business_id IS NOT NULL AND public.caller_owns_business(parent_business_id));
+
 -- Verify, do not assume.
 DO $$
 BEGIN
@@ -126,5 +140,9 @@ BEGIN
   END IF;
   IF (SELECT count(*) FROM pg_proc WHERE proname IN ('orders_caller_is_owner', 'can_access_adr_report_row', 'caller_owns_business')) <> 3 THEN
     RAISE EXCEPTION 'expected exactly one overload each of the ownership functions';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'businesses'
+                  AND policyname = 'owner manages own branches' AND cmd = 'ALL' AND roles = '{authenticated}') THEN
+    RAISE EXCEPTION 'the branch policy is missing';
   END IF;
 END $$;
