@@ -152,8 +152,10 @@ export async function parseFile(file) {
     case 'csv':
       return parseCSV(file);
     case 'xlsx':
-    case 'xls':
       return parseExcel(file);
+    case 'xls':
+      // Old binary Excel files are not read (the server parser only reads .xlsx, see api/_lib/spreadsheet.js).
+      throw new Error('Old .xls files are not supported. In Excel, use File > Save As > Excel Workbook (.xlsx), then upload that file.');
     default:
       throw new Error(`Unsupported file type: ${extension}`);
   }
