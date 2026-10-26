@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import SafetyReportPage from './SafetyReportPage.jsx'
 import ReviewStep from './steps/ReviewStep.jsx'
@@ -30,8 +30,11 @@ const { mockRepo } = vi.hoisted(() => ({
 }))
 
 vi.mock('./repository', () => ({ safetyReportRepository: mockRepo }))
+// One stable user object, as the real AuthContext provides: a fresh object on every
+// call made the page's [user] effect refetch and re-render forever.
+const { authUser } = vi.hoisted(() => ({ authUser: { id: 'user-1', email: 'a@example.com' } }))
 vi.mock('../../providers/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1', email: 'a@example.com' } }),
+  useAuth: () => ({ user: authUser }),
 }))
 
 function renderPage() {
@@ -69,8 +72,9 @@ describe('SafetyReportPage welcome', () => {
     renderPage()
     expect(await screen.findByText(WELCOME_HEADING)).toBeTruthy()
     expect(screen.getByText(/monitor medicine safety/i)).toBeTruthy()
-    expect(screen.getByText(/does not prove/i)).toBeTruthy()
-    expect(screen.getByText(/not.*an emergency service/i)).toBeTruthy()
+    // "not" is bold, so the sentence spans elements: match the paragraph's whole text.
+    expect(screen.getByText((_, el) => el?.tagName === 'P' && /does not prove/i.test(el.textContent))).toBeTruthy()
+    expect(screen.getByRole('note').textContent).toMatch(/not an emergency service/i)
     expect(screen.getByRole('button', { name: /start report/i })).toBeTruthy()
   })
 
@@ -104,7 +108,8 @@ describe('SafetyReportPage welcome', () => {
     fireEvent.click(await screen.findByRole('button', { name: /start report/i }))
     await screen.findByText('About you (the reporter)')
     expect(mockRepo.updateDraft).not.toHaveBeenCalled()
-    fireEvent.change(screen.getByLabelText(/your name/i), { target: { value: 'Ada' } })
+    // The name is prefilled from the profile ('Ada'), so type a different one: an unchanged value is not a change.
+    fireEvent.change(screen.getByLabelText(/your name/i), { target: { value: 'Ada Obi' } })
     await waitFor(() => expect(mockRepo.updateDraft).toHaveBeenCalledTimes(1), { timeout: 8000 })
     await new Promise((r) => setTimeout(r, 2500))
     expect(mockRepo.updateDraft).toHaveBeenCalledTimes(1)
@@ -128,7 +133,9 @@ describe('ReviewStep', () => {
     const missing = [{ step: STEPS.PRODUCTS, label: 'Product brand name' }]
     render(<ReviewStep draft={{ ...validDraft, products: [] }} missing={missing} onEdit={onEdit} onSubmit={() => {}} submitting={false} submitError={null} />)
     expect(screen.getByRole('button', { name: /submit safety report/i }).disabled).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: /edit Medicine or product/i }))
+    // The section also has its own Edit button; this checks the link in the missing-items list.
+    const missingList = screen.getByRole('alert', { name: /missing information/i })
+    fireEvent.click(within(missingList).getByRole('button', { name: /edit Medicine or product/i }))
     expect(onEdit).toHaveBeenCalledWith(STEPS.PRODUCTS)
   })
 })
@@ -138,8 +145,12 @@ describe('CompanyPicker', () => {
 
   it('stores manual text as an unverified candidate', () => {
     const onChange = vi.fn()
-    render(<CompanyPicker value={base} onChange={onChange} searchCompanies={mockRepo.searchCompanies} />)
+    // The picker is controlled: pass the parent's new value back, as the report page does.
+    let value = base
+    const picker = () => <CompanyPicker value={value} onChange={(v) => { value = v; onChange(v) }} searchCompanies={mockRepo.searchCompanies} />
+    const { rerender } = render(picker())
     fireEvent.click(screen.getByText('I can’t find the company'))
+    rerender(picker())
     fireEvent.change(screen.getByPlaceholderText(/exactly as printed/i), { target: { value: 'Acme Labs' } })
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: 'unverified_candidate', candidateName: 'Acme Labs' }))
   })

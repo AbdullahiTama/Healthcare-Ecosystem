@@ -111,7 +111,7 @@ describe('Login', () => {
 
   it('says phone login is coming soon and exposes the switch state to assistive tech', () => {
     renderLogin()
-    const group = screen.getByRole('group', { name: /sign-in method/i })
+    const group = screen.getByRole('group', { name: /sign[- ]in method/i })
     expect(within(group).getByRole('button', { name: 'Email' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(within(group).getByRole('button', { name: 'Phone' }))
     expect(within(group).getByRole('button', { name: 'Phone' })).toHaveAttribute('aria-pressed', 'true')

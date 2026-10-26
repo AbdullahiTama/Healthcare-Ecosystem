@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // The delivery guarantee: money events that settled but have no e-mail in the outbox are sent late, through the same effects
 // and keys; one broken event never stops the rest; nothing here throws into the cron.
@@ -19,6 +19,8 @@ const client = (events, { rpcError = null, intent = { id: 'i1', purpose: 'wallet
 })
 
 beforeEach(() => { for (const f of Object.values(h)) f.mockReset().mockResolvedValue(undefined); vi.spyOn(console, 'info').mockImplementation(() => {}); vi.spyOn(console, 'error').mockImplementation(() => {}) })
+// Vitest 3+: spyOn on an already-spied method reuses the spy, so restore after each test or console calls accumulate.
+afterEach(() => { vi.restoreAllMocks() })
 
 describe('runNotificationBackfill', () => {
   it('asks the database for the last 48 hours, bounded, and sends nothing when nothing is missing', async () => {
