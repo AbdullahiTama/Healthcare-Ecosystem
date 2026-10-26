@@ -17,10 +17,10 @@ Design and decisions: `docs/superpowers/specs/2026-10-25-pos-sales-report-design
 | Piece | State |
 |---|---|
 | Client (report, detail, shifts, exports, deposit method, collections) | On branch `feat/pos-sales-report` |
-| `carehub_20261210_pos_accounting.sql` | **Drafted, NOT applied** (`docs/architecture/pending-migrations/`) |
+| `carehub_20261210_pos_accounting.sql` | **APPLIED live 2026-10-26** (tracked as `20261026221943`), verified: ACLs (no anon; internals not executable by signed-in users), behavioural rollback test as a real Cashier, backfill 183 sales / ₦4,660,975.00 matching the pre-apply total, advisors +4 expected WARNs only |
 | `carehub_20261211_sales_write_hardening.sql` | **Drafted, NOT applied** |
 
-Until migration 1 is applied the report still works on `sales` alone. It shows
+Before migration 1 was applied the report still worked on `sales` alone. It shows
 a notice that money figures are estimated, hides the Payments tab, shift
 controls, refunds and repayments from the detail view. Collections in the POS
 and Debts fall back to the previous writes.

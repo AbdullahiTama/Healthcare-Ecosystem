@@ -142,6 +142,10 @@ ok('ledger: a held sale records no payment', (await pays(sHeld)).length === 0)
 const sCreditNone = await insertSale('repA1', S.A, { txn: 'T7', total: 400, paid: 0, balance: 400, method: 'Credit', credit: true })
 ok('ledger: a credit sale with nothing paid records no payment', (await pays(sCreditNone)).length === 0)
 
+const sTiny = await insertSale('repA1', S.A, { txn: 'T-TINY', total: 0.004, paid: 0.004 })
+ok('ledger: a sub-kobo amount does not abort the sale and records nothing', !!sTiny && (await pays(sTiny)).length === 0)
+const sFrac = await insertSale('repA1', S.A, { txn: 'T-FRAC', total: 1000.9996, paid: 1000.9996 })
+ok('ledger: a 4-decimal amount is rounded to kobo', (await pays(sFrac))[0].amount === 1001)
 await expectError('stamp: company B cannot insert a sale into company A (policy unchanged)', () => insertSale('repB1', S.A, { txn: 'X', total: 1, paid: 1 }))
 
 // ---- shifts --------------------------------------------------------------------------------------

@@ -30,6 +30,7 @@
 -- stores the cash TENDERED in amount_paid, so change handed back must not be
 -- counted (1 live row had amount_paid > total on 2026-10-25).
 --
+-- APPLIED to production 2026-10-26 (schema_migrations 20261026221943).
 -- Re-runnable. Apply as a tracked migration, then run the verification block
 -- in docs/architecture/POS-Sales-Report.md (ACL re-check: Supabase re-grants
 -- EXECUTE to anon at creation time even after REVOKE FROM PUBLIC).
@@ -202,12 +203,15 @@ END $$;
 -- read. Values may be numbers or numeric strings ('' means none).
 -- Change is handed back in cash, so when the methods add up to more than was
 -- received, non-cash methods are taken first and Cash absorbs the excess.
+-- Everything is rounded to kobo first: some stored amounts carry 4 decimals,
+-- and an unrounded 0.004 would become a 0.00 ledger row, fail amount > 0, and
+-- abort the sale insert itself.
 CREATE OR REPLACE FUNCTION public.pos_split_payments(p_split jsonb, p_method text, p_received numeric)
 RETURNS TABLE (method text, amount numeric)
 LANGUAGE plpgsql IMMUTABLE SET search_path TO 'public', 'pg_temp' AS $$
 DECLARE
   v_split jsonb := p_split;
-  v_left numeric := COALESCE(p_received, 0);
+  v_left numeric := round(COALESCE(p_received, 0), 2);
   v_m text;
   v_amt numeric;
   v_any boolean := false;
@@ -219,7 +223,7 @@ BEGIN
 
   IF jsonb_typeof(v_split) = 'object' THEN
     FOREACH v_m IN ARRAY ARRAY['Transfer', 'POS', 'Cash'] LOOP
-      BEGIN v_amt := NULLIF(trim(v_split ->> v_m), '')::numeric; EXCEPTION WHEN others THEN v_amt := NULL; END;
+      BEGIN v_amt := round(NULLIF(trim(v_split ->> v_m), '')::numeric, 2); EXCEPTION WHEN others THEN v_amt := NULL; END;
       IF v_amt IS NOT NULL AND v_amt > 0 AND v_left > 0 THEN
         method := v_m; amount := least(v_amt, v_left);
         v_left := v_left - amount; v_any := true;
