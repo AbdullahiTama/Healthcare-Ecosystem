@@ -20,6 +20,8 @@
 - Task 1 (sign-in prefers the main business) is dropped: with unique emails and email-less branches an email matches
   one business. The is_platform_admin() draft written on the way is dropped for the same reason.
 
+- Both DB drafts APPLIED 2026-10-26 (20261026222721, 20261026223407) after pre-flight added the "owner manages own branches" row policy; verified as two real owners in rolled-back blocks, no residue, advisors: only the expected caller_owns_business entry.
+
 ## Global Constraints
 
 - No business has branches in production (checked 2026-10-25); behaviour for single-location businesses must not change.

@@ -1,4 +1,4 @@
--- carehub_20261210_branch_plan_follows_parent  (DRAFT, not applied)
+-- carehub_20261210_branch_plan_follows_parent  (APPLIED 2026-10-26 as version 20261026223407)
 --
 -- A branch is its own businesses row and carries its own plan and plan_expires_at. guard_business_insert makes a new
 -- branch copy its parent's plan and expiry ONCE, at creation. Nothing kept them in step afterwards: a renewal

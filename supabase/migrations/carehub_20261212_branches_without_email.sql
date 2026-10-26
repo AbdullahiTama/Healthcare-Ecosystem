@@ -1,4 +1,4 @@
--- carehub_20261212_branches_without_email  (DRAFT, not applied)
+-- carehub_20261212_branches_without_email  (APPLIED 2026-10-26 as version 20261026222721)
 --
 -- Branches (businesses rows with a parent_business_id) have no sign-in email of their own (owner's decision
 -- 2026-10-25, option A). Until now businesses.email was NOT NULL and UNIQUE while the Locations page created branches

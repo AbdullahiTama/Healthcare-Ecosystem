@@ -17,15 +17,6 @@ The other three drafts of this work were applied on 2026-10-24 (see "Already app
 |---|---|---|---|
 | - | `carehub_20261026_orders_read_scope.sql` | Narrows who reads orders (creator, approver, watchers, field managers, owner). | **Held**: warehouse staff would lose sight of orders they process. Owner decides (a) give them "Manage field team", (b) add a warehouse path, or (c) keep reading as is. |
 
-## Pending (branches, `docs/superpowers/plans/2026-10-26-branch-switching.md`)
-
-Apply in this order, only with the owner's approval. Tested on PGlite (`branchEmail.pglite.mjs`, `branchPlan.pglite.mjs`).
-
-| Order | Draft | Fixes | Status |
-|---|---|---|---|
-| 1 | `carehub_20261212_branches_without_email.sql` | Branches have no sign-in email (owner's option A); a non-admin cannot put one on a branch; ownership follows the parent chain in `orders_caller_is_owner` and `can_access_adr_report_row` via `caller_owns_business`. Without it, adding a branch is refused. | Ready |
-| 2 | `carehub_20261210_branch_plan_follows_parent.sql` | A main business's plan and expiry are copied to its branches on every change (renewals used to stop at the business that paid); backfills existing branches. | Ready |
-
 ## Already applied (files in `supabase/migrations/`)
 
 | Applied as | Version | Fixes |
@@ -41,6 +32,8 @@ Apply in this order, only with the owner's approval. Tested on PGlite (`branchEm
 | `carehub_20261026_orders_field_activity_link` | 20261024110003 | `orders.field_activity_id`: an order remembers the visit it came from; links to another company's or an unseen report are refused |
 | `carehub_20261027_directory_field_link` | 20261025010459 | Customers derived from visits (`field_customers` with a before-the-limit quiet filter, `field_customer_visits`: SECURITY INVOKER) and `directory_suggestions` (identity and status forced by the database, 20 per company per day, platform admin reviews) |
 | `carehub_20261026_orders_authorisation` | 20261024110224 | Orders approval, pipeline, frozen approved content, order lines and unforgeable history enforced in the database; no signed-in deletes |
+| `carehub_20261212_branches_without_email` | 20261026222721 | Branches have no sign-in email (owner's option A); a non-admin cannot put one on a branch; ownership follows the parent chain (`caller_owns_business`) in `orders_caller_is_owner` and `can_access_adr_report_row`; row policy "owner manages own branches" (added after pre-flight found the own-email policy would refuse every branch) |
+| `carehub_20261210_branch_plan_follows_parent` | 20261026223407 | A main business's plan and expiry are copied to its branches on every change (renewals used to stop at the business that paid); backfill was a no-op (no branches yet) |
 
 The three 2026-10-23 migrations were verified by catalog read-back (one overload of `log_field_activity`, SECURITY
 INVOKER, ACL without `anon`; bucket private; exactly two policies, authenticated only) and by rolled-back runs as real
