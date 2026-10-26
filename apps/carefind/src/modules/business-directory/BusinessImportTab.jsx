@@ -53,17 +53,21 @@ export default function BusinessImportTab({ onComplete, onError }) {
   }, []);
 
   const handleFile = (file) => {
-    const validTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-    const validExtensions = ['.csv', '.xls', '.xlsx'];
+    const validExtensions = ['.csv', '.xlsx'];
     const extension = '.' + file.name.split('.').pop().toLowerCase();
 
-    if (!validTypes.includes(file.type) && !validExtensions.includes(extension)) {
-      onError('Please upload a CSV or Excel file');
+    if (extension === '.xls') {
+      onError('Old .xls files are not supported. In Excel, use File > Save As > Excel Workbook (.xlsx), then upload that file.');
+      return;
+    }
+    if (!validExtensions.includes(extension)) {
+      onError('Please upload a CSV or Excel (.xlsx) file');
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      onError('File size must be less than 10MB');
+    // Matches the server's import limit (api/_handlers/excel-import.js).
+    if (file.size > 5 * 1024 * 1024) {
+      onError('File size must be less than 5MB');
       return;
     }
 
@@ -119,7 +123,7 @@ export default function BusinessImportTab({ onComplete, onError }) {
             <label style={styles.fileInputLabel}>
               <input
                 type="file"
-                accept=".csv,.xls,.xlsx"
+                accept=".csv,.xlsx"
                 onChange={(e) => handleFile(e.target.files[0])}
                 style={styles.fileInput}
               />
@@ -127,7 +131,7 @@ export default function BusinessImportTab({ onComplete, onError }) {
                 Browse Files
               </Button>
             </label>
-            <p style={styles.fileInfo}>Maximum file size: 10MB</p>
+            <p style={styles.fileInfo}>CSV or Excel (.xlsx), up to 5MB</p>
           </div>
         );
 
