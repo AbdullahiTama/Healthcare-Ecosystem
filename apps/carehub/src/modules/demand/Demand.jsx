@@ -3,7 +3,8 @@ import {
   ClipboardList, PackageX, MessageSquare, FileText, Plus, Printer, CheckCircle, Search, X, Zap,
 } from 'lucide-react'
 import { demandRepository } from './repositories'
-import { clientRepository } from '../clients/repositories'
+import { useClients } from '../../hooks/queries'
+import ClientsLoadNote from '../clients/components/ClientsLoadNote'
 import { fmt, nowStr } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
@@ -33,7 +34,10 @@ export default function Demand({ brand, role, perms, products }) {
   const [outItems, setOutItems] = useState([])
   const [requests, setRequests] = useState([])
   const [requisitions, setRequisitions] = useState([])
-  const [clients, setClients] = useState([])
+  // Shared, cached client list (React Query): one download for every page that
+  // picks a client, instead of each page fetching all clients and hiding failures.
+  const clientsQuery = useClients(brand?.id)
+  const clients = clientsQuery.data || []
 
   // Out-of-stock form (manual)
   const [showOut, setShowOut] = useState(false)
@@ -58,11 +62,6 @@ export default function Demand({ brand, role, perms, products }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
 
   useEffect(() => { load() }, [brand?.id])
-  useEffect(() => {
-    let live = true
-    clientRepository.getAll(brand.id).then(c => { if (live) setClients(c || []) }).catch(() => {})
-    return () => { live = false }
-  }, [brand?.id])
 
   async function load() {
     setLoading(true)
@@ -522,6 +521,7 @@ export default function Demand({ brand, role, perms, products }) {
               <datalist id='demand-clients'>
                 {clients.map(c => <option key={c.id} value={c.full_name} />)}
               </datalist>
+              <ClientsLoadNote query={clientsQuery} />
             </div>
           </div>
           <Inp label='Product Requested *' value={reqForm.product_name} onChange={v => setReqForm(p => ({ ...p, product_name: v }))} placeholder='e.g. Augmentin 625mg' required />

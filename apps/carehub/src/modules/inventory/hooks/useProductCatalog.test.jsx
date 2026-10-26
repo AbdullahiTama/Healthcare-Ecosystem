@@ -8,6 +8,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const store = new Map()
 vi.mock('../../../services/supabase', () => ({
   sbFetch: vi.fn(),
+  sbFetchWithCount: vi.fn(),
   cacheData: vi.fn((key, data) => store.set(key, data)),
   getCached: vi.fn((key) => (store.has(key) ? store.get(key) : null)),
 }))

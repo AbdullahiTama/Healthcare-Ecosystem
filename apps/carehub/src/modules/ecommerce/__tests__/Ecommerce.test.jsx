@@ -15,7 +15,9 @@ const vendor = vi.hoisted(() => ({
 }))
 vi.mock('../shopVendorRepository', () => ({ createShopVendorRepository: () => vendor }))
 vi.mock('../repositories', () => ({
+  mergeInventoryStatus: () => [],
   createEcommerceRepository: () => ({
+    getListings: vi.fn().mockResolvedValue([]),
     getApplication: vi.fn().mockResolvedValue({ status: 'Approved' }),
     getInventoryWithStatus: vi.fn().mockResolvedValue([]),
     getTermsForSegment: vi.fn().mockResolvedValue({ body: 'Terms' }),

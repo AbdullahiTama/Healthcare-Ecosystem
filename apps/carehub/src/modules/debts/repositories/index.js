@@ -1,4 +1,5 @@
 import { sbFetch } from '../../../services/supabase'
+import { pagedQuery } from '../../../lib/pagedQuery'
 
 // ── Debt repository ───────────────────────────────────────────────────────────
 // A deep module over the `debts` table. The interface is small
@@ -16,8 +17,10 @@ import { sbFetch } from '../../../services/supabase'
 // the query shape, the same way Purchases imports the inventory repository.
 export function createDebtRepository(request = sbFetch) {
   const repo = {
+    // Paged: a single request is capped at 1000 rows by the server, which
+    // silently dropped the rest.
     async getAll(businessId) {
-      return request(`debts?business_id=eq.${businessId}&order=created_at.desc&select=*`)
+      return pagedQuery(request, `debts?business_id=eq.${businessId}&order=created_at.desc,id.asc&select=*`)
     },
 
     async create(businessId, debt) {

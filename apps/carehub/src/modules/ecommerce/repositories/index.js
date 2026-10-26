@@ -5,6 +5,32 @@ import { SEGMENT_RATES, resolveEcommerceSegment } from '../../../lib/ecommerceSe
 // ── E-commerce repository (Shop Foundation + Terms Auto-Approval) ─────────────
 // Seam over ecommerce_applications / ecommerce_products / ecommerce_product_images / ecommerce_terms.
 // Covers onboarding with segment-specific versioned terms, auto-approve, audit, and approved-gated setup.
+// PostgREST / Postgres "relation does not exist" for one table — the only
+// failure that may read as "nothing here". Matching on the bare table name
+// (as before) also caught ordinary errors whose text mentioned it.
+function isMissingTable(e, table) {
+  const msg = String(e?.message || '')
+  return msg.includes(table) && /does not exist|could not find the table|PGRST205|42P01/i.test(msg)
+}
+
+// Each product with its online-store state. Pure, so a page can recompute it
+// whenever the shared catalog changes without another request.
+export function mergeInventoryStatus(products, listings) {
+  const byProduct = new Map((listings || []).map(r => [r.product_id, r]))
+  return (products || []).map(p => {
+    const e = byProduct.get(p.id)
+    let status = 'Not Activated'
+    if (e) {
+      if (e.is_restricted) status = 'Restricted'
+      else if ((p.stock ?? 0) <= 0) status = 'Out of Stock'
+      else status = e.status
+    } else if ((p.stock ?? 0) <= 0) {
+      status = 'Out of Stock'
+    }
+    return { product: p, ecommerce: e || null, status, isActive: e?.status === 'Active' && !(e.is_restricted) && (p.stock ?? 0) > 0 }
+  })
+}
+
 export function createEcommerceRepository({ request = sbFetch, upload = null } = {}) {
   const up = upload || (async () => { throw new Error('upload not configured') })
 
@@ -111,33 +137,31 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
     })
   }
 
-  // Inventory + ecommerce status — compose productRepository paged read with ecommerce rows
-  async function getInventoryWithStatus(businessId) {
+  // The online-store listing rows for a business, paged past the server's
+  // 1000-row cap. A missing table (store not set up on this database) reads as
+  // no listings; any other failure is raised, never shown as an empty store.
+  async function getListings(businessId) {
     try {
-      const products = await pagedQuery(request, `products?business_id=eq.${businessId}&order=name.asc,id.asc&select=*`)
-      let ecommerceRows = []
-      try {
-        ecommerceRows = await request(`ecommerce_products?business_id=eq.${businessId}&select=*`)
-      } catch (e) {
-        if (!String(e.message).includes('ecommerce_products')) throw e
-      }
-      const byProduct = new Map((ecommerceRows || []).map(r => [r.product_id, r]))
-      return (products || []).map(p => {
-        const e = byProduct.get(p.id)
-        let status = 'Not Activated'
-        if (e) {
-          if (e.is_restricted) status = 'Restricted'
-          else if ((p.stock ?? 0) <= 0) status = 'Out of Stock'
-          else status = e.status
-        } else if ((p.stock ?? 0) <= 0) {
-          status = 'Out of Stock'
-        }
-        return { product: p, ecommerce: e || null, status, isActive: e?.status === 'Active' && !(e.is_restricted) && (p.stock ?? 0) > 0 }
-      })
+      return await pagedQuery(request, `ecommerce_products?business_id=eq.${businessId}&order=id.asc&select=*`)
     } catch (e) {
-      if (String(e.message).includes('products')) return []
+      if (isMissingTable(e, 'ecommerce_products')) return []
       throw e
     }
+  }
+
+  // Inventory + ecommerce status. Pages that already hold the shared product
+  // catalog pass it as `products`, so the catalog is not downloaded again.
+  async function getInventoryWithStatus(businessId, { products } = {}) {
+    let list = products
+    if (!Array.isArray(list)) {
+      try {
+        list = await pagedQuery(request, `products?business_id=eq.${businessId}&order=name.asc,id.asc&select=*`)
+      } catch (e) {
+        if (isMissingTable(e, 'products')) return []
+        throw e
+      }
+    }
+    return mergeInventoryStatus(list, await getListings(businessId))
   }
 
   async function getEcommerceProduct(businessId, productId) {
@@ -352,6 +376,7 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
     submitApplication,
     updateApplicationStatus,
     getInventoryWithStatus,
+    getListings,
     getEcommerceProduct,
     upsertEcommerceProduct,
     getImages,

@@ -1,5 +1,6 @@
-import { sbFetch } from '../../../services/supabase'
+import { sbFetch, sbFetchWithCount } from '../../../services/supabase'
 import { isDuplicateError } from '../../../lib/dbErrors'
+import { pagedQuery } from '../../../lib/pagedQuery'
 
 // ── Fail-loud dispensing ──────────────────────────────────────────────────────
 // A till may park an unsent sale and replay it later. Dispensing must NOT:
@@ -80,12 +81,57 @@ export function isServerRejection(e) {
 //   offline  — the queue store above (all/push/replace)
 //   isOnline — connectivity, so both branches of create() are reachable in tests
 // Production binds the real ones (defaults); tests bind in-memory adapters.
+function newestFirst(a, b) {
+  return String(b.created_at || '').localeCompare(String(a.created_at || ''))
+}
+
 export function createSaleRepository({
   request = sbFetch,
+  requestWithCount = sbFetchWithCount,
   offline = localOfflineQueue,
   isOnline = () => navigator.onLine,
 } = {}) {
   return {
+    // ── Targeted reads ────────────────────────────────────────────────────────
+    // Screens must not download a business's whole sales history: it grows
+    // with every sale, and a single PostgREST request is clamped to 1000 rows
+    // (db-max-rows), so "all sales" silently lost older rows past that point.
+    // Each read below asks only for what a screen shows, and pages past the cap.
+
+    // Sales still needing action: on hold, or on credit with a balance owed.
+    // Two paged queries merged (PostgREST's flat or() cannot express "held OR
+    // (credit AND balance > 0)"), newest first.
+    async getOpen(businessId) {
+      const [held, credit] = await Promise.all([
+        pagedQuery(request, `sales?business_id=eq.${businessId}&is_on_hold=eq.true&order=created_at.desc,id.asc&select=*`),
+        pagedQuery(request, `sales?business_id=eq.${businessId}&is_credit=eq.true&balance=gt.0&order=created_at.desc,id.asc&select=*`),
+      ])
+      const byId = new Map()
+      for (const s of [...held, ...credit]) byId.set(String(s.id), s)
+      return [...byId.values()].sort(newestFirst)
+    },
+
+    // Every sale created in [from, to) (ISO date-times; `to` optional), paged.
+    async getSince(businessId, from, { to } = {}) {
+      let q = `sales?business_id=eq.${businessId}`
+      if (from) q += `&created_at=gte.${from}`
+      if (to) q += `&created_at=lt.${to}`
+      return pagedQuery(request, `${q}&order=created_at.desc,id.asc&select=*`)
+    },
+
+    // How many sales a business has, counted by the database (no rows sent).
+    async count(businessId) {
+      const res = await requestWithCount(`sales?business_id=eq.${businessId}&select=id`, { head: true })
+      return res && Number.isFinite(res.total) ? res.total : 0
+    },
+
+    // The latest completed (not held) sales, for a "recent sales" list.
+    async getRecent(businessId, limit = 50) {
+      return request(`sales?business_id=eq.${businessId}&is_on_hold=eq.false&order=created_at.desc,id.asc&select=*&limit=${limit}`)
+    },
+
+    // Unpaged and capped at 1000 rows by the server: only for small, filtered
+    // reads (e.g. `{ date }`). Prefer the targeted reads above.
     async getAll(businessId, filters = {}) {
       let query = `sales?business_id=eq.${businessId}&order=created_at.desc&select=*`
       if (filters.date) query += `&created_at=gte.${filters.date}T00:00:00`

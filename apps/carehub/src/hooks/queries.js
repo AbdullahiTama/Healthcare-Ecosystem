@@ -7,7 +7,8 @@ import { settingsRepository } from '../modules/settings/repositories'
 // ── Query Keys ───────────────────────────────────────────────────────────────
 export const keys = {
   todaySales: (brandId) => ['sales', 'today', brandId],
-  allSales: (brandId) => ['sales', 'all', brandId],
+  openSales: (brandId) => ['sales', 'open', brandId],
+  recentSales: (brandId) => ['sales', 'recent', brandId],
   appointments: (brandId) => ['appointments', brandId],
   clients: (brandId) => ['clients', brandId],
   settings: (brandId) => ['settings', brandId],
@@ -28,10 +29,23 @@ export function useTodaySales(brandId) {
   })
 }
 
-export function useAllSales(brandId) {
+// Held sales and credit sales with a balance owed — the sales that still need
+// action. Replaces an "all sales" download that grew with every sale and was
+// silently capped at 1000 rows.
+export function useOpenSales(brandId) {
   return useQuery({
-    queryKey: keys.allSales(brandId),
-    queryFn: () => saleRepository.getAll(brandId),
+    queryKey: keys.openSales(brandId),
+    queryFn: () => saleRepository.getOpen(brandId),
+    enabled: !!brandId,
+    staleTime: 30_000,
+  })
+}
+
+// The latest completed sales, for the POS "Recent" list.
+export function useRecentSales(brandId, limit = 50) {
+  return useQuery({
+    queryKey: [...keys.recentSales(brandId), limit],
+    queryFn: () => saleRepository.getRecent(brandId, limit),
     enabled: !!brandId,
     staleTime: 30_000,
   })
@@ -135,7 +149,8 @@ export function useCreateSale(brandId) {
     mutationFn: (saleData) => saleRepository.create(brandId, saleData),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.todaySales(brandId) })
-      qc.invalidateQueries({ queryKey: keys.allSales(brandId) })
+      qc.invalidateQueries({ queryKey: keys.openSales(brandId) })
+      qc.invalidateQueries({ queryKey: keys.recentSales(brandId) })
     },
   })
 }
@@ -146,7 +161,8 @@ export function useUpdateSale(brandId) {
     mutationFn: ({ id, data }) => saleRepository.update(id, brandId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.todaySales(brandId) })
-      qc.invalidateQueries({ queryKey: keys.allSales(brandId) })
+      qc.invalidateQueries({ queryKey: keys.openSales(brandId) })
+      qc.invalidateQueries({ queryKey: keys.recentSales(brandId) })
     },
   })
 }
@@ -155,6 +171,7 @@ export function useInvalidateSales(brandId) {
   const qc = useQueryClient()
   return () => {
     qc.invalidateQueries({ queryKey: keys.todaySales(brandId) })
-    qc.invalidateQueries({ queryKey: keys.allSales(brandId) })
+    qc.invalidateQueries({ queryKey: keys.openSales(brandId) })
+    qc.invalidateQueries({ queryKey: keys.recentSales(brandId) })
   }
 }
