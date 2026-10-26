@@ -4,7 +4,13 @@
   "type": "module",
   "description": "Framework-free client logic for payout screens (bank search, account lookup, PIN and payout-account flows) shared by CareFind and CareHub",
   "main": "src/index.js",
-  "exports": { ".": "./src/index.js" },
-  "scripts": { "test": "vitest run" },
-  "devDependencies": { "vitest": "^2.0.0" }
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.12"
+  }
 }
