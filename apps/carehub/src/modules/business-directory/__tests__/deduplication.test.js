@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createDedupIndex, classify, classifyBatch, compareRecords, buildMergePatch, DUP_STATUS } from '../services/deduplication'
+import { createDedupIndex, candidatesFor, classify, classifyBatch, compareRecords, buildMergePatch, DUP_STATUS } from '../services/deduplication'
 import { deriveNormalized } from '../services/normalize'
 
 const rec = (id, o) => ({ id, ...o, ...deriveNormalized(o) })
@@ -85,12 +85,15 @@ describe('classifyBatch', () => {
     await expect(classifyBatch([rec(undefined, { name: 'A Clinic' })], createDedupIndex([]), { shouldCancel: () => true })).rejects.toThrow('cancelled')
   })
 
-  it('handles a 3,000 × 3,000 comparison quickly (blocking index, not O(n·m))', async () => {
+  // Counts comparisons instead of timing them: a stopwatch limit fails on a busy
+  // CI runner even when the blocking index works (8.1s against 8s on 2026-10-26).
+  it('handles a 3,000 × 3,000 comparison with the blocking index, not O(n·m)', async () => {
     const mk = (i, p) => rec(p + i, { name: 'Facility ' + i + ' Healthcare', address: i + ' Road', phone: '080' + String(10000000 + i), latitude: 6 + (i % 300) / 100, longitude: 3 + Math.floor(i / 300) / 100 })
     const idx = createDedupIndex(Array.from({ length: 3000 }, (_, i) => mk(i, 'e')))
-    const t0 = Date.now()
-    const out = await classifyBatch(Array.from({ length: 3000 }, (_, i) => { const c = mk(i, 'c'); delete c.id; return c }), idx)
-    expect(Date.now() - t0).toBeLessThan(8000)
+    const candidates = Array.from({ length: 3000 }, (_, i) => { const c = mk(i, 'c'); delete c.id; return c })
+    const compared = candidates.reduce((n, c) => n + candidatesFor(idx, c).length, 0)
+    expect(compared).toBeLessThan(3000 * 3000 * 0.1) // about 325,000 today; every pair would be 9,000,000
+    const out = await classifyBatch(candidates, idx)
     expect(out.every((o) => o.status === DUP_STATUS.CONFIRMED)).toBe(true)
   })
 })
