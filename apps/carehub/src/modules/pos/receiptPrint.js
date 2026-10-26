@@ -11,6 +11,7 @@
 import { esc } from '../../lib/escape.js'
 import { fmt, nowStr } from '../../lib/utils.js'
 import QRCode from 'qrcode'
+import { parseDbTime } from './salesReport.js'
 
 // A stored `sales` row → the receipt shape buildReceiptHtml/buildReceiptEscpos
 // read. Used to reprint a past sale (POS Recent tab, Sales & Accounts report).
@@ -35,7 +36,9 @@ export function saleToReceipt(s) {
     amtPaid: s.amount_paid,
     balance: s.balance,
     splitAmounts: s.payment_method === 'Split' ? splitAmounts : null,
-    date: s.created_at,
+    // created_at is stored as UTC with no zone; read as-is it would print in
+    // the device's zone as if it were local time (an hour early in Lagos).
+    date: parseDbTime(s.created_at)?.toISOString() || s.created_at,
   }
 }
 

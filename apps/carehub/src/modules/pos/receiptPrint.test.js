@@ -253,6 +253,10 @@ describe('saleToReceipt', () => {
     expect(saleToReceipt({ ...row, payment_method: 'Split', payment_split: '{"Cash":"100","Transfer":"100"}' }).splitAmounts).toEqual({ Cash: '100', Transfer: '100' })
     expect(saleToReceipt({ ...row, payment_split: '{"Cash":"1"}' }).splitAmounts).toBeNull()
   })
+  it('reads the zone-less stored time as UTC, so the reprint shows the real local time', () => {
+    expect(saleToReceipt(row).date).toBe('2026-10-21T10:00:00.000Z')
+    expect(saleToReceipt({ ...row, created_at: '2026-10-21T10:00:00+00:00' }).date).toBe('2026-10-21T10:00:00.000Z')
+  })
   it('survives unreadable items and split', () => {
     const r = saleToReceipt({ ...row, items: 'garbage', payment_method: 'Split', payment_split: '{bad' })
     expect(r.items).toEqual([])
