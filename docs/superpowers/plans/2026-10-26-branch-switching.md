@@ -16,6 +16,7 @@
   refused, which is why no business has branches. The owner chose **option A**: a branch has no sign-in email; the
   owner of a branch is the owner of its main business (draft carehub_20261212_branches_without_email). Because email
   is an identity column, branches carry no email at all (no "contact email" field).
+- The subscription-expiry cron (Task 6) also had the F-21 secret bypass; fixed alongside in its own commit (2026-10-26).
 - Task 1 (sign-in prefers the main business) is dropped: with unique emails and email-less branches an email matches
   one business. The is_platform_admin() draft written on the way is dropped for the same reason.
 
