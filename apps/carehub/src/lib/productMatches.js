@@ -63,3 +63,29 @@ export function findAllDuplicateGroups(allProducts) {
   }
   return [...groups.values()].filter((g) => g.length > 1)
 }
+
+// A lookup with exactly findDuplicate's answer (the first product in list
+// order whose normalized name or generic name matches) that is built once in
+// O(n) and answers each query in O(1). Bulk CSV import used to call
+// findDuplicate per row, which is O(rows × catalog) regex work and froze older
+// devices on a 3,000-product catalog.
+export function createDuplicateIndex(existingProducts) {
+  const byName = new Map()
+  const byGeneric = new Map()
+  existingProducts.forEach((p, i) => {
+    const pName = normalize(p.name)
+    const pGeneric = normalize(p.generic_name || p.genericName)
+    if (pName && !byName.has(pName)) byName.set(pName, i)
+    if (pGeneric && !byGeneric.has(pGeneric)) byGeneric.set(pGeneric, i)
+  })
+  return {
+    find(name, genericName) {
+      const nName = normalize(name)
+      const nGeneric = normalize(genericName)
+      const hits = []
+      if (nName && byName.has(nName)) hits.push(byName.get(nName))
+      if (nGeneric && byGeneric.has(nGeneric)) hits.push(byGeneric.get(nGeneric))
+      return hits.length ? existingProducts[Math.min(...hits)] : null
+    },
+  }
+}

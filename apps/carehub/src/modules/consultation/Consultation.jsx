@@ -7,7 +7,7 @@ import ConsultationForm from './ConsultationForm'
 import PharmacyForm, { PHARMACY_TYPE_LABEL } from './PharmacyForm'
 import { printConsultation, printPharmacyConsultation } from './consultationPrint'
 import { consultationRepository } from './repositories'
-import { clientRepository } from '../clients/repositories'
+import { useClients } from '../../hooks/queries'
 
 const { tealDeep, navy, gray600, gray500, gray400, border, bg } = theme
 
@@ -49,7 +49,9 @@ export default function Consultation({ brand, products, staffName }) {
   const [selected, setSelected] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [formClient, setFormClient] = useState(null)
-  const [clients, setClients] = useState([])
+  // Shared, cached client list (React Query): one download for every page that
+  // picks a client, instead of each page fetching all clients and hiding failures.
+  const { data: clients = [] } = useClients(brand?.id)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
 
   const isPharmacy = (brand?.business_type || brand?.type) === 'pharmacy'
@@ -79,10 +81,6 @@ export default function Consultation({ brand, products, staffName }) {
     // eslint-disable-next-line
   }, [brand?.id, search, from, to, typeFilter])
 
-  useEffect(() => {
-    if (!brand?.id) return
-    clientRepository.getAll(brand.id).then(c => setClients(c || [])).catch(() => {})
-  }, [brand?.id])
 
   // Deep link from Clients.jsx ("New Consultation" in the client's file):
   // /consultation?client=<id> pre-selects that client and opens the form.

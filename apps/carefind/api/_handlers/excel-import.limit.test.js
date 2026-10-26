@@ -2,18 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // The upload ceiling on the business-directory import.
 //
-// This handler feeds raw request bytes straight into `XLSX.read()`. xlsx@0.18.5 carries two unresolved HIGH advisories
-// (prototype pollution GHSA-4r6h-8v6p-xvw6, ReDoS GHSA-5pgg-2g8v-p4x9) with no fixed version published on npm, so the
-// library cannot simply be upgraded away. What IS in our control is how much we hand it: the original code buffered the
-// entire request with no bound, which made both a memory exhaustion and an unbounded parse trivially reachable from a
-// public endpoint. The cap closes that.
+// This handler feeds raw request bytes to the spreadsheet parser (api/_lib/spreadsheet.js, exceljs, which replaced
+// xlsx@0.18.5 and its unfixed advisories). The original code buffered the entire request with no bound, which made a
+// memory exhaustion trivially reachable from a public endpoint. The cap closes that; the parser's own zip-size guard
+// is tested in api/_lib/__tests__/spreadsheet.test.js.
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: 'u-1', email: 'a@b.c' } }, error: null }) } }),
 }))
 
-const XLSX = vi.hoisted(() => ({ read: vi.fn(), utils: { sheet_to_json: vi.fn() } }))
-vi.mock('xlsx', () => XLSX)
+const parser = vi.hoisted(() => ({ readFirstSheetRows: vi.fn(), SpreadsheetError: class extends Error {} }))
+vi.mock('../_lib/spreadsheet.js', () => parser)
 
 // The handler refuses to do anything without these, and it checks them at call time - without them it returns 500
 // before it ever subscribes to the request body, which would make every test below pass for the wrong reason.
@@ -71,10 +70,8 @@ const res = () => {
 const MAX = 5 * 1024 * 1024
 
 beforeEach(() => {
-  XLSX.read.mockReset()
-  XLSX.utils.sheet_to_json.mockReset()
-  XLSX.utils.sheet_to_json.mockReturnValue([['name'], ['Acme']])
-  XLSX.read.mockReturnValue({ SheetNames: ['Sheet1'], Sheets: { Sheet1: {} } })
+  parser.readFirstSheetRows.mockReset()
+  parser.readFirstSheetRows.mockResolvedValue([['name'], ['Acme']])
 })
 
 describe('the import upload ceiling', () => {
@@ -85,7 +82,7 @@ describe('the import upload ceiling', () => {
 
     expect(r.statusCode).toBe(413)
     expect(r.body.error).toBe('File too large')
-    expect(XLSX.read).not.toHaveBeenCalled()
+    expect(parser.readFirstSheetRows).not.toHaveBeenCalled()
   })
 
   it('stops buffering once the ceiling is passed, rather than reading the whole thing first', async () => {
@@ -105,7 +102,7 @@ describe('the import upload ceiling', () => {
     await run(handler, req, r)
 
     expect(r.statusCode).not.toBe(413)
-    expect(XLSX.read).toHaveBeenCalledTimes(1)
+    expect(parser.readFirstSheetRows).toHaveBeenCalledTimes(1)
   })
 
   it('a body exactly on the ceiling is still accepted - the limit is not off by one', async () => {
@@ -114,7 +111,7 @@ describe('the import upload ceiling', () => {
     await run(handler, req, r)
 
     expect(r.statusCode).not.toBe(413)
-    expect(XLSX.read).toHaveBeenCalledTimes(1)
+    expect(parser.readFirstSheetRows).toHaveBeenCalledTimes(1)
   })
 
   it('rejects an empty body rather than handing an empty buffer to the parser', async () => {
@@ -123,6 +120,6 @@ describe('the import upload ceiling', () => {
     await run(handler, req, r)
 
     expect(r.statusCode).toBe(400)
-    expect(XLSX.read).not.toHaveBeenCalled()
+    expect(parser.readFirstSheetRows).not.toHaveBeenCalled()
   })
 })

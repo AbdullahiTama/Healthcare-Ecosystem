@@ -163,6 +163,41 @@ describe('apply carefind_20261019_red_team_fixes', () => {
   it('applies', async () => { await db.exec(M('carefind_20261019_red_team_fixes')) }, 60_000)
 })
 
+describe('get_purchases_page against the live purchases column types', () => {
+  const member = async () => {
+    const email = `pp${++n}@example.com`; const b = await business(email)
+    await db.query(`insert into purchases (business_id, supplier_name, product_name, quantity, expiry, created_at)
+                    values ($1,'Emzor','Paracetamol',10,'2027-06-30','2026-10-26 10:45:56')`, [b])
+    return { b, claims: { sub: uid(), email } }
+  }
+
+  it('reproduces: the 20261019 version fails on every call (expiry is date, created_at has no time zone)', async () => {
+    const { b, claims } = await member()
+    await expect(as('authenticated', claims, () => all('select * from get_purchases_page($1,null,null,null,0,10)', [b])))
+      .rejects.toThrow(/structure of query does not match function result type/)
+  })
+
+  it('applies carehub_20261210_purchases_page_column_types', async () => {
+    await db.exec(M('carehub_20261210_purchases_page_column_types'))
+  })
+
+  it('returns the rows: expiry as YYYY-MM-DD text, created_at as the stored UTC instant; filters still work', async () => {
+    const { b, claims } = await member()
+    const rows = await as('authenticated', claims, () => all('select * from get_purchases_page($1,null,null,null,0,10)', [b]))
+    expect(rows).toHaveLength(1)
+    expect(rows[0].expiry).toBe('2027-06-30')
+    expect(new Date(rows[0].created_at).toISOString()).toBe('2026-10-26T10:45:56.000Z')
+    expect(await as('authenticated', claims, () => all("select product_name from get_purchases_page($1,'para','2026-10',null,0,10)", [b]))).toEqual([{ product_name: 'Paracetamol' }])
+    expect(await as('authenticated', claims, () => all("select 1 from get_purchases_page($1,null,null,'2025',0,10)", [b]))).toEqual([])
+  })
+
+  it('keeps the ownership check and the anon block', async () => {
+    const { b } = await member()
+    await expect(as('anon', null, () => one('select * from get_purchases_page($1,null,null,null,0,10)', [b]))).rejects.toThrow(/permission denied/)
+    await expect(as('authenticated', { sub: uid(), email: 'nobody@example.com' }, () => one('select * from get_purchases_page($1,null,null,null,0,10)', [b]))).rejects.toThrow(/Not authorized/)
+  })
+})
+
 describe('F-37: provision_staff_auth can no longer take over an account', () => {
   it('an existing account keeps its password and confirmation; the staff row links to it', async () => {
     const victim = uid()

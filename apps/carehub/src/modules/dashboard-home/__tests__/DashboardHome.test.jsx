@@ -12,18 +12,21 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 vi.mock('../../../hooks/queries', () => ({
   useTodaySales: vi.fn(),
-  useAllSales: vi.fn(),
+  useOpenSales: vi.fn(),
   useAppointments: vi.fn(),
 }))
 vi.mock('../FieldTeamToday.jsx', () => ({
   default: function MockFieldTeamToday({ role, staffId }) { return <div data-testid="field-team-today" data-role={role} data-staff={staffId || ''} /> },
+}))
+vi.mock('../../pos/repositories', () => ({
+  saleRepository: { getSince: vi.fn(async () => []) },
 }))
 vi.mock('../../notifications/repositories', () => ({
   notificationRepository: { notify: vi.fn(async () => {}) },
 }))
 
 import DashboardHome from '../DashboardHome'
-import { useTodaySales, useAllSales, useAppointments } from '../../../hooks/queries'
+import { useTodaySales, useOpenSales, useAppointments } from '../../../hooks/queries'
 import { fmt } from '../../../lib/utils'
 
 const BRAND = { id: 'biz-1', name: 'Pharma Hub', city: 'Lagos' }
@@ -42,7 +45,7 @@ function LocationProbe() {
 
 async function mountHome({ today, all, appts, products = [], perms = {}, role = 'Owner', brand = BRAND } = {}) {
   useTodaySales.mockReturnValue(today ?? query())
-  useAllSales.mockReturnValue(all ?? query())
+  useOpenSales.mockReturnValue(all ?? query())
   useAppointments.mockReturnValue(appts ?? query())
 
   const host = document.createElement('div')

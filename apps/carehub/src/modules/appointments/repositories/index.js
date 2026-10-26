@@ -1,4 +1,5 @@
 import { sbFetch } from '../../../services/supabase'
+import { pagedQuery } from '../../../lib/pagedQuery'
 
 // ── Appointment repository ────────────────────────────────────────────────────
 // A deep module over the `appointments` table. The interface is small
@@ -18,8 +19,10 @@ export function createAppointmentRepository(request = sbFetch) {
   return {
     // Ordered by date ascending — the page shows a forward-looking schedule,
     // not a newest-first log like the other aggregates.
+    // Paged: a single request is capped at 1000 rows by the server, which
+    // silently dropped the newest appointments (the list is oldest first).
     async getAll(businessId) {
-      return request(`appointments?business_id=eq.${businessId}&order=date.asc&select=*`)
+      return pagedQuery(request, `appointments?business_id=eq.${businessId}&order=date.asc,id.asc&select=*`)
     },
 
     async create(businessId, appointment) {

@@ -6,7 +6,7 @@ import Sidebar from '../../components/layout/Sidebar'
 import TopBar from '../../components/layout/TopBar'
 import PlanExpiryBanner from '../../components/layout/PlanExpiryBanner'
 import { Toast, useToast, DashboardShell, Loading } from '../../components/ui'
-import { getProducts, cacheData, getCached } from '../../services/supabase'
+import { useProductCatalog } from '../../modules/inventory/hooks/useProductCatalog'
 // Cross-aggregate read: the permission flags a staff member's role grants are
 // owned by the staff module.
 import { staffRepository } from '../../modules/staff/repositories'
@@ -122,7 +122,11 @@ export default function BusinessDashboard() {
   // their Field page (a rep). Never to a page they cannot open, which would redirect forever.
   const landing = landingRoute(allowedRouteKeys)
   const guard = (routeKey, element) => (allowedRouteKeys.includes(routeKey) ? element : <Navigate to={'/dashboard/' + landing} replace />)
-  const [products, setProducts] = useState([])
+  // The product catalog is loaded once per business and shared by every page
+  // (Inventory, POS, stock validation, CareFind…). Loading, error, offline and
+  // saved-copy states live in useProductCatalog; pages read them from `catalog`.
+  const catalog = useProductCatalog(brand?.id)
+  const { products, setProducts, reload: loadProducts } = catalog
   const [syncing, setSyncing] = useState(false)
   const { isMobile, isTablet } = useBreakpoint()
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
@@ -142,7 +146,6 @@ export default function BusinessDashboard() {
 
   useEffect(() => {
     if (!brand?.id) return
-    loadProducts()
     if (navigator.onLine) {
       saleRepository.syncQueued(brand.id).then(r => {
         if (r.synced > 0) showToast(r.synced + ' offline sale(s) synced!')
@@ -150,22 +153,6 @@ export default function BusinessDashboard() {
       }).catch(() => {})
     }
   }, [brand?.id])
-
-  async function loadProducts() {
-    try {
-      const p = await getProducts(brand.id)
-      if (p && p.length > 0) {
-        setProducts(p)
-        cacheData('products_' + brand.id, p)
-      } else {
-        const cached = getCached('products_' + brand.id)
-        if (cached) setProducts(cached)
-      }
-    } catch (e) {
-      const cached = getCached('products_' + brand.id)
-      if (cached) setProducts(cached)
-    }
-  }
 
   const handleSync = async () => {
     setSyncing(true)
@@ -180,7 +167,7 @@ export default function BusinessDashboard() {
 
   const online = useOnlineStatus()
 
-  const pageProps = { brand, products, setProducts, role, perms, showToast, loadProducts, staffName: staffUser?.full_name || '' }
+  const pageProps = { brand, products, setProducts, catalog, role, perms, showToast, loadProducts, staffName: staffUser?.full_name || '' }
 
   return (
     <>

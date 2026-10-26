@@ -13,7 +13,6 @@ vi.mock('../repositories', () => ({
     getEvents: vi.fn(), advance: vi.fn(), create: vi.fn(), uploadFile: vi.fn(),
   },
 }))
-vi.mock('../../inventory/repositories', () => ({ productRepository: { getAll: vi.fn(async () => []) } }))
 vi.mock('../../warehouses/repositories', () => ({ warehouseRepository: { getAll: vi.fn(async () => []) } }))
 vi.mock('../../territories/repositories', () => ({ territoryRepository: { getAll: vi.fn(async () => []) } }))
 vi.mock('../../staff/repositories', () => ({ staffRepository: { getAll: vi.fn(async () => []) } }))

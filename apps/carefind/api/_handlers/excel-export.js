@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import * as XLSX from 'xlsx'
+import { writeSheet } from '../_lib/spreadsheet.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -69,19 +69,12 @@ export default async function handler(req, res) {
     return row
   })
 
-  const wb = XLSX.utils.book_new()
-  const ws = XLSX.utils.json_to_sheet(transformed)
-
-  const colWidths = Object.keys(transformed[0] || {}).map((key) => ({
-    wch: Math.max(key.length, ...transformed.map((row) => String(row[key] || '').length)) + 2,
-  }))
-  ws['!cols'] = colWidths
-
-  XLSX.utils.book_append_sheet(wb, ws, 'Businesses')
-
-  const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  const columns = exportFields.map((field) => FIELD_LABELS[field] || field)
+  const excelBuffer = await writeSheet('Businesses', columns, transformed)
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-  res.setHeader('Content-Disposition', `attachment; filename="${filename || 'businesses'}.xlsx"`)
-  return res.status(200).send(Buffer.from(excelBuffer))
+  // The name comes from the request: keep it to safe characters so it cannot break out of the header.
+  const safeName = String(filename || 'businesses').replace(/[^\w .-]/g, '_').slice(0, 100) || 'businesses'
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}.xlsx"`)
+  return res.status(200).send(excelBuffer)
 }

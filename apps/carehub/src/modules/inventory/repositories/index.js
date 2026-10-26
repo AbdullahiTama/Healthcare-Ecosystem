@@ -20,9 +20,19 @@ export function createProductRepository(request = sbFetch) {
     // single query, which is why uploaded products past 1000 never appeared).
     // A raised limit cannot help; the rows are fetched by offset-paging until
     // the last short page. `id.asc` pins the order so pages cannot shift rows.
-    // The UI paginates the returned array for rendering.
-    async getAll(businessId) {
-      return pagedQuery(request, `products?business_id=eq.${businessId}&order=name.asc,id.asc&select=*`)
+    // The UI paginates the returned array for rendering. `onProgress(count)`
+    // reports rows loaded so far, page by page.
+    async getAll(businessId, { onProgress } = {}) {
+      return pagedQuery(request, `products?business_id=eq.${businessId}&order=name.asc,id.asc&select=*`, { onPage: onProgress })
+    },
+
+    // Counts for a summary card (e.g. one per branch on Locations) without the
+    // full rows: only the three columns the counts need, paged. About 20x less
+    // data than getAll for a large catalog.
+    async getStockSummary(businessId) {
+      const rows = await pagedQuery(request, `products?business_id=eq.${businessId}&order=id.asc&select=id,stock,reorder_level,category`)
+      const lowStock = rows.filter(p => p.category !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5)).length
+      return { productCount: rows.length, lowStock }
     },
 
     async getById(productId, businessId) {
@@ -53,12 +63,16 @@ export function createProductRepository(request = sbFetch) {
       })
     },
 
+    // Returns the saved row (or null when nothing matched — wrong tenant or a
+    // deleted product) so callers can update their local list from what the
+    // database actually stored instead of re-downloading the catalog.
     async update(productId, businessId, updates) {
-      return request(`products?id=eq.${productId}&business_id=eq.${businessId}`, {
+      const rows = await request(`products?id=eq.${productId}&business_id=eq.${businessId}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
-        prefer: 'return=minimal',
+        prefer: 'return=representation',
       })
+      return Array.isArray(rows) ? rows[0] || null : rows || null
     },
 
     async delete(productId, businessId) {

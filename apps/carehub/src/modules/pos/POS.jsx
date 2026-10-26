@@ -18,9 +18,10 @@ import { buildReceiptHtml, buildReceiptQrDataUrl, saleToReceipt } from './receip
 import { buildReceiptEscpos } from './receiptEscpos'
 import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscpos, requestPrinter } from './escposUsb'
 import { theme } from '../../styles/theme'
-import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, Loading } from '../../components/ui'
+import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, ErrorState, Loading, Skeleton } from '../../components/ui'
+import { CatalogStatusBanner, loadingLabel } from '../inventory/components/CatalogStatus'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useTodaySales, useAllSales, useSettings, useClients, useInvalidateSales } from '../../hooks/queries'
+import { useTodaySales, useOpenSales, useRecentSales, useSettings, useClients, useInvalidateSales } from '../../hooks/queries'
 
 const { tealDeep, tealMist, bg, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, warning, warningBg, success } = theme
 
@@ -73,7 +74,9 @@ export default function POS(props) {
   return <POSErrorBoundary><POSInner {...props} /></POSErrorBoundary>
 }
 
-function POSInner({ brand, products, setProducts, role, perms }) {
+function POSInner({ brand, products, setProducts, role, perms, catalog }) {
+  // Catalog load state from BusinessDashboard (inventory/hooks/useProductCatalog.js).
+  const catalogStatus = catalog?.status || 'ready'
   const [view, setView] = useState('pos') // pos | held | recent | credit
   const [cart, setCart] = useState([])
   const [client, setClient] = useState('Walk-in')
@@ -117,12 +120,15 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   const { data: settings } = useSettings(brand?.id)
   const { data: clients = [] } = useClients(brand?.id)
   const { data: todaySales = [], isLoading: loadingToday } = useTodaySales(brand?.id)
-  const { data: allSales = [], isLoading: loadingAll } = useAllSales(brand?.id)
+  // Held and unpaid credit sales, and the latest completed sales for the
+  // Recent tab — targeted reads instead of the whole sales history.
+  const { data: openSales = [], isLoading: loadingOpen } = useOpenSales(brand?.id)
+  const recentQuery = useRecentSales(brand?.id, 50)
   const invalidateSales = useInvalidateSales(brand?.id)
-  const loadingSales = loadingToday || loadingAll
+  const loadingSales = loadingToday || loadingOpen
 
-  const heldSales = allSales.filter(s => s.is_on_hold)
-  const creditSales = allSales.filter(s => s.is_credit && s.balance > 0)
+  const heldSales = openSales.filter(s => s.is_on_hold)
+  const creditSales = openSales.filter(s => s.is_credit && s.balance > 0)
 
   const cats = ['All', ...Array.from(new Set(products.map(p => p.cat)))]
   // The search box accepts typed text AND barcode scans ("Search products or
@@ -742,10 +748,12 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: bg }}>
       <div style={{ background: 'white', padding: isMobile ? '6px 16px 0' : '8px 24px 0', flexShrink: 0 }}>{tabBar('recent')}</div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-        {loadingSales ? (
+        {recentQuery.isLoading ? (
           <Loading text="Loading recent sales…" />
+        ) : recentQuery.isError ? (
+          <ErrorState message="We couldn't load recent sales." onRetry={() => recentQuery.refetch()} />
         ) : (() => {
-          const recent = allSales.filter(s => !s.is_on_hold)
+          const recent = recentQuery.data || []
           if (recent.length === 0) return <Empty icon={<Clipboard size={40} strokeWidth={1.5} />} message="No sales yet" />
           return recent.slice(0, 50).map(s => {
             let items = []; try { items = JSON.parse(s.items || '[]') } catch (e) {}
@@ -901,9 +909,30 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           </div>
         )}
 
+        {catalog && <div style={{ padding: isMobile ? '12px 16px 0' : '12px 20px 0' }}><CatalogStatusBanner catalog={catalog} /></div>}
+
         {/* Product grid — only sellable items; out-of-stock live in the sheet */}
         <div style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', padding: isMobile ? '14px 16px' : '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, alignContent: 'start' }}>
-          {sellable.length === 0 ? (
+          {catalogStatus === 'loading' ? (
+            <>
+              <div role="status" aria-live="polite" style={{ gridColumn: '1 / -1', fontSize: 13, fontWeight: 700, color: gray500 }}>{loadingLabel(catalog?.loadedCount || 0)}</div>
+              {Array.from({ length: 8 }, (_, i) => (
+                <Card key={i} aria-hidden="true" style={{ padding: 14 }}>
+                  <Skeleton width={32} height={32} radius={theme.radius.md} style={{ marginBottom: 10 }} />
+                  <Skeleton width="80%" height={12} style={{ marginBottom: 6 }} />
+                  <Skeleton width="45%" height={14} />
+                </Card>
+              ))}
+            </>
+          ) : catalogStatus === 'error' ? (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <ErrorState message={catalog?.error || "We couldn't load your products."} onRetry={catalog?.reload} />
+            </div>
+          ) : products.length === 0 ? (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <Empty icon={<Search size={40} strokeWidth={1.5} />} title='No products to sell yet' description='Add products in Inventory and they will appear here.' />
+            </div>
+          ) : sellable.length === 0 ? (
             <div style={{ gridColumn: '1 / -1' }}>
               <Empty icon={<Search size={40} strokeWidth={1.5} />} message={outOfStock.length > 0 ? 'All matching products are out of stock.' : 'No products match your search.'} cause="filtered" />
             </div>

@@ -13,7 +13,7 @@ import { fmt, todayDate, businessLucideIcon } from '../../lib/utils'
 import { NIG_STATES } from '../../config/constants'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealBright, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, success, warning, bg } = theme
 
@@ -23,6 +23,7 @@ export default function Locations({ brand, role }) {
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({})
+  const [loadError, setLoadError] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
@@ -35,29 +36,35 @@ export default function Locations({ brand, role }) {
 
   async function load() {
     setLoading(true)
+    setLoadError('')
     try {
       const locs = await locationsRepository.getAll(brand.id)
       setLocations(locs || [])
-      // Get stats for each location
-      const statsData = {}
-      for (const loc of (locs || [])) {
+      // All branches at once, each with today's sales and a stock summary
+      // (counts only, not every product row). A branch that fails is marked,
+      // not shown as zero.
+      const entries = await Promise.all((locs || []).map(async (loc) => {
         try {
-          const [today, products] = await Promise.all([
+          const [today, summary] = await Promise.all([
             saleRepository.getToday(loc.id),
-            productRepository.getAll(loc.id),
+            productRepository.getStockSummary(loc.id),
           ])
-          statsData[loc.id] = {
+          return [loc.id, {
             todayRevenue: (today || []).reduce((s, x) => s + (x.total || 0), 0),
             todayCount: (today || []).length,
-            productCount: (products || []).length,
-            lowStock: (products || []).filter(p => (p.cat || p.category) !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5)).length,
-          }
+            productCount: summary.productCount,
+            lowStock: summary.lowStock,
+          }]
         } catch (e) {
-          statsData[loc.id] = { todayRevenue: 0, todayCount: 0, productCount: 0, lowStock: 0 }
+          console.error('[locations] branch stats failed:', loc.id, e?.message)
+          return [loc.id, { failed: true }]
         }
-      }
-      setStats(statsData)
-    } catch (e) {}
+      }))
+      setStats(Object.fromEntries(entries))
+    } catch (e) {
+      console.error('[locations] load failed:', e)
+      setLoadError("We couldn't load your branches. Check your connection and try again.")
+    }
     setLoading(false)
   }
 
@@ -150,11 +157,13 @@ export default function Locations({ brand, role }) {
         </div>
       </div>
 
-      {loading ? <Loading /> : locations.length === 0 ? (
+      {loading ? <Loading text='Loading branches…' /> : loadError ? (
+        <ErrorState message={loadError} onRetry={load} />
+      ) : locations.length === 0 ? (
         <Empty icon={<Building2 size={40} />} message='No additional branches yet' action='+ Add First Branch' onAction={() => setShowAdd(true)} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {locations.sort((a, b) => (a.parent_business_id ? 1 : -1)).map(loc => {
+          {[...locations].sort((a, b) => (a.parent_business_id ? 1 : -1)).map(loc => {
             const isCurrentLocation = loc.id === brand.id
             const isMain = !loc.parent_business_id
             const s = stats[loc.id] || {}
@@ -173,8 +182,12 @@ export default function Locations({ brand, role }) {
                       </div>
                       <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{loc.address || 'No address set'}{loc.state ? ', ' + loc.state : ''}</div>
                       <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
+                        {s.failed ? (
+                          <span role="status" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: warning, fontWeight: '700' }}><AlertTriangle size={12} /> Figures unavailable. <button type="button" onClick={load} style={{ background: 'none', border: 'none', padding: 0, color: tealDeep, fontWeight: 700, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>Try again</button></span>
+                        ) : (<>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: tealDeep, fontWeight: '700' }}><DollarSign size={12} /> {fmt(s.todayRevenue || 0)} today</span>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: gray500 }}><Package size={12} /> {s.productCount || 0} products</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: gray500 }}><Package size={12} /> {(s.productCount || 0).toLocaleString()} products</span>
+                        </>)}
                         {s.lowStock > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: warning, fontWeight: '700' }}><AlertTriangle size={12} /> {s.lowStock} low stock</span>}
                       </div>
                     </div>

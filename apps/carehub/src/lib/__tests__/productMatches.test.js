@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalize, findDuplicate, findAllDuplicateGroups } from '../productMatches.js'
+import { normalize, findDuplicate, findAllDuplicateGroups, createDuplicateIndex } from '../productMatches.js'
 
 describe('normalize', () => {
   it('lowercases, trims and collapses whitespace', () => {
@@ -81,5 +81,38 @@ describe('findAllDuplicateGroups', () => {
     const groups = findAllDuplicateGroups(list)
     expect(groups.length).toBe(1)
     expect(groups[0].map((p) => p.id).sort()).toEqual(['1', '2', '3'])
+  })
+})
+
+describe('createDuplicateIndex', () => {
+  const list = [
+    { id: '1', name: 'Amoxil 500mg', generic_name: 'Amoxicillin' },
+    { id: '2', name: 'Panadol', generic_name: 'Paracetamol' },
+    { id: '3', name: 'Emzor Paracetamol', generic_name: 'Paracetamol' },
+    { id: '4', name: 'Amoxicillin', genericName: 'Amoxicillin trihydrate' },
+    { id: '5', name: '', generic_name: '' },
+  ]
+  const queries = [
+    ['amoxil 500MG', ''],
+    ['Unknown', 'paracetamol'],
+    ['Amoxicillin', ''],
+    ['Something', 'Amoxicillin'],
+    // Name matches a later row, generic matches an earlier one: the earlier wins.
+    ['Amoxicillin', 'Paracetamol'],
+    ['Panadol!', 'Ibuprofen'],
+    ['No match', 'Nothing'],
+    ['', ''],
+    [null, undefined],
+  ]
+
+  it('gives exactly the same answer as findDuplicate', () => {
+    const index = createDuplicateIndex(list)
+    for (const [name, generic] of queries) {
+      expect(index.find(name, generic)).toBe(findDuplicate(list, name, generic))
+    }
+  })
+
+  it('handles an empty catalog', () => {
+    expect(createDuplicateIndex([]).find('Panadol', 'Paracetamol')).toBeNull()
   })
 })
