@@ -20,9 +20,10 @@ export function createProductRepository(request = sbFetch) {
     // single query, which is why uploaded products past 1000 never appeared).
     // A raised limit cannot help; the rows are fetched by offset-paging until
     // the last short page. `id.asc` pins the order so pages cannot shift rows.
-    // The UI paginates the returned array for rendering.
-    async getAll(businessId) {
-      return pagedQuery(request, `products?business_id=eq.${businessId}&order=name.asc,id.asc&select=*`)
+    // The UI paginates the returned array for rendering. `onProgress(count)`
+    // reports rows loaded so far, page by page.
+    async getAll(businessId, { onProgress } = {}) {
+      return pagedQuery(request, `products?business_id=eq.${businessId}&order=name.asc,id.asc&select=*`, { onPage: onProgress })
     },
 
     async getById(productId, businessId) {

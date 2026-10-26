@@ -11,6 +11,7 @@ export const keys = {
   appointments: (brandId) => ['appointments', brandId],
   clients: (brandId) => ['clients', brandId],
   settings: (brandId) => ['settings', brandId],
+  products: (brandId) => ['products', brandId],
   clientSales: (clientId, brandId) => ['clients', 'sales', clientId, brandId],
   clientConsults: (clientId, brandId) => ['clients', 'consults', clientId, brandId],
   clientHistory: (clientId, brandId, tab) => ['clients', 'history', clientId, brandId, tab],

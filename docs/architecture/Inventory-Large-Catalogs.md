@@ -22,6 +22,30 @@ A pharmacy with 3,193 products reported slow pages and data that "doesn't load w
 * **Offline cache follows the list.** `BusinessDashboard` writes the `products_<businessId>` cache 1.5 s after the list stops changing, instead of once per full download. It never writes before the first load has finished (so the empty initial list, or the previous business's list after a switch, cannot overwrite a good cache).
 * Errors in delete, restock, CareFind toggle and "update existing" are now logged and shown; the CareFind toggle used to fail silently.
 
+## Loading the catalog (states and rules)
+
+The catalog is loaded once per business by `useProductCatalog` (`modules/inventory/hooks/useProductCatalog.js`), called in `BusinessDashboard` and passed to every page as `products`, `setProducts` and `catalog`. It is a React Query query (`keys.products(businessId)` in `hooks/queries.js`), like the app's other server data, so request de-duplication, one retry, refetch on reconnect and dropping answers for a previous business come from the library. The fallback rules are a plain function, `loadProductCatalog` (`modules/inventory/productCatalog.js`):
+
+| Situation | What the user sees |
+|---|---|
+| First load, no saved copy | Skeleton tiles and rows with "Loading products… 2,000 loaded" (progress per 1,000-row page). Add, Upload CSV and Export wait until the list has loaded |
+| First load, saved copy on this device | The saved copy at once, with "Updating your product list…"; replaced by the server list when it arrives |
+| Request failed, no saved copy | An error panel with Retry |
+| Request failed, saved copy | The saved copy with a warning ("may be out of date") and Try again |
+| Offline | The saved copy with an offline notice (no request is sent); refreshed automatically on reconnect |
+| Server answered empty but a saved copy exists | The saved copy, flagged: this is how an expired sign-in looks (row security returns nothing to the anon key) |
+| Server answered empty, no saved copy | "No products yet" with Add product |
+| Search or filters match nothing | "No products match" with Clear filters |
+
+Rules:
+
+* **Refresh cadence.** The list is refreshed on window focus at most every 5 minutes (the app default is 30 s, too heavy for a multi-megabyte catalog), on reconnect, and on Retry. A saved copy counts as out of date at once.
+* **Edits during a load.** A page's local update (`setProducts`) made while a load is running cancels that load (its rows were read before the edit), applies the edit, and loads again, so the edit is never overwritten.
+* **Offline copy.** Written 1.5 s after the list stops changing, never for an unchanged list, and read only when a fallback is needed.
+* The POS product grid uses the same states (skeleton, error with Retry, "No products to sell yet").
+
+`services/supabase.js` `getProducts` was removed: it duplicated `productRepository.getAll`.
+
 ## What did not change, and why
 
 The catalog is still loaded **in full once per session** (`BusinessDashboard.loadProducts`). Server-side paging of the products page was considered and not done: the POS, offline sales, the stock KPIs, duplicate detection, Excel export and the plan cap all work on the whole list in memory. Paging only the products table would mean either a second copy of the catalog or moving all of those to the server. The list is now fetched once instead of twice per save, which removes the reported slowness. If catalogs grow past ~20,000 products, the next steps are: select explicit columns instead of `*` for the initial load, then a server-side search RPC for the products table.
@@ -40,6 +64,10 @@ Automated (`npx vitest run` in `apps/carehub`):
 
 * `modules/inventory/productListState.test.js`: replace in place, partial merge (restock), insert in name order, numeric vs string ids, no-op on empty results, removal, inputs never mutated.
 * `lib/__tests__/productMatches.test.js`: `createDuplicateIndex` gives the same answer as `findDuplicate` for name, generic, mixed and empty queries, including the "earlier row wins" case.
+* `modules/inventory/productCatalog.test.js`: server wins; offline, failed and unconfirmed fall back to the saved copy (and say why); no copy means an error or a genuinely empty catalog; the copy is not read on success; progress is forwarded.
+* `modules/inventory/hooks/useProductCatalog.test.jsx` (real React Query): loading with progress then ready; saved copy shown at once then replaced; error then Retry; failed refresh keeps the copy; local edits need no reload; an edit during a load survives the late answer; a business switch never shows the previous business's products; the offline copy is written once, after the list settles.
+* `modules/inventory/Inventory.states.test.jsx`: skeleton and disabled actions while loading, error panel with Retry, saved-copy and offline banners, refreshing line, "No products yet", "No products match" with Clear filters.
+* `lib/__tests__/pagedQuery.test.js`: page progress callback.
 * `modules/inventory/repositories/index.test.js`: `update` returns the saved row and returns `null` (changing nothing) for another business's row.
 
 Manual test plan (a business with 1,000+ products, DevTools Network tab open):
@@ -54,3 +82,8 @@ Manual test plan (a business with 1,000+ products, DevTools Network tab open):
 8. Run duplicate cleanup: the list shrinks as batches finish.
 9. Reload the page while offline: the products from the cache include the changes from steps 2-8.
 10. Switch business (multi-business owner): the second business's cache does not contain the first one's products.
+11. Clear site data, throttle the network to "Slow 3G", open Inventory: skeletons with a rising "N loaded" count; Add / Upload / Export disabled until loaded; no "No products" flash.
+12. Reload with a saved copy: products appear at once with "Updating your product list…".
+13. Block `*/rest/v1/products*` in DevTools and reload: the saved copy with the "may be out of date" warning; Try again after unblocking loads fresh data. With site data cleared too: the error panel with Retry.
+14. Go offline (DevTools) and reload: the offline notice; go back online: it refreshes by itself.
+15. Search for nonsense: "No products match" and Clear filters brings the list back. Repeat 11 and 13 on POS.

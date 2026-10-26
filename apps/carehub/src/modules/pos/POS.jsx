@@ -17,7 +17,8 @@ import { buildReceiptHtml, buildReceiptQrDataUrl } from './receiptPrint'
 import { buildReceiptEscpos } from './receiptEscpos'
 import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscpos, requestPrinter } from './escposUsb'
 import { theme } from '../../styles/theme'
-import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, Loading } from '../../components/ui'
+import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, ErrorState, Loading, Skeleton } from '../../components/ui'
+import { CatalogStatusBanner, loadingLabel } from '../inventory/components/CatalogStatus'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useTodaySales, useAllSales, useSettings, useClients, useInvalidateSales } from '../../hooks/queries'
 
@@ -72,7 +73,9 @@ export default function POS(props) {
   return <POSErrorBoundary><POSInner {...props} /></POSErrorBoundary>
 }
 
-function POSInner({ brand, products, setProducts, role, perms }) {
+function POSInner({ brand, products, setProducts, role, perms, catalog }) {
+  // Catalog load state from BusinessDashboard (inventory/hooks/useProductCatalog.js).
+  const catalogStatus = catalog?.status || 'ready'
   const [view, setView] = useState('pos') // pos | held | recent | credit
   const [cart, setCart] = useState([])
   const [client, setClient] = useState('Walk-in')
@@ -891,9 +894,30 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           </div>
         )}
 
+        {catalog && <div style={{ padding: isMobile ? '12px 16px 0' : '12px 20px 0' }}><CatalogStatusBanner catalog={catalog} /></div>}
+
         {/* Product grid — only sellable items; out-of-stock live in the sheet */}
         <div style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', padding: isMobile ? '14px 16px' : '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, alignContent: 'start' }}>
-          {sellable.length === 0 ? (
+          {catalogStatus === 'loading' ? (
+            <>
+              <div role="status" aria-live="polite" style={{ gridColumn: '1 / -1', fontSize: 13, fontWeight: 700, color: gray500 }}>{loadingLabel(catalog?.loadedCount || 0)}</div>
+              {Array.from({ length: 8 }, (_, i) => (
+                <Card key={i} aria-hidden="true" style={{ padding: 14 }}>
+                  <Skeleton width={32} height={32} radius={theme.radius.md} style={{ marginBottom: 10 }} />
+                  <Skeleton width="80%" height={12} style={{ marginBottom: 6 }} />
+                  <Skeleton width="45%" height={14} />
+                </Card>
+              ))}
+            </>
+          ) : catalogStatus === 'error' ? (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <ErrorState message={catalog?.error || "We couldn't load your products."} onRetry={catalog?.reload} />
+            </div>
+          ) : products.length === 0 ? (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <Empty icon={<Search size={40} strokeWidth={1.5} />} title='No products to sell yet' description='Add products in Inventory and they will appear here.' />
+            </div>
+          ) : sellable.length === 0 ? (
             <div style={{ gridColumn: '1 / -1' }}>
               <Empty icon={<Search size={40} strokeWidth={1.5} />} message={outOfStock.length > 0 ? 'All matching products are out of stock.' : 'No products match your search.'} cause="filtered" />
             </div>

@@ -20,10 +20,13 @@
 //     Requesting more is pointless: the server clamps to its own ceiling and
 //     the loop just wastes a page.
 //
+// `onPage(loadedSoFar)` (optional) is called after each page arrives, so a
+// screen can show "2,000 products loaded…" while a large catalog streams in.
+//
 // Works through the injected `request` transport (sbFetch in production, the
 // in-memory adapter in tests), so it is exercised by the same tests as every
 // repository.
-export async function pagedQuery(request, path, { pageSize = 1000 } = {}) {
+export async function pagedQuery(request, path, { pageSize = 1000, onPage } = {}) {
   const sep = path.includes('?') ? '&' : '?'
   let offset = 0
   let all = []
@@ -37,6 +40,7 @@ export async function pagedQuery(request, path, { pageSize = 1000 } = {}) {
     const rows = await request(`${path}${sep}limit=${pageSize}&offset=${offset}`)
     const page = rows || []
     all = all.concat(page)
+    if (onPage) onPage(all.length)
     if (page.length < pageSize) break
     offset += pageSize
     pages += 1

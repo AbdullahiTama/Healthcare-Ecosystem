@@ -14,8 +14,9 @@ import { PRODUCT_CATS } from '../../config/constants'
 import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
 import { findAllDuplicateGroups, createDuplicateIndex } from '../../lib/productMatches'
 import { upsertProducts, removeProducts, toRows } from './productListState'
+import { CatalogStatusBanner, CatalogSkeleton } from './components/CatalogStatus'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, Toggle, GhostBtn, TealBtn, RedBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, Toggle, GhostBtn, TealBtn, RedBtn, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray300, border, danger, dangerBg, warning, warningBg, success, successBg, bg } = theme
@@ -24,7 +25,16 @@ const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray300, b
 // stock goods — replacing the per-product emoji.
 const productIcon = (p) => ((p.cat || p.category) === 'Services' ? Clipboard : Package)
 
-export default function Inventory({ brand, products, setProducts, role, perms, loadProducts }) {
+export default function Inventory({ brand, products, setProducts, role, perms, loadProducts, catalog }) {
+  // Catalog load state from BusinessDashboard (hooks/useProductCatalog.js).
+  // Rendered without it (tests, older callers) the list is treated as loaded.
+  const catalogState = catalog || { status: 'ready', refreshing: false, stale: false, loadedCount: 0, error: null, reload: loadProducts }
+  const catalogLoading = catalogState.status === 'loading'
+  const catalogFailed = catalogState.status === 'error'
+  // Import, export, duplicate cleanup and the plan cap all need the whole list;
+  // they wait until it has loaded.
+  const catalogReady = catalogState.status === 'ready'
+  const waitTitle = catalogReady ? undefined : 'Available once your products have loaded'
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('All')
@@ -91,6 +101,13 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   // Pagination — 50 rows per page. Reset to page 0 whenever the result set
   // changes (search, filter, or a save) so the user never lands on an
   // empty page that no longer exists. DataTable does the slicing.
+  function clearFilters() {
+    setSearch('')
+    setCatFilter('All')
+    setStockFilter('')
+    setExpiryFilter('')
+  }
+
   const PAGE_SIZE = 50
   const [page, setPage] = useState(0)
   useEffect(() => { setPage(0) }, [search, catFilter, stockFilter, expiryFilter, products.length])
@@ -462,20 +479,26 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         <div><div style={{ fontSize: '20px', fontWeight: '900', color: navy }}>Inventory</div><div style={{ fontSize: '13px', color: gray500, marginTop: '3px' }}>Manage products, stock and CareFind listings</div></div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button onClick={downloadTemplate} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}><Download size={14} /> Template</button>
-          <button onClick={() => setShowUpload(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}><Upload size={14} /> Upload CSV</button>
+          <button onClick={() => setShowUpload(true)} disabled={!catalogReady} title={waitTitle} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: catalogReady ? 'pointer' : 'not-allowed', opacity: catalogReady ? 1 : 0.6 }}><Upload size={14} /> Upload CSV</button>
           {perms?.canExportReports && (
-            <button onClick={exportExcel} disabled={exporting} aria-busy={exporting} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: exporting ? 'wait' : 'pointer', opacity: exporting ? 0.7 : 1 }}>
+            <button onClick={exportExcel} disabled={exporting || !catalogReady} title={waitTitle} aria-busy={exporting} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: exporting ? 'wait' : catalogReady ? 'pointer' : 'not-allowed', opacity: exporting || !catalogReady ? 0.6 : 1 }}>
               {exporting ? <Loader2 size={14} className="spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />} {exporting ? 'Exporting…' : 'Export Excel'}
             </button>
           )}
-          {totalDuplicateItems > 0 && (
+          {catalogReady && totalDuplicateItems > 0 && (
             <button onClick={() => setShowCleanup(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${warning}`, background: warningBg, color: warning, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
               <AlertTriangle size={14} /> Clean up {totalDuplicateItems} duplicate{totalDuplicateItems > 1 ? 's' : ''}
             </button>
           )}
-          {perms?.canEditStock && <TealBtn onClick={() => setShowAdd(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Add product</TealBtn>}
+          {perms?.canEditStock && <TealBtn onClick={() => setShowAdd(true)} disabled={!catalogReady} title={waitTitle} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Add product</TealBtn>}
         </div>
       </div>
+
+      <CatalogStatusBanner catalog={catalogState} />
+
+      {catalogLoading ? <CatalogSkeleton loadedCount={catalogState.loadedCount} /> : catalogFailed ? (
+        <Card><ErrorState message={catalogState.error || "We couldn't load your products."} onRetry={catalogState.reload} /></Card>
+      ) : (<>
 
       {/* 6 tiles: auto-fit at a 180px minimum so a 7-figure naira value never
           gets squeezed — wraps to 3/2/1 columns down to mobile. */}
@@ -539,7 +562,11 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         </div>
       )}
 
-      {filtered.length === 0 ? <Empty icon={<Package size={80} />} message="No products found" action={perms?.canEditStock ? '+ Add Product' : undefined} onAction={() => setShowAdd(true)} /> : (
+      {products.length === 0 ? (
+        <Empty icon={<Package size={56} strokeWidth={1.5} />} title='No products yet' description={perms?.canEditStock ? 'Add your first product, or upload a CSV to add many at once.' : 'Products added by your team will appear here.'} action={perms?.canEditStock ? '+ Add product' : undefined} onAction={() => setShowAdd(true)} />
+      ) : filtered.length === 0 ? (
+        <Empty icon={<Search size={48} strokeWidth={1.5} />} cause='filtered' title='No products match' description='Try a different search, or clear the filters.' action='Clear filters' onAction={clearFilters} />
+      ) : (
         <DataTable
           rows={filtered}
           page={page}
@@ -654,6 +681,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
           )}
         />
       )}
+      </>)}
 
       {/* Add/Edit Product Modal */}
       {(showAdd || editItem) && (
