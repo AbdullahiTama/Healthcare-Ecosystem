@@ -14,11 +14,17 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server misconfigured: missing Supabase env vars' })
   }
 
+  // Fail closed (Financial-Architecture-Audit F-21). This guard used to read `if (token && process.env.CRON_SECRET)`,
+  // so a request with no Authorization header skipped the check and anyone could set off the reminder run. Mirrors the
+  // guard in cron/process-email-outbox.js.
+  const expected = process.env.CRON_SECRET
+  if (!expected) {
+    console.error('[cron/check-subscription-expiry] CRON_SECRET is not set - refusing to run')
+    return res.status(500).json({ error: 'Server misconfigured: CRON_SECRET not set' })
+  }
   const authHeader = req.headers.authorization || ''
   const token = authHeader.replace(/^Bearer\s+/i, '').trim()
-  if (token && process.env.CRON_SECRET) {
-    if (token !== process.env.CRON_SECRET) return res.status(401).json({ error: 'Unauthorized' })
-  }
+  if (token !== expected) return res.status(401).json({ error: 'Unauthorized' })
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 
