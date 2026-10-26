@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, Component } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Pause, Clock, CreditCard, Camera, ShoppingCart,
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
-  DollarSign, Repeat, Divide, Search, Package, PackageX, Clipboard,
+  DollarSign, Repeat, Divide, Search, Package, PackageX, Clipboard, ReceiptText,
 } from 'lucide-react'
 import { saleRepository } from './repositories'
 // Credit sales raise and settle debts. That aggregate belongs to the debts
@@ -107,6 +108,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   const [charging, setCharging] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const { isMobile } = useBreakpoint()
+  const navigate = useNavigate()
 
   // React Query hooks
   const { data: settings } = useSettings(brand?.id)
@@ -800,6 +802,12 @@ function POSInner({ brand, products, setProducts, role, perms }) {
             <button onClick={startScan} title='Scan barcode' aria-label='Scan barcode'
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: tealDeep, color: 'white', cursor: 'pointer', flexShrink: 0 }}>
               <Camera size={17} />
+            </button>
+            {/* Sales & Accounts report. White, so the scan button stays the
+                primary action on the counter. */}
+            <button onClick={() => navigate('/dashboard/pos/report')} title='Sales & Accounts report' aria-label='Sales and accounts report'
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: tealDeep, cursor: 'pointer', flexShrink: 0 }}>
+              <ReceiptText size={17} />
             </button>
           </div>
 

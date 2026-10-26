@@ -23,6 +23,7 @@ import OutboxRunner from '../../modules/live-activity/outbox/OutboxRunner'
 // Lazy-loaded modules for code splitting
 const DashboardHome = lazy(() => import('../../modules/dashboard-home/DashboardHome'))
 const POS = lazy(() => import('../../modules/pos/POS'))
+const SalesReport = lazy(() => import('../../modules/pos/SalesReport'))
 const Inventory = lazy(() => import('../../modules/inventory/Inventory'))
 const StockManagement = lazy(() => import('../../modules/stock-management/StockManagement'))
 const Clients = lazy(() => import('../../modules/clients/Clients'))
@@ -235,6 +236,9 @@ export default function BusinessDashboard() {
                   standard content padding — see DashboardHome.jsx. */}
               <Route path='dashboard' element={guard('dashboard', <DashboardHome {...pageProps} staffId={staffUser?.id || null} customRoles={customRoles} />)} />
               <Route path='pos' element={guard('pos', <POS {...pageProps} />)} />
+              {/* The till's Sales & Accounts report, opened from the POS search bar. Same
+                  permission as the POS itself, so it exists for every business type that sells. */}
+              <Route path='pos/report' element={bareGuard('pos', <SalesReport {...pageProps} />)} />
               <Route path='inventory' element={guard('inventory', <><TopBar title='Stock Management' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><StockManagement {...pageProps} /></div></>)} />
               <Route path='clients' element={guard('clients', <><TopBar title={brand?.business_type === 'hospital' ? 'Patients' : 'Clients'} brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Clients {...pageProps} /></div></>)} />
               <Route path='appointments' element={guard('appointments', <><TopBar title='Appointments' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Appointments {...pageProps} /></div></>)} />
