@@ -54,7 +54,16 @@ The app lockfiles also record the linked packages' own `node_modules`. When a sh
 ## Verification
 
 * CareHub: 2,545 tests, coverage run, build; `npm audit`: 0.
-* CareFind: full suite, lint, `lint:undef`, build; `npm audit`: 0. New `api/_lib/__tests__/spreadsheet.test.js` covers the parser, the zip guard and the export round trip.
+* CareFind: 2,901 tests (72 real-Postgres tests skip locally; CI runs them), lint, `lint:undef`, build; `npm audit`: 0. New `api/_lib/__tests__/spreadsheet.test.js` covers the parser, the zip guard and the export round trip.
+* Both apps and every shared package install with CI's npm 10 (`npm ci`) from the new lockfiles.
+
+### Tests that had been hidden behind the audit
+
+CI stopped at the audit step before the tests ran, so some CareFind tests had gone stale unnoticed. They were fixed with the upgrade (no app code changed):
+
+* `SafetyReport.test.jsx`: the `useAuth` mock returned a new `user` object on every call, so the page's `[user]` effect re-ran forever; three tests hung and crashed their worker. The real `AuthContext` keeps `user` in state, so the app was never affected. Four more assertions were updated to the current page (text split by `<strong>`, a duplicated Edit button, the controlled company picker, a prefilled name).
+* `Login.test.jsx`, `PublicProfile.subscribe.test.jsx`: wording follows the current copy.
+* `moneyNotifications.test.js`: spies restored after each test (Vitest 3+ reuses an existing spy).
 * Shared packages: 1,170 tests; `npm audit`: 0.
 
 Manual checks before release: sign in, make a POS sale, export Inventory to Excel (CareHub), import a directory `.xlsx` and try an `.xls` (CareFind), open a deep link, reload while offline.
