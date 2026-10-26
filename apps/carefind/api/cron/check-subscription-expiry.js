@@ -38,6 +38,9 @@ export default async function handler(req, res) {
       .gt('plan_expires_at', now.toISOString())
       .lte('plan_expires_at', horizon.toISOString())
       .eq('status', 'active')
+      // Main businesses only: a branch is renewed with its main business (carehub_20261210_branch_plan_follows_parent)
+      // and has no email of its own, so its owner hears about it once, through the main business.
+      .is('parent_business_id', null)
 
     if (error) throw error
 

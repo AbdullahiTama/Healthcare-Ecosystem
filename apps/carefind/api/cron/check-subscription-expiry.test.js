@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // The daily plan-expiry reminder. It must refuse to run without the cron secret (Financial-Architecture-Audit F-21:
-// a request with no Authorization header used to skip the check).
+// a request with no Authorization header used to skip the check), and it reminds main businesses only: a branch
+// follows its main business's plan and has no owner email of its own (carehub_20261212_branches_without_email).
 const h = vi.hoisted(() => ({ filters: [], businesses: [], inserts: [], processBatch: vi.fn(async () => {}) }))
 
 function query(table) {
@@ -54,5 +55,10 @@ describe('check-subscription-expiry cron', () => {
     expect(r.statusCode).toBe(200)
     expect(r.body).toMatchObject({ ok: true, scanned: 1, enqueued: 1 })
     expect(h.inserts[0]).toMatchObject({ to_email: 'owner@a.test', template_key: 'subscription_expiry' })
+  })
+
+  it('asks only for main businesses, never branches', async () => {
+    await call({ authorization: 'Bearer cron-secret' })
+    expect(h.filters).toContainEqual(['is', 'businesses', 'parent_business_id', null])
   })
 })
