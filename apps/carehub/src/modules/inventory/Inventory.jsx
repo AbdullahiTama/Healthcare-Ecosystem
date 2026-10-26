@@ -12,7 +12,8 @@ import { auditRepository } from '../audit/repositories'
 import { fmt, todayDate } from '../../lib/utils'
 import { PRODUCT_CATS } from '../../config/constants'
 import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
-import { findDuplicate, findAllDuplicateGroups } from '../../lib/productMatches'
+import { findAllDuplicateGroups, createDuplicateIndex } from '../../lib/productMatches'
+import { upsertProducts, removeProducts, toRows } from './productListState'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, Toggle, GhostBtn, TealBtn, RedBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
@@ -42,10 +43,22 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   const [exporting, setExporting] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
-  const duplicateGroups = findAllDuplicateGroups(products)
+  // Both walk the whole catalog, so they are recomputed only when it changes,
+  // not on every keystroke in the search box.
+  const duplicateGroups = useMemo(() => findAllDuplicateGroups(products), [products])
   const totalDuplicateItems = duplicateGroups.reduce((s, g) => s + (g.length - 1), 0)
 
-  const cats = ['All', ...Array.from(new Set(products.map(p => p.cat || p.category)))]
+  // Built once per catalog change; the add form, CSV preview and CSV import
+  // all check duplicates against it instead of scanning the catalog per row.
+  const duplicateIndex = useMemo(() => createDuplicateIndex(products), [products])
+
+  // Rows in a CSV being previewed that already exist (they will be skipped).
+  const uploadDupeCount = useMemo(
+    () => uploadData.filter(p => duplicateIndex.find(p.name, p.generic_name)).length,
+    [uploadData, duplicateIndex],
+  )
+
+  const cats = useMemo(() => ['All', ...Array.from(new Set(products.map(p => p.cat || p.category)))], [products])
 
   // Deep-link filters (issue #4): the dashboard's proactive alerts link here
   // with ?stock=low|out and ?expiry=expiring|expired, so a tap opens the full
@@ -76,7 +89,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   }), [products, catFilter, search, stockFilter, expiryFilter])
 
   // Pagination — 50 rows per page. Reset to page 0 whenever the result set
-  // changes (search, filter, or data reload) so the user never lands on an
+  // changes (search, filter, or a save) so the user never lands on an
   // empty page that no longer exists. DataTable does the slicing.
   const PAGE_SIZE = 50
   const [page, setPage] = useState(0)
@@ -121,15 +134,11 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     setExporting(false)
   }
 
-  async function reload() {
-    try {
-      const p = await productRepository.getAll(brand.id)
-      if (Array.isArray(p)) setProducts(p)
-      if (loadProducts) loadProducts()
-    } catch (e) {
-      console.error('reload error:', e)
-    }
-  }
+  // After a save the page applies the row the server returned to the list it
+  // already holds (productListState.js) instead of re-downloading the whole
+  // catalog. BusinessDashboard refreshes the offline cache from the new list.
+  const applySaved = (result) => setProducts(prev => upsertProducts(prev, result))
+  const applyRemoved = (ids) => setProducts(prev => removeProducts(prev, ids))
 
   async function saveProduct(data, isEdit) {
     try {
@@ -157,7 +166,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         const name = (productData.name || '').trim()
         const generic = (productData.generic_name || '').trim()
         if (name.length > 3) {
-          const dupe = findDuplicate(products, name, generic, null)
+          const dupe = duplicateIndex.find(name, generic)
           if (dupe) {
             setDuplicateWarning({ existing: dupe, incoming: productData })
             return
@@ -166,13 +175,15 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       }
 
       if (isEdit) {
-        await productRepository.update(data.id, brand.id, productData)
+        const saved = await productRepository.update(data.id, brand.id, productData)
+        if (!saved) throw new Error('This product no longer exists. Refresh the page to see the latest list.')
+        applySaved(saved)
         showToast('Product updated!', { type: 'success' })
       } else {
-        await productRepository.create(brand.id, productData)
+        const created = await productRepository.create(brand.id, productData)
+        applySaved(created)
         showToast('Product added!', { type: 'success' })
       }
-      await reload()
     } catch (e) {
       console.error('saveProduct error:', e)
       showToast(e.message || 'Could not save product. Please try again.', { type: 'error' })
@@ -184,7 +195,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     if (!duplicateWarning) return
     try {
       const { existing, incoming } = duplicateWarning
-      await productRepository.update(existing.id, brand.id, {
+      const saved = await productRepository.update(existing.id, brand.id, {
         price: incoming.price,
         cost_price: incoming.cost_price,
         stock: (existing.stock || 0) + (incoming.stock || 0),
@@ -193,12 +204,16 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         barcode: incoming.barcode || existing.barcode,
         list_on_carefind: incoming.list_on_carefind,
       })
+      if (!saved) throw new Error('product not found')
+      applySaved(saved)
       showToast('Existing product updated. Stock was combined.', { type: 'success' })
       setDuplicateWarning(null)
       setShowAdd(false)
       setEditItem(null)
-      await reload()
-    } catch (e) { showToast('Could not update product. Please try again.', { type: 'error' }) }
+    } catch (e) {
+      console.error('updateExistingFromDuplicate error:', e)
+      showToast('Could not update product. Please try again.', { type: 'error' })
+    }
   }
 
   // Merge ALL detected duplicate groups in one go — batched version:
@@ -229,7 +244,8 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       const UPDATE_BATCH_SIZE = 25
       for (let i = 0; i < updates.length; i += UPDATE_BATCH_SIZE) {
         const batch = updates.slice(i, i + UPDATE_BATCH_SIZE)
-        await Promise.all(batch.map(u => productRepository.update(u.id, brand.id, { stock: u.stock })))
+        const saved = await Promise.all(batch.map(u => productRepository.update(u.id, brand.id, { stock: u.stock })))
+        applySaved(saved.filter(Boolean))
         showToast('Updating products... ' + Math.min(i + UPDATE_BATCH_SIZE, updates.length) + ' / ' + updates.length, { type: 'info' })
       }
 
@@ -239,11 +255,11 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       for (let i = 0; i < idsToDelete.length; i += DELETE_BATCH_SIZE) {
         const batch = idsToDelete.slice(i, i + DELETE_BATCH_SIZE)
         await productRepository.deleteBulk(batch, brand.id)
+        applyRemoved(batch)
         deletedSoFar += batch.length
         showToast('Removing duplicates... ' + deletedSoFar + ' / ' + idsToDelete.length, { type: 'info' })
       }
 
-      await reload()
       showToast('Cleaned up ' + duplicateGroups.length + ' duplicate group(s). Removed ' + idsToDelete.length + ' duplicate item(s)', { type: 'success' })
     } catch (e) {
       console.error('Error during cleanup:', e)
@@ -257,22 +273,45 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   async function handleDelete() {
     const id = deleteTarget?.id
     setDeleteTarget(null)
-    try { await productRepository.delete(id, brand.id); await reload(); showToast('Product deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete product. Please try again.', { type: 'error' }) }
+    try {
+      await productRepository.delete(id, brand.id)
+      applyRemoved([id])
+      showToast('Product deleted.', { type: 'success' })
+    } catch (e) {
+      console.error('handleDelete error:', e)
+      showToast('Could not delete product. Please try again.', { type: 'error' })
+    }
   }
 
+  // Restock adds inside the database (increment_product_stock) rather than
+  // writing back a total computed here, so a sale made on a till at the same
+  // moment is not overwritten. The RPC returns the new stock level.
   async function handleRestock(product, qty, note) {
+    const amount = parseInt(qty, 10)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast('Enter a quantity greater than zero.', { type: 'warning' })
+      return
+    }
     try {
-      await productRepository.update(product.id, brand.id, { stock: (product.stock || 0) + parseInt(qty) })
-      await reload()
-      showToast(qty + ' units added to ' + product.name, { type: 'success' })
-    } catch (e) { showToast('Could not update stock. Please try again.', { type: 'error' }) }
+      const newStock = await productRepository.incrementStock(product.id, brand.id, amount)
+      if (newStock === null || newStock === undefined) throw new Error('product not found')
+      applySaved({ id: product.id, stock: newStock })
+      showToast(amount + ' units added to ' + product.name, { type: 'success' })
+    } catch (e) {
+      console.error('handleRestock error:', e)
+      showToast('Could not update stock. Please try again.', { type: 'error' })
+    }
   }
 
   async function toggleCareFind(product) {
     try {
-      await productRepository.update(product.id, brand.id, { list_on_carefind: !product.list_on_carefind })
-      await reload()
-    } catch (e) {}
+      const saved = await productRepository.update(product.id, brand.id, { list_on_carefind: !product.list_on_carefind })
+      if (!saved) throw new Error('product not found')
+      applySaved(saved)
+    } catch (e) {
+      console.error('toggleCareFind error:', e)
+      showToast('Could not change the CareFind listing. Please try again.', { type: 'error' })
+    }
   }
 
   function downloadTemplate() {
@@ -319,7 +358,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     const failedNames = []
     const fresh = []
     for (const p of uploadData) {
-      if (findDuplicate(products, p.name, p.generic_name)) {
+      if (duplicateIndex.find(p.name, p.generic_name)) {
         skipped++
         skippedNames.push(p.name)
         continue
@@ -354,20 +393,22 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       }
     }
     const BATCH = 20
+    const createdRows = []
     for (let i = 0; i < fresh.length; i += BATCH) {
       const batch = fresh.slice(i, i + BATCH)
       const results = await Promise.all(batch.map(p =>
-        productRepository.create(brand.id, p).then(() => ({ ok: true })).catch(err => ({ ok: false, name: p.name, msg: err.message }))
+        productRepository.create(brand.id, p).then(res => ({ ok: true, rows: toRows(res) })).catch(err => ({ ok: false, name: p.name, msg: err.message }))
       ))
       for (const r of results) {
-        if (r.ok) added++
+        if (r.ok) { added++; createdRows.push(...r.rows) }
         else {
           failed++
           if (failedNames.length < 5) failedNames.push(r.name + ' (' + r.msg + ')')
         }
       }
     }
-    await reload()
+    // One list update for the whole file rather than one per batch.
+    applySaved(createdRows)
     setUploadData([])
     setShowUpload(false)
     setImporting(false)
@@ -506,7 +547,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
           pageSize={PAGE_SIZE}
           total={filtered.length}
           count={`${filtered.length} product${filtered.length !== 1 ? 's' : ''}`}
-          onRetry={reload}
+          onRetry={loadProducts}
           columns={[
             {
               key: 'name', label: 'Product', sortable: true,
@@ -656,13 +697,13 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: success, fontSize: '13px', marginBottom: '8px' }}>
                 <CheckCircle size={15} /> {uploadData.length} products in file
-                {uploadData.filter(p => findDuplicate(products, p.name, p.generic_name)).length > 0 && (
-                  <span style={{ color: warning, fontWeight: '600' }}> · {uploadData.filter(p => findDuplicate(products, p.name, p.generic_name)).length} already exist (will be skipped)</span>
+                {uploadDupeCount > 0 && (
+                  <span style={{ color: warning, fontWeight: '600' }}> · {uploadDupeCount} already exist (will be skipped)</span>
                 )}
               </div>
               <div style={{ maxHeight: '180px', overflowY: 'auto', borderRadius: '10px', border: `1px solid ${gray100}` }}>
                 {uploadData.map((p, i) => {
-                  const isDupe = !!findDuplicate(products, p.name, p.generic_name)
+                  const isDupe = !!duplicateIndex.find(p.name, p.generic_name)
                   return (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 12px', borderBottom: `1px solid ${gray100}`, fontSize: '12px', background: isDupe ? warningBg : 'transparent' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600', color: isDupe ? warning : navy }}>

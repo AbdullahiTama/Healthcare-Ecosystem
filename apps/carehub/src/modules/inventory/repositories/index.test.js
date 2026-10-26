@@ -87,6 +87,14 @@ describe('productRepository', () => {
     expect(client.rows('products').find((r) => r.id === '9').stock).toBe(7)
   })
 
+  it('update returns the saved row so callers need not re-download the catalog', async () => {
+    const { repo } = seeded()
+    const saved = await repo.update('2', A, { stock: 12 })
+    expect(saved).toMatchObject({ id: '2', business_id: A, name: 'Amoxicillin', stock: 12 })
+    // another business's row is neither changed nor returned
+    expect(await repo.update('9', A, { stock: 0 })).toBeNull()
+  })
+
   it('delete scopes by id and business', async () => {
     const { repo, client } = seeded()
     await repo.delete('2', A)

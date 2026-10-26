@@ -53,12 +53,16 @@ export function createProductRepository(request = sbFetch) {
       })
     },
 
+    // Returns the saved row (or null when nothing matched — wrong tenant or a
+    // deleted product) so callers can update their local list from what the
+    // database actually stored instead of re-downloading the catalog.
     async update(productId, businessId, updates) {
-      return request(`products?id=eq.${productId}&business_id=eq.${businessId}`, {
+      const rows = await request(`products?id=eq.${productId}&business_id=eq.${businessId}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
-        prefer: 'return=minimal',
+        prefer: 'return=representation',
       })
+      return Array.isArray(rows) ? rows[0] || null : rows || null
     },
 
     async delete(productId, businessId) {

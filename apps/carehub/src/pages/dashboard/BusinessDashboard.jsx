@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
-import { useState, useEffect, Suspense, lazy } from 'react'
+import { useState, useEffect, useRef, Suspense, lazy } from 'react'
 import { Menu } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
 import Sidebar from '../../components/layout/Sidebar'
@@ -122,6 +122,7 @@ export default function BusinessDashboard() {
   const landing = landingRoute(allowedRouteKeys)
   const guard = (routeKey, element) => (allowedRouteKeys.includes(routeKey) ? element : <Navigate to={'/dashboard/' + landing} replace />)
   const [products, setProducts] = useState([])
+  const productsHydrated = useRef(false)
   const [syncing, setSyncing] = useState(false)
   const { isMobile, isTablet } = useBreakpoint()
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
@@ -141,6 +142,7 @@ export default function BusinessDashboard() {
 
   useEffect(() => {
     if (!brand?.id) return
+    productsHydrated.current = false
     loadProducts()
     if (navigator.onLine) {
       saleRepository.syncQueued(brand.id).then(r => {
@@ -150,12 +152,24 @@ export default function BusinessDashboard() {
     }
   }, [brand?.id])
 
+  // Offline copy of the catalog. Pages now update `products` in place after a
+  // save instead of re-downloading it, so the cache follows the list here,
+  // debounced: a bulk import or cleanup changes the list many times in a few
+  // seconds and each write serialises the whole catalog (megabytes for a large
+  // pharmacy). Nothing is written until a load has filled the list, so the
+  // initial empty array (or the previous business's list, after a switch)
+  // never overwrites a good cache.
+  useEffect(() => {
+    if (!brand?.id || !productsHydrated.current) return
+    const t = setTimeout(() => cacheData('products_' + brand.id, products), 1500)
+    return () => clearTimeout(t)
+  }, [products, brand?.id])
+
   async function loadProducts() {
     try {
       const p = await getProducts(brand.id)
       if (p && p.length > 0) {
         setProducts(p)
-        cacheData('products_' + brand.id, p)
       } else {
         const cached = getCached('products_' + brand.id)
         if (cached) setProducts(cached)
@@ -164,6 +178,9 @@ export default function BusinessDashboard() {
       const cached = getCached('products_' + brand.id)
       if (cached) setProducts(cached)
     }
+    // From here the list is this business's (server or cached copy), so local
+    // edits may be written back to the cache.
+    productsHydrated.current = true
   }
 
   const handleSync = async () => {

@@ -366,7 +366,10 @@ create table public.staff (
 create table public.service_availability (id uuid primary key default gen_random_uuid(), is_booked boolean, status text, appointment_id uuid);
 create table public.purchases (
   id uuid primary key default gen_random_uuid(), business_id uuid not null, supplier_name text, product_name text, quantity integer, cost_price numeric, total_cost numeric,
-  amount_paid numeric, balance numeric, supply_date text, due_date text, expiry text, batch text, status text, notes text, created_at timestamptz default now()
+  -- live types (read 2026-10-26): created_at is timestamp WITHOUT time zone, expiry is date. An earlier copy used the function's
+  -- declared types here, which hid that get_purchases_page failed on every call in production.
+  amount_paid numeric, balance numeric, supply_date text, due_date text, status text, notes text, created_at timestamp default now(),
+  selling_price numeric default 0, expiry date, batch text
 );
 create table public.expenses (
   id uuid primary key default gen_random_uuid(), business_id uuid not null, category text, description text, amount numeric, date text, staff_name text, created_at timestamptz default now()
