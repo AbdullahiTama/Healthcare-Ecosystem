@@ -1,3 +1,4 @@
+import { isCompletedSale } from '../../pos/salesReport'
 import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
 import { isDuplicateError } from '../../../lib/dbErrors'
@@ -97,7 +98,9 @@ export function createClientRepository(request = sbFetch) {
     // returns nothing rather than that tenant's sales, debts or clinical notes.
 
     async getSales(clientId, businessId) {
-      return request(`sales?client_id=eq.${clientId}&business_id=eq.${businessId}&order=created_at.desc&select=*`)
+      // Completed sales only: held, deleted and resumed rows are not purchases.
+      const rows = await request(`sales?client_id=eq.${clientId}&business_id=eq.${businessId}&order=created_at.desc&select=*`)
+      return (rows || []).filter(isCompletedSale)
     },
 
     async getAppointments(clientId, businessId) {

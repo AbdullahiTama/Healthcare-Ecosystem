@@ -19,12 +19,11 @@ import { buildReceiptHtml, buildReceiptQrDataUrl, saleToReceipt } from './receip
 import { buildReceiptEscpos } from './receiptEscpos'
 import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscpos, requestPrinter } from './escposUsb'
 import { theme } from '../../styles/theme'
-import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, ErrorState, Loading, Skeleton } from '../../components/ui'
+import { Card, Modal, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, ErrorState, Loading, Skeleton } from '../../components/ui'
 import { CatalogStatusBanner, loadingLabel } from '../inventory/components/CatalogStatus'
 import CreditCollections from './CreditCollections'
 import CustomerPicker from './CustomerPicker'
 import SaleDetailModal from './SaleDetailModal'
-import { isManagerRole } from '../../lib/permissions'
 import { creditCustomerFor } from './customerPick'
 import { isDuplicateError } from '../../lib/dbErrors'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -123,11 +122,11 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   // Hold note
   const [holdNote, setHoldNote] = useState('')
   const [showHoldModal, setShowHoldModal] = useState(false)
-  const [deleteHeldTarget, setDeleteHeldTarget] = useState(null)
-  // The held-sale row resumed into the current cart, if any — removed (soft
-  // deleted) the moment this cart is actually charged, so held sales never
-  // linger as phantom rows after completion (#17).
-  const [resumedSaleId, setResumedSaleId] = useState(null)
+  // The held sale open in the current cart, if any. Its row stays ON HOLD (and
+  // listed under Held) while it is edited; it is never released, deleted or
+  // counted as a sale. Charging the cart sends `resumed_from`, and the
+  // database converts the held row in the same transaction as the new sale.
+  const [resumedSale, setResumedSale] = useState(null)
   const [printing, setPrinting] = useState(false)
   const [charging, setCharging] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
@@ -327,15 +326,6 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     return cart.map(i => ({ ...i, source: recIds.has(i.id) ? 'recommended' : 'walk-in' }))
   }
 
-  // A completed sale closes the loop on a resumed held sale: the original
-  // held row is soft-deleted so it can't be resumed twice or linger in the
-  // sales list as a phantom "resumed" entry.
-  async function finishResumedSale() {
-    if (!resumedSaleId) return
-    try { await saleRepository.update(resumedSaleId, brand.id, { is_on_hold: false, status: 'deleted' }) } catch (e) {}
-    setResumedSaleId(null)
-  }
-
   // The repository decides whether the sale reaches the database or the offline
   // queue; the page only reports what happened. A queued-on-error sale stays
   // silent, exactly as before — the cashier is told nothing failed because
@@ -386,6 +376,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
       balance: balance,
       is_credit: isShortfall,
       is_on_hold: false,
+      ...(resumedSale ? { resumed_from: resumedSale.id } : {}),
     }
 
     const receiptData = {
@@ -413,7 +404,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
       const s = cart.find(c => c.id === p.id)
       return s && (p.cat || p.category) !== 'Services' ? { ...p, stock: Math.max(0, p.stock - s.qty) } : p
     }))
-    await finishResumedSale()
+    setResumedSale(null)
 
     // AUTO-CREATE DEBT if amount paid is less than total
     if (balance > 0 && brand?.id) {
@@ -466,6 +457,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
       balance,
       is_credit: true,
       is_on_hold: false,
+      ...(resumedSale ? { resumed_from: resumedSale.id } : {}),
     }
     // Record before advancing the UI — a server rejection (price guard)
     // must not show a receipt, decrement stock state or open a debt for a
@@ -477,7 +469,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     // but not in charge(). Both now agree, and both are display-only: the
     // authoritative decrement is the sale_stock_movement trigger.
     setProducts(prev => prev.map(p => { const s = cart.find(c => c.id === p.id); return s && (p.cat || p.category) !== 'Services' ? { ...p, stock: Math.max(0, p.stock - s.qty) } : p }))
-    await finishResumedSale()
+    setResumedSale(null)
     // AUTO-CREATE DEBT: credit sale automatically appears in debts as "Owes Us"
     if (balance > 0 && brand?.id) {
       await debtRepository.recordUnderpayment({
@@ -503,7 +495,13 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     // rejects it (price guard), saveSale already toasted the reason — keep the
     // cart and the modal intact instead of clearing them.
     try {
-      await saveSale({
+      if (resumedSale) {
+        // Editing a held sale: save the changes onto the same held row.
+        await saleRepository.updateHeld(resumedSale.id, brand.id, {
+          items: cart, subtotal: sub, discount: discAmt, total,
+          clientName: client || 'Walk-in', notes: holdNote || resumedSale.notes || '',
+        })
+      } else await saveSale({
         txn_no: txnNo,
         client_name: client || 'Walk-in',
         items: JSON.stringify(cart),
@@ -518,43 +516,35 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         notes: holdNote,
       })
     } catch (e) {
+      if (resumedSale) showToast('Could not save the changes to this held sale. Please try again.', { type: 'error' })
       return
     }
-    showToast('Sale held. Resume it from Held Sales.', { type: 'success' })
+    showToast(resumedSale ? 'Held sale updated.' : 'Sale held. Resume it from Held Sales.', { type: 'success' })
     setShowHoldModal(false)
+    setResumedSale(null)
+    setDisc('')
     setCart([])
     setClient('Walk-in')
     setHoldNote('')
     invalidateSales()
   }
 
-  function askDeleteHeldSale(sale) {
-    // Only Owner can delete held sales
-    if (role !== 'Owner') { showToast('Only the Owner can delete held sales', { type: 'warning' }); return }
-    setDeleteHeldTarget(sale)
-  }
-  async function deleteHeldSale() {
-    const sale = deleteHeldTarget
-    setDeleteHeldTarget(null)
-    try {
-      await saleRepository.update(sale.id, brand.id, { is_on_hold: false, status: 'deleted' })
-      showToast('Held sale deleted.', { type: 'success' })
-      invalidateSales()
-    } catch (e) { showToast('Could not delete held sale. Please try again.', { type: 'error' }) }
-  }
-
-  async function resumeHeld(sale) {
+  // Opening a held sale loads it into the cart for editing. The held row is
+  // left exactly as it is: nothing is released, deleted or recorded as a sale
+  // until the cart is charged.
+  function resumeHeld(sale) {
     let items = []
     try { items = JSON.parse(sale.items || '[]') } catch (e) {}
     setCart(items)
     setClient(sale.client_name || 'Walk-in')
-    try { await saleRepository.update(sale.id, brand.id, { is_on_hold: false, status: 'resumed' }) } catch (e) {}
+    setDisc(Number(sale.discount) > 0 ? String(sale.discount) : '')
+    setDiscPct(false)
+    setHoldNote(sale.notes || '')
+    setResumedSale(sale)
     setView('pos')
-    setResumedSaleId(sale.id)
-    invalidateSales()
   }
 
-  function newSale() { finishResumedSale(); setReceipt(null); setCart([]); setClient('Walk-in'); setPickedClient(null); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid(''); setCreditMethod('Cash') }
+  function newSale() { setResumedSale(null); setReceipt(null); setCart([]); setClient('Walk-in'); setPickedClient(null); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid(''); setCreditMethod('Cash') }
 
   // Universal fallback path: render an HTML page and let the browser/OS
   // rasterize it via the system print dialog. Always works, but thermal
@@ -738,23 +728,13 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
-                  <TealBtn onClick={() => resumeHeld(s)} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }}><Play size={13} /> Resume sale</TealBtn>
-                  {role === 'Owner' && (
-                    <button onClick={() => askDeleteHeldSale(s)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: theme.radius.md, border: 'none', background: dangerBg, color: danger, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
-                      <Trash2 size={12} /> Delete
-                    </button>
-                  )}
+                  <TealBtn onClick={() => resumeHeld(s)} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }}><Play size={13} /> Open &amp; edit</TealBtn>
                 </div>
               </div>
             </Card>
           )
         })}
       </div>
-      <ConfirmDialog show={!!deleteHeldTarget} onClose={() => setDeleteHeldTarget(null)} onConfirm={deleteHeldSale}
-        title='Delete this held sale?'
-        consequence={`This permanently discards the held sale for ${deleteHeldTarget?.client_name || 'this customer'}. The cart cannot be recovered once deleted.`}
-        confirmLabel='Delete' />
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )
@@ -800,8 +780,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         })()}
       </div>
       <SaleDetailModal show={!!detailSale} sale={detailSale} onClose={() => setDetailSale(null)} brand={brand} settings={settings}
-        canRefund={role === 'Owner' || isManagerRole(role)} ledgerAvailable showToast={showToast}
-        onChanged={() => { setDetailSale(null); invalidateSales() }} />
+        readOnly ledgerAvailable showToast={showToast} />
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )
@@ -998,6 +977,13 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
             </datalist>
           </div>
         </div>
+
+        {resumedSale && (
+          <div role='status' style={{ padding: '8px 16px', background: warningBg, color: warning, fontSize: 12, fontWeight: 600, lineHeight: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexShrink: 0 }}>
+            <span>Editing held sale {resumedSale.txn_no}. Add or remove products, then <strong>Hold</strong> to save it or charge to complete it. It is not a sale until charged.</span>
+            <button onClick={newSale} style={{ background: 'none', border: 'none', color: warning, fontWeight: 800, fontSize: 12, cursor: 'pointer', textDecoration: 'underline', flexShrink: 0 }}>Close</button>
+          </div>
+        )}
 
         {/* Items */}
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px', ...(isMobile ? { maxHeight: 320 } : {}) }}>

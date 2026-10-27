@@ -64,5 +64,6 @@ export function useInvalidateSalesReport() {
   return () => {
     qc.invalidateQueries({ queryKey: ['salesReport'] })
     qc.invalidateQueries({ queryKey: ['sales'] })
+    qc.invalidateQueries({ queryKey: ['reports'] })
   }
 }

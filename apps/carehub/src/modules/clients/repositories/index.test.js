@@ -163,3 +163,19 @@ describe('clientRepository', () => {
     expect(await repo.getSales('c9', A)).toEqual([])
   })
 })
+
+describe('clientRepository.getSales counts purchases only', () => {
+  it('leaves out held, deleted, resumed and converted rows', async () => {
+    const { repo } = build({
+      sales: [
+        { id: 'ok', client_id: 'c1', business_id: A, is_on_hold: false, status: null, created_at: '2026-01-05' },
+        { id: 'ok2', client_id: 'c1', business_id: A, is_on_hold: false, status: 'completed', created_at: '2026-01-04' },
+        { id: 'held', client_id: 'c1', business_id: A, is_on_hold: true, status: null, created_at: '2026-01-03' },
+        { id: 'del', client_id: 'c1', business_id: A, is_on_hold: false, status: 'deleted', created_at: '2026-01-02' },
+        { id: 'res', client_id: 'c1', business_id: A, is_on_hold: false, status: 'resumed', created_at: '2026-01-01' },
+        { id: 'conv', client_id: 'c1', business_id: A, is_on_hold: true, status: 'converted', created_at: '2026-01-01' },
+      ],
+    })
+    expect((await repo.getSales('c1', A)).map((r) => r.id).sort()).toEqual(['ok', 'ok2'])
+  })
+})
