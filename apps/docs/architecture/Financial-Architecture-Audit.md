@@ -140,7 +140,7 @@ Severity scale: CRITICAL = unauthorised/duplicate money movement possible; HIGH 
 
 * **F-19** — Mixed units in one schema: `transactions.naira_amount` = naira, `appointments.fee_amount` = kobo, `shop_orders.*_kobo`, `plan_payments.naira_amount` = naira, `consultation fee` = naira `numeric`. Conversions are scattered (`Math.round(amount/100)`).
 * **F-20** — `settle_consultation_payment` credits `ceil(fee/200)` coins for a ₦ fee: professional over-credited by up to ₦199 and no platform commission is taken on card consultations (check against commercial intent).
-* **F-21** — Cron endpoints: `check-subscription-expiry.js` authenticates only if a token is supplied (anonymous call allowed). It only enqueues emails, so low; the money crons correctly fail closed.
+* **F-21** — Cron endpoints: `check-subscription-expiry.js` authenticates only if a token is supplied (anonymous call allowed). It only enqueues emails, so low; the money crons correctly fail closed. **Fixed 2026-10-26** (fix/branch-switching, ec760af): fails closed like the outbox cron (500 without CRON_SECRET, 401 on a missing or wrong token).
 * **F-22** — Migration drift risk: the same SQL exists in `apps/*/sql`, `supabase/migrations`, and `supabase/seeds` (e.g. `carefind_wallet_payment_hardening.sql` under *seeds*). Live drift not yet checked (`list_migrations` not run).
 * **F-23** — `paystack-webhook.js` is the only file where CareFind/CareHub logic is entangled; `packages/shared-email/test_*.txt` stray files and `preview.log` are untracked noise (not financial).
 
