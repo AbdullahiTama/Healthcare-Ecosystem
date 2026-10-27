@@ -16,9 +16,9 @@ Design and decisions: `docs/superpowers/specs/2026-10-25-pos-sales-report-design
 
 | Piece | State |
 |---|---|
-| Client (report, detail, shifts, exports, deposit method, collections) | On branch `feat/pos-sales-report` |
+| Client (report, detail, shifts, exports, deposit method, collections) | Merged to `main` and deployed 2026-10-27 (PR #36, `99055c2`) |
 | `carehub_20261210_pos_accounting.sql` | **APPLIED live 2026-10-26** (tracked as `20261026221943`), verified: ACLs (no anon; internals not executable by signed-in users), behavioural rollback test as a real Cashier, backfill 183 sales / ₦4,660,975.00 matching the pre-apply total, advisors +4 expected WARNs only |
-| `carehub_20261211_sales_write_hardening.sql` | **Drafted, NOT applied** |
+| `carehub_20261211_sales_write_hardening.sql` | **APPLIED live 2026-10-27** (tracked as `20261027012946`) after PR #36 deployed, verified: `anon` has no privileges on `sales`; `authenticated` keeps SELECT/INSERT and UPDATE on `status, is_on_hold, notes` only; a rolled-back run as a real Cashier showed hold/resume still works, direct edits to amount_paid/total/staff_name and DELETE are refused, Collect via `record_sale_payment()` works |
 
 Before migration 1 was applied the report still worked on `sales` alone. It shows
 a notice that money figures are estimated, hides the Payments tab, shift

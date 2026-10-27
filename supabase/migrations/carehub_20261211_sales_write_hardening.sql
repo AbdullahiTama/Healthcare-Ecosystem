@@ -2,6 +2,8 @@
 --
 -- Design: docs/superpowers/specs/2026-10-25-pos-sales-report-design.md
 -- Requires: carehub_20261210_pos_accounting.sql (record_sale_payment, refund_sale).
+-- APPLIED to production 2026-10-27 (schema_migrations 20261027012946), after the
+-- client that records repayments through record_sale_payment() was deployed (PR #36, 99055c2).
 --
 -- Why: the `sales` policy is FOR ALL to every member of the business, and the
 -- table carries the default Supabase grants. So any cashier could PATCH any
