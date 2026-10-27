@@ -7,11 +7,14 @@ import { paymentErrorMessage } from '../../lib/dbErrors'
 // exposes it through its own repository. `getClients` is still the shared
 // services/supabase read used by POS too — repoint it when that call is
 // consolidated; it is unrelated to this module's own aggregate.
-import { useClients } from '../../hooks/queries'
+import { useClients, useSettings } from '../../hooks/queries'
 import ClientsLoadNote from '../clients/components/ClientsLoadNote'
 // A debt raised by a credit sale is settled against that sale, through the
 // sales aggregate's own collection function, so the two never disagree.
 import { saleRepository, paymentRepository, isMissingObject } from '../pos/repositories'
+import DebtDetail from './DebtDetail'
+import { PurchasePaymentModal } from '../purchases/SupplierPayments'
+import { isManagerRole } from '../../lib/permissions'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
@@ -44,6 +47,10 @@ export default function Debts({ brand, role, perms, staffName }) {
   const [payTarget, setPayTarget] = useState(null)
   const [payMethod, setPayMethod] = useState('Cash')
   const [paying, setPaying] = useState(false)
+  // The debt opened in full, and a purchase being paid from it.
+  const [detail, setDetail] = useState(null)
+  const [payingPurchase, setPayingPurchase] = useState(null)
+  const { data: settings } = useSettings(brand?.id)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
@@ -196,7 +203,11 @@ export default function Debts({ brand, role, perms, staffName }) {
               key: 'party_name', label: 'Party', sortable: true,
               render: d => (
                 <>
-                  <span style={{ fontWeight: '700', fontSize: '13px', color: navy }}>{d.party_name}</span>
+                  {/* The row opens the debt in full; the name is its keyboard-reachable button. */}
+                  <button type='button' onClick={(e) => { e.stopPropagation(); setDetail(d) }} aria-label={`View debt: ${d.party_name}`}
+                    style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontWeight: '700', fontSize: '13px', color: navy, cursor: 'pointer', textAlign: 'left', textDecoration: 'underline', textDecorationColor: theme.gray100, textUnderlineOffset: 3 }}>
+                    {d.party_name}
+                  </button>
                   {d.client_id && <div style={{ marginTop: '4px' }}><Pill label={<> <UserCheck size={10} /> Client record</>} type='teal' /></div>}
                 </>
               ),
@@ -231,8 +242,9 @@ export default function Debts({ brand, role, perms, staffName }) {
               render: d => <Pill label={d.status} type={d.status === 'paid' ? 'green' : 'amber'} />,
             },
           ]}
+          onRowClick={d => setDetail(d)}
           actions={d => (
-            d.status !== 'paid' && <button onClick={() => markPaid(d)} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Mark paid</button>
+            d.status !== 'paid' && <button onClick={(e) => { e.stopPropagation(); markPaid(d) }} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Mark paid</button>
           )}
         />
       )}
@@ -289,6 +301,16 @@ export default function Debts({ brand, role, perms, staffName }) {
           </div>
         </div>
       </Modal>
+
+      {detail && (
+        <DebtDetail debt={detail} brand={brand} settings={settings} canRefund={role === 'Owner' || isManagerRole(role)} showToast={showToast}
+          onClose={() => setDetail(null)} onChanged={load} onMarkPaid={markPaid}
+          onPay={(purchase) => { setDetail(null); setPayingPurchase(purchase) }} />
+      )}
+      {payingPurchase && (
+        <PurchasePaymentModal brand={brand} purchase={payingPurchase} staffName={staffName} showToast={showToast}
+          onPaid={load} onClose={() => setPayingPurchase(null)} />
+      )}
 
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
     </div>

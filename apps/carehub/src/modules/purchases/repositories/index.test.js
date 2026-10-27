@@ -110,3 +110,29 @@ describe('purchaseRepository supplier payments', () => {
     ])
   })
 })
+
+describe('purchaseRepository.create invoice lines', () => {
+  const lines = [{ name: 'Amoxil', qty: 5, cost: 1200 }]
+  it('saves the lines with the purchase', async () => {
+    const bodies = []
+    const repo = createPurchaseRepository(async (path, opts) => { bodies.push(JSON.parse(opts.body)); return [{ id: 'p-1' }] })
+    expect(await repo.create('biz', { supplier_name: 'Emzor', items: lines })).toEqual([{ id: 'p-1' }])
+    expect(bodies).toEqual([{ supplier_name: 'Emzor', items: lines, business_id: 'biz' }])
+  })
+  it('before the items column exists, saves the purchase without its lines instead of failing', async () => {
+    const bodies = []
+    const repo = createPurchaseRepository(async (path, opts) => {
+      const body = JSON.parse(opts.body); bodies.push(body)
+      if ('items' in body) throw new Error("Supabase error (400): Could not find the 'items' column of 'purchases' in the schema cache")
+      return [{ id: 'p-2' }]
+    })
+    expect(await repo.create('biz', { supplier_name: 'Emzor', items: lines })).toEqual([{ id: 'p-2' }])
+    expect(bodies[1]).toEqual({ supplier_name: 'Emzor', business_id: 'biz' })
+  })
+  it('any other failure is not retried', async () => {
+    let calls = 0
+    const repo = createPurchaseRepository(async () => { calls++; throw new Error('Supabase error (400): new row violates row-level security policy') })
+    await expect(repo.create('biz', { supplier_name: 'Emzor', items: lines })).rejects.toThrow(/row-level security/)
+    expect(calls).toBe(1)
+  })
+})

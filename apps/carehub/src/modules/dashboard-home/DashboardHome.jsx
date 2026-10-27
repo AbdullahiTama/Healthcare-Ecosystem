@@ -12,12 +12,13 @@ import { saleRepository } from '../pos/repositories'
 import { classifySalesVelocity } from '../../lib/velocity'
 import { fmt, businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
-import { Avatar, Empty, ErrorState, Loading, StatCard, PageHeader, MetricGrid, SectionCard, ActivityList, QuickAction } from '../../components/ui'
+import { Avatar, Empty, ErrorState, Loading, StatCard, PageHeader, MetricGrid, SectionCard, ActivityList, QuickAction, Toast, useToast } from '../../components/ui'
+import SaleDetailModal from '../pos/SaleDetailModal'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
-import { canSeeAllActivity } from '../../lib/permissions'
+import { canSeeAllActivity, isManagerRole } from '../../lib/permissions'
 import FieldTeamToday from './FieldTeamToday.jsx'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useTodaySales, useOpenSales, useAppointments } from '../../hooks/queries'
+import { useTodaySales, useOpenSales, useAppointments, useSettings, useInvalidateSales } from '../../hooks/queries'
 
 const { tealDeep, tealMist, navy, gray500, gray400, border, success, bg } = theme
 
@@ -41,6 +42,11 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
   const canSeeAppts = !perms?.nav || perms.nav.includes('appointments')
 
   const { data: todaySales = [], isLoading: loadingToday, isError: errToday, refetch: refetchToday } = useTodaySales(brand?.id)
+  // A recent sale opened in full (items, payments, receipt).
+  const [detailSale, setDetailSale] = useState(null)
+  const { data: settings } = useSettings(brand?.id)
+  const invalidateSales = useInvalidateSales(brand?.id)
+  const { msg: toastMsg, type: toastType, show: showToast } = useToast()
   // Held and unpaid credit sales only — not the whole sales history.
   const { data: openSales = [], isLoading: loadingAll, isError: errAll, refetch: refetchAll } = useOpenSales(brand?.id)
   const { data: appts = [], isLoading: loadingAppts, isError: errAppts, refetch: refetchAppts } = useAppointments(brand?.id, canSeeAppts)
@@ -303,6 +309,7 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
                   title: s.client_name || 'Walk-in',
                   meta: `${s.payment_method} · ${(s.created_at || '').slice(11, 16)}`,
                   value: fmt(s.total),
+                  onClick: () => setDetailSale(s),
                 }))}
               />
             </SectionCard>
@@ -341,6 +348,10 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
           </SectionCard>
         )}
       </div>
+      <SaleDetailModal show={!!detailSale} sale={detailSale} onClose={() => setDetailSale(null)} brand={brand} settings={settings}
+        canRefund={role === 'Owner' || isManagerRole(role)} ledgerAvailable showToast={showToast}
+        onChanged={() => { setDetailSale(null); invalidateSales() }} />
+      <Toast msg={toastMsg} type={toastType} />
     </div>
   )
 }

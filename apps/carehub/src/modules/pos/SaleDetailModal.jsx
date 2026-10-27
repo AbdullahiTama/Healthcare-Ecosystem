@@ -121,7 +121,7 @@ export default function SaleDetailModal({ sale, show, onClose, shiftsById = {}, 
             <Fact label='Date' value={when(sale.created_at)} />
             <Fact label='Customer' value={sale.client_name || 'Walk-in'} />
             <Fact label='Cashier' value={sale.staff_name || 'Not recorded'} />
-            <Fact label='Shift' value={sale.shift_id ? shiftLabel(shiftsById[sale.shift_id]) : 'No shift'} />
+            <Fact label='Shift' value={!sale.shift_id ? 'No shift' : shiftsById[sale.shift_id] ? shiftLabel(shiftsById[sale.shift_id]) : 'Recorded in a shift'} />
             <Fact label='Method' value={methodLabel(sale)} />
             <Fact label='Status' value={<span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><Pill label={paymentStatus(sale)} type={STATUS_PILL[paymentStatus(sale)]} />{saleRefunded(sale) > 0 && <Pill label='Refund' type='gray' />}</span>} />
           </div>

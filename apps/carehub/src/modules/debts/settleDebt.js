@@ -1,5 +1,6 @@
 import { debtRepository as defaultDebts } from './repositories'
 import { purchaseRepository as defaultPurchases } from '../purchases/repositories'
+import { isMissingObject } from '../../lib/dbErrors'
 
 // "Mark paid" on the Debts page, for every debt that is not a credit sale.
 // (A credit-sale debt is settled in Debts.jsx through the POS ledger's
@@ -10,7 +11,8 @@ import { purchaseRepository as defaultPurchases } from '../purchases/repositorie
 // payment history. So a purchase debt is settled by paying the purchase's
 // remaining balance through record_purchase_payment, which moves the
 // purchase, the debt and the history together. Any other debt, or one whose
-// purchase is gone or already paid, is simply marked paid.
+// purchase is gone or already paid (or the supplier-payments update is not
+// applied yet), is simply marked paid.
 //
 // Returns { via: 'purchase' | 'debt' }.
 export async function settleDebt(debt, businessId, {
@@ -21,9 +23,14 @@ export async function settleDebt(debt, businessId, {
   if (debt.source === 'purchase' && debt.source_ref) {
     const purchase = await purchases.getById(debt.source_ref, businessId)
     if (purchase && Number(purchase.balance) > 0) {
-      await purchases.recordPayment(purchase.id, { amount: Number(purchase.balance), method: 'Other', note: 'Settled from the Debts page', staffName })
-      await markDebtPaidIfStillOpen(debt, businessId, debts)
-      return { via: 'purchase' }
+      try {
+        await purchases.recordPayment(purchase.id, { amount: Number(purchase.balance), method: 'Other', note: 'Settled from the Debts page', staffName })
+        await markDebtPaidIfStillOpen(debt, businessId, debts)
+        return { via: 'purchase' }
+      } catch (e) {
+        // Before carehub_20261212 is applied: mark the debt paid, as before.
+        if (!isMissingObject(e)) throw e
+      }
     }
   }
   await debts.update(debt.id, businessId, { amount_paid: debt.amount, balance: 0, status: 'paid' })

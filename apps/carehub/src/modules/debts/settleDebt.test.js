@@ -31,4 +31,11 @@ describe('settleDebt', () => {
     expect(f.purchases.recordPayment).not.toHaveBeenCalled()
     expect(f.debts.update).toHaveBeenCalledWith('d3', 'biz', { amount_paid: 100, balance: 0, status: 'paid' })
   })
+
+  it('before the supplier-payments update, a purchase debt is just marked paid, as it used to be', async () => {
+    const f = fakes({ purchase: { id: 'p-1', balance: 700 } })
+    f.purchases.recordPayment.mockRejectedValue(new Error('Supabase error (404): Could not find the function public.record_purchase_payment in the schema cache'))
+    expect(await settleDebt({ id: 'd5', source: 'purchase', source_ref: 'p-1', amount: 700 }, 'biz', f)).toEqual({ via: 'debt' })
+    expect(f.debts.update).toHaveBeenCalledWith('d5', 'biz', { amount_paid: 700, balance: 0, status: 'paid' })
+  })
 })

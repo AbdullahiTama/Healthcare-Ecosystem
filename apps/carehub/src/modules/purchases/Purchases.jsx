@@ -16,6 +16,8 @@ import { purchaseExpirySummary } from './expirySummary'
 import { findDuplicate } from '../../lib/productMatches'
 import { upsertProducts } from '../inventory/productListState'
 import { PurchasePaymentModal, SupplierBalances, purchaseStatus } from './SupplierPayments'
+import PurchaseDetailModal from './PurchaseDetail'
+import { purchaseItemsFromForm } from './purchaseInvoice'
 import { PRODUCT_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
@@ -40,6 +42,8 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
   const [view, setView] = useState('purchases')
   // The purchase whose "Record payment" dialog is open.
   const [paying, setPaying] = useState(null)
+  // The purchase opened as a supplier invoice (PurchaseDetailModal).
+  const [viewing, setViewing] = useState(null)
   const inventory = products
   // Matching a purchase against a half-loaded catalog would create duplicates.
   const catalogLoading = catalog?.status === 'loading' || catalog?.status === 'error'
@@ -138,6 +142,8 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
         notes: form.notes || '',
         expiry: expiry,
         batch: batch,
+        // Each line's quantity and price, for the invoice view.
+        items: purchaseItemsFromForm(validItems),
       })
       const purchaseId = (purchase[0] || {}).id || ''
 
@@ -312,8 +318,15 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
               </thead>
               <tbody>
                 {purchases.map(p => (
-                  <tr key={p.id} style={{ borderBottom: `1px solid ${gray100}` }}>
-                    <td style={{ padding: '12px 12px', fontWeight: '700', fontSize: '13px', color: navy }}>{p.supplier_name}</td>
+                  // The whole row opens the purchase as an invoice; the supplier
+                  // name is its keyboard-reachable button.
+                  <tr key={p.id} onClick={() => setViewing(p)} style={{ borderBottom: `1px solid ${gray100}`, cursor: 'pointer' }}>
+                    <td style={{ padding: '12px 12px', fontWeight: '700', fontSize: '13px', color: navy }}>
+                      <button type='button' onClick={(e) => { e.stopPropagation(); setViewing(p) }} aria-label={`View purchase from ${p.supplier_name}`}
+                        style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontWeight: 700, color: navy, cursor: 'pointer', textAlign: 'left', textDecoration: 'underline', textDecorationColor: gray100, textUnderlineOffset: 3 }}>
+                        {p.supplier_name}
+                      </button>
+                    </td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', color: gray600, maxWidth: '260px' }}>{p.product_name || 'Not set'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', color: navy }}>{p.quantity || 'Not set'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', color: navy }}>{p.cost_price ? fmt(p.cost_price) : 'Not set'}</td>
@@ -326,9 +339,9 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
                     <td style={{ padding: '12px 12px' }}>{(() => { const st = purchaseStatus(p); return <Pill label={st.label} type={st.type} /> })()}</td>
                     <td style={{ padding: '12px 12px' }}>
                       {(Number(p.balance) || 0) > 0 ? (
-                        <button type='button' onClick={() => setPaying(p)} aria-label={`Record payment to ${p.supplier_name}`} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap', minHeight: 32 }}>Record payment</button>
+                        <button type='button' onClick={(e) => { e.stopPropagation(); setPaying(p) }} aria-label={`Record payment to ${p.supplier_name}`} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap', minHeight: 32 }}>Record payment</button>
                       ) : (
-                        <button type='button' onClick={() => setPaying(p)} aria-label={`Payment history for ${p.supplier_name}`} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap', minHeight: 32 }}>History</button>
+                        <button type='button' onClick={(e) => { e.stopPropagation(); setPaying(p) }} aria-label={`Payment history for ${p.supplier_name}`} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap', minHeight: 32 }}>History</button>
                       )}
                     </td>
                   </tr>
@@ -349,6 +362,7 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
 
       </>)}
 
+      {viewing && !paying && <PurchaseDetailModal brand={brand} purchase={viewing} onClose={() => setViewing(null)} onPay={(p) => { setViewing(null); setPaying(p) }} />}
       {paying && <PurchasePaymentModal brand={brand} purchase={paying} staffName={staffName} showToast={showToast} onPaid={load} onClose={() => setPaying(null)} />}
 
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ supplyDate: todayDate(), items: [blankItem()] }) }} title='Record Purchase'

@@ -66,3 +66,21 @@ export function paymentErrorMessage(error) {
   }
   return "We couldn't record the payment. Check your connection and try again."
 }
+
+// ── Not deployed yet ──────────────────────────────────────────────────────────
+// A table or function the app expects but the database does not have yet: its
+// migration is not applied. Callers degrade (an "available once the update is
+// applied" notice, or the previous behaviour) instead of failing.
+const MISSING_OBJECT = /PGRST20[25]|Could not find the (function|table)|relation "[^"]+" does not exist/i
+export function isMissingObject(e) {
+  return !!e && MISSING_OBJECT.test(String(e.message || e))
+}
+
+// A column the app writes that the table does not have yet (PostgREST
+// PGRST204: "Could not find the 'items' column of 'purchases' in the schema
+// cache").
+export function isMissingColumn(e, column) {
+  const m = String(e?.message || e || '')
+  return new RegExp(`Could not find the '${column}' column`).test(m)
+}
+

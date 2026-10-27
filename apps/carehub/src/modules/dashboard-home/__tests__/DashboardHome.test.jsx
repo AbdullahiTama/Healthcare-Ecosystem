@@ -14,12 +14,15 @@ vi.mock('../../../hooks/queries', () => ({
   useTodaySales: vi.fn(),
   useOpenSales: vi.fn(),
   useAppointments: vi.fn(),
+  useSettings: vi.fn(() => ({ data: {} })),
+  useInvalidateSales: vi.fn(() => vi.fn()),
 }))
 vi.mock('../FieldTeamToday.jsx', () => ({
   default: function MockFieldTeamToday({ role, staffId }) { return <div data-testid="field-team-today" data-role={role} data-staff={staffId || ''} /> },
 }))
 vi.mock('../../pos/repositories', () => ({
   saleRepository: { getSince: vi.fn(async () => []) },
+  paymentRepository: { getForSale: vi.fn(async () => []) },
 }))
 vi.mock('../../notifications/repositories', () => ({
   notificationRepository: { notify: vi.fn(async () => {}) },
@@ -162,6 +165,21 @@ describe('DashboardHome', () => {
     // they must still be inert-safe buttons (D1 review B5).
     const restock = [...m.host.querySelectorAll('button')].find((b) => b.textContent === 'Restock')
     expect(restock.getAttribute('type')).toBe('button')
+  })
+
+  it('a recent sale opens in full: items, prices and payments', async () => {
+    const sale = { id: 's1', txn_no: 'TXN-77', client_name: 'Mama Ngozi', payment_method: 'Cash', total: 2400, amount_paid: 2400, balance: 0,
+      created_at: '2026-10-27T09:30:00', items: JSON.stringify([{ name: 'Amoxil 500mg', qty: 2, price: 1200 }]) }
+    m = await mountHome({ today: query({ data: [sale] }) })
+    const row = [...m.host.querySelectorAll('button')].find((b) => b.textContent.includes('Mama Ngozi'))
+    expect(row).toBeTruthy()
+    await act(async () => { row.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog.textContent).toContain('Receipt TXN-77')
+    expect(dialog.textContent).toContain('Amoxil 500mg')
+    expect(dialog.textContent).toContain('×2')
+    expect(dialog.textContent).toContain(fmt(2400))
   })
 
   it('shows empty states without losing the KPI row', async () => {

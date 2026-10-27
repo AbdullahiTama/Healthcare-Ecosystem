@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Pause, Clock, CreditCard, Camera, ShoppingCart,
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
-  DollarSign, Repeat, Divide, Search, Package, PackageX, Clipboard, ReceiptText,
+  DollarSign, Repeat, Divide, Search, Package, PackageX, Clipboard, ReceiptText, ChevronRight,
 } from 'lucide-react'
 import { saleRepository } from './repositories'
 // Credit sales raise and settle debts. That aggregate belongs to the debts
@@ -21,8 +21,13 @@ import { theme } from '../../styles/theme'
 import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, ErrorState, Loading, Skeleton } from '../../components/ui'
 import { CatalogStatusBanner, loadingLabel } from '../inventory/components/CatalogStatus'
 import CreditCollections from './CreditCollections'
+import CustomerPicker from './CustomerPicker'
+import SaleDetailModal from './SaleDetailModal'
+import { isManagerRole } from '../../lib/permissions'
+import { creditCustomerFor } from './customerPick'
+import { isDuplicateError } from '../../lib/dbErrors'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useTodaySales, useOpenSales, useRecentSales, useSettings, useClients, useInvalidateSales } from '../../hooks/queries'
+import { useTodaySales, useOpenSales, useRecentSales, useSettings, useClients, useCreateClient, useInvalidateSales } from '../../hooks/queries'
 
 const { tealDeep, tealMist, bg, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, warning, warningBg, success } = theme
 
@@ -81,6 +86,11 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const [view, setView] = useState('pos') // pos | held | recent | credit
   const [cart, setCart] = useState([])
   const [client, setClient] = useState('Walk-in')
+  // The customer record picked for this sale (CustomerPicker). A credit sale
+  // cannot be recorded without one.
+  const [pickedClient, setPickedClient] = useState(null)
+  // The sale opened from the Recent list (SaleDetailModal).
+  const [detailSale, setDetailSale] = useState(null)
   const [method, setMethod] = useState('Cash')
   const [cash, setCash] = useState('')
   const [disc, setDisc] = useState('')
@@ -119,7 +129,9 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
 
   // React Query hooks
   const { data: settings } = useSettings(brand?.id)
-  const { data: clients = [] } = useClients(brand?.id)
+  const clientsQuery = useClients(brand?.id)
+  const clients = clientsQuery.data || []
+  const createClient = useCreateClient(brand?.id)
   const { data: todaySales = [], isLoading: loadingToday } = useTodaySales(brand?.id)
   // Held and unpaid credit sales, and the latest completed sales for the
   // Recent tab — targeted reads instead of the whole sales history.
@@ -264,9 +276,34 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
 
   // When the typed client name matches a saved client, the sale and any debt
   // it creates get linked to that client's record (customer database).
+  // A customer picked in CustomerPicker wins over a name match, so two
+  // customers with the same name are never confused.
   function resolveClientId(name) {
+    if (pickedClient && pickedClient.full_name === name) return pickedClient.id
     const match = clients.find(c => c.full_name === name)
     return match?.id || null
+  }
+
+  // The customer a credit sale would be recorded against, or null (blocked).
+  const creditCustomer = creditCustomerFor(pickedClient, client, clients)
+
+  function pickCustomer(c) {
+    setPickedClient(c)
+    setClient(c ? c.full_name : 'Walk-in')
+  }
+
+  async function addCustomer(fields) {
+    try {
+      const rows = await createClient.mutateAsync(fields)
+      const created = Array.isArray(rows) ? rows[0] : rows
+      if (!created?.id) throw new Error('The customer was not saved.')
+      console.info('[pos] customer added at the till', { id: created.id })
+      return created
+    } catch (e) {
+      console.error('[pos] add customer failed:', e)
+      if (isDuplicateError(e)) throw new Error('A customer with this phone number already exists. Search for them instead.')
+      throw new Error(cleanServerError(e))
+    }
   }
 
   // Tags each cart line with whether it was recommended on this client's most
@@ -399,10 +436,14 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     setCharging(true)
     try {
     const txnNo = genId('TXN')
+    // Every credit sale belongs to a customer record, so the debt can be
+    // traced to the right person. The database refuses one without it too.
+    const customer = creditCustomer
+    if (!customer) { showToast('Select the customer before recording a credit sale.', { type: 'warning' }); return }
     const amtPaid = parseFloat(creditAmountPaid) || 0
     const balance = total - amtPaid
-    const clientName = client || 'Walk-in'
-    const clientId = resolveClientId(clientName)
+    const clientName = customer.full_name
+    const clientId = customer.id
     const items = await tagItems(clientId)
     const saleData = {
       txn_no: txnNo,
@@ -506,7 +547,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     invalidateSales()
   }
 
-  function newSale() { finishResumedSale(); setReceipt(null); setCart([]); setClient('Walk-in'); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid(''); setCreditMethod('Cash') }
+  function newSale() { finishResumedSale(); setReceipt(null); setCart([]); setClient('Walk-in'); setPickedClient(null); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid(''); setCreditMethod('Cash') }
 
   // Universal fallback path: render an HTML page and let the browser/OS
   // rasterize it via the system print dialog. Always works, but thermal
@@ -728,11 +769,14 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
           return (
             <Card key={s.id} style={{ padding: '14px', marginBottom: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontWeight: '700', fontSize: '14px' }}>{s.client_name || 'Walk-in'}</div>
+                {/* The whole summary opens the sale in full: items, prices,
+                    payments and the receipt. */}
+                <button type='button' onClick={() => setDetailSale(s)} aria-label={`View sale ${s.txn_no} for ${s.client_name || 'Walk-in'}`}
+                  style={{ flex: '1 1 200px', minWidth: 0, textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: navy }}>
+                  <div style={{ fontWeight: '700', fontSize: '14px', display: 'flex', alignItems: 'center', gap: 4 }}>{s.client_name || 'Walk-in'} <ChevronRight size={14} color={gray400} aria-hidden='true' /></div>
                   <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{s.txn_no} · {items.length} item(s) · {s.payment_method}</div>
                   <div style={{ fontSize: '11px', color: theme.gray500, marginTop: '2px' }}>{s.created_at?.replace('T', ' ').slice(0, 16)}</div>
-                </div>
+                </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: '16px', fontWeight: '900', color: tealDeep }}>{fmt(s.total)}</div>
@@ -748,6 +792,9 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         })
         })()}
       </div>
+      <SaleDetailModal show={!!detailSale} sale={detailSale} onClose={() => setDetailSale(null)} brand={brand} settings={settings}
+        canRefund={role === 'Owner' || isManagerRole(role)} ledgerAvailable showToast={showToast}
+        onChanged={() => { setDetailSale(null); invalidateSales() }} />
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )
@@ -764,7 +811,8 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   )
 
   // ── MAIN POS VIEW (Sell tab) ──────────────────────────────────────────────
-  const chargeLabel = !cart.length ? 'Add products' : method === 'Credit' ? 'Record credit sale' : 'Charge ' + fmt(total)
+  const chargeLabel = !cart.length ? 'Add products' : method === 'Credit' ? (creditCustomer ? 'Record credit sale' : 'Select a customer') : 'Charge ' + fmt(total)
+  const creditBlocked = method === 'Credit' && !creditCustomer
 
   return (
     <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: isMobile ? 'auto' : '100%', minHeight: isMobile ? 'auto' : '100%', overflow: isMobile ? 'visible' : 'hidden', background: bg }}>
@@ -1043,7 +1091,9 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
             </div>
           )}
           {method === 'Credit' && (
-            <div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <CustomerPicker clients={clients} loading={clientsQuery.isLoading} error={clientsQuery.isError} onRetry={() => clientsQuery.refetch()}
+                selected={creditCustomer} onSelect={pickCustomer} onCreate={addCustomer} />
               <input type='number' value={creditAmountPaid} onChange={e => setCreditAmountPaid(e.target.value)} placeholder='Amount paid now (₦)'
                 style={{ width: '100%', padding: '10px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 12.5, outline: 'none', boxSizing: 'border-box', background: bg, color: navy }} />
               {creditAmountPaid !== '' && <div style={{ fontSize: 11.5, fontWeight: 700, marginTop: 5, color: danger }}>Balance owed: {fmt(total - (parseFloat(creditAmountPaid) || 0))}</div>}
@@ -1072,8 +1122,8 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
                 (balance 0, is_credit false), the `creditAmountPaid` the
                 cashier typed would be ignored, and the debt would never be
                 recorded — the balance simply disappears. */}
-            <button onClick={method === 'Credit' ? chargeCredit : charge} disabled={!cart.length || charging} className="pos-charge"
-              style={{ flex: 1, padding: '14px 0', borderRadius: theme.radius.md, border: 'none', fontWeight: 800, fontSize: 14, opacity: charging ? 0.6 : 1, cursor: charging ? 'not-allowed' : 'pointer' }}>
+            <button onClick={method === 'Credit' ? chargeCredit : charge} disabled={!cart.length || charging || creditBlocked} className="pos-charge"
+              style={{ flex: 1, padding: '14px 0', borderRadius: theme.radius.md, border: 'none', fontWeight: 800, fontSize: 14, opacity: charging || creditBlocked ? 0.6 : 1, cursor: charging || creditBlocked ? 'not-allowed' : 'pointer' }}>
               {charging ? 'Processing...' : chargeLabel}
             </button>
           </div>

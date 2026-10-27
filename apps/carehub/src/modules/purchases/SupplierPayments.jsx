@@ -1,10 +1,14 @@
 import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Search, Truck, X } from 'lucide-react'
 import { Card, Modal, Empty, ErrorState, Loading, Pill } from '../../components/ui'
 import RecordPaymentForm from '../../components/payments/RecordPaymentForm'
 import PaymentHistory from '../../components/payments/PaymentHistory'
 import { useSupplierBalances, useSupplierPurchases, usePurchasePayments, useRecordPurchasePayment } from '../../hooks/queries'
-import { paymentErrorMessage } from '../../lib/dbErrors'
+import { paymentErrorMessage, isMissingObject } from '../../lib/dbErrors'
+import { purchaseRepository } from './repositories'
+import { debtRepository } from '../debts/repositories'
+import PurchaseDetailModal from './PurchaseDetail'
 import { fmt } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 
@@ -19,13 +23,37 @@ export function purchaseStatus(p) {
   return { label: 'Unpaid', type: 'amber' }
 }
 
+// Before the supplier-payments update (carehub_20261212) is applied, the
+// payment function does not exist. Paying the whole balance then works as it
+// always did (the purchase and its debt are marked paid); a part payment
+// needs the update.
+async function payInFullWithoutHistory(purchase, businessId) {
+  const total = Number(purchase.total_cost) || 0
+  await purchaseRepository.update(purchase.id, businessId, { amount_paid: total, balance: 0, status: 'paid' })
+  const debt = await debtRepository.findOpenBySource('purchase', purchase.id, businessId)
+  if (debt) await debtRepository.update(debt.id, businessId, { amount_paid: debt.amount, balance: 0, status: 'paid' })
+  return { balance: 0, amount_paid: total, status: 'paid' }
+}
+
 // The hook that records a supplier payment, with the toast and logging every
 // screen wants. Throws a user-facing message for the form to show.
 function useSupplierPayment(brand, staffName, showToast, onPaid) {
   const mutation = useRecordPurchasePayment(brand?.id)
+  const qc = useQueryClient()
   return async (purchase, { amount, method, paidOn, note }) => {
     try {
-      const r = await mutation.mutateAsync({ purchaseId: purchase.id, amount, method, paidOn, note, staffName: staffName || null })
+      let r
+      try {
+        r = await mutation.mutateAsync({ purchaseId: purchase.id, amount, method, paidOn, note, staffName: staffName || null })
+      } catch (e) {
+        if (!isMissingObject(e)) throw e
+        if (amount + 0.005 < (Number(purchase.balance) || 0)) {
+          throw new Error('Part payments to suppliers become available once the latest database update is applied. You can still pay the full balance.')
+        }
+        console.warn('[purchases] supplier payments not deployed yet; marking the purchase paid in full')
+        r = await payInFullWithoutHistory(purchase, brand.id)
+        qc.invalidateQueries({ queryKey: ['purchases'] })
+      }
       showToast(r.balance > 0
         ? `${fmt(amount)} paid to ${purchase.supplier_name}. ${fmt(r.balance)} still owed on this purchase.`
         : `Purchase from ${purchase.supplier_name} is now fully paid.`, { type: 'success' })
@@ -34,7 +62,7 @@ function useSupplierPayment(brand, staffName, showToast, onPaid) {
       return r
     } catch (e) {
       console.error('[purchases] supplier payment failed:', e)
-      throw new Error(paymentErrorMessage(e))
+      throw new Error(e?.message?.startsWith('Part payments to suppliers') ? e.message : paymentErrorMessage(e))
     }
   }
 }
@@ -62,14 +90,15 @@ export function PurchasePaymentModal({ brand, purchase, staffName, showToast, on
         )}
         <section aria-label='Payments on this purchase'>
           <div style={{ fontWeight: 800, fontSize: 13, color: navy, marginBottom: 8 }}>Payments on this purchase</div>
-          <PaymentHistory payments={history.data} loading={history.isLoading} error={history.isError} onRetry={() => history.refetch()} />
+          <PaymentHistory payments={history.data} loading={history.isLoading} onRetry={() => history.refetch()}
+            unavailable={history.isError && isMissingObject(history.error)} error={history.isError && !isMissingObject(history.error)} />
         </section>
       </div>
     </Modal>
   )
 }
 
-function Figure({ label, value, color = navy }) {
+export function Figure({ label, value, color = navy }) {
   return (
     <div style={{ padding: '10px 12px', borderRadius: theme.radius.md, background: gray100 }}>
       <div style={{ fontSize: 11, color: gray500, fontWeight: 700 }}>{label}</div>
@@ -90,6 +119,9 @@ export function SupplierBalances({ brand, staffName, showToast, onPaid }) {
   const owed = rows.reduce((sum, s) => sum + (Number(s.balance) || 0), 0)
 
   if (balances.isLoading) return <Loading text='Loading suppliers…' />
+  if (balances.isError && isMissingObject(balances.error)) {
+    return <Empty icon={<Truck size={40} />} cause='none' message='Supplier totals and payment history become available once the latest database update is applied. Purchases are listed under the Purchases tab.' />
+  }
   if (balances.isError) return <ErrorState message="We couldn't load your suppliers." onRetry={() => balances.refetch()} />
   if ((balances.data || []).length === 0) return <Empty icon={<Truck size={40} />} message='No suppliers yet. Record a purchase to start.' />
 
@@ -153,11 +185,15 @@ function SupplierDetailModal({ brand, supplier, staffName, showToast, onPaid, on
   const purchases = useSupplierPurchases(brand?.id, supplier.supplier_key)
   const history = usePurchasePayments(brand?.id, { supplierKey: supplier.supplier_key })
   const [paying, setPaying] = useState(null)
+  const [viewing, setViewing] = useState(null)
   const open = (purchases.data || []).filter((p) => (Number(p.balance) || 0) > 0)
-  // One dialog at a time (each traps focus): paying swaps in the payment
-  // dialog, and closing it comes back here with refreshed figures.
+  // One dialog at a time (each traps focus): paying or viewing a purchase
+  // swaps in that dialog, and closing it comes back here with fresh figures.
   if (paying) {
     return <PurchasePaymentModal brand={brand} purchase={paying} staffName={staffName} showToast={showToast} onPaid={onPaid} onClose={() => setPaying(null)} />
+  }
+  if (viewing) {
+    return <PurchaseDetailModal brand={brand} purchase={viewing} onClose={() => setViewing(null)} onPay={(p) => { setViewing(null); setPaying(p) }} />
   }
   return (
     <Modal show onClose={onClose} title={supplier.supplier_name}>
@@ -179,10 +215,11 @@ function SupplierDetailModal({ brand, supplier, staffName, showToast, onPaid, on
                 const st = purchaseStatus(p)
                 return (
                   <li key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 12px', border: `1px solid ${border}`, borderRadius: theme.radius.md }}>
-                    <div style={{ minWidth: 0 }}>
+                    <button type='button' onClick={() => setViewing(p)} aria-label={`View purchase: ${p.product_name || 'Purchase'}`}
+                      style={{ minWidth: 0, flex: '1 1 180px', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: navy }}>{p.product_name || 'Purchase'} <Pill label={st.label} type={st.type} /></div>
                       <div style={{ fontSize: 12, color: gray500 }}>{(p.supply_date || (p.created_at || '').slice(0, 10))} · total {fmt(p.total_cost)} · paid {fmt(p.amount_paid)}</div>
-                    </div>
+                    </button>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <strong style={{ color: danger, fontSize: 14 }}>{fmt(p.balance)}</strong>
                       <button type='button' onClick={() => setPaying(p)}
@@ -198,7 +235,8 @@ function SupplierDetailModal({ brand, supplier, staffName, showToast, onPaid, on
         </section>
         <section aria-label='Payment history'>
           <div style={{ fontWeight: 800, fontSize: 13, color: navy, marginBottom: 8 }}>Payment history</div>
-          <PaymentHistory payments={history.data} loading={history.isLoading} error={history.isError} onRetry={() => history.refetch()} emptyText='No payments made to this supplier yet.' />
+          <PaymentHistory payments={history.data} loading={history.isLoading} onRetry={() => history.refetch()} emptyText='No payments made to this supplier yet.'
+            unavailable={history.isError && isMissingObject(history.error)} error={history.isError && !isMissingObject(history.error)} />
         </section>
       </div>
     </Modal>

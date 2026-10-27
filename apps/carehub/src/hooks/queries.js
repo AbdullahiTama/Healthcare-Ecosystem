@@ -18,6 +18,7 @@ export const keys = {
   supplierBalances: (brandId) => ['purchases', 'suppliers', brandId],
   supplierPurchases: (brandId, supplierKey) => ['purchases', 'supplier', brandId, supplierKey],
   purchasePayments: (brandId, scope) => ['purchases', 'payments', brandId, scope],
+  purchase: (brandId, purchaseId) => ['purchases', 'one', brandId, purchaseId],
   clientSales: (clientId, brandId) => ['clients', 'sales', clientId, brandId],
   clientConsults: (clientId, brandId) => ['clients', 'consults', clientId, brandId],
   clientHistory: (clientId, brandId, tab) => ['clients', 'history', clientId, brandId, tab],
@@ -236,6 +237,19 @@ export function useSupplierPurchases(brandId, supplierKey) {
     queryKey: keys.supplierPurchases(brandId, supplierKey),
     queryFn: () => purchaseRepository.getBySupplier(brandId, supplierKey),
     enabled: !!brandId && !!supplierKey,
+    staleTime: 30_000,
+  })
+}
+
+// One purchase in full (the list's page function returns summary columns
+// only; this includes the invoice lines). `placeholder` is the list row, shown
+// while the full record loads.
+export function usePurchase(brandId, purchaseId, placeholder) {
+  return useQuery({
+    queryKey: keys.purchase(brandId, purchaseId),
+    queryFn: () => purchaseRepository.getById(purchaseId, brandId),
+    enabled: !!brandId && !!purchaseId,
+    placeholderData: placeholder || undefined,
     staleTime: 30_000,
   })
 }

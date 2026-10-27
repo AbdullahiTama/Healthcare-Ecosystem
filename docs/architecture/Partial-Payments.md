@@ -107,9 +107,15 @@ updated, or invalidated, after each payment.
 
 ## Deployment order
 
-Apply `carehub_20261212_supplier_payments.sql` **before** deploying the app.
-The supplier screens call its functions. The migration is additive, and its
-backfill is idempotent. The credit side needs no new migration.
+`carehub_20261212_supplier_payments.sql` is additive, and its backfill is
+idempotent. The app works before it is applied:
+- payment history and supplier totals show an "available once the latest
+  database update is applied" notice;
+- paying a purchase's full balance marks it and its debt paid, as before;
+- a part payment explains it needs the update.
+
+See [Transaction-Details-and-Credit-Customers.md](Transaction-Details-and-Credit-Customers.md).
+The credit side needs no new migration.
 
 ## Test plan
 

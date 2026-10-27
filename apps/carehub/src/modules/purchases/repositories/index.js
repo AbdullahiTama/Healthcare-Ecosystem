@@ -1,5 +1,6 @@
 import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
+import { isMissingColumn } from '../../../lib/dbErrors'
 
 // ── Purchase repository ───────────────────────────────────────────────────────
 // A deep module over the `purchases` table. The interface is small
@@ -81,11 +82,22 @@ export function createPurchaseRepository(request = sbFetch) {
       return (Array.isArray(rows) ? rows[0] : rows) || null
     },
 
+    // `items` (the invoice lines) needs carehub_20261213; until that column
+    // exists the purchase is saved without its lines rather than not at all.
     async create(businessId, purchase) {
-      return request('purchases', {
+      const send = (row) => request('purchases', {
         method: 'POST',
-        body: JSON.stringify({ ...purchase, business_id: businessId }),
+        body: JSON.stringify({ ...row, business_id: businessId }),
       })
+      try {
+        return await send(purchase)
+      } catch (e) {
+        if (!('items' in purchase) || !isMissingColumn(e, 'items')) throw e
+        console.warn('[purchases] items column not deployed yet; saved without line items')
+        const withoutItems = { ...purchase }
+        delete withoutItems.items
+        return send(withoutItems)
+      }
     },
 
     // Previously an id-only PATCH in services/supabase.js, same class as the

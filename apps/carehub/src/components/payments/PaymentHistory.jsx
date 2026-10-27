@@ -19,7 +19,10 @@ const kindLabel = (p) => [KIND_LABEL[p.kind], p.backfilled ? 'from earlier recor
 
 // A list of recorded payments, newest first: purchase_payments rows (with the
 // balance left after each) or sale_payments ledger rows (refunds included).
-export default function PaymentHistory({ payments, loading, error, onRetry, showSupplier = false, emptyText = 'No payments recorded yet.' }) {
+// `unavailable`: the history table is not deployed yet (its migration is not
+// applied), which is not an error the user can retry.
+export default function PaymentHistory({ payments, loading, error, unavailable = false, onRetry, showSupplier = false, emptyText = 'No payments recorded yet.' }) {
+  if (unavailable) return <div style={{ fontSize: 13, color: theme.gray500, padding: '8px 0' }}>Payment history becomes available once the latest database update is applied.</div>
   if (loading) return <Loading text='Loading payments…' />
   if (error) return <ErrorState message="We couldn't load the payment history." onRetry={onRetry} />
   if (!payments || payments.length === 0) return <div style={{ fontSize: 13, color: theme.gray500, padding: '8px 0' }}>{emptyText}</div>

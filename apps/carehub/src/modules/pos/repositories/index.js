@@ -1,5 +1,5 @@
 import { sbFetch, sbFetchWithCount } from '../../../services/supabase'
-import { isDuplicateError } from '../../../lib/dbErrors'
+import { isDuplicateError, isMissingObject } from '../../../lib/dbErrors'
 import { pagedQuery } from '../../../lib/pagedQuery'
 
 // Ids per `id=in.(...)` request: keeps the URL well under proxy limits.
@@ -297,10 +297,8 @@ export const saleRepository = createSaleRepository()
 // An object the client expects that the database does not have yet: the
 // accounting migration is not applied. Callers degrade (the report shows its
 // "not available yet" notice) instead of failing.
-const MISSING_OBJECT = /PGRST20[25]|Could not find the (function|table)|relation "[^"]+" does not exist/i
-export function isMissingObject(e) {
-  return !!e && MISSING_OBJECT.test(String(e.message || e))
-}
+// (One rule for the whole app: lib/dbErrors.js.)
+export { isMissingObject }
 
 const rpc = (request, name, body) => request(`rpc/${name}`, { method: 'POST', body: JSON.stringify(body) })
 
