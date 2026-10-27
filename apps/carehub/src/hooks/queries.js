@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { saleRepository } from '../modules/pos/repositories'
+import { saleRepository, paymentRepository } from '../modules/pos/repositories'
 import { appointmentRepository } from '../modules/appointments/repositories'
 import { clientRepository } from '../modules/clients/repositories'
 import { settingsRepository } from '../modules/settings/repositories'
+import { purchaseRepository } from '../modules/purchases/repositories'
 
 // ── Query Keys ───────────────────────────────────────────────────────────────
 export const keys = {
@@ -13,6 +14,11 @@ export const keys = {
   clients: (brandId) => ['clients', brandId],
   settings: (brandId) => ['settings', brandId],
   products: (brandId) => ['products', brandId],
+  salePayments: (saleId) => ['sales', 'payments', saleId],
+  supplierBalances: (brandId) => ['purchases', 'suppliers', brandId],
+  supplierPurchases: (brandId, supplierKey) => ['purchases', 'supplier', brandId, supplierKey],
+  purchasePayments: (brandId, scope) => ['purchases', 'payments', brandId, scope],
+  purchase: (brandId, purchaseId) => ['purchases', 'one', brandId, purchaseId],
   clientSales: (clientId, brandId) => ['clients', 'sales', clientId, brandId],
   clientConsults: (clientId, brandId) => ['clients', 'consults', clientId, brandId],
   clientHistory: (clientId, brandId, tab) => ['clients', 'history', clientId, brandId, tab],
@@ -174,4 +180,99 @@ export function useInvalidateSales(brandId) {
     qc.invalidateQueries({ queryKey: keys.openSales(brandId) })
     qc.invalidateQueries({ queryKey: keys.recentSales(brandId) })
   }
+}
+
+// ── Credit-sale payments ──────────────────────────────────────────────────────
+
+// Payment history for one credit sale, newest first, from the sale_payments
+// ledger (carehub_20261210_pos_accounting). Loaded only when asked for.
+export function useSalePayments(saleId, brandId, enabled = true) {
+  return useQuery({
+    queryKey: keys.salePayments(saleId),
+    queryFn: async () => [...((await paymentRepository.getForSale(brandId, saleId)) || [])].reverse(),
+    enabled: !!saleId && !!brandId && enabled,
+    staleTime: 30_000,
+  })
+}
+
+// Records a full or partial payment against a credit sale through
+// record_sale_payment(), which writes the ledger row (cashier and shift taken
+// from the session), the sale and its debt in one transaction and returns
+// { applied, amount_paid, balance }. The new balance is applied to the
+// open-sales list straight away (a fully paid sale leaves it), then the lists
+// are refreshed from the server.
+export function useRecordSalePayment(brandId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ saleId, amount, method }) => paymentRepository.recordCollection(saleId, amount, method),
+    onSuccess: (result, { saleId }) => {
+      qc.setQueryData(keys.openSales(brandId), (prev) => {
+        if (!Array.isArray(prev) || !result) return prev
+        return prev
+          .map((s) => (s.id === saleId ? { ...s, amount_paid: result.amount_paid, balance: result.balance, is_credit: result.balance > 0 } : s))
+          .filter((s) => s.is_on_hold || (s.is_credit && Number(s.balance) > 0))
+      })
+      qc.invalidateQueries({ queryKey: keys.openSales(brandId) })
+      qc.invalidateQueries({ queryKey: keys.salePayments(saleId) })
+      qc.invalidateQueries({ queryKey: keys.todaySales(brandId) })
+    },
+  })
+}
+
+// ── Supplier payments ─────────────────────────────────────────────────────────
+
+// Totals per supplier: bought, paid, outstanding (get_supplier_balances).
+export function useSupplierBalances(brandId, enabled = true) {
+  return useQuery({
+    queryKey: keys.supplierBalances(brandId),
+    queryFn: () => purchaseRepository.getSupplierBalances(brandId),
+    enabled: !!brandId && enabled,
+    staleTime: 30_000,
+  })
+}
+
+// One supplier's purchases (same grouping key as the totals).
+export function useSupplierPurchases(brandId, supplierKey) {
+  return useQuery({
+    queryKey: keys.supplierPurchases(brandId, supplierKey),
+    queryFn: () => purchaseRepository.getBySupplier(brandId, supplierKey),
+    enabled: !!brandId && !!supplierKey,
+    staleTime: 30_000,
+  })
+}
+
+// One purchase in full (the list's page function returns summary columns
+// only; this includes the invoice lines). `placeholder` is the list row, shown
+// while the full record loads.
+export function usePurchase(brandId, purchaseId, placeholder) {
+  return useQuery({
+    queryKey: keys.purchase(brandId, purchaseId),
+    queryFn: () => purchaseRepository.getById(purchaseId, brandId),
+    enabled: !!brandId && !!purchaseId,
+    placeholderData: placeholder || undefined,
+    staleTime: 30_000,
+  })
+}
+
+// Payment history for one purchase ({ purchaseId }) or one supplier ({ supplierKey }).
+export function usePurchasePayments(brandId, scope) {
+  const id = scope?.purchaseId ? 'p:' + scope.purchaseId : scope?.supplierKey ? 's:' + scope.supplierKey : null
+  return useQuery({
+    queryKey: keys.purchasePayments(brandId, id),
+    queryFn: () => purchaseRepository.getPayments(brandId, scope),
+    enabled: !!brandId && !!id,
+    staleTime: 30_000,
+  })
+}
+
+// Records a full or partial payment to a supplier; refreshes every supplier
+// total, supplier list and payment history (prefix ['purchases']).
+export function useRecordPurchasePayment(brandId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ purchaseId, ...payment }) => purchaseRepository.recordPayment(purchaseId, payment),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['purchases'] })
+    },
+  })
 }

@@ -78,3 +78,61 @@ describe('purchaseRepository.getAll paging and range', () => {
     expect(await repo.getAll('biz-A', { from: '2026-10-01T00:00:00', to: '2026-11-01T00:00:00' })).toHaveLength(1000)
   })
 })
+
+describe('purchaseRepository supplier payments', () => {
+  it('recordPayment calls record_purchase_payment with amount, method, date, note and staff', async () => {
+    const calls = []
+    const repo = createPurchaseRepository(async (path, opts) => { calls.push([path, opts]); return { balance: 0, status: 'paid' } })
+    expect(await repo.recordPayment('p-1', { amount: 500, method: 'Cheque', paidOn: '2026-10-20', note: 'chq 12', staffName: 'Ada' })).toEqual({ balance: 0, status: 'paid' })
+    expect(calls[0][0]).toBe('rpc/record_purchase_payment')
+    expect(JSON.parse(calls[0][1].body)).toEqual({ p_purchase_id: 'p-1', p_amount: 500, p_method: 'Cheque', p_paid_on: '2026-10-20', p_note: 'chq 12', p_staff_name: 'Ada' })
+  })
+
+  it('getPayments reads by purchase or by supplier key, scoped to the business, newest first', async () => {
+    const client = createInMemoryClient({ purchase_payments: [
+      { id: 'a', business_id: 'biz-A', purchase_id: 'p-1', supplier_key: 'emzor ltd', created_at: '2026-10-01' },
+      { id: 'b', business_id: 'biz-A', purchase_id: 'p-2', supplier_key: 'emzor ltd', created_at: '2026-10-02' },
+      { id: 'c', business_id: 'biz-B', purchase_id: 'p-1', supplier_key: 'emzor ltd', created_at: '2026-10-03' },
+    ] })
+    const repo = createPurchaseRepository(client)
+    expect((await repo.getPayments('biz-A', { purchaseId: 'p-1' })).map((r) => r.id)).toEqual(['a'])
+    expect((await repo.getPayments('biz-A', { supplierKey: 'emzor ltd' })).map((r) => r.id).sort()).toEqual(['a', 'b'])
+  })
+
+  it('getSupplierBalances and getBySupplier call their database functions', async () => {
+    const calls = []
+    const repo = createPurchaseRepository(async (path, opts) => { calls.push([path, opts ? JSON.parse(opts.body || 'null') : null]); return [] })
+    await repo.getSupplierBalances('biz-A')
+    await repo.getBySupplier('biz-A', 'emzor ltd')
+    expect(calls).toEqual([
+      ['rpc/get_supplier_balances?p_business_id=biz-A', null],
+      ['rpc/get_supplier_purchases', { p_business_id: 'biz-A', p_supplier_key: 'emzor ltd' }],
+    ])
+  })
+})
+
+describe('purchaseRepository.create invoice lines', () => {
+  const lines = [{ name: 'Amoxil', qty: 5, cost: 1200 }]
+  it('saves the lines with the purchase', async () => {
+    const bodies = []
+    const repo = createPurchaseRepository(async (path, opts) => { bodies.push(JSON.parse(opts.body)); return [{ id: 'p-1' }] })
+    expect(await repo.create('biz', { supplier_name: 'Emzor', items: lines })).toEqual([{ id: 'p-1' }])
+    expect(bodies).toEqual([{ supplier_name: 'Emzor', items: lines, business_id: 'biz' }])
+  })
+  it('before the items column exists, saves the purchase without its lines instead of failing', async () => {
+    const bodies = []
+    const repo = createPurchaseRepository(async (path, opts) => {
+      const body = JSON.parse(opts.body); bodies.push(body)
+      if ('items' in body) throw new Error("Supabase error (400): Could not find the 'items' column of 'purchases' in the schema cache")
+      return [{ id: 'p-2' }]
+    })
+    expect(await repo.create('biz', { supplier_name: 'Emzor', items: lines })).toEqual([{ id: 'p-2' }])
+    expect(bodies[1]).toEqual({ supplier_name: 'Emzor', business_id: 'biz' })
+  })
+  it('any other failure is not retried', async () => {
+    let calls = 0
+    const repo = createPurchaseRepository(async () => { calls++; throw new Error('Supabase error (400): new row violates row-level security policy') })
+    await expect(repo.create('biz', { supplier_name: 'Emzor', items: lines })).rejects.toThrow(/row-level security/)
+    expect(calls).toBe(1)
+  })
+})

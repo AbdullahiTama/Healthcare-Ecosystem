@@ -11,7 +11,7 @@ const debts = vi.hoisted(() => ({ getAll: vi.fn(), update: vi.fn(), create: vi.f
 const sales = vi.hoisted(() => ({ getById: vi.fn() }))
 const payments = vi.hoisted(() => ({ recordCollection: vi.fn() }))
 vi.mock('./repositories', () => ({ debtRepository: debts }))
-vi.mock('../../hooks/queries', () => ({ useClients: () => ({ data: [], isLoading: false, isError: false }) }))
+vi.mock('../../hooks/queries', () => ({ useClients: () => ({ data: [], isLoading: false, isError: false }), useSettings: () => ({ data: {} }) }))
 vi.mock('../pos/repositories', async (orig) => {
   const real = await orig()
   return { saleRepository: sales, paymentRepository: payments, isMissingObject: real.isMissingObject }

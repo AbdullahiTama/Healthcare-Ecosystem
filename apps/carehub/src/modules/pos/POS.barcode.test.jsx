@@ -18,6 +18,7 @@ vi.mock('../../hooks/queries', () => ({
   useRecentSales: vi.fn(() => ({ data: [], isLoading: false, isError: false })),
   useSettings: vi.fn(() => ({ data: {} })),
   useClients: vi.fn(() => ({ data: [] })),
+  useCreateClient: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useInvalidateSales: vi.fn(() => vi.fn()),
 }))
 

@@ -62,7 +62,8 @@ export function addToIndex(index, rec) {
   if (rec.latitude != null && rec.longitude != null) push(index.byCell, cellKey(Number(rec.latitude), Number(rec.longitude)), rec)
 }
 
-function candidatesFor(index, c) {
+/** The records a candidate is compared with (the blocking step). Exposed for tests. */
+export function candidatesFor(index, c) {
   const seen = new Set()
   const out = []
   const take = (arr) => {
