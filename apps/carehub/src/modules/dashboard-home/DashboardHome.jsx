@@ -8,6 +8,7 @@ import {
 // aggregates other modules own, so it composes their repositories rather than
 // keeping a second copy of either query. Same shape as Reports.
 import { notificationRepository } from '../notifications/repositories'
+import { saleRepository } from '../pos/repositories'
 import { classifySalesVelocity } from '../../lib/velocity'
 import { fmt, businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
@@ -16,11 +17,16 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { canSeeAllActivity } from '../../lib/permissions'
 import FieldTeamToday from './FieldTeamToday.jsx'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useTodaySales, useAllSales, useAppointments } from '../../hooks/queries'
+import { useTodaySales, useOpenSales, useAppointments } from '../../hooks/queries'
 
 const { tealDeep, tealMist, navy, gray500, gray400, border, success, bg } = theme
 
-export default function DashboardHome({ brand, products, role, perms, staffId = null, customRoles }) {
+export default function DashboardHome({ brand, products, catalog, role, perms, staffId = null, customRoles }) {
+  // Shared product catalog state (inventory/hooks/useProductCatalog.js). Stock
+  // figures wait for it; automatic stock alerts use only a fresh server list,
+  // never a saved copy that may be out of date.
+  const catalogLoading = catalog?.status === 'loading'
+  const catalogFresh = !catalog || (catalog.status === 'ready' && !catalog.stale && !catalog.refreshing)
   const navigate = useNavigate()
   const online = useOnlineStatus()
   const { isMobile } = useBreakpoint()
@@ -35,7 +41,8 @@ export default function DashboardHome({ brand, products, role, perms, staffId = 
   const canSeeAppts = !perms?.nav || perms.nav.includes('appointments')
 
   const { data: todaySales = [], isLoading: loadingToday, isError: errToday, refetch: refetchToday } = useTodaySales(brand?.id)
-  const { data: allSales = [], isLoading: loadingAll, isError: errAll, refetch: refetchAll } = useAllSales(brand?.id)
+  // Held and unpaid credit sales only — not the whole sales history.
+  const { data: openSales = [], isLoading: loadingAll, isError: errAll, refetch: refetchAll } = useOpenSales(brand?.id)
   const { data: appts = [], isLoading: loadingAppts, isError: errAppts, refetch: refetchAppts } = useAppointments(brand?.id, canSeeAppts)
 
   const loading = loadingToday || loadingAll || (canSeeAppts && loadingAppts)
@@ -48,8 +55,8 @@ export default function DashboardHome({ brand, products, role, perms, staffId = 
   ].filter(Boolean)
 
   const todayTotal = todaySales.reduce((s, x) => s + (x.total || 0), 0)
-  const heldSales = allSales.filter(s => s.is_on_hold)
-  const creditSales = allSales.filter(s => s.is_credit && s.balance > 0)
+  const heldSales = openSales.filter(s => s.is_on_hold)
+  const creditSales = openSales.filter(s => s.is_credit && s.balance > 0)
   const creditTotal = creditSales.reduce((s, x) => s + (x.balance || 0), 0)
   const lowStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5))
   const outStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock <= 0)
@@ -79,7 +86,7 @@ export default function DashboardHome({ brand, products, role, perms, staffId = 
   const expiredProducts = products.filter(p => { const t = daysToExpiry(p); return t !== null && t < 0 })
 
   useEffect(() => {
-    if (role !== 'Owner' || !brand?.id || loading) return
+    if (role !== 'Owner' || !brand?.id || loading || !catalogFresh) return
     const dayKey = new Date().toISOString().split('T')[0]
     const keyFor = (kind) => 'carehub_notified_' + kind + '_' + brand.id
     const sentToday = (kind) => { try { return localStorage.getItem(keyFor(kind)) === dayKey } catch (e) { return false } }
@@ -116,8 +123,11 @@ export default function DashboardHome({ brand, products, role, perms, staffId = 
         }
         // Velocity digest — only when something actually sold in the window;
         // "everything is slow" on an empty book is noise, not insight.
-        const windowStart = Date.now() - 30 * 86400000
-        const recentSales = allSales.filter(s => new Date(s.created_at || 0).getTime() >= windowStart)
+        // Fetched only when the digest is due (once a day): the last 30 days of
+        // sales, not the whole history.
+        const recentSales = sentToday('sales_velocity')
+          ? []
+          : await saleRepository.getSince(brand.id, new Date(Date.now() - 30 * 86400000).toISOString())
         if (recentSales.length > 0 && !sentToday('sales_velocity')) {
           const v = classifySalesVelocity(products, recentSales, { days: 30 })
           const parts = []
@@ -137,10 +147,10 @@ export default function DashboardHome({ brand, products, role, perms, staffId = 
       }
     }
     raiseAlerts()
-  }, [role, brand?.id, loading, products, allSales])
+  }, [role, brand?.id, loading, products, catalogFresh])
 
   const attentionCount = outCount + lowCount + creditSales.length + (showApptItem ? 1 : 0)
-  const worklistEmpty = attentionCount === 0
+  const worklistEmpty = attentionCount === 0 && !catalogLoading
 
   const today = new Date().toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long' })
   const branchLabel = brand?.city ? `${brand.city} branch` : (brand?.name || businessName(bType))
@@ -187,7 +197,11 @@ export default function DashboardHome({ brand, products, role, perms, staffId = 
           <StatCard icon={<BarChart2 />} label='Sales today' value={fmt(todayTotal)} sub={`${todaySales.length} transaction${todaySales.length === 1 ? '' : 's'}`} onClick={() => navigate('/dashboard/pos')} />
           <StatCard icon={<Pause />} label='Held sales' value={heldSales.length} sub={heldSales.length > 0 ? 'waiting at counter' : 'none on hold'} onClick={() => navigate('/dashboard/pos')} />
           <StatCard icon={<CreditCard />} label='Owed to you' value={fmt(creditTotal)} sub={`${creditSales.length} credit sale${creditSales.length === 1 ? '' : 's'} open`} tone={creditSales.length > 0 ? 'warning' : 'default'} onClick={() => navigate('/dashboard/debts')} />
-          <StatCard icon={<AlertTriangle />} label='Stock alerts' value={stockAlertCount} sub={`${outCount} out of stock`} tone={stockAlertCount > 0 ? 'danger' : 'default'} onClick={() => navigate('/dashboard/inventory')} />
+          {catalogLoading ? (
+            <StatCard icon={<AlertTriangle />} label='Stock alerts' value='…' sub={catalog?.loadedCount > 0 ? `Loading products… ${catalog.loadedCount.toLocaleString()}` : 'Loading products…'} onClick={() => navigate('/dashboard/inventory')} />
+          ) : (
+            <StatCard icon={<AlertTriangle />} label='Stock alerts' value={stockAlertCount} sub={`${outCount} out of stock`} tone={stockAlertCount > 0 ? 'danger' : 'default'} onClick={() => navigate('/dashboard/inventory')} />
+          )}
         </MetricGrid>
 
         {/* Worklist (left) + recent sales & quick actions (right). A grid with
@@ -202,7 +216,9 @@ export default function DashboardHome({ brand, products, role, perms, staffId = 
             actions={worklistEmpty ? null : <span style={{ fontSize: 11.5, color: gray400 }}>{attentionCount} item{attentionCount === 1 ? '' : 's'}</span>}
             style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}
           >
-            {worklistEmpty ? (
+            {catalogLoading && attentionCount === 0 ? (
+              <Loading text='Checking your stock…' />
+            ) : worklistEmpty ? (
               // A failed query leaves defaulted [] data — a false all-clear.
               // While the aggregate error surface is up, show nothing here
               // rather than "Nothing needs your attention" (D1 review B1).

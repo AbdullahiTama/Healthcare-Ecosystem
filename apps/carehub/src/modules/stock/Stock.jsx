@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { stockRepository } from './repositories'
 import { warehouseRepository } from '../warehouses/repositories'
-import { productRepository } from '../inventory/repositories'
 import { notificationRepository } from '../notifications/repositories'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, DataTable, useToast, Toast, ConfirmDialog } from '../../components/ui'
@@ -67,7 +66,9 @@ function readAuth() {
   try { return JSON.parse(localStorage.getItem('carehub_auth') || '{}') } catch (e) { return {} }
 }
 
-export default function Stock({ brand }) {
+// `products` is the dashboard's shared catalog (inventory/hooks/useProductCatalog.js),
+// used for product-name suggestions; it is not downloaded again here.
+export default function Stock({ brand, products = [] }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const authData = readAuth()
   const meName = (authData && authData.staff && authData.staff.full_name)
@@ -76,8 +77,8 @@ export default function Stock({ brand }) {
 
   const [batches, setBatches] = useState([])
   const [locations, setLocations] = useState([])
-  const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   const [filterLoc, setFilterLoc] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
@@ -117,15 +118,18 @@ export default function Stock({ brand }) {
   async function load() {
     if (!brand || !brand.id) return
     setLoading(true)
+    setLoadError('')
     try {
-      const b = await stockRepository.getBatches(brand.id)
-      const l = await warehouseRepository.getAll(brand.id)
-      const p = await productRepository.getAll(brand.id)
+      const [b, l] = await Promise.all([
+        stockRepository.getBatches(brand.id),
+        warehouseRepository.getAll(brand.id),
+      ])
       setBatches(b || [])
       setLocations(l || [])
-      setProducts(p || [])
     } catch (e) {
-      showToast('Could not load stock: ' + e.message, { type: 'error' })
+      // Shown in place of the list: a failed load must not read as "no stock".
+      console.error('[stock] load failed:', e)
+      setLoadError("We couldn't load your stock. Check your connection and try again.")
     }
     setLoading(false)
   }
@@ -315,6 +319,8 @@ export default function Stock({ brand }) {
         pageSize={25}
         total={visible.length}
         loading={loading}
+        error={loadError || undefined}
+        onRetry={load}
         empty={
           locations.length === 0 ? (
             <Card style={{ padding: '32px', textAlign: 'center' }}>

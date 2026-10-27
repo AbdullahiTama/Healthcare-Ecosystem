@@ -133,7 +133,7 @@ describe('PublicProfile subscribe flow', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Subscribed' }))
 
-    expect(await screen.findByText(/^Auto-renew turned off/)).toBeInTheDocument()
+    expect(await screen.findByText(/^Automatic renewal turned off/)).toBeInTheDocument()
     expect(cancelAutoRenew).toHaveBeenCalledWith(VIEWER, CREATOR)
     expect(invalidate).toHaveBeenCalledWith({ queryKey: accessKey })
   })

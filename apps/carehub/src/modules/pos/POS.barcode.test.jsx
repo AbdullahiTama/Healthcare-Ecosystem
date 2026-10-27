@@ -13,7 +13,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 // component renders against fixture products without a network layer.
 vi.mock('../../hooks/queries', () => ({
   useTodaySales: vi.fn(() => ({ data: [], isLoading: false })),
-  useAllSales: vi.fn(() => ({ data: [], isLoading: false })),
+  useOpenSales: vi.fn(() => ({ data: [], isLoading: false })),
+  useRecentSales: vi.fn(() => ({ data: [], isLoading: false, isError: false })),
   useSettings: vi.fn(() => ({ data: {} })),
   useClients: vi.fn(() => ({ data: [] })),
   useInvalidateSales: vi.fn(() => vi.fn()),

@@ -69,3 +69,12 @@ describe('purchaseRepository', () => {
     }
   })
 })
+
+describe('purchaseRepository.getAll paging and range', () => {
+  it('pages past the 1000-row cap and applies [from, to)', async () => {
+    const rows = Array.from({ length: 1100 }, (_, i) => ({ id: 'p' + i, business_id: 'biz-A', created_at: i < 1000 ? '2026-10-10T00:00:00' : '2026-09-10T00:00:00' }))
+    const repo = createPurchaseRepository(createInMemoryClient({ purchases: rows }))
+    expect(await repo.getAll('biz-A')).toHaveLength(1100)
+    expect(await repo.getAll('biz-A', { from: '2026-10-01T00:00:00', to: '2026-11-01T00:00:00' })).toHaveLength(1000)
+  })
+})

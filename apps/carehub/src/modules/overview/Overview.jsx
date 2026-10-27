@@ -10,7 +10,7 @@ import { appointmentRepository } from '../appointments/repositories'
 import { staffRepository } from '../staff/repositories'
 import { fmt } from '../../lib/utils'
 import { theme } from '../../styles/theme'
-import { Card, Avatar, Loading, StatCard } from '../../components/ui'
+import { Card, Avatar, Loading, StatCard, ErrorState } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray500, gray400, gray100, border, danger, dangerBg, warning, warningBg, success, bg, cardBg } = theme
 
@@ -23,6 +23,9 @@ export default function Overview({ brand, role, perms }) {
   const [branches, setBranches] = useState([])
   const [branchData, setBranchData] = useState({})
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [partialError, setPartialError] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     if (role !== 'Owner' || !brand?.id) { setLoading(false); return }
@@ -32,20 +35,30 @@ export default function Overview({ brand, role, perms }) {
       const all = list || [brand]
       setBranches(all)
       // Fan out: fetch each branch's data in parallel, then aggregate.
+      // Per branch: today's sales, the held ones, and a database count, never
+      // the whole sales history. A branch that fails is reported, not shown as zero.
+      let failures = 0
       const entries = await Promise.all(all.map(async (b) => {
-        const [sales, appts, staff] = await Promise.all([
-          saleRepository.getAll(b.id).catch(() => []),
-          appointmentRepository.getAll(b.id).catch(() => []),
-          staffRepository.getAll(b.id).catch(() => []),
+        const guard = (p, fallback) => p.catch((e) => { failures++; console.error('[overview] branch load failed:', b.id, e?.message); return fallback })
+        const [today, open, salesCount, appts, staff] = await Promise.all([
+          guard(saleRepository.getToday(b.id), []),
+          guard(saleRepository.getOpen(b.id), []),
+          guard(saleRepository.count(b.id), 0),
+          guard(appointmentRepository.getAll(b.id), []),
+          guard(staffRepository.getAll(b.id), []),
         ])
-        return [b.id, { sales: sales || [], appts: appts || [], staff: staff || [], branch: b }]
+        return [b.id, { today: today || [], held: (open || []).filter(s => s.is_on_hold), salesCount, appts: appts || [], staff: staff || [], branch: b }]
       }))
       if (!live) return
       setBranchData(Object.fromEntries(entries))
+      setPartialError(failures > 0)
       setLoading(false)
-    }).catch(() => { if (live) setLoading(false) })
+    }).catch((e) => {
+      console.error('[overview] load failed:', e?.message)
+      if (live) { setLoadError(true); setLoading(false) }
+    })
     return () => { live = false }
-  }, [brand?.id, role])
+  }, [brand?.id, role, attempt])
 
   if (loading) return <Loading text="Loading overview..." />
   if (role !== 'Owner') return (
@@ -55,12 +68,14 @@ export default function Overview({ brand, role, perms }) {
     </div>
   )
 
+  const retry = () => { setLoadError(false); setPartialError(false); setLoading(true); setAttempt(n => n + 1) }
+  if (loadError) return <ErrorState message="We couldn't load your branches. Check your connection and try again." onRetry={retry} />
+
   const todayStr = new Date().toISOString().split('T')[0]
-  const allSales = Object.values(branchData).flatMap(b => b.sales)
   const allAppts = Object.values(branchData).flatMap(b => b.appts)
   const allStaff = Object.values(branchData).flatMap(b => b.staff)
 
-  const todaySales = allSales.filter(s => (s.created_at || '').startsWith(todayStr))
+  const todaySales = Object.values(branchData).flatMap(b => b.today)
   const todayTotal = todaySales.reduce((sum, s) => sum + (s.total || 0), 0)
 
   const upcomingAppts = allAppts
@@ -73,13 +88,13 @@ export default function Overview({ brand, role, perms }) {
 
   // Pending tasks: appointments needing confirmation + held sales across branches.
   const pendingAppts = allAppts.filter(a => a.status === 'pending').length
-  const heldSales = allSales.filter(s => s.is_on_hold).length
+  const heldSales = Object.values(branchData).reduce((n, b) => n + b.held.length, 0)
   const pendingTasks = pendingAppts + heldSales
 
   const branchesWithActivity = branches.map(b => {
     const d = branchData[b.id]
-    if (!b.branch_name) return { ...b, isHeadquarters: true, salesCount: d.sales.length }
-    return { ...b, isHeadquarters: false, salesCount: d.sales.length }
+    if (!b.branch_name) return { ...b, isHeadquarters: true, salesCount: d.salesCount }
+    return { ...b, isHeadquarters: false, salesCount: d.salesCount }
   })
 
   return (
@@ -108,6 +123,13 @@ export default function Overview({ brand, role, perms }) {
       </header>
 
       <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+        {partialError && (
+          <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 14px', borderRadius: theme.radius.md, background: theme.warningBg, border: `1px solid ${theme.warning}`, color: theme.warning, fontSize: 13, fontWeight: 600 }}>
+            <span style={{ flex: 1, minWidth: 200 }}>Some branch figures could not be loaded, so the totals below may be incomplete.</span>
+            <button type="button" onClick={retry} style={{ padding: '6px 12px', borderRadius: theme.radius.md, border: `1px solid ${theme.warning}`, background: 'white', color: theme.warning, fontWeight: 700, fontSize: 12, cursor: 'pointer', minHeight: 32 }}>Try again</button>
+          </div>
+        )}
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 14 }}>
@@ -154,7 +176,7 @@ export default function Overview({ brand, role, perms }) {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</div>
-                    <div style={{ fontSize: 11, color: gray400 }}>{branchData[b.id]?.staff.length || 0} staff · {branchData[b.id]?.sales.length || 0} sales</div>
+                    <div style={{ fontSize: 11, color: gray400 }}>{branchData[b.id]?.staff.length || 0} staff · {(branchData[b.id]?.salesCount || 0).toLocaleString()} sales</div>
                   </div>
                 </div>
               ))}

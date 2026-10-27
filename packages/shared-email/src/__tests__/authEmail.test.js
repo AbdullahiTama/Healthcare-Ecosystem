@@ -23,6 +23,9 @@ beforeEach(() => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'stub-service-role-key'
   enqueue = vi.spyOn(EmailService.prototype, 'enqueue').mockResolvedValue({ id: 1 })
   createClient.mockClear()
+  // Vitest 3+: restoreAllMocks() no longer resets vi.fn() mocks, so call history
+  // and per-test implementations are reset here explicitly.
+  generateLink.mockReset()
   flushed = false
   flush = vi.spyOn(EmailService.prototype, 'processBatch').mockImplementation(async () => {
     await new Promise((r) => setTimeout(r, 20))

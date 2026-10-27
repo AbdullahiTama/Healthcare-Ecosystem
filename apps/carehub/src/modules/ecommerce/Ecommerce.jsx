@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ShoppingBag, Package, Image as ImageIcon, AlertTriangle, CheckCircle, Search, Upload, Trash2, ShieldCheck } from 'lucide-react'
-import { createEcommerceRepository } from './repositories'
+import { createEcommerceRepository, mergeInventoryStatus } from './repositories'
 import { createShopVendorRepository } from './shopVendorRepository'
 import { sbFetch, sbUpload } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
@@ -16,7 +16,10 @@ const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, suc
 const ecommerceRepository = createEcommerceRepository({ request: sbFetch, upload: sbUpload })
 const shopVendorRepository = createShopVendorRepository({ request: sbFetch })
 
-export default function Ecommerce({ brand, role }) {
+// `products`/`catalog` are the dashboard's shared catalog
+// (inventory/hooks/useProductCatalog.js); only the store's own listing rows are
+// fetched here, and the two are combined in memory.
+export default function Ecommerce({ brand, role, products, catalog }) {
   const isOwner = role === 'Owner'
   // /dashboard/ecommerce/orders/:orderId (the link in every shop order notification) opens that order's drawer
   const { orderId: routeOrderId } = useParams()
@@ -32,7 +35,11 @@ export default function Ecommerce({ brand, role }) {
   const [termsError, setTermsError] = useState('')
   const termsRef = useRef(null)
 
-  const [inventory, setInventory] = useState([])
+  const [listings, setListings] = useState([])
+  const [fallbackProducts, setFallbackProducts] = useState(null) // only when rendered without the shared catalog
+  const sharedCatalog = Array.isArray(products) && !!catalog
+  const catalogProducts = sharedCatalog ? products : (fallbackProducts || [])
+  const inventory = useMemo(() => mergeInventoryStatus(catalogProducts, listings), [catalogProducts, listings])
   const [invLoading, setInvLoading] = useState(true)
   const [invError, setInvError] = useState('')
   const [search, setSearch] = useState('')
@@ -164,9 +171,17 @@ export default function Ecommerce({ brand, role }) {
   async function loadInventory() {
     setInvLoading(true); setInvError('')
     try {
-      const rows = await ecommerceRepository.getInventoryWithStatus(brand.id)
-      setInventory(rows || [])
-    } catch (e) { setInvError('Could not load inventory') }
+      if (sharedCatalog) {
+        setListings((await ecommerceRepository.getListings(brand.id)) || [])
+      } else {
+        const rows = await ecommerceRepository.getInventoryWithStatus(brand.id)
+        setFallbackProducts((rows || []).map(r => r.product))
+        setListings((rows || []).map(r => r.ecommerce).filter(Boolean))
+      }
+    } catch (e) {
+      console.error('[ecommerce] inventory load failed:', e)
+      setInvError('Could not load inventory')
+    }
     setInvLoading(false)
   }
 
@@ -503,13 +518,13 @@ export default function Ecommerce({ brand, role }) {
             <input aria-label="Search products" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search products..." style={{ flex: 1, border: 'none', outline: 'none', padding: '8px 0', fontSize: 13 }} />
           </div>
           <Sel value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, { value: 'Active', label: 'Active' }, { value: 'Not Activated', label: 'Not Activated' }, { value: 'Incomplete', label: 'Incomplete' }, { value: 'Paused', label: 'Paused' }, { value: 'Out of Stock', label: 'Out of Stock' }, { value: 'Restricted', label: 'Restricted' }]} />
-          <button onClick={loadInventory} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${border}`, background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Refresh</button>
+          <button onClick={() => { if (sharedCatalog) catalog.reload(); loadInventory() }} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${border}`, background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Refresh</button>
         </div>
         <DataTable
           rows={filtered}
-          loading={invLoading}
-          error={invError}
-          onRetry={loadInventory}
+          loading={invLoading || catalog?.status === 'loading'}
+          error={invError || (catalog?.status === 'error' ? (catalog.error || "We couldn't load your products.") : '')}
+          onRetry={() => { if (catalog?.status === 'error') catalog.reload(); loadInventory() }}
           empty={<Empty icon={<Package size={40} />} message="No inventory products yet. Add products in Inventory first." />}
           count={`${filtered.length} products`}
           columns={[

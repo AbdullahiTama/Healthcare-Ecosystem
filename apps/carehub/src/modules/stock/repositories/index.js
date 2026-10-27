@@ -1,4 +1,5 @@
 import { sbFetch } from '../../../services/supabase'
+import { pagedQuery } from '../../../lib/pagedQuery'
 
 // ── Stock repository ──────────────────────────────────────────────────────────
 // A deep module over the `stock_batches` table and the `stock_movements` audit
@@ -20,8 +21,10 @@ import { sbFetch } from '../../../services/supabase'
 // enforced by the database transaction rather than by convention here.
 export function createStockRepository({ request = sbFetch } = {}) {
   return {
+    // Paged: a single request is capped at 1000 rows by the server, and batches
+    // accumulate with every purchase that records a batch or expiry.
     async getBatches(businessId) {
-      return request(`stock_batches?business_id=eq.${businessId}&order=created_at.desc&select=*`)
+      return pagedQuery(request, `stock_batches?business_id=eq.${businessId}&order=created_at.desc,id.asc&select=*`)
     },
 
     async createBatch(businessId, batch) {

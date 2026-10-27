@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import * as XLSX from 'xlsx'
+import { readFirstSheetRows, SpreadsheetError } from '../_lib/spreadsheet.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -18,9 +18,9 @@ export default async function handler(req, res) {
   if (authErr || !user) return res.status(401).json({ error: 'Invalid session' })
 
   // An import is a spreadsheet, not an upload. Without a ceiling the whole body is buffered with no bound, so a large
-  // or slow POST exhausts memory, and the known ReDoS advisories in xlsx@0.18.5 (GHSA-5pgg-2g8v-p4x9,
-  // GHSA-4r6h-8v6p-xvw6 - no fixed version exists on npm) get an unbounded input to chew on. 5 MB is far above any real
-  // business-directory spreadsheet; anything bigger is a mistake or an attack.
+  // or slow POST exhausts memory. 5 MB is far above any real business-directory spreadsheet; anything bigger is a
+  // mistake or an attack. The parser (api/_lib/spreadsheet.js, exceljs) also refuses an .xlsx whose zip contents would
+  // expand past its own limit, so a small upload cannot inflate into gigabytes either.
   const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
   const { data: rawBody, error: bodyErr } = await new Promise((resolve) => {
@@ -56,10 +56,7 @@ export default async function handler(req, res) {
   if (bodyErr || !rawBody || rawBody.length === 0) return res.status(400).json({ error: 'Failed to read request body' })
 
   try {
-    const workbook = XLSX.read(rawBody, { type: 'buffer' })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+    const jsonData = (await readFirstSheetRows(rawBody)).filter((row) => row.some((cell) => cell !== ''))
 
     if (jsonData.length < 2) {
       return res.status(400).json({ error: 'Excel file is empty or has no data rows' })
@@ -79,6 +76,10 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ headers, records, totalRows: records.length })
   } catch (err) {
-    return res.status(400).json({ error: 'Failed to parse Excel file: ' + err.message })
+    if (err instanceof SpreadsheetError) {
+      return res.status(err.code === 'too_large' ? 413 : 400).json({ error: err.message, code: err.code })
+    }
+    console.error('[excel-import] parse failed:', err)
+    return res.status(400).json({ error: 'The file could not be read as an .xlsx spreadsheet.' })
   }
 }

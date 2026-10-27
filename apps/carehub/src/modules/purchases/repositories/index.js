@@ -1,4 +1,5 @@
 import { sbFetch } from '../../../services/supabase'
+import { pagedQuery } from '../../../lib/pagedQuery'
 
 // ── Purchase repository ───────────────────────────────────────────────────────
 // A deep module over the `purchases` table. The interface is small
@@ -17,8 +18,13 @@ import { sbFetch } from '../../../services/supabase'
 // repository reaching across into tables it does not own.
 export function createPurchaseRepository(request = sbFetch) {
   return {
-    async getAll(businessId) {
-      return request(`purchases?business_id=eq.${businessId}&order=created_at.desc&select=*`)
+    // Paged past the server's 1000-row cap. `from`/`to` (ISO, optional)
+    // restrict to purchases created in [from, to).
+    async getAll(businessId, { from, to } = {}) {
+      let q = `purchases?business_id=eq.${businessId}`
+      if (from) q += `&created_at=gte.${from}`
+      if (to) q += `&created_at=lt.${to}`
+      return pagedQuery(request, `${q}&order=created_at.desc,id.asc&select=*`)
     },
 
     // Paginated purchase list — use for table display

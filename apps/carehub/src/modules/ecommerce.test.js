@@ -1,5 +1,5 @@
 ﻿import { describe, it, expect } from 'vitest'
-import { createEcommerceRepository } from './ecommerce/repositories/index.js'
+import { createEcommerceRepository, mergeInventoryStatus } from './ecommerce/repositories/index.js'
 import { createInMemoryClient } from '../test/inMemoryClient.js'
 import { SEGMENT_CHECKBOX_LABELS } from '../lib/ecommerceSegments.js'
 
@@ -442,3 +442,31 @@ describe('ecommerceRepository', () => {
   })
 })
 
+describe('ecommerce listings (shared catalog, paging, honest errors)', () => {
+  it('getInventoryWithStatus uses the products it is given instead of downloading the catalog', async () => {
+    const calls = []
+    const request = async (path) => { calls.push(path); return path.startsWith('ecommerce_products') ? [{ id: 'e1', product_id: 'p1', status: 'Active' }] : [] }
+    const repo = createEcommerceRepository({ request })
+    const rows = await repo.getInventoryWithStatus('biz-A', { products: [{ id: 'p1', stock: 3 }, { id: 'p2', stock: 0 }] })
+    expect(calls.some((c) => c.startsWith('products?'))).toBe(false)
+    expect(rows.map((r) => [r.product.id, r.status, r.isActive])).toEqual([['p1', 'Active', true], ['p2', 'Out of Stock', false]])
+  })
+
+  it('getListings pages past the 1000-row cap', async () => {
+    const listings = Array.from({ length: 1300 }, (_, i) => ({ id: 'e' + i, business_id: 'biz-A', product_id: 'p' + i, status: 'Active' }))
+    const repo = createEcommerceRepository({ request: createInMemoryClient({ ecommerce_products: listings }) })
+    expect(await repo.getListings('biz-A')).toHaveLength(1300)
+  })
+
+  it('a missing table reads as no listings, but any other failure is raised', async () => {
+    const missing = createEcommerceRepository({ request: async () => { throw new Error('relation "public.ecommerce_products" does not exist') } })
+    expect(await missing.getListings('biz-A')).toEqual([])
+    const down = createEcommerceRepository({ request: async () => { throw new Error('Supabase error (503): ecommerce_products timed out') } })
+    await expect(down.getListings('biz-A')).rejects.toThrow(/503/)
+  })
+
+  it('mergeInventoryStatus marks restricted and unlisted products', () => {
+    const rows = mergeInventoryStatus([{ id: 'a', stock: 5 }, { id: 'b', stock: 5 }], [{ product_id: 'a', status: 'Active', is_restricted: true }])
+    expect(rows.map((r) => r.status)).toEqual(['Restricted', 'Not Activated'])
+  })
+})

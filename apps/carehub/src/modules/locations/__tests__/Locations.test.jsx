@@ -12,7 +12,7 @@ const auth = vi.hoisted(() => ({ value: null, setAuth: null }))
 vi.mock('../../../providers/AuthProvider', () => ({ useAuth: () => ({ auth: auth.value, setAuth: auth.setAuth }) }))
 vi.mock('../repositories', () => ({ locationsRepository: { getAll: vi.fn(), addBranch: vi.fn(), cloneBranchData: vi.fn() } }))
 vi.mock('../../pos/repositories', () => ({ saleRepository: { getToday: vi.fn() } }))
-vi.mock('../../inventory/repositories', () => ({ productRepository: { getAll: vi.fn() } }))
+vi.mock('../../inventory/repositories', () => ({ productRepository: { getStockSummary: vi.fn() } }))
 
 import Locations from '../Locations.jsx'
 import { locationsRepository as repo } from '../repositories'
@@ -50,7 +50,7 @@ beforeEach(() => {
   repo.addBranch.mockResolvedValue([{ id: 'new' }])
   repo.cloneBranchData.mockResolvedValue(undefined)
   saleRepository.getToday.mockResolvedValue([{ total: 1000 }])
-  productRepository.getAll.mockResolvedValue([])
+  productRepository.getStockSummary.mockResolvedValue({ productCount: 0, lowStock: 0 })
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -78,8 +78,8 @@ describe('Locations page', () => {
     repo.getAll.mockRejectedValueOnce(new Error('Supabase error (500): timeout'))
     await show()
     expect(host.textContent).not.toContain('No additional branches yet')
-    expect(host.textContent).toMatch(/could not load your locations/i)
-    await act(async () => { button('Try again').click() })
+    expect(host.textContent).toMatch(/couldn't load your branches/i)
+    await act(async () => { button('Retry').click() })
     await flush(); await flush()
     expect(host.textContent).toContain('Yaba')
   })

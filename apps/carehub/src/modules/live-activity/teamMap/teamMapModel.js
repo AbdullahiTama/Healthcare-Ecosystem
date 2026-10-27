@@ -91,7 +91,7 @@ export function buildTeamMap({
     key: c.key, name: c.name, rep: c.last_visit_rep || '', days: Math.floor((now - Date.parse(c.last_visit_at)) / DAY_MS),
   }))
   if (showQuiet) {
-    ;(quietCustomers || []).forEach((c, i) => {
+    (quietCustomers || []).forEach((c, i) => {
       if (!hasPosition(c.lat, c.lng)) return
       pins.push({
         id: 'quiet:' + c.key, kind: 'quiet', tone: 'quiet', lat: c.lat, lng: c.lng, title: c.name,

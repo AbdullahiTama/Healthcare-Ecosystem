@@ -5,10 +5,11 @@ import { debtRepository } from './repositories'
 // exposes it through its own repository. `getClients` is still the shared
 // services/supabase read used by POS too — repoint it when that call is
 // consolidated; it is unrelated to this module's own aggregate.
-import { clientRepository } from '../clients/repositories'
+import { useClients } from '../../hooks/queries'
+import ClientsLoadNote from '../clients/components/ClientsLoadNote'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, bg } = theme
 
@@ -22,8 +23,12 @@ function sourceLabel(source, short) {
 
 export default function Debts({ brand, role, perms }) {
   const [debts, setDebts] = useState([])
-  const [clients, setClients] = useState([])
+  // Shared, cached client list (React Query): one download for every page that
+  // picks a client, instead of each page fetching all clients and hiding failures.
+  const clientsQuery = useClients(brand?.id)
+  const clients = clientsQuery.data || []
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [search, setSearch] = useState('')
   const [filterMonth, setFilterMonth] = useState('')
   const [page, setPage] = useState(0)
@@ -35,11 +40,6 @@ export default function Debts({ brand, role, perms }) {
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => { load() }, [brand?.id])
-  useEffect(() => {
-    let live = true
-    clientRepository.getAll(brand.id).then(c => { if (live) setClients(c || []) }).catch(() => {})
-    return () => { live = false }
-  }, [brand?.id])
 
   // Picking a saved client links the debt to their customer record so it
   // shows up on their history.
@@ -50,7 +50,15 @@ export default function Debts({ brand, role, perms }) {
 
   async function load() {
     setLoading(true)
-    try { const d = await debtRepository.getAll(brand.id); setDebts(d || []) } catch (e) {}
+    setLoadError('')
+    try {
+      const d = await debtRepository.getAll(brand.id)
+      setDebts(d || [])
+    } catch (e) {
+      // Shown in place of the list: a failed load must not read as "no debts".
+      console.error('[debts] load failed:', e)
+      setLoadError("We couldn't load your debts. Check your connection and try again.")
+    }
     setLoading(false)
   }
 
@@ -119,7 +127,7 @@ export default function Debts({ brand, role, perms }) {
         {filterMonth && <button onClick={() => setFilterMonth('')} style={{ padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>Clear</button>}
       </div>
 
-      {loading ? <Loading /> : filtered.length === 0 ? (
+      {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : filtered.length === 0 ? (
         <Empty icon={<Landmark size={40} />} message='No debts recorded' action='+ Record Debt' onAction={() => setShowAdd(true)} />
       ) : (
         <DataTable
@@ -207,6 +215,7 @@ export default function Debts({ brand, role, perms }) {
               <datalist id='debt-clients'>
                 {clients.map(c => <option key={c.id} value={c.full_name} />)}
               </datalist>
+              <ClientsLoadNote query={clientsQuery} />
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

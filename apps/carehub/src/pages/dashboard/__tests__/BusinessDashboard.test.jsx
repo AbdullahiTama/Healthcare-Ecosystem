@@ -40,11 +40,8 @@ vi.mock('../../../modules/staff/repositories', () => ({
 vi.mock('../../../modules/pos/repositories', () => ({
   saleRepository: { syncQueued: vi.fn(async () => ({ synced: 0, rejected: [] })) },
 }))
-vi.mock('../../../services/supabase', async (importOriginal) => ({
-  ...(await importOriginal()),
-  getProducts: vi.fn(async () => []),
-  cacheData: vi.fn(),
-  getCached: vi.fn(() => null),
+vi.mock('../../../modules/inventory/hooks/useProductCatalog', () => ({
+  useProductCatalog: () => ({ products: [], setProducts: vi.fn(), status: 'ready', refreshing: false, stale: false, staleReason: null, loadedCount: 0, error: null, reload: vi.fn() }),
 }))
 vi.mock('../../../modules/live-activity/LiveActivity', () => ({
   default: function MockField({ mode }) { return <div data-testid="field-page" data-mode={mode || 'rep'}>Field</div> },
