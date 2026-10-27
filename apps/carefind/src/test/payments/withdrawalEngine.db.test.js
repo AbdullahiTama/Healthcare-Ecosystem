@@ -383,12 +383,15 @@ describe('applying the migration to production-shaped data', () => {
     const d = await newDb()
     const u = uid(); await d.query('insert into auth.users (id) values ($1)', [u])
     const b = uid()
-    const w = async (status, ref, code) => (await d.query('insert into withdrawal_requests (user_id, amount, status, paystack_reference, paystack_transfer_code) values ($1,5,$2,$3,$4) returning id', [u, status, ref, code])).rows[0].id
+    // Legacy rows predate the migration, as in production. Dated an hour back so
+    // they can never share the cutover instant: PGlite's clock is coarse, and a
+    // refunded row created at the cutover itself counts as post-cutover.
+    const w = async (status, ref, code) => (await d.query("insert into withdrawal_requests (user_id, amount, status, paystack_reference, paystack_transfer_code, created_at) values ($1,5,$2,$3,$4, now() - interval '1 hour') returning id", [u, status, ref, code])).rows[0].id
     const ids = {
       pendingNoRef: await w('pending', null, null), pendingRef: await w('pending', 'a1', null), pendingCode: await w('pending', 'a2', 'T'),
       approved: await w('approved', 'a3', 'T'), rejected: await w('rejected', 'a4', null), completed: await w('completed', 'a5', 'T'),
     }
-    const bw = async (status, ref, code) => (await d.query('insert into business_withdrawal_requests (business_id, amount, status, paystack_reference, paystack_transfer_code) values ($1,20000,$2,$3,$4) returning id', [b, status, ref, code])).rows[0].id
+    const bw = async (status, ref, code) => (await d.query("insert into business_withdrawal_requests (business_id, amount, status, paystack_reference, paystack_transfer_code, created_at) values ($1,20000,$2,$3,$4, now() - interval '1 hour') returning id", [b, status, ref, code])).rows[0].id
     const bids = { pending: await bw('pending', 'b1', null), processing: await bw('processing', 'b2', 'T'), failed: await bw('failed', 'b3', null), rejected: await bw('rejected', 'b4', null), completed: await bw('completed', 'b5', 'T') }
     await d.exec(M('carefind_20261008_withdrawal_engine'))
     const status = async (t, id) => (await d.query(`select status from ${t} where id = $1`, [id])).rows[0].status
