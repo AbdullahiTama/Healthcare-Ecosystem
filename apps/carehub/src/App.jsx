@@ -2,7 +2,8 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useState, useEffect, Suspense, lazy } from 'react'
 import { initSentry, Sentry } from './lib/sentry'
 import { authClient } from './lib/authClient'
-import { resolveAccountByEmail } from './services/supabase'
+import { resolveAccountByEmail, getBusinessById } from './services/supabase'
+import { keepReachableLocation } from './lib/locationSwitch'
 import { clearAllDraftBackups } from './modules/adr/draftBackup'
 import { purgeUnsentReports } from './modules/live-activity/outbox/purge'
 import AuthProvider from './providers/AuthProvider'
@@ -137,7 +138,11 @@ let loggingOut = false
       if (account.biz.is_platform_admin) {
         login(account.biz, null, { isAdmin: true, role: 'SuperAdmin' })
       } else if (account.biz.status === 'active') {
-        login(account.biz, account.staff)
+        // The account resolves to the owner's MAIN business. An owner who switched to a branch keeps it across a
+        // reload, if they can still reach it (lib/locationSwitch); staff always work in their own business.
+        const brand = account.staff ? account.biz : await keepReachableLocation(account.biz, auth && auth.brand, getBusinessById)
+        if (cancelled) return
+        login(brand, account.staff)
       }
       // A pending/suspended business with a lingering real session is a narrow
       // edge case left alone here — Login.jsx already blocks that status at

@@ -214,7 +214,9 @@ export default function BusinessDashboard() {
         <>
           <Suspense fallback={<Loading text='Loading module...' />}>
             {waitingForRoles ? <Loading text='Loading your workspace...' /> : (
-            <Routes>
+            // Keyed by the business: switching location remounts every module, so nothing from the previous location
+            // (a cart, a half-filled form) survives the switch.
+            <Routes key={brand?.id || 'none'}>
               {/* Overview renders its own full-bleed header (cross-branch stats),
                   so it skips the generic TopBar — see Overview.jsx. Owner-only. */}
               <Route path='overview' element={guard('overview', <Overview brand={brand} role={role} perms={perms} />)} />

@@ -21,6 +21,7 @@ const h = vi.hoisted(() => ({
   signOut: vi.fn(async () => {}),
   onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
   resolveAccountByEmail: vi.fn(),
+  getBusinessById: vi.fn(),
   purgeUnsentReports: vi.fn(async () => true),
 }))
 
@@ -38,7 +39,7 @@ vi.mock('./lib/authClient', () => ({
     },
   },
 }))
-vi.mock('./services/supabase', () => ({ resolveAccountByEmail: h.resolveAccountByEmail }))
+vi.mock('./services/supabase', () => ({ resolveAccountByEmail: h.resolveAccountByEmail, getBusinessById: h.getBusinessById }))
 // Lazy routes: stubbed so the harness never pulls the full dashboard tree into
 // jsdom (these suites must stay fast and deterministic).
 vi.mock('./pages/auth/Login', () => ({ default: () => <div data-testid="login" /> }))
@@ -69,6 +70,7 @@ describe('App session reconciliation', () => {
     localStorage.clear()
     h.getSession.mockReset()
     h.resolveAccountByEmail.mockReset()
+    h.getBusinessById.mockReset()
     h.signOut.mockReset()
     h.purgeUnsentReports.mockClear()
     h.refreshSession.mockResolvedValue({ data: { session: null } })
@@ -147,6 +149,42 @@ describe('App session reconciliation', () => {
 
     expect(h.purgeUnsentReports).toHaveBeenCalledTimes(1)
     expect(h.signOut).toHaveBeenCalled()
+  })
+
+  // Branches share the owner's email, so the account always resolves to the MAIN business. A reload must keep the
+  // location the owner switched to, or their sales and stock changes silently land at the main business.
+  describe('the location an owner chose', () => {
+    const ROOT = { id: 'root', name: 'Allen Pharmacy', status: 'active', is_platform_admin: false, parent_business_id: null }
+    const YABA = { id: 'yaba', name: 'Allen · Yaba', status: 'active', parent_business_id: 'root' }
+    const signedIn = () => h.getSession.mockResolvedValue({ data: { session: { user: { email: 'owner@a.test' } } } })
+    const cachedBrand = () => JSON.parse(localStorage.getItem('carehub_auth')).brand
+
+    it('a reload keeps the branch the owner switched to, with its fresh details', async () => {
+      localStorage.setItem('carehub_auth', JSON.stringify({ brand: { id: 'yaba', name: 'stale' }, role: 'Owner' }))
+      signedIn()
+      h.resolveAccountByEmail.mockResolvedValue({ biz: ROOT, staff: null })
+      h.getBusinessById.mockImplementation(async (id) => ({ root: ROOT, yaba: YABA })[id] || null)
+      await mount()
+      expect(cachedBrand()).toEqual(YABA)
+    })
+
+    it('a remembered business the owner cannot reach (a shared device) gives way to their main business', async () => {
+      localStorage.setItem('carehub_auth', JSON.stringify({ brand: { id: 'other' }, role: 'Owner' }))
+      signedIn()
+      h.resolveAccountByEmail.mockResolvedValue({ biz: ROOT, staff: null })
+      h.getBusinessById.mockResolvedValue({ id: 'other', status: 'active', parent_business_id: null })
+      await mount()
+      expect(cachedBrand().id).toBe('root')
+    })
+
+    it('staff always work in their own business, whatever is remembered', async () => {
+      localStorage.setItem('carehub_auth', JSON.stringify({ brand: { id: 'yaba' }, role: 'Cashier' }))
+      signedIn()
+      h.resolveAccountByEmail.mockResolvedValue({ biz: ROOT, staff: { id: 's1', role: 'Cashier' } })
+      await mount()
+      expect(cachedBrand().id).toBe('root')
+      expect(h.getBusinessById).not.toHaveBeenCalled()
+    })
   })
 
   it('does nothing when there is no cached identity to invalidate', async () => {

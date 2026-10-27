@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Component } from 'react'
+import { registerSwitchBlocker } from '../../lib/locationSwitch'
 import { useNavigate } from 'react-router-dom'
 import {
   Pause, Clock, CreditCard, Camera, ShoppingCart,
@@ -85,6 +86,12 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const catalogStatus = catalog?.status || 'ready'
   const [view, setView] = useState('pos') // pos | held | recent | credit
   const [cart, setCart] = useState([])
+  // Products belong to this location: while the cart has items, a location switch asks first (it clears the cart).
+  useEffect(() => {
+    const n = cart.length
+    if (n === 0) return undefined
+    return registerSwitchBlocker(() => 'Your POS cart has ' + n + (n === 1 ? ' item' : ' items') + '. Switching location clears it.')
+  }, [cart.length])
   const [client, setClient] = useState('Walk-in')
   // The customer record picked for this sale (CustomerPicker). A credit sale
   // cannot be recorded without one.

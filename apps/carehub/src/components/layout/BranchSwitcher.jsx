@@ -1,19 +1,22 @@
 import { useState, useEffect } from 'react'
 import { ChevronDown, ChevronUp, MapPin } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
+import { useLocationSwitch } from './useLocationSwitch'
 import { locationsRepository } from '../../modules/locations/repositories'
 import { theme } from '../../styles/theme'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border } = theme
 
-// Persistent branch switcher for the business owner. Shows the active branch in
-// the top bar; clicking opens a dropdown of every branch the owner can reach
-// (parent + all descendants via the recursive current_business_ids()). Selecting
-// one swaps auth.brand to that branch, which re-scopes every repository call.
+// Persistent branch switcher for the business owner. Shows the active location in
+// the top bar; clicking opens a dropdown of the main business and its branches
+// (locationsRepository.getAll: the main business and its direct branches, which is
+// what the Locations page creates). Selecting one goes through the shared switch
+// (useLocationSwitch), which asks first when a POS cart would be lost.
 //
 // Rendered only when the user is the Owner and more than one branch exists.
 export default function BranchSwitcher() {
-  const { auth, setAuth } = useAuth()
+  const { auth } = useAuth()
+  const { request, dialog } = useLocationSwitch()
   const brand = auth?.brand
   const role = auth?.role
   const [branches, setBranches] = useState([])
@@ -35,14 +38,12 @@ export default function BranchSwitcher() {
 
   function switchTo(branch) {
     setOpen(false)
-    if (branch.id === brand?.id) return
-    const newAuth = { ...auth, brand: branch, staff: null, role: 'Owner' }
-    setAuth(newAuth)
-    try { localStorage.setItem('carehub_auth', JSON.stringify(newAuth)) } catch (e) {}
+    request(branch)
   }
 
   return (
     <div style={{ position: 'relative' }}>
+      {dialog}
       <button
         onClick={() => setOpen(o => !o)}
         aria-label="Switch branch"
