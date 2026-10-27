@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -23,6 +24,10 @@ vi.mock('../../hooks/queries', () => ({
 import POS from './POS.jsx'
 
 const BRAND = { id: 'biz-1', name: 'Pharm Tama' }
+
+function WhereAmI() {
+  return <div data-testid='location'>{useLocation().pathname}</div>
+}
 
 const PRODUCTS = [
   { id: 'p1', name: 'Amoxicillin 500mg', generic_name: 'Amoxicillin', cat: 'Prescription Drugs', category: 'Prescription Drugs', price: 1200, stock: 20, barcode: '6201234567890' },
@@ -44,7 +49,14 @@ async function renderPOS() {
   document.body.appendChild(host)
   const root = createRoot(host)
   await act(async () => {
-    root.render(<POS brand={BRAND} products={PRODUCTS} setProducts={vi.fn()} role="Owner" perms={{ canEditPrice: true }} />)
+    root.render(
+      <MemoryRouter initialEntries={['/dashboard/pos']}>
+        <Routes>
+          <Route path='/dashboard/pos' element={<POS brand={BRAND} products={PRODUCTS} setProducts={vi.fn()} role="Owner" perms={{ canEditPrice: true }} />} />
+          <Route path='*' element={<WhereAmI />} />
+        </Routes>
+      </MemoryRouter>
+    )
   })
   await act(async () => {})
   return {
@@ -108,6 +120,14 @@ describe('POS barcode lookup', () => {
     await pressEnter(searchInput(m.host))
     expect(cartHasItem(m.host)).toBe(false)
     expect(m.host.textContent).not.toContain('Added:')
+  })
+
+  it('the report button beside the scanner opens the Sales & Accounts report', async () => {
+    m = await renderPOS()
+    const btn = m.host.querySelector('button[aria-label="Sales and accounts report"]')
+    expect(btn).toBeTruthy()
+    await act(async () => { btn.click() })
+    expect(m.host.querySelector('[data-testid="location"]').textContent).toBe('/dashboard/pos/report')
   })
 
   it('the camera-scan fallback prompt finds products by barcode', async () => {

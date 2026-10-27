@@ -1,36 +1,27 @@
 import { debtRepository as defaultDebts } from './repositories'
-import { saleRepository as defaultSales } from '../pos/repositories'
 import { purchaseRepository as defaultPurchases } from '../purchases/repositories'
 
-// "Mark paid" on the Debts page.
+// "Mark paid" on the Debts page, for every debt that is not a credit sale.
+// (A credit-sale debt is settled in Debts.jsx through the POS ledger's
+// record_sale_payment, after asking how the customer paid.)
 //
-// A debt raised by a credit sale or a purchase mirrors that record. Settling
-// only the debt (as this page used to) left the sale or purchase still owing,
-// with nothing in its payment history. So a linked debt is settled by paying
-// the linked record's remaining balance through its payment function
-// (record_sale_payment / record_purchase_payment), which moves the record, the
-// debt and the history together. A manual debt is simply marked paid.
+// A debt raised by a purchase mirrors that purchase. Settling only the debt
+// (as this page used to) left the purchase still owing, with nothing in its
+// payment history. So a purchase debt is settled by paying the purchase's
+// remaining balance through record_purchase_payment, which moves the
+// purchase, the debt and the history together. Any other debt, or one whose
+// purchase is gone or already paid, is simply marked paid.
 //
-// Returns { via: 'sale' | 'purchase' | 'debt' }.
+// Returns { via: 'purchase' | 'debt' }.
 export async function settleDebt(debt, businessId, {
   staffName = null,
   debts = defaultDebts,
-  sales = defaultSales,
   purchases = defaultPurchases,
 } = {}) {
-  const note = 'Settled from the Debts page'
-  if (debt.source === 'credit_sale' && debt.source_ref) {
-    const sale = await sales.getById(businessId, debt.source_ref)
-    if (sale && Number(sale.balance) > 0) {
-      await sales.recordPayment(sale.id, { amount: Number(sale.balance), method: 'Other', note, staffName })
-      await markDebtPaidIfStillOpen(debt, businessId, debts)
-      return { via: 'sale' }
-    }
-  }
   if (debt.source === 'purchase' && debt.source_ref) {
     const purchase = await purchases.getById(debt.source_ref, businessId)
     if (purchase && Number(purchase.balance) > 0) {
-      await purchases.recordPayment(purchase.id, { amount: Number(purchase.balance), method: 'Other', note, staffName })
+      await purchases.recordPayment(purchase.id, { amount: Number(purchase.balance), method: 'Other', note: 'Settled from the Debts page', staffName })
       await markDebtPaidIfStillOpen(debt, businessId, debts)
       return { via: 'purchase' }
     }

@@ -1,6 +1,7 @@
 // @vitest-environment node
-// Partial payments with history (carehub_20261211_partial_payments): credit-sale collections and supplier payments.
-// Runs the real migration on PGlite with the live column types and RLS shape of sales / purchases / debts.
+// Supplier payments with history (carehub_20261212_supplier_payments).
+// Runs the real migration on PGlite with the live column types and RLS shape of purchases / debts.
+// Customer credit payments use the POS ledger (carehub_20261210_pos_accounting), tested in scripts/db-tests.
 import { describe, it, expect, beforeAll } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { readFileSync } from 'node:fs'
@@ -9,7 +10,7 @@ import { vi } from 'vitest'
 
 vi.setConfig({ testTimeout: 60000, hookTimeout: 120000 })
 const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
-const MIGRATION = read('../../../../../supabase/migrations/carehub_20261211_partial_payments.sql')
+const MIGRATION = read('../../../../../supabase/migrations/carehub_20261212_supplier_payments.sql')
 
 const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -48,11 +49,6 @@ beforeAll(async () => {
       select coalesce((select is_platform_admin from businesses where lower(email)=lower(auth.email())), false) $$;
 
     -- Column types as on the LIVE tables (read 2026-10-26).
-    create table sales (id uuid primary key default gen_random_uuid(), business_id uuid, txn_no text not null, client_name text default 'Walk-in',
-      client_id uuid, items jsonb default '[]', subtotal numeric default 0, discount numeric default 0, total numeric default 0,
-      payment_method text default 'Cash', payment_split jsonb, amount_paid numeric default 0, balance numeric default 0,
-      is_credit boolean default false, is_on_hold boolean default false, staff_name text, created_at timestamp without time zone default now(),
-      notes text, status text, dispense_ref text);
     create table purchases (id uuid primary key default gen_random_uuid(), business_id uuid, supplier_name text not null, product_name text,
       quantity integer default 0, cost_price numeric default 0, total_cost numeric default 0, amount_paid numeric default 0, balance numeric default 0,
       supply_date text, due_date text, status text default 'pending', notes text, created_at timestamp without time zone default now(),
@@ -60,7 +56,7 @@ beforeAll(async () => {
     create table debts (id uuid primary key default gen_random_uuid(), business_id uuid, direction text not null, party_name text not null,
       amount numeric default 0, amount_paid numeric default 0, balance numeric default 0, due_date text, status text default 'pending',
       description text, created_at timestamp without time zone default now(), source text default 'manual', source_ref text default '', client_id uuid);
-    do $$ declare t text; begin foreach t in array array['sales','purchases','debts'] loop
+    do $$ declare t text; begin foreach t in array array['purchases','debts'] loop
       execute format('alter table %I enable row level security', t);
       execute format('create policy "%s of own business" on %I for all to public using (business_id in (select current_business_ids()) or is_platform_admin()) with check (business_id in (select current_business_ids()) or is_platform_admin())', t, t);
       execute format('grant select, insert, update, delete on %I to authenticated', t);
@@ -69,9 +65,6 @@ beforeAll(async () => {
     insert into staff (business_id,email) values ('${A}','cashier@x.com');
 
     -- Existing data, recorded before the migration: the backfill must turn these into history rows.
-    insert into sales (business_id, txn_no, client_name, total, amount_paid, balance, is_credit, payment_method) values
-      ('${A}','OLD-1','Mama Ngozi',5000,1000,4000,true,'Credit'),
-      ('${A}','OLD-CASH','Walk-in',800,800,0,false,'Cash');
     insert into purchases (business_id, supplier_name, total_cost, amount_paid, balance, status) values
       ('${A}','Emzor Ltd',10000,4000,6000,'pending');
   `)
@@ -79,105 +72,36 @@ beforeAll(async () => {
 })
 
 describe('backfill and first-payment history', () => {
-  it('turns money paid before the migration into one history row per credit sale / purchase, not cash sales', async () => {
-    const rows = await db.query(`select txn_no, amount, kind from sale_payments order by txn_no`)
-    expect(rows.rows.map((r) => [r.txn_no, n(r.amount), r.kind])).toEqual([['OLD-1', 1000, 'before_history']])
+  it('turns money paid before the migration into one history row per purchase', async () => {
     const p = await one(`select supplier_name, amount, kind, supplier_key from purchase_payments`)
     expect([p.supplier_name, n(p.amount), p.kind, p.supplier_key]).toEqual(['Emzor Ltd', 4000, 'before_history', 'emzor ltd'])
   })
 
   it('re-running the migration does not duplicate history', async () => {
     await db.exec(MIGRATION)
-    expect(n((await one('select count(*) c from sale_payments')).c)).toBe(1)
     expect(n((await one('select count(*) c from purchase_payments')).c)).toBe(1)
   })
 
-  it('a new credit sale with a deposit, and a new purchase paid in part, start their history', async () => {
+  it('a new purchase paid in part starts its history', async () => {
     await as('cashier@x.com', UID_A, async (q) => {
-      await q(`insert into sales (business_id, txn_no, client_name, total, amount_paid, balance, is_credit, payment_method)
-               values ('${A}','CR-2','Baba Tunde',3000,500,2500,true,'Cash')`)
-      await q(`insert into sales (business_id, txn_no, total, amount_paid, balance) values ('${A}','CASH-2',700,700,0)`)
       await q(`insert into purchases (business_id, supplier_name, total_cost, amount_paid, balance) values ('${A}','  emzor ltd ',2000,500,1500)`)
     })
-    const s = await one(`select amount, kind, method, balance_after from sale_payments where txn_no='CR-2'`)
-    expect([n(s.amount), s.kind, s.method, n(s.balance_after)]).toEqual([500, 'at_sale', 'Cash', 2500])
-    expect(n((await one(`select count(*) c from sale_payments where txn_no='CASH-2'`)).c)).toBe(0)
-    expect((await one(`select kind from purchase_payments where amount=500`)).kind).toBe('at_purchase')
+    const h = await one(`select kind, method, balance_after from purchase_payments where amount=500`)
+    expect([h.kind, h.method, n(h.balance_after)]).toEqual(['at_purchase', 'Other', 1500])
+  })
+
+  it('leaves customer payments to the POS ledger: no sale table, function or trigger is created', async () => {
+    const r = await one(`select to_regclass('public.sale_payments') t, to_regproc('public.record_sale_payment') f`)
+    expect([r.t, r.f]).toEqual([null, null])
   })
 })
 
-describe('history never blocks a sale or purchase', () => {
-  it('a sale with an over-long staff name, or a huge amount, is still recorded', async () => {
+describe('history never blocks a purchase', () => {
+  it('a purchase whose history row cannot be written (amount too large) is still recorded', async () => {
     await as('cashier@x.com', UID_A, async (q) => {
-      await q(`insert into sales (business_id, txn_no, total, amount_paid, balance, is_credit, staff_name) values ('${A}','LONG-1',100,10,90,true,$1)`, ['x'.repeat(500)])
       await q(`insert into purchases (business_id, supplier_name, total_cost, amount_paid, balance) values ('${A}','Big', 1e15, 1e14, 9e14)`)
     })
-    expect(n((await one(`select count(*) c from sales where txn_no='LONG-1'`)).c)).toBe(1)
-    expect((await one(`select length(staff_name) l from sale_payments where txn_no='LONG-1'`)).l).toBe(120)
     expect(n((await one(`select count(*) c from purchases where supplier_name='Big'`)).c)).toBe(1)
-  })
-})
-
-describe('record_sale_payment', () => {
-  let saleId
-  beforeAll(async () => {
-    saleId = (await one(`insert into sales (business_id, txn_no, client_name, total, amount_paid, balance, is_credit, payment_method)
-      values ('${A}','CR-9','Iya Bisi',10000,0,10000,true,'Credit') returning id`)).id
-    await db.query(`insert into debts (business_id, direction, party_name, amount, amount_paid, balance, status, source, source_ref)
-      values ('${A}','owed_to_us','Iya Bisi',10000,0,10000,'pending','credit_sale','CR-9')`)
-  })
-
-  it('a partial payment updates the sale, the linked debt and the history together', async () => {
-    const r = await as('cashier@x.com', UID_A, (q) => q(`select record_sale_payment($1, 2500.004, 'Transfer', ' first part ', 'Ada') r`, [saleId]))
-    expect(r[0].r).toMatchObject({ amount: 2500, amount_paid: 2500, balance: 7500 })
-    const sale = await one('select amount_paid, balance, is_credit from sales where id=$1', [saleId])
-    expect([n(sale.amount_paid), n(sale.balance), sale.is_credit]).toEqual([2500, 7500, true])
-    const debt = await one(`select amount_paid, balance, status from debts where source_ref='CR-9'`)
-    expect([n(debt.amount_paid), n(debt.balance), debt.status]).toEqual([2500, 7500, 'pending'])
-    const h = await one('select amount, method, kind, note, balance_after, recorded_by, staff_name from sale_payments where sale_id=$1', [saleId])
-    expect([n(h.amount), h.method, h.kind, h.note, n(h.balance_after), h.recorded_by, h.staff_name]).toEqual([2500, 'Transfer', 'payment', 'first part', 7500, UID_A, 'Ada'])
-  })
-
-  it('refuses more than the balance, zero, negative, an unknown method; nothing changes', async () => {
-    await as('cashier@x.com', UID_A, async (q) => {
-      await expect(q('select record_sale_payment($1, 7500.01)', [saleId])).rejects.toThrow(/more than the balance of 7,500.00/)
-      await expect(q('select record_sale_payment($1, 0)', [saleId])).rejects.toThrow(/greater than zero/)
-      await expect(q('select record_sale_payment($1, -5)', [saleId])).rejects.toThrow(/greater than zero/)
-      await expect(q(`select record_sale_payment($1, 10, 'Bitcoin')`, [saleId])).rejects.toThrow(/how the customer paid/)
-    })
-    expect(n((await one('select balance from sales where id=$1', [saleId])).balance)).toBe(7500)
-  })
-
-  it('the final payment clears the sale and marks the debt paid', async () => {
-    const r = await as('a@x.com', UID_A, (q) => q(`select record_sale_payment($1, 7500) r`, [saleId]))
-    expect(r[0].r.balance).toBe(0)
-    const sale = await one('select balance, is_credit from sales where id=$1', [saleId])
-    expect([n(sale.balance), sale.is_credit]).toEqual([0, false])
-    expect((await one(`select status from debts where source_ref='CR-9'`)).status).toBe('paid')
-    await as('a@x.com', UID_A, async (q) => {
-      await expect(q('select record_sale_payment($1, 1)', [saleId])).rejects.toThrow(/nothing left to pay/)
-    })
-    const hist = await db.query('select sum(amount) s from sale_payments where sale_id=$1', [saleId])
-    expect(n(hist.rows[0].s)).toBe(10000)
-  })
-
-  it('a held sale is refused', async () => {
-    const held = (await one(`insert into sales (business_id, txn_no, total, balance, is_credit, is_on_hold) values ('${A}','HOLD-1',100,100,true,true) returning id`)).id
-    await as('a@x.com', UID_A, async (q) => {
-      await expect(q('select record_sale_payment($1, 10)', [held])).rejects.toThrow(/on hold/)
-    })
-  })
-
-  it("another business's member, and anon, cannot pay it or learn it exists", async () => {
-    const other = (await one(`insert into sales (business_id, txn_no, total, balance, is_credit) values ('${A}','CR-X',100,100,true) returning id`)).id
-    await as('b@x.com', UID_B, async (q) => {
-      await expect(q('select record_sale_payment($1, 10)', [other])).rejects.toThrow(/Sale not found/)
-      await expect(q(`select record_sale_payment('00000000-0000-4000-8000-000000000999', 10)`)).rejects.toThrow(/Sale not found/)
-    })
-    await asAnon(async (q) => {
-      await expect(q('select record_sale_payment($1, 10)', [other])).rejects.toThrow(/permission denied/)
-    })
-    expect(n((await one('select balance from sales where id=$1', [other])).balance)).toBe(100)
   })
 })
 
@@ -195,15 +119,19 @@ describe('record_purchase_payment', () => {
     expect(r[0].r).toMatchObject({ amount_paid: 3000, balance: 5000, status: 'partial' })
     const debt = await one(`select amount_paid, balance, status from debts where source='purchase'`)
     expect([n(debt.amount_paid), n(debt.balance), debt.status]).toEqual([3000, 5000, 'pending'])
-    const h = await one('select method, paid_on::text d, note, kind from purchase_payments where purchase_id=$1', [purchaseId])
-    expect([h.method, h.d, h.note, h.kind]).toEqual(['Cheque', '2026-10-20', 'chq 0012', 'payment'])
+    const h = await one('select method, paid_on::text d, note, kind, balance_after, recorded_by from purchase_payments where purchase_id=$1', [purchaseId])
+    expect([h.method, h.d, h.note, h.kind, n(h.balance_after), h.recorded_by]).toEqual(['Cheque', '2026-10-20', 'chq 0012', 'payment', 5000, UID_A])
   })
 
-  it('refuses a future date and an overpayment', async () => {
+  it('refuses a future date, an overpayment, zero, negative and an unknown method; nothing changes', async () => {
     await as('a@x.com', UID_A, async (q) => {
       await expect(q(`select record_purchase_payment($1, 10, 'Cash', current_date + 5)`, [purchaseId])).rejects.toThrow(/future/)
-      await expect(q('select record_purchase_payment($1, 5000.01)', [purchaseId])).rejects.toThrow(/more than the balance/)
+      await expect(q('select record_purchase_payment($1, 5000.01)', [purchaseId])).rejects.toThrow(/more than the balance of 5,000.00/)
+      await expect(q('select record_purchase_payment($1, 0)', [purchaseId])).rejects.toThrow(/greater than zero/)
+      await expect(q('select record_purchase_payment($1, -5)', [purchaseId])).rejects.toThrow(/greater than zero/)
+      await expect(q(`select record_purchase_payment($1, 10, 'Bitcoin')`, [purchaseId])).rejects.toThrow(/how the supplier was paid/)
     })
+    expect(n((await one('select balance from purchases where id=$1', [purchaseId])).balance)).toBe(5000)
   })
 
   it('the rest pays it off', async () => {
@@ -215,26 +143,32 @@ describe('record_purchase_payment', () => {
     })
   })
 
-  it("another business cannot pay it", async () => {
+  it("another business's member, and anon, cannot pay it or learn it exists", async () => {
     const p = (await one(`insert into purchases (business_id, supplier_name, total_cost, balance) values ('${A}','X',10,10) returning id`)).id
     await as('b@x.com', UID_B, async (q) => {
       await expect(q('select record_purchase_payment($1, 1)', [p])).rejects.toThrow(/Purchase not found/)
+      await expect(q(`select record_purchase_payment('00000000-0000-4000-8000-000000000999', 1)`)).rejects.toThrow(/Purchase not found/)
     })
+    await asAnon(async (q) => {
+      await expect(q('select record_purchase_payment($1, 1)', [p])).rejects.toThrow(/permission denied/)
+      await expect(q(`select * from get_supplier_balances('${A}')`)).rejects.toThrow(/permission denied/)
+    })
+    expect(n((await one('select balance from purchases where id=$1', [p])).balance)).toBe(10)
   })
 })
 
 describe('history is read-only and tenant-scoped', () => {
   it('a member reads only their business; nobody writes history directly', async () => {
-    await db.query(`insert into sales (business_id, txn_no, total, amount_paid, balance, is_credit) values ('${B}','B-1',100,40,60,true)`)
+    await db.query(`insert into purchases (business_id, supplier_name, total_cost, amount_paid, balance) values ('${B}','B Supplier',100,40,60)`)
     await as('b@x.com', UID_B, async (q) => {
-      const rows = await q('select txn_no from sale_payments')
-      expect(rows.map((r) => r.txn_no)).toEqual(['B-1'])
-      await expect(q(`insert into sale_payments (business_id, sale_id, txn_no, amount, balance_after) select business_id, id, txn_no, 1, 0 from sales limit 1`)).rejects.toThrow(/permission denied/)
-      await expect(q('update sale_payments set amount = 1')).rejects.toThrow(/permission denied/)
+      const rows = await q('select supplier_name from purchase_payments')
+      expect(rows.map((r) => r.supplier_name)).toEqual(['B Supplier'])
+      await expect(q(`insert into purchase_payments (business_id, purchase_id, supplier_name, amount, balance_after) select business_id, id, supplier_name, 1, 0 from purchases limit 1`)).rejects.toThrow(/permission denied/)
+      await expect(q('update purchase_payments set amount = 1')).rejects.toThrow(/permission denied/)
       await expect(q('delete from purchase_payments')).rejects.toThrow(/permission denied/)
     })
     await asAnon(async (q) => {
-      await expect(q('select * from sale_payments')).rejects.toThrow(/permission denied/)
+      await expect(q('select * from purchase_payments')).rejects.toThrow(/permission denied/)
     })
   })
 })

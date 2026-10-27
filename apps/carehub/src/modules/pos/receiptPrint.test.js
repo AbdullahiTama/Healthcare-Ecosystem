@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildReceiptHtml, buildReceiptQrDataUrl, computeTax, fmtReceiptDate } from './receiptPrint.js'
+import { buildReceiptHtml, buildReceiptQrDataUrl, computeTax, fmtReceiptDate, saleToReceipt } from './receiptPrint.js'
 
 const base = {
   receipt: {
@@ -237,5 +237,29 @@ describe('buildReceiptHtml', () => {
     })
     expect(html).toContain('Paracetamol')
     expect(html).not.toContain('undefined')
+  })
+})
+describe('saleToReceipt', () => {
+  const row = { txn_no: 'TXN-1', client_name: 'Ayo', items: JSON.stringify([{ name: 'A', price: 100, qty: 2 }]), subtotal: 200, discount: 0, total: 200,
+    payment_method: 'Cash', amount_paid: 500, balance: 0, payment_split: null, created_at: '2026-10-21T10:00:00' }
+  it('maps a stored sale to the receipt shape, items parsed', () => {
+    expect(saleToReceipt(row)).toMatchObject({ id: 'TXN-1', client: 'Ayo', items: [{ name: 'A', price: 100, qty: 2 }], total: 200, method: 'Cash', cashGiven: 500, amtPaid: 500 })
+  })
+  it('shows no change unless a cash sale was paid in full', () => {
+    expect(saleToReceipt({ ...row, payment_method: 'Transfer' }).cashGiven).toBe(0)
+    expect(saleToReceipt({ ...row, amount_paid: 100 }).cashGiven).toBe(0)
+  })
+  it('reads split amounts stored as a JSON string, only for split sales', () => {
+    expect(saleToReceipt({ ...row, payment_method: 'Split', payment_split: '{"Cash":"100","Transfer":"100"}' }).splitAmounts).toEqual({ Cash: '100', Transfer: '100' })
+    expect(saleToReceipt({ ...row, payment_split: '{"Cash":"1"}' }).splitAmounts).toBeNull()
+  })
+  it('reads the zone-less stored time as UTC, so the reprint shows the real local time', () => {
+    expect(saleToReceipt(row).date).toBe('2026-10-21T10:00:00.000Z')
+    expect(saleToReceipt({ ...row, created_at: '2026-10-21T10:00:00+00:00' }).date).toBe('2026-10-21T10:00:00.000Z')
+  })
+  it('survives unreadable items and split', () => {
+    const r = saleToReceipt({ ...row, items: 'garbage', payment_method: 'Split', payment_split: '{bad' })
+    expect(r.items).toEqual([])
+    expect(r.splitAmounts).toBeNull()
   })
 })

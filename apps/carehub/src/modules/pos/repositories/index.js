@@ -2,6 +2,9 @@ import { sbFetch, sbFetchWithCount } from '../../../services/supabase'
 import { isDuplicateError } from '../../../lib/dbErrors'
 import { pagedQuery } from '../../../lib/pagedQuery'
 
+// Ids per `id=in.(...)` request: keeps the URL well under proxy limits.
+const ID_CHUNK = 100
+
 // ── Fail-loud dispensing ──────────────────────────────────────────────────────
 // A till may park an unsent sale and replay it later. Dispensing must NOT:
 // medication is handed over once, in the real world, and a sale that silently
@@ -119,23 +122,6 @@ export function createSaleRepository({
       return pagedQuery(request, `${q}&order=created_at.desc,id.asc&select=*`)
     },
 
-    // Records a payment against a credit sale (full or part). The database
-    // locks the sale, refuses zero, negative or more-than-the-balance amounts,
-    // updates amount_paid / balance and the linked debt, and writes a history
-    // row, all in one transaction (record_sale_payment). Returns
-    // { payment_id, amount, amount_paid, balance }.
-    async recordPayment(saleId, { amount, method = 'Cash', note = null, staffName = null }) {
-      return request('rpc/record_sale_payment', {
-        method: 'POST',
-        body: JSON.stringify({ p_sale_id: saleId, p_amount: amount, p_method: method, p_note: note, p_staff_name: staffName }),
-      })
-    },
-
-    // Payment history for one sale, newest first.
-    async getPayments(saleId, businessId) {
-      return request(`sale_payments?sale_id=eq.${saleId}&business_id=eq.${businessId}&order=created_at.desc,id.asc&select=*`)
-    },
-
     // How many sales a business has, counted by the database (no rows sent).
     async count(businessId) {
       const res = await requestWithCount(`sales?business_id=eq.${businessId}&select=id`, { head: true })
@@ -155,6 +141,26 @@ export function createSaleRepository({
       if (filters.onHold !== undefined) query += `&is_on_hold=eq.${filters.onHold}`
       if (filters.isCredit !== undefined) query += `&is_credit=eq.${filters.isCredit}`
       return request(query)
+    },
+
+    // Every row created in [fromIso, toIso), paged past the server's row cap.
+    // Held and deleted rows come back too: the Sales & Accounts report decides
+    // what counts as a sale (salesReport.isCompletedSale), one rule in one place.
+    async getRange(businessId, fromIso, toIso) {
+      return pagedQuery(request,
+        `sales?business_id=eq.${businessId}&created_at=gte.${fromIso}&created_at=lt.${toIso}&order=created_at.asc,id.asc&select=*`)
+    },
+
+    // Sales by id, for payments received in a period against sales made
+    // before it (a repayment today on last month's credit sale).
+    async getByIds(businessId, ids) {
+      const unique = [...new Set(ids || [])].filter(Boolean)
+      const rows = []
+      for (let i = 0; i < unique.length; i += ID_CHUNK) {
+        const chunk = unique.slice(i, i + ID_CHUNK)
+        rows.push(...((await request(`sales?business_id=eq.${businessId}&id=in.(${chunk.join(',')})&select=*`)) || []))
+      }
+      return rows
     },
 
     // Today's completed sales — held sales are excluded because they are not
@@ -282,3 +288,100 @@ export function createSaleRepository({
 }
 
 export const saleRepository = createSaleRepository()
+
+// ── Accounting: payments ledger and shifts ───────────────────────────────────
+// Both are written only by database functions that stamp the actor from the
+// caller's session (carehub_20261210_pos_accounting.sql); clients read their
+// own business's rows and call the functions. Nothing here can name a cashier.
+
+// An object the client expects that the database does not have yet: the
+// accounting migration is not applied. Callers degrade (the report shows its
+// "not available yet" notice) instead of failing.
+const MISSING_OBJECT = /PGRST20[25]|Could not find the (function|table)|relation "[^"]+" does not exist/i
+export function isMissingObject(e) {
+  return !!e && MISSING_OBJECT.test(String(e.message || e))
+}
+
+const rpc = (request, name, body) => request(`rpc/${name}`, { method: 'POST', body: JSON.stringify(body) })
+
+export function createPaymentRepository({ request = sbFetch } = {}) {
+  return {
+    // Ledger rows received in [fromIso, toIso). { available: false } when the
+    // ledger is not deployed; any other failure is the caller's to show.
+    async getRange(businessId, fromIso, toIso) {
+      try {
+        const rows = await pagedQuery(request,
+          `sale_payments?business_id=eq.${businessId}&received_at=gte.${fromIso}&received_at=lt.${toIso}&order=received_at.asc,id.asc&select=*`)
+        return { available: true, rows }
+      } catch (e) {
+        if (isMissingObject(e)) return { available: false, rows: [] }
+        throw e
+      }
+    },
+
+    async getForSale(businessId, saleId) {
+      return request(`sale_payments?business_id=eq.${businessId}&sale_id=eq.${saleId}&order=received_at.asc&select=*`)
+    },
+
+    // Everything taken or refunded during one shift: the close-shift preview
+    // of expected cash. The server recomputes it on close; this is a preview.
+    async getForShift(businessId, shiftId) {
+      return pagedQuery(request, `sale_payments?business_id=eq.${businessId}&shift_id=eq.${shiftId}&order=received_at.asc,id.asc&select=*`)
+    },
+
+    // A credit collection: the ledger row, the sale and its debt move together
+    // in one transaction. The server clamps to what is outstanding and returns
+    // { applied, amount_paid, balance }.
+    async recordCollection(saleId, amount, method) {
+      return rpc(request, 'record_sale_payment', { p_sale_id: saleId, p_amount: amount, p_method: method })
+    },
+
+    // Owner or manager only, enforced by the database. Money only: stock is
+    // returned through Inventory.
+    async refund(saleId, amount, method, reason) {
+      return rpc(request, 'refund_sale', { p_sale_id: saleId, p_amount: amount, p_method: method, p_reason: reason })
+    },
+  }
+}
+
+export function createShiftRepository({ request = sbFetch } = {}) {
+  return {
+    // The caller's own open shift in this business, if any.
+    async getOpen(businessId, userId) {
+      if (!userId) return { available: true, shift: null }
+      try {
+        const rows = await request(`pos_shifts?business_id=eq.${businessId}&opened_by=eq.${userId}&closed_at=is.null&select=*`)
+        return { available: true, shift: (rows || [])[0] || null }
+      } catch (e) {
+        if (isMissingObject(e)) return { available: false, shift: null }
+        throw e
+      }
+    },
+
+    // Shifts that overlap [fromIso, toIso): opened before the end, and either
+    // still open or closed after the start.
+    async getRange(businessId, fromIso, toIso) {
+      try {
+        const rows = await request(
+          `pos_shifts?business_id=eq.${businessId}&opened_at=lt.${toIso}&or=(closed_at.gte.${fromIso},closed_at.is.null)&order=opened_at.desc&select=*`)
+        return { available: true, rows: rows || [] }
+      } catch (e) {
+        if (isMissingObject(e)) return { available: false, rows: [] }
+        throw e
+      }
+    },
+
+    async open(businessId, openingFloat) {
+      return rpc(request, 'open_pos_shift', { p_business_id: businessId, p_opening_float: openingFloat })
+    },
+
+    // The server computes expected cash and returns { expected_cash,
+    // counted_cash, difference }.
+    async close(shiftId, countedCash, note) {
+      return rpc(request, 'close_pos_shift', { p_shift_id: shiftId, p_counted_cash: countedCash, p_note: note || null })
+    },
+  }
+}
+
+export const paymentRepository = createPaymentRepository()
+export const shiftRepository = createShiftRepository()

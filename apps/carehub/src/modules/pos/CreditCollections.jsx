@@ -10,15 +10,18 @@ import { theme } from '../../styles/theme'
 import { searchCreditSales, CREDIT_SORTS } from './creditSearch'
 
 const { navy, gray400, gray500, gray600, border, danger, success, tealDeep } = theme
-const CUSTOMER_METHODS = ['Cash', 'Transfer', 'POS', 'Other']
+// The methods record_sale_payment() accepts; they feed the Sales & Accounts
+// report's cash / transfer / POS totals.
+const CUSTOMER_METHODS = ['Cash', 'Transfer', 'POS']
 const PAGE = 30
 
 // POS → Credit: find a customer's credit sale by name or transaction number and
 // record a full or partial payment. The open credit sales come from
 // useOpenSales (every outstanding sale, paged); searching them is in memory.
-// Each payment goes through record_sale_payment, which updates the balance,
-// the linked debt and the payment history in one transaction.
-export default function CreditCollections({ brand, creditSales, loading, error, onRetry, staffName, showToast }) {
+// Each payment goes through record_sale_payment, which writes the ledger row
+// (cashier and shift from the session), the balance and the linked debt in
+// one transaction.
+export default function CreditCollections({ brand, creditSales, loading, error, onRetry, showToast }) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('newest')
   const [shown, setShown] = useState(PAGE)
@@ -30,12 +33,12 @@ export default function CreditCollections({ brand, creditSales, loading, error, 
 
   async function record(sale, { amount, method }) {
     try {
-      const r = await recordPayment.mutateAsync({ saleId: sale.id, amount, method, staffName: staffName || null })
+      const r = await recordPayment.mutateAsync({ saleId: sale.id, amount, method })
       const who = sale.client_name || 'Walk-in'
       showToast(r.balance > 0
-        ? `${fmt(amount)} received from ${who}. Balance now ${fmt(r.balance)}.`
+        ? `${fmt(r.applied ?? amount)} received from ${who}. Balance now ${fmt(r.balance)}.`
         : `${who} has paid in full (${sale.txn_no}).`, { type: 'success' })
-      console.info('[credit] payment recorded', { sale: sale.txn_no, amount, balance: r.balance })
+      console.info('[credit] payment recorded', { sale: sale.txn_no, amount: r.applied ?? amount, balance: r.balance })
     } catch (e) {
       console.error('[credit] payment failed:', e)
       throw new Error(paymentErrorMessage(e))

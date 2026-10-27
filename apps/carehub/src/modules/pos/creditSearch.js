@@ -28,9 +28,15 @@ export const CREDIT_SORTS = {
   name: { label: 'Customer A–Z', compare: (a, b) => norm(a.client_name || 'Walk-in').localeCompare(norm(b.client_name || 'Walk-in')) },
 }
 
+// A credit sale a payment can be recorded against: owing, not held, and
+// completed (record_sale_payment refuses resumed or deleted rows).
+function isCollectable(s) {
+  return s.is_credit && Number(s.balance) > 0 && !s.is_on_hold && (s.status == null || s.status === 'completed')
+}
+
 // The outstanding credit sales that match, sorted, with their total balance.
 export function searchCreditSales(sales, { query = '', sort = 'newest' } = {}) {
-  const open = (sales || []).filter((s) => s.is_credit && Number(s.balance) > 0 && !s.is_on_hold)
+  const open = (sales || []).filter(isCollectable)
   const results = open.filter((s) => matchesCreditSearch(s, query))
   results.sort((CREDIT_SORTS[sort] || CREDIT_SORTS.newest).compare)
   const outstanding = Math.round(results.reduce((sum, s) => sum + (Number(s.balance) || 0), 0) * 100) / 100

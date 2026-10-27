@@ -56,7 +56,13 @@ export function isDuplicateError(e) {
 export function paymentErrorMessage(error) {
   const raw = String(error?.message || '')
   if (raw.startsWith('Session expired')) return raw
-  const m = raw.match(/^Supabase error \((400|404)\): (.+)$/s)
-  if (m && /[.!]$/.test(m[2].trim()) && m[2].length <= 200) return m[2].trim()
+  // A plain sentence raised by the payment function (400 for a refused amount,
+  // 403/404 for a sale or purchase outside the caller's business). Anything
+  // that looks like raw database output falls through to the generic message.
+  const m = raw.match(/^Supabase error \((400|403|404)\): (.+)$/s)
+  const sentence = m ? m[2].trim() : ''
+  if (sentence && sentence.length <= 200 && /^[A-Z][^{}<>()_"`\n]*$/.test(sentence)) {
+    return /[.!?]$/.test(sentence) ? sentence : sentence + '.'
+  }
   return "We couldn't record the payment. Check your connection and try again."
 }

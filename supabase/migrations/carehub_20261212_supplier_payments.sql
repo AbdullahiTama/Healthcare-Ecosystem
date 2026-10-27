@@ -1,55 +1,37 @@
--- Partial payments with history: customers paying off credit sales, and the business paying suppliers.
+-- Supplier payments: paying a purchase in full or in parts, with history.
 --
--- Written against the LIVE schema read on 2026-10-26:
---   * sales(amount_paid, balance, is_credit, txn_no, client_name, ...), purchases(supplier_name, total_cost,
---     amount_paid, balance, status 'pending'|'paid', ...), debts(source 'credit_sale'|'purchase'|'manual',
---     source_ref = sale txn_no | purchase id, amount_paid, balance, status 'pending'|'paid').
---   * All three tables: one RLS policy "<table> of own business" (business_id in current_business_ids() or admin).
---   * There was no payment-history table. POS updated amount_paid with a value computed in the browser
---     (read, add, write back), so two tills collecting at the same moment could lose one payment; Purchases could
---     only set a purchase to fully paid.
+-- Written against the LIVE schema read on 2026-10-27:
+--   * purchases(supplier_name, total_cost, amount_paid, balance, status 'pending'|'paid', ...) with one RLS policy
+--     (business_id in current_business_ids() or admin); debts(source 'purchase', source_ref = purchase id,
+--     amount_paid, balance, status).
+--   * Purchases could only be set to fully paid, and nothing recorded when or how a supplier was paid.
+--   * Customer credit payments are NOT handled here: they use the POS ledger (sale_payments,
+--     record_sale_payment) from carehub_20261210_pos_accounting.sql.
 --
--- WHAT THIS ADDS (nothing existing is altered except rows the backfill below inserts into the new tables)
---   1. sale_payments, purchase_payments: one row per payment, append-only. Clients may only SELECT their own
---      business's rows; rows are written only by the functions below and the insert triggers.
---   2. record_sale_payment(), record_purchase_payment(): lock the row, validate the amount (> 0, <= balance),
---      update amount_paid / balance / status, keep the linked debt (Debts page) in step, and record the payment,
---      all in one transaction. They return the new totals.
---   3. Insert triggers: the amount paid when a credit sale or a purchase is first recorded becomes its first
---      history row, so the history adds up to amount_paid.
+-- WHAT THIS ADDS (nothing existing is altered except rows the backfill inserts into the new table)
+--   1. purchase_payments: one row per payment to a supplier, append-only. Clients may only SELECT their own
+--      business's rows; rows are written only by the function and the insert trigger below.
+--   2. record_purchase_payment(): locks the purchase, validates the amount (> 0, <= balance), updates
+--      amount_paid / balance / status ('partial' or 'paid'), keeps the linked debt (Debts page) in step, and
+--      records the payment, all in one transaction. Returns the new totals.
+--   3. Insert trigger: the amount paid when a purchase is first recorded becomes its first history row, so the
+--      history adds up to amount_paid. It never blocks the purchase.
 --   4. get_supplier_balances() / get_supplier_purchases(): totals and purchases per supplier (purchases are keyed
 --      by supplier_name; names are grouped ignoring case and surrounding spaces).
---   5. Backfill: one "before payment history" row for each existing credit sale / purchase with amount_paid > 0.
+--   5. Backfill: one "before payment history" row for each existing purchase with amount_paid > 0.
 --
 -- SECURITY
---   * The record_* functions are SECURITY DEFINER (so the history tables need no client write grant) and check
---     membership first, with the same rule as the tables' RLS: the row's business is in current_business_ids(),
---     or the caller is a platform admin. Anyone else gets "not found" (no existence leak). anon has no EXECUTE.
---   * Who may record a payment is unchanged: any member of the business could already update these rows.
+--   * record_purchase_payment is SECURITY DEFINER (so the history table needs no client write grant) and checks
+--     membership first, with the same rule as purchases' RLS: the row's business is in current_business_ids(),
+--     or the caller is a platform admin. Anyone else gets "not found" (no existence leak). anon has no EXECUTE
+--     (revoked explicitly: Supabase grants EXECUTE to anon when a function is created).
+--   * Who may record a payment is unchanged: any member of the business could already update purchases.
 --   * recorded_by is auth.uid() (trusted); staff_name is the display name the app passes (informational only).
 --
--- ROLLBACK: drop the six functions, the two triggers and the two tables. sales/purchases/debts keep the totals
--- that were written, which is exactly what the old code would have written.
+-- ROLLBACK: drop the four functions, the trigger and purchase_payments. purchases/debts keep the totals that were
+-- written.
 
 -- ── Tables ───────────────────────────────────────────────────────────────────────────────────────────────────
-create table if not exists public.sale_payments (
-  id            uuid primary key default gen_random_uuid(),
-  business_id   uuid not null,
-  sale_id       uuid not null references public.sales(id) on delete cascade,
-  txn_no        text not null,
-  client_name   text,
-  amount        numeric(14,2) not null check (amount > 0),
-  method        text not null default 'Cash' check (method in ('Cash', 'Transfer', 'POS', 'Other')),
-  kind          text not null default 'payment' check (kind in ('payment', 'at_sale', 'before_history')),
-  note          text check (note is null or length(note) <= 300),
-  balance_after numeric(14,2) not null check (balance_after >= 0),
-  recorded_by   uuid,
-  staff_name    text check (staff_name is null or length(staff_name) <= 120),
-  created_at    timestamptz not null default now()
-);
-create index if not exists sale_payments_sale_idx on public.sale_payments (sale_id, created_at desc);
-create index if not exists sale_payments_business_idx on public.sale_payments (business_id, created_at desc);
-
 create table if not exists public.purchase_payments (
   id            uuid primary key default gen_random_uuid(),
   business_id   uuid not null,
@@ -69,85 +51,16 @@ create table if not exists public.purchase_payments (
 create index if not exists purchase_payments_purchase_idx on public.purchase_payments (purchase_id, created_at desc);
 create index if not exists purchase_payments_supplier_idx on public.purchase_payments (business_id, supplier_key, created_at desc);
 
-alter table public.sale_payments enable row level security;
 alter table public.purchase_payments enable row level security;
 
-drop policy if exists "sale payments of own business" on public.sale_payments;
-create policy "sale payments of own business" on public.sale_payments for select to authenticated
-  using (business_id in (select public.current_business_ids()) or public.is_platform_admin());
 drop policy if exists "purchase payments of own business" on public.purchase_payments;
 create policy "purchase payments of own business" on public.purchase_payments for select to authenticated
   using (business_id in (select public.current_business_ids()) or public.is_platform_admin());
 
 -- Read-only to clients: history is written by the functions and triggers below, never edited.
-revoke all on public.sale_payments, public.purchase_payments from public, anon, authenticated;
-grant select on public.sale_payments, public.purchase_payments to authenticated;
-grant all on public.sale_payments, public.purchase_payments to service_role;
-
--- ── Record a payment against a credit sale ───────────────────────────────────────────────────────────────────
-create or replace function public.record_sale_payment(
-  p_sale_id uuid,
-  p_amount numeric,
-  p_method text default 'Cash',
-  p_note text default null,
-  p_staff_name text default null
-) returns json
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  s        public.sales%rowtype;
-  v_amount numeric(14,2);
-  v_paid   numeric(14,2);
-  v_bal    numeric(14,2);
-  v_id     uuid;
-begin
-  if p_amount is null or p_amount <= 0 then
-    raise exception 'Enter an amount greater than zero.' using errcode = '22023';
-  end if;
-  v_amount := round(p_amount, 2);
-
-  select * into s from public.sales where id = p_sale_id for update;
-  if not found or not (s.business_id in (select public.current_business_ids()) or public.is_platform_admin()) then
-    raise exception 'Sale not found.' using errcode = 'P0002';
-  end if;
-  if coalesce(s.is_on_hold, false) then
-    raise exception 'This sale is on hold. Complete it before recording a payment.' using errcode = '22023';
-  end if;
-  if round(coalesce(s.balance, 0), 2) <= 0 then
-    raise exception 'This sale has nothing left to pay.' using errcode = '22023';
-  end if;
-  if v_amount > round(s.balance, 2) then
-    raise exception 'The amount is more than the balance of %.', to_char(round(s.balance, 2), 'FM999,999,999,990.00')
-      using errcode = '22023';
-  end if;
-  if coalesce(p_method, '') not in ('Cash', 'Transfer', 'POS', 'Other') then
-    raise exception 'Choose how the customer paid.' using errcode = '22023';
-  end if;
-
-  v_paid := round(coalesce(s.amount_paid, 0) + v_amount, 2);
-  v_bal  := greatest(round(s.balance - v_amount, 2), 0);
-
-  update public.sales
-     set amount_paid = v_paid, balance = v_bal, is_credit = v_bal > 0
-   where id = s.id;
-
-  -- The credit sale's debt on the Debts page moves with it.
-  update public.debts
-     set amount_paid = round(coalesce(amount_paid, 0) + v_amount, 2),
-         balance     = greatest(round(coalesce(balance, 0) - v_amount, 2), 0),
-         status      = case when round(coalesce(balance, 0) - v_amount, 2) <= 0 then 'paid' else 'pending' end
-   where business_id = s.business_id and source = 'credit_sale' and source_ref = s.txn_no
-     and coalesce(status, '') <> 'paid';
-
-  insert into public.sale_payments (business_id, sale_id, txn_no, client_name, amount, method, kind, note, balance_after, recorded_by, staff_name)
-  values (s.business_id, s.id, s.txn_no, s.client_name, v_amount, p_method, 'payment', nullif(btrim(p_note), ''), v_bal, auth.uid(), nullif(btrim(p_staff_name), ''))
-  returning id into v_id;
-
-  return json_build_object('payment_id', v_id, 'sale_id', s.id, 'amount', v_amount, 'amount_paid', v_paid, 'balance', v_bal);
-end;
-$$;
+revoke all on public.purchase_payments from public, anon, authenticated;
+grant select on public.purchase_payments to authenticated;
+grant all on public.purchase_payments to service_role;
 
 -- ── Record a payment to a supplier against a purchase ────────────────────────────────────────────────────────
 create or replace function public.record_purchase_payment(
@@ -253,25 +166,9 @@ as $$
    order by p.created_at desc, p.id
 $$;
 
--- ── First history row when a credit sale / purchase is recorded with money already paid ─────────────────────
--- History must never block a sale or a purchase: if the history row cannot be written (an unexpected value),
--- the sale/purchase is still recorded and a warning is logged.
-create or replace function public.sale_payment_at_sale() returns trigger
-language plpgsql security definer set search_path = public as $$
-begin
-  if new.business_id is not null and coalesce(new.is_credit, false) and coalesce(new.amount_paid, 0) > 0 then
-    begin
-      insert into public.sale_payments (business_id, sale_id, txn_no, client_name, amount, method, kind, balance_after, staff_name, created_at)
-      values (new.business_id, new.id, coalesce(new.txn_no, ''), new.client_name, round(new.amount_paid, 2),
-              case when new.payment_method in ('Cash', 'Transfer', 'POS') then new.payment_method else 'Other' end,
-              'at_sale', greatest(round(coalesce(new.balance, 0), 2), 0), left(new.staff_name, 120), coalesce(new.created_at, now()));
-    exception when others then
-      raise warning 'sale_payment_at_sale: history not written for sale %: %', new.id, sqlerrm;
-    end;
-  end if;
-  return new;
-end $$;
-
+-- ── First history row when a purchase is recorded with money already paid ─────────────────────
+-- History must never block a purchase: if the history row cannot be written (an unexpected value), the purchase
+-- is still recorded and a warning is logged.
 create or replace function public.purchase_payment_at_purchase() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -287,20 +184,10 @@ begin
   return new;
 end $$;
 
-drop trigger if exists sale_payment_at_sale on public.sales;
-create trigger sale_payment_at_sale after insert on public.sales for each row execute function public.sale_payment_at_sale();
 drop trigger if exists purchase_payment_at_purchase on public.purchases;
 create trigger purchase_payment_at_purchase after insert on public.purchases for each row execute function public.purchase_payment_at_purchase();
 
 -- ── Backfill: what was paid before history existed ───────────────────────────────────────────────────────────
-insert into public.sale_payments (business_id, sale_id, txn_no, client_name, amount, method, kind, note, balance_after, created_at)
-select s.business_id, s.id, s.txn_no, s.client_name, round(s.amount_paid, 2), 'Other', 'before_history',
-       'Paid before payment history was kept', greatest(round(coalesce(s.balance, 0), 2), 0), coalesce(s.created_at, now())
-  from public.sales s
- where s.business_id is not null and coalesce(s.amount_paid, 0) > 0
-   and (coalesce(s.is_credit, false) or exists (select 1 from public.debts d where d.source = 'credit_sale' and d.source_ref = s.txn_no and d.business_id = s.business_id))
-   and not exists (select 1 from public.sale_payments x where x.sale_id = s.id);
-
 insert into public.purchase_payments (business_id, purchase_id, supplier_name, amount, method, kind, paid_on, note, balance_after, created_at)
 select p.business_id, p.id, coalesce(nullif(btrim(p.supplier_name), ''), 'Unknown supplier'), round(p.amount_paid, 2), 'Other', 'before_history',
        coalesce(p.created_at::date, current_date), 'Paid before payment history was kept', greatest(round(coalesce(p.balance, 0), 2), 0), coalesce(p.created_at, now())
@@ -309,13 +196,10 @@ select p.business_id, p.id, coalesce(nullif(btrim(p.supplier_name), ''), 'Unknow
    and not exists (select 1 from public.purchase_payments x where x.purchase_id = p.id);
 
 -- ── Grants ───────────────────────────────────────────────────────────────────────────────────────────────────
-revoke all on function public.record_sale_payment(uuid, numeric, text, text, text) from public, anon;
 revoke all on function public.record_purchase_payment(uuid, numeric, text, date, text, text) from public, anon;
 revoke all on function public.get_supplier_balances(uuid) from public, anon;
 revoke all on function public.get_supplier_purchases(uuid, text) from public, anon;
-revoke all on function public.sale_payment_at_sale() from public, anon, authenticated;
 revoke all on function public.purchase_payment_at_purchase() from public, anon, authenticated;
-grant execute on function public.record_sale_payment(uuid, numeric, text, text, text) to authenticated, service_role;
 grant execute on function public.record_purchase_payment(uuid, numeric, text, date, text, text) to authenticated, service_role;
 grant execute on function public.get_supplier_balances(uuid) to authenticated, service_role;
 grant execute on function public.get_supplier_purchases(uuid, text) to authenticated, service_role;

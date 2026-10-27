@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { saleRepository } from '../modules/pos/repositories'
+import { saleRepository, paymentRepository } from '../modules/pos/repositories'
 import { appointmentRepository } from '../modules/appointments/repositories'
 import { clientRepository } from '../modules/clients/repositories'
 import { settingsRepository } from '../modules/settings/repositories'
@@ -183,23 +183,27 @@ export function useInvalidateSales(brandId) {
 
 // ── Credit-sale payments ──────────────────────────────────────────────────────
 
-// Payment history for one credit sale. Loaded only when asked for (enabled).
+// Payment history for one credit sale, newest first, from the sale_payments
+// ledger (carehub_20261210_pos_accounting). Loaded only when asked for.
 export function useSalePayments(saleId, brandId, enabled = true) {
   return useQuery({
     queryKey: keys.salePayments(saleId),
-    queryFn: () => saleRepository.getPayments(saleId, brandId),
+    queryFn: async () => [...((await paymentRepository.getForSale(brandId, saleId)) || [])].reverse(),
     enabled: !!saleId && !!brandId && enabled,
     staleTime: 30_000,
   })
 }
 
-// Records a full or partial payment against a credit sale. The new balance is
-// applied to the open-sales list straight away (a fully paid sale leaves it),
-// then the lists are refreshed from the server.
+// Records a full or partial payment against a credit sale through
+// record_sale_payment(), which writes the ledger row (cashier and shift taken
+// from the session), the sale and its debt in one transaction and returns
+// { applied, amount_paid, balance }. The new balance is applied to the
+// open-sales list straight away (a fully paid sale leaves it), then the lists
+// are refreshed from the server.
 export function useRecordSalePayment(brandId) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ saleId, ...payment }) => saleRepository.recordPayment(saleId, payment),
+    mutationFn: ({ saleId, amount, method }) => paymentRepository.recordCollection(saleId, amount, method),
     onSuccess: (result, { saleId }) => {
       qc.setQueryData(keys.openSales(brandId), (prev) => {
         if (!Array.isArray(prev) || !result) return prev
