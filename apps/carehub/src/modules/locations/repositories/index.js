@@ -1,4 +1,6 @@
 import { sbFetch } from '../../../services/supabase'
+import { pagedQuery } from '../../../lib/pagedQuery'
+import { createMasterCatalogRepository } from '../../master-catalog/repositories'
 
 // ── Locations repository ─────────────────────────────────────────────────────
 // A deep module over the multi-branch `businesses` tree — not to be confused
@@ -41,16 +43,16 @@ export function createLocationsRepository(request = sbFetch) {
       // hundreds of requests at once). If anything failed, one summary is thrown so the owner is told, instead of
       // finding half a shelf and staff without roles later.
       const problems = []
-      const masterRows = (await request(`master_products?business_id=eq.${parentId}&select=id`)) || []
+      // The branch carries the whole master catalogue at stock 0 (CareFind hides items without stock), 500 items per
+      // call. Archived items are left out.
+      // Before carehub_20261215 there is no archived_at column to filter on.
+      const list = (filter) => pagedQuery(request, `master_products?business_id=eq.${parentId}${filter}&order=id.asc&select=id`)
+      const masterRows = (await list('&archived_at=is.null').catch((e) => (/archived_at/.test(String(e?.message)) ? list('') : Promise.reject(e)))) || []
+      const catalogue = createMasterCatalogRepository(request)
       let failed = 0
-      for (let i = 0; i < masterRows.length; i += 10) {
-        const results = await Promise.allSettled(masterRows.slice(i, i + 10).map(mp =>
-          request('rpc/activate_branch_product', {
-            method: 'POST',
-            body: JSON.stringify({ p_branch_id: branchId, p_master_product_id: mp.id, p_override_price: null }),
-          })
-        ))
-        failed += results.filter(r => r.status === 'rejected').length
+      for (let i = 0; i < masterRows.length; i += 500) {
+        const chunk = masterRows.slice(i, i + 500).map((m) => m.id)
+        try { await catalogue.carry(branchId, chunk) } catch (e) { failed += chunk.length }
       }
       if (failed > 0) problems.push(failed + ' of ' + masterRows.length + ' products could not be copied')
       try {
