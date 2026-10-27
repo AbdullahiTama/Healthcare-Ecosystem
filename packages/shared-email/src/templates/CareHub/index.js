@@ -175,18 +175,65 @@ export function subscriptionCreated({ fullName, plan, businessName, expiryDate }
   })
 }
 
-export function subscriptionExpiry({ fullName, plan, businessName, expiryDate, daysLeft } = {}) {
+// One template for every plan reminder (api/cron/check-subscription-expiry.js). `stage` says where the plan is:
+//   before_14 / before_7 / before_3 / before_1   counting down to expiry (the default, as before)
+//   expired / grace_mid / grace_last              expired, within the 7-day grace period (graceEndDate given)
+//   restricted                                    after the grace period: some features paused
+//   lapsed                                        expired while restrictions are not switched on (no graceEndDate)
+export function subscriptionExpiry({ fullName, plan, businessName, expiryDate, daysLeft, stage, graceEndDate } = {}) {
+  const renew = { href: siteLink(APP, '/dashboard/settings'), label: 'Renew subscription' }
+  const details = detailsTable([['Plan', plan], ['Business', businessName], ['Expired on', expiryDate], ['Restrictions from', graceEndDate]])
+  const forBusiness = businessName ? html` for <strong>${businessName}</strong>` : ''
+
+  if (stage === 'restricted') {
+    return email({
+      title: 'Some CareHub features are paused',
+      preheader: 'Your plan has expired. Renew to add staff, branches and products again.',
+      body: [
+        paragraph(html`${hi(fullName)} the <strong>${plan || 'CareHub'}</strong> plan${forBusiness} expired on <strong>${expiryDate}</strong>, so some features are paused until it is renewed.`),
+        details,
+        notice('warn', 'Paused: adding staff, branches and products, imports and exports. Still working: the POS and sales, and all your records.'),
+      ],
+      cta: renew,
+    })
+  }
+  if (stage === 'expired' || stage === 'grace_mid' || stage === 'grace_last') {
+    const last = stage === 'grace_last'
+    return email({
+      title: last ? 'Restrictions start tomorrow' : 'Your subscription has expired',
+      preheader: last ? 'Renew today to keep adding staff, branches and products.' : `Renew by ${graceEndDate || 'the end of your grace period'} to avoid restrictions.`,
+      body: [
+        paragraph(html`${hi(fullName)} the <strong>${plan || 'CareHub'}</strong> plan${forBusiness} expired on <strong>${expiryDate}</strong>. Everything keeps working until <strong>${graceEndDate}</strong>.`),
+        details,
+        notice('warn', 'If it is not renewed by then, adding staff, branches and products, imports and exports will be paused. Sales and your records are never affected.'),
+      ],
+      cta: renew,
+    })
+  }
+  if (stage === 'lapsed') {
+    return email({
+      title: 'Your subscription has expired',
+      preheader: `Your CareHub plan expired on ${expiryDate}.`,
+      body: [
+        paragraph(html`${hi(fullName)} the <strong>${plan || 'CareHub'}</strong> plan${forBusiness} expired on <strong>${expiryDate}</strong>.`),
+        details,
+        notice('warn', 'Renew to keep your account in good standing.'),
+      ],
+      cta: renew,
+    })
+  }
+
   const days = Number(daysLeft)
   const when = Number.isFinite(days) ? `in ${days} ${days === 1 ? 'day' : 'days'}` : 'soon'
   return email({
     title: 'Your subscription is about to expire',
     preheader: `Your CareHub plan expires ${when}.`,
     body: [
-      paragraph(html`${hi(fullName)} the <strong>${plan || 'CareHub'}</strong> plan${businessName ? html` for <strong>${businessName}</strong>` : ''} expires <strong>${when}</strong>.`),
+      paragraph(html`${hi(fullName)} the <strong>${plan || 'CareHub'}</strong> plan${forBusiness} expires <strong>${when}</strong>.`),
       detailsTable([['Plan', plan], ['Business', businessName], ['Expires on', expiryDate]]),
       notice('warn', 'Renew before it expires to keep using CareHub without interruption.'),
     ],
-    cta: { href: siteLink(APP, '/billing'), label: 'Renew subscription' },
+    cta: renew,
   })
 }
 

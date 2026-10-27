@@ -36,6 +36,11 @@ const BUSINESS_PROFILE_FIELDS = [
 // rather than "whatever is in the form object".
 export function createSettingsRepository(request = sbFetch) {
   return {
+    // Where the business stands with its plan (business_plan_status, carehub_20261214): state, dates and limits.
+    async getPlanStatus(businessId) {
+      return request('rpc/business_plan_status', { method: 'POST', body: JSON.stringify({ p_business_id: businessId }) })
+    },
+
     async get(businessId) {
       const rows = await request(`business_settings?business_id=eq.${businessId}&select=*`)
       return rows[0] || null

@@ -14,6 +14,7 @@ import { adrReportRepository } from '../adr/repositories'
 import { inPeriod, periodRange } from './periodFilter'
 import { fmt, currentMonth } from '../../lib/utils'
 import { theme } from '../../styles/theme'
+import { usePlanGate } from '../../hooks/usePlanGate'
 import { Card, StatCard, Loading, TealBtn, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, warning, bg } = theme
@@ -22,6 +23,7 @@ export default function Reports({ brand, role, perms, embedded = false }) {
   const [period, setPeriod] = useState('month')
   const [customMonth, setCustomMonth] = useState(currentMonth())
   const { msg, show: showToast } = useToast()
+  const plan = usePlanGate(showToast)
 
   // Only the selected period is read from the server (sales and purchases are
   // filtered by date there, and every read pages past the 1000-row cap), so a
@@ -77,6 +79,7 @@ export default function Reports({ brand, role, perms, embedded = false }) {
   const maxDaily = Math.max(...Object.values(dailySales), 1)
 
   function exportCSV() {
+    if (!plan.allow('exporting reports')) return
     const rows = [
       ['CareHub Financial Report'],
       ['Business', brand?.name || '', 'Period', period === 'month' ? customMonth : period],

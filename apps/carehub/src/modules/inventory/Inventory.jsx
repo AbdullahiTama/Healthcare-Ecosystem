@@ -18,6 +18,7 @@ import { CatalogStatusBanner, CatalogSkeleton } from './components/CatalogStatus
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, Toggle, GhostBtn, TealBtn, RedBtn, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
+import { usePlanGate } from '../../hooks/usePlanGate'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray300, border, danger, dangerBg, warning, warningBg, success, successBg, bg } = theme
 
@@ -52,6 +53,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [exporting, setExporting] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
+  const plan = usePlanGate(showToast)
 
   // Both walk the whole catalog, so they are recomputed only when it changes,
   // not on every keystroke in the search box.
@@ -122,6 +124,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   // record for any other reason still delivers the file but says so.
   async function exportExcel() {
     if (filtered.length === 0) { showToast('There are no products to export.', { type: 'warning' }); return }
+    if (!plan.allow('exporting')) return
     setExporting(true)
     try {
       let audit = { status: 'failed' }
@@ -173,6 +176,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       }
 
       if (!isEdit) {
+        if (!plan.allow('adding products')) return
         // Enforce product cap for Basic (5,000)
         const limit = planLimitsFor(brand?.plan)
         if (limit.maxProducts !== Infinity && products.length >= limit.maxProducts) {
@@ -365,6 +369,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   // network hiccup for 2,000+ product files. Duplicates are skipped up front
   // against the currently-loaded product list.
   async function importProducts() {
+    if (!plan.allow('importing products')) return
     if (uploadData.length === 0) return
     setImporting(true)
     showToast('Importing ' + uploadData.length + ' products…', { type: 'info' })
@@ -490,7 +495,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               <AlertTriangle size={14} /> Clean up {totalDuplicateItems} duplicate{totalDuplicateItems > 1 ? 's' : ''}
             </button>
           )}
-          {perms?.canEditStock && <TealBtn onClick={() => setShowAdd(true)} disabled={!catalogReady} title={waitTitle} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Add product</TealBtn>}
+          {perms?.canEditStock && <TealBtn onClick={() => plan.allow('adding products') && setShowAdd(true)} disabled={!catalogReady} title={waitTitle} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Add product</TealBtn>}
         </div>
       </div>
 
@@ -563,7 +568,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       )}
 
       {products.length === 0 ? (
-        <Empty icon={<Package size={56} strokeWidth={1.5} />} title='No products yet' description={perms?.canEditStock ? 'Add your first product, or upload a CSV to add many at once.' : 'Products added by your team will appear here.'} action={perms?.canEditStock ? '+ Add product' : undefined} onAction={() => setShowAdd(true)} />
+        <Empty icon={<Package size={56} strokeWidth={1.5} />} title='No products yet' description={perms?.canEditStock ? 'Add your first product, or upload a CSV to add many at once.' : 'Products added by your team will appear here.'} action={perms?.canEditStock ? '+ Add product' : undefined} onAction={() => plan.allow('adding products') && setShowAdd(true)} />
       ) : filtered.length === 0 ? (
         <Empty icon={<Search size={48} strokeWidth={1.5} />} cause='filtered' title='No products match' description='Try a different search, or clear the filters.' action='Clear filters' onAction={clearFilters} />
       ) : (

@@ -16,6 +16,7 @@ import {
   toReportRows, filterOptions, parseDbTime, cashierKey, expectedCash,
 } from './salesReport'
 import { exportSalesReportXlsx, printSalesReport } from './salesReportExport'
+import { usePlanGate } from '../../hooks/usePlanGate'
 import { useAuthUserId, useSalesReportData, useInvalidateSalesReport } from './useSalesReportData'
 import SaleDetailModal from './SaleDetailModal'
 import ShiftControl from './ShiftControl'
@@ -40,6 +41,7 @@ export default function SalesReport({ brand, role, perms, staffName }) {
   const navigate = useNavigate()
   const { isMobile } = useBreakpoint()
   const { msg: toastMsg, type: toastType, show: showToast } = useToast()
+  const plan = usePlanGate(showToast)
   const userId = useAuthUserId()
   const { data: settings } = useSettings(brand?.id)
   const invalidate = useInvalidateSalesReport()
@@ -111,6 +113,7 @@ export default function SalesReport({ brand, role, perms, staffName }) {
   // from the database (the role may not export) cancels the download.
   async function exportExcel() {
     if (!view.rows.length) { showToast('There are no sales to export for this period and these filters.', { type: 'warning' }); return }
+    if (!plan.allow('exporting reports')) return
     setExporting(true)
     try {
       let audit = { status: 'failed' }

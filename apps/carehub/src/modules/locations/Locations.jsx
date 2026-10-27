@@ -12,6 +12,7 @@ import { productRepository } from '../inventory/repositories'
 import { fmt, todayDate, businessLucideIcon } from '../../lib/utils'
 import { NIG_STATES } from '../../config/constants'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
+import { usePlanGate } from '../../hooks/usePlanGate'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
 
@@ -35,6 +36,7 @@ export default function Locations({ brand, role }) {
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
+  const plan = usePlanGate(showToast)
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isOwner = role === 'Owner'
   const mainId = brand?.parent_business_id || brand?.id
@@ -77,6 +79,7 @@ export default function Locations({ brand, role }) {
 
   async function saveBranch() {
     if (!form.name || !form.address) { showToast('Please enter branch name and address.', { type: 'warning' }); return }
+    if (!plan.allow('adding branches')) return
     const limit = planLimitsFor(brand?.plan).maxLocations
     if (locations.length >= limit) {
       showToast(`Your ${PLAN_LABELS[brand?.plan] || 'current'} plan allows up to ${limit} location${limit === 1 ? '' : 's'}. Upgrade your plan in Settings to add more.`, { type: 'warning' })
@@ -138,7 +141,7 @@ export default function Locations({ brand, role }) {
 
   return (
     <div>
-      <SectionHead title='Locations' sub='Manage all your business branches in one place' btn='+ Add Branch' onBtn={() => setShowAdd(true)} />
+      <SectionHead title='Locations' sub='Manage all your business branches in one place' btn='+ Add Branch' onBtn={() => plan.allow('adding branches') && setShowAdd(true)} />
 
       {/* Combined stats across all locations */}
       <div style={{ marginBottom: '20px', padding: '20px', borderRadius: theme.radius.lg, background: navy, color: 'white' }}>
@@ -167,7 +170,7 @@ export default function Locations({ brand, role }) {
       {loading ? <Loading text='Loading branches…' /> : loadError ? (
         <ErrorState message={loadError} onRetry={load} />
       ) : locations.length === 0 ? (
-        <Empty icon={<Building2 size={40} />} message='No additional branches yet' action='+ Add First Branch' onAction={() => setShowAdd(true)} />
+        <Empty icon={<Building2 size={40} />} message='No additional branches yet' action='+ Add First Branch' onAction={() => plan.allow('adding branches') && setShowAdd(true)} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {ordered.map(loc => {

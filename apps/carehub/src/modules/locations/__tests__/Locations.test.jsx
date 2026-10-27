@@ -13,8 +13,10 @@ vi.mock('../../../providers/AuthProvider', () => ({ useAuth: () => ({ auth: auth
 vi.mock('../repositories', () => ({ locationsRepository: { getAll: vi.fn(), addBranch: vi.fn(), cloneBranchData: vi.fn() } }))
 vi.mock('../../pos/repositories', () => ({ saleRepository: { getToday: vi.fn() } }))
 vi.mock('../../inventory/repositories', () => ({ productRepository: { getStockSummary: vi.fn() } }))
+vi.mock('../../settings/repositories', () => ({ settingsRepository: { getPlanStatus: vi.fn(async () => ({ plan: 'growth', state: 'restricted', expires_at: '2026-09-01T00:00:00Z', grace_ends_at: '2026-10-28T00:00:00Z', limits: {} })) } }))
 
 import Locations from '../Locations.jsx'
+import { PlanStatusProvider } from '../../../hooks/usePlanStatus.jsx'
 import { locationsRepository as repo } from '../repositories'
 import { saleRepository } from '../../pos/repositories'
 import { productRepository } from '../../inventory/repositories'
@@ -162,5 +164,18 @@ describe('Locations page', () => {
     await act(async () => { [...document.body.querySelectorAll('button')].filter((b) => b.textContent.trim() === 'Add Branch').at(-1).click() })
     await flush(); await flush()
     expect(document.body.textContent).toContain('The branch was added, but its products and roles were not fully copied: 3 of 40 products could not be copied')
+  })
+
+  it('while the plan is restricted, adding a branch is paused with the reason, and nothing is sent', async () => {
+    await act(async () => {
+      root.render(<MemoryRouter initialEntries={['/dashboard/locations']}><PlanStatusProvider brand={ROOT}><Routes>
+        <Route path='/dashboard/locations' element={<Locations brand={ROOT} role='Owner' />} />
+      </Routes></PlanStatusProvider></MemoryRouter>)
+    })
+    await flush(); await flush()
+    await act(async () => { button('+ Add Branch').click() })
+    expect(document.body.textContent).toContain('Your CareHub plan has expired, so adding branches is paused')
+    expect(document.body.textContent).not.toContain('A branch has no sign-in of its own')
+    expect(repo.addBranch).not.toHaveBeenCalled()
   })
 })
