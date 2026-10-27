@@ -153,3 +153,24 @@ export function createStaffRepository(request = sbFetch) {
 }
 
 export const staffRepository = createStaffRepository()
+
+// ── Staff activity (owner-only feed) ──────────────────────────────────────────
+// One database function, staff_activity(), that refuses everyone but the Owner
+// and returns what each person did across sales, refunds, stock, expenses,
+// attendance, field visits and shifts. Read-only. The cap is passed so the
+// screen can tell the Owner when older rows are not shown.
+export const ACTIVITY_LIMIT = 1000
+
+export function createStaffActivityRepository({ request = sbFetch } = {}) {
+  return {
+    async get(businessId, fromIso, toIso, limit = ACTIVITY_LIMIT) {
+      const rows = await request('rpc/staff_activity', {
+        method: 'POST',
+        body: JSON.stringify({ p_business_id: businessId, p_from: fromIso, p_to: toIso, p_limit: limit }),
+      })
+      return Array.isArray(rows) ? rows : []
+    },
+  }
+}
+
+export const staffActivityRepository = createStaffActivityRepository()
