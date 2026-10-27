@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, Component } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Pause, Clock, CreditCard, Camera, ShoppingCart,
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
-  DollarSign, Repeat, Divide, Search, Package, PackageX, Clipboard,
+  DollarSign, Repeat, Divide, Search, Package, PackageX, Clipboard, ReceiptText,
 } from 'lucide-react'
-import { saleRepository } from './repositories'
+import { saleRepository, paymentRepository, isMissingObject } from './repositories'
 // Credit sales raise and settle debts. That aggregate belongs to the debts
 // module, so its repository is used here rather than a second copy of the
 // query shape living in POS.
@@ -13,7 +14,7 @@ import { debtRepository } from '../debts/repositories'
 import { clientRepository } from '../clients/repositories'
 import { consultationRepository } from '../consultation/repositories'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
-import { buildReceiptHtml, buildReceiptQrDataUrl } from './receiptPrint'
+import { buildReceiptHtml, buildReceiptQrDataUrl, saleToReceipt } from './receiptPrint'
 import { buildReceiptEscpos } from './receiptEscpos'
 import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscpos, requestPrinter } from './escposUsb'
 import { theme } from '../../styles/theme'
@@ -98,6 +99,9 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const [splitAmounts, setSplitAmounts] = useState({ Cash: '', Transfer: '', POS: '' })
   // Credit
   const [creditAmountPaid, setCreditAmountPaid] = useState('')
+  // How a credit sale's deposit was paid. Without it the deposit could not be
+  // placed in the cash / transfer / POS totals of the Sales & Accounts report.
+  const [creditMethod, setCreditMethod] = useState('Cash')
   // Hold note
   const [holdNote, setHoldNote] = useState('')
   const [showHoldModal, setShowHoldModal] = useState(false)
@@ -110,6 +114,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const [charging, setCharging] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const { isMobile } = useBreakpoint()
+  const navigate = useNavigate()
 
   // React Query hooks
   const { data: settings } = useSettings(brand?.id)
@@ -407,6 +412,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
       discount: discAmt,
       total,
       payment_method: 'Credit',
+      payment_split: amtPaid > 0 ? JSON.stringify({ [creditMethod]: amtPaid }) : null,
       amount_paid: amtPaid,
       balance,
       is_credit: true,
@@ -499,7 +505,23 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     invalidateSales()
   }
 
-  async function collectCredit(sale, amount) {
+  // A repayment goes through record_sale_payment(): the ledger row (who took
+  // it, how, in which shift), the sale and its debt move in one transaction.
+  // Until the accounting migration is applied the function does not exist, and
+  // the previous two-step write is used.
+  async function collectCredit(sale, amount, payMethod = 'Cash') {
+    try {
+      const r = await paymentRepository.recordCollection(sale.id, parseFloat(amount), payMethod)
+      showToast('Payment of ' + fmt(r.applied) + ' collected!', { type: 'success' })
+      invalidateSales()
+      return
+    } catch (e) {
+      if (!isMissingObject(e)) { showToast(cleanServerError(e), { type: 'error' }); return }
+    }
+    await collectCreditLegacy(sale, amount)
+  }
+
+  async function collectCreditLegacy(sale, amount) {
     const newPaid = (sale.amount_paid || 0) + parseFloat(amount)
     const newBalance = sale.total - newPaid
     await saleRepository.update(sale.id, brand.id, { amount_paid: newPaid, balance: Math.max(0, newBalance), is_credit: newBalance > 0 })
@@ -516,7 +538,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     invalidateSales()
   }
 
-  function newSale() { finishResumedSale(); setReceipt(null); setCart([]); setClient('Walk-in'); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid('') }
+  function newSale() { finishResumedSale(); setReceipt(null); setCart([]); setClient('Walk-in'); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid(''); setCreditMethod('Cash') }
 
   // Universal fallback path: render an HTML page and let the browser/OS
   // rasterize it via the system print dialog. Always works, but thermal
@@ -748,25 +770,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
                     <div style={{ fontSize: '16px', fontWeight: '900', color: tealDeep }}>{fmt(s.total)}</div>
                     {s.is_credit && <Pill label='Credit' type='amber' />}
                   </div>
-                  <button onClick={() => {
-                    let splitAmounts = null
-                    try { splitAmounts = typeof s.payment_split === 'string' ? JSON.parse(s.payment_split) : s.payment_split || null } catch (e) { splitAmounts = null }
-                    const receiptData = {
-                      id: s.txn_no,
-                      client: s.client_name,
-                      items,
-                      subtotal: s.subtotal,
-                      disc: s.discount,
-                      total: s.total,
-                      method: s.payment_method,
-                      cashGiven: s.payment_method === 'Cash' && Number(s.amount_paid) >= Number(s.total) ? (Number(s.amount_paid) || 0) : 0,
-                      amtPaid: s.amount_paid,
-                      balance: s.balance,
-                      splitAmounts: s.payment_method === 'Split' ? splitAmounts : null,
-                      date: s.created_at,
-                    }
-                    printReceipt(receiptData)
-                  }} disabled={printing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '600', fontSize: '12px', cursor: printing ? 'wait' : 'pointer', opacity: printing ? 0.6 : 1 }}>
+                  <button onClick={() => printReceipt(saleToReceipt(s))} disabled={printing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '600', fontSize: '12px', cursor: printing ? 'wait' : 'pointer', opacity: printing ? 0.6 : 1 }}>
                     <Printer size={12} /> {printing ? 'Sending…' : 'Reprint'}
                   </button>
                 </div>
@@ -826,6 +830,12 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
             <button onClick={startScan} title='Scan barcode' aria-label='Scan barcode'
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: tealDeep, color: 'white', cursor: 'pointer', flexShrink: 0 }}>
               <Camera size={17} />
+            </button>
+            {/* Sales & Accounts report. White, so the scan button stays the
+                primary action on the counter. */}
+            <button onClick={() => navigate('/dashboard/pos/report')} title='Sales & Accounts report' aria-label='Sales and accounts report'
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: tealDeep, cursor: 'pointer', flexShrink: 0 }}>
+              <ReceiptText size={17} />
             </button>
           </div>
 
@@ -1084,6 +1094,16 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
               <input type='number' value={creditAmountPaid} onChange={e => setCreditAmountPaid(e.target.value)} placeholder='Amount paid now (₦)'
                 style={{ width: '100%', padding: '10px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 12.5, outline: 'none', boxSizing: 'border-box', background: bg, color: navy }} />
               {creditAmountPaid !== '' && <div style={{ fontSize: 11.5, fontWeight: 700, marginTop: 5, color: danger }}>Balance owed: {fmt(total - (parseFloat(creditAmountPaid) || 0))}</div>}
+              {parseFloat(creditAmountPaid) > 0 && (
+                <div role='radiogroup' aria-label='Deposit paid by' style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  {['Cash', 'Transfer', 'POS'].map(m => (
+                    <button key={m} role='radio' aria-checked={creditMethod === m} onClick={() => setCreditMethod(m)}
+                      style={{ flex: 1, padding: '7px 0', borderRadius: theme.radius.md, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', border: `1px solid ${creditMethod === m ? tealDeep : border}`, background: creditMethod === m ? tealMist : 'white', color: creditMethod === m ? tealDeep : gray600 }}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1147,21 +1167,24 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
 
 function CollectPayment({ sale, onCollect }) {
   const [amount, setAmount] = useState('')
+  const [payMethod, setPayMethod] = useState('Cash')
   const [collecting, setCollecting] = useState(false)
 
   const handleCollect = async () => {
     if (!amount || parseFloat(amount) <= 0) return
     setCollecting(true)
-    await onCollect(sale, amount)
-    setAmount('')
-    setCollecting(false)
+    try { await onCollect(sale, amount, payMethod); setAmount('') } finally { setCollecting(false) }
   }
 
   return (
-    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-      <input type='number' value={amount} onChange={e => setAmount(e.target.value)} placeholder='Amount'
+    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <input type='number' value={amount} onChange={e => setAmount(e.target.value)} placeholder='Amount' aria-label={'Amount collected from ' + (sale.client_name || 'customer')}
         style={{ width: '90px', padding: '6px 8px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, fontSize: '12px', outline: 'none' }} />
-      <TealBtn onClick={handleCollect} style={{ padding: '6px 12px', fontSize: '12px' }}>{collecting ? '...' : 'Collect'}</TealBtn>
+      <select value={payMethod} onChange={e => setPayMethod(e.target.value)} aria-label='Paid by'
+        style={{ padding: '6px 8px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, fontSize: '12px', background: 'white', color: theme.navy }}>
+        {['Cash', 'Transfer', 'POS'].map(m => <option key={m}>{m}</option>)}
+      </select>
+      <TealBtn onClick={handleCollect} disabled={collecting} style={{ padding: '6px 12px', fontSize: '12px' }}>{collecting ? '...' : 'Collect'}</TealBtn>
     </div>
   )
 }

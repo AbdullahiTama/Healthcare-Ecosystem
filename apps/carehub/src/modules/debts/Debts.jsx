@@ -7,6 +7,9 @@ import { debtRepository } from './repositories'
 // consolidated; it is unrelated to this module's own aggregate.
 import { useClients } from '../../hooks/queries'
 import ClientsLoadNote from '../clients/components/ClientsLoadNote'
+// A debt raised by a credit sale is settled against that sale, through the
+// sales aggregate's own collection function, so the two never disagree.
+import { saleRepository, paymentRepository, isMissingObject } from '../pos/repositories'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
@@ -36,6 +39,9 @@ export default function Debts({ brand, role, perms }) {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ direction: 'owes_us' })
   const [saving, setSaving] = useState(false)
+  const [payTarget, setPayTarget] = useState(null)
+  const [payMethod, setPayMethod] = useState('Cash')
+  const [paying, setPaying] = useState(false)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
@@ -85,7 +91,39 @@ export default function Debts({ brand, role, perms }) {
     setSaving(false)
   }
 
-  async function markPaid(debt) {
+  // A credit-sale debt is settled through record_sale_payment(): the sale,
+  // the debt and the payments ledger move together, and the method feeds the
+  // Sales & Accounts report. Previously only the debt changed, so the sale
+  // kept showing the balance as owed. Before the accounting migration exists
+  // (or when the sale cannot be found) the debt-only update is kept.
+  function markPaid(debt) {
+    if (debt.source === 'credit_sale' && debt.source_ref) { setPayMethod('Cash'); setPayTarget(debt); return }
+    markDebtPaid(debt)
+  }
+
+  async function settleSaleDebt() {
+    const debt = payTarget
+    setPaying(true)
+    try {
+      const sale = await saleRepository.getById(brand.id, debt.source_ref)
+      const owed = sale ? Math.max(Number(sale.total || 0) - Math.min(Number(sale.amount_paid || 0), Number(sale.total || 0)), 0) : 0
+      if (sale && owed > 0) {
+        try {
+          await paymentRepository.recordCollection(sale.id, owed, payMethod)
+          setPayTarget(null); load(); showToast('Marked as paid! ' + fmt(owed) + ' recorded against ' + debt.source_ref + '.', { type: 'success' })
+          return
+        } catch (e) {
+          if (!isMissingObject(e)) { showToast(String(e?.message || e).replace(/^Supabase error \(\d{3}\):\s*/, ''), { type: 'error' }); return }
+        }
+      }
+      setPayTarget(null)
+      await markDebtPaid(debt)
+    } catch (e) {
+      showToast('Could not mark as paid. Please try again.', { type: 'error' })
+    } finally { setPaying(false) }
+  }
+
+  async function markDebtPaid(debt) {
     try {
       await debtRepository.update(debt.id, brand.id, { amount_paid: debt.amount, balance: 0, status: 'paid' })
       load(); showToast('Marked as paid!', { type: 'success' })
@@ -228,6 +266,21 @@ export default function Debts({ brand, role, perms }) {
           </div>}
           <Inp label='Due Date' value={form.dueDate} onChange={v => f('dueDate', v)} type='date' />
           <Textarea label='Description' value={form.description} onChange={v => f('description', v)} placeholder='What is this debt for?' rows={2} />
+        </div>
+      </Modal>
+
+      <Modal show={!!payTarget} onClose={() => setPayTarget(null)} title='Record payment'
+        footer={<><GhostBtn onClick={() => setPayTarget(null)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={settleSaleDebt} disabled={paying} style={{ flex: 1, padding: '12px' }}>{paying ? 'Saving…' : 'Mark paid'}</TealBtn></>}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ padding: '12px', borderRadius: theme.radius.md, background: bg, fontSize: '13px', color: gray600 }}>
+            {payTarget?.party_name} pays the remaining <strong>{fmt(payTarget?.balance)}</strong> on sale {payTarget?.source_ref}.
+          </div>
+          <div role='radiogroup' aria-label='Paid by' style={{ display: 'flex', gap: '8px' }}>
+            {['Cash', 'Transfer', 'POS'].map(m => (
+              <button key={m} role='radio' aria-checked={payMethod === m} onClick={() => setPayMethod(m)}
+                style={{ flex: 1, padding: '10px 0', borderRadius: theme.radius.md, fontWeight: 700, fontSize: '13px', cursor: 'pointer', border: `1px solid ${payMethod === m ? tealDeep : border}`, background: payMethod === m ? tealMist : 'white', color: payMethod === m ? tealDeep : gray600 }}>{m}</button>
+            ))}
+          </div>
         </div>
       </Modal>
 
