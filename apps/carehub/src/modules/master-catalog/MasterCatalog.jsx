@@ -1,305 +1,284 @@
-import { useState, useEffect } from 'react'
-import { Lock, Layers, Building2, Trash2, RefreshCw } from 'lucide-react'
-import { masterCatalogRepository } from './repositories'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Lock, Layers, Search, Building2 } from 'lucide-react'
+import { masterCatalogRepository, PAGE_SIZE } from './repositories'
 import { locationsRepository } from '../locations/repositories'
-import { fmt } from '../../lib/utils'
-import { PRODUCT_CATS } from '../../config/constants'
+import { isDuplicateError } from '../../lib/dbErrors'
 import { theme } from '../../styles/theme'
-import { Card, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
+import { SectionHead, ConfirmDialog, Sel, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
+import { usePlanGate } from '../../hooks/usePlanGate'
+import { RX_STATUSES, locationName } from './catalogueRules'
+import MasterItemCard from './MasterItemCard'
+import MasterItemForm from './MasterItemForm'
+import CarryDialog from './CarryDialog'
+import ItemLocationsModal from './ItemLocationsModal'
 
-const { tealDeep, tealBright, tealMist, navy, gray600, gray500, gray400, border, warning, bg } = theme
+const { tealBright, navy, gray500, border } = theme
+const log = (what, e) => console.error(`[master-catalog] ${what}:`, e)
+const reason = (e) => String(e?.message || e || '').replace(/^Supabase error \(\d+\):\s*/, '')
 
+// The business's master catalogue: the home of every product (Product-Catalogue-Design.md, phase 1). Every product at
+// every location is linked to an item here by id. The owner searches and filters the list, edits an item and pushes
+// it to the locations, carries items at locations in bulk, sets a location's own price, and archives what is no longer
+// sold. Pages of 50 come from master_catalog_page; before carehub_20261215 the page shows the plain list.
 export default function MasterCatalog({ brand, role }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
-  const [masters, setMasters] = useState([])
-  const [locs, setLocs] = useState([])
-  // links: branchId → { masterProductId → link row }. Indexed per branch because
-  // the page renders a branch × product matrix and every read is one lookup.
-  const [links, setLinks] = useState({})
-  const [loading, setLoading] = useState(true)
-  const [busy, setBusy] = useState(false)
-  const [showEdit, setShowEdit] = useState(false)
-  const [editing, setEditing] = useState(null) // master product being edited, null = new
-  const [form, setForm] = useState({})
-  const [saving, setSaving] = useState(false)
-  const [manageTarget, setManageTarget] = useState(null) // master product whose branch matrix is open
-  const [overrides, setOverrides] = useState({}) // branchId → draft override string in the matrix
-  const [pushTarget, setPushTarget] = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
-
+  const { allow } = usePlanGate(showToast)
+  const mainId = brand?.parent_business_id || brand?.id // master items live on the main business (ADR-004)
   const isOwner = role === 'Owner'
-  // Master rows live on the PARENT business (ADR-004): from the main location
-  // brand.parent_business_id is absent and brand.id IS the parent; from a
-  // branch view the parent is explicit. Same resolution Locations.jsx uses.
-  const mainId = brand?.parent_business_id || brand?.id
 
-  useEffect(() => { load() }, [brand?.id])
+  const [categories, setCategories] = useState([])
+  const [locations, setLocations] = useState([])
+  const [page, setPage] = useState({ items: [], total: 0, upgraded: true })
+  const [status, setStatus] = useState('loading') // loading | ready | error
+  const [searchText, setSearchText] = useState('')
+  const [filters, setFilters] = useState({ search: '', category: '', rx: '', archived: false })
+  const [offset, setOffset] = useState(0)
+  const [selected, setSelected] = useState([])
+  const [busy, setBusy] = useState(false)
 
-  async function load() {
-    setLoading(true)
+  const [formItem, setFormItem] = useState(undefined) // undefined: closed, null: new item, object: editing
+  const [carryItems, setCarryItems] = useState(null)
+  const [locationsItemId, setLocationsItemId] = useState(null)
+  const [pushTarget, setPushTarget] = useState(null)
+  const [archiveTargets, setArchiveTargets] = useState(null)
+  const request = useRef(0)
+
+  // Categories and locations change rarely: loaded once per business.
+  useEffect(() => {
+    if (!isOwner || !mainId) return
+    masterCatalogRepository.getCategories().then(setCategories).catch((e) => log('categories', e))
+    locationsRepository.getAll(mainId).then((l) => setLocations(l || [])).catch((e) => log('locations', e))
+  }, [mainId, isOwner])
+
+  // The search box waits for a pause in typing before asking the server.
+  useEffect(() => {
+    const t = setTimeout(() => setFilters((f) => (f.search === searchText.trim() ? f : { ...f, search: searchText.trim() })), 300)
+    return () => clearTimeout(t)
+  }, [searchText])
+  useEffect(() => { setOffset(0); setSelected([]) }, [filters])
+
+  const load = useCallback(async () => {
+    if (!isOwner || !mainId) return
+    const mine = ++request.current
+    setStatus('loading')
     try {
-      const [m, l] = await Promise.all([
-        masterCatalogRepository.getAll(mainId),
-        locationsRepository.getAll(mainId),
-      ])
-      setMasters(m || [])
-      setLocs(l || [])
-      const linkMap = {}
-      await Promise.all((l || []).map(async (loc) => {
-        const rows = await masterCatalogRepository.getLinks(loc.id)
-        linkMap[loc.id] = Object.fromEntries((rows || []).map(r => [r.master_product_id, r]))
-      }))
-      setLinks(linkMap)
-    } catch (e) { /* links stay empty; the toast-less failure keeps the page usable */ }
-    setLoading(false)
-  }
-
-  const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
-  const branchName = (loc) => loc.branch_name || (!loc.parent_business_id ? 'Main Location' : loc.name)
-
-  // ── Master product CRUD ─────────────────────────────────────────────────────
-  function openAdd() {
-    setEditing(null)
-    setForm({})
-    setShowEdit(true)
-  }
-
-  function openEdit(master) {
-    setEditing(master)
-    setForm({ name: master.name, category: master.category || '', default_price: master.default_price || '', description: master.description || '' })
-    setShowEdit(true)
-  }
-
-  async function saveProduct() {
-    if (!form.name) { showToast('Please enter a product name.', { type: 'warning' }); return }
-    const price = Number(form.default_price) || 0
-    if (price < 0) { showToast('Price cannot be negative.', { type: 'warning' }); return }
-    const payload = { name: form.name, category: form.category || '', default_price: price, description: form.description || '' }
-    setSaving(true)
-    try {
-      if (editing) {
-        await masterCatalogRepository.update(editing.id, mainId, payload)
-        showToast('Product updated. Use Push to send changes to branches.', { type: 'success' })
-      } else {
-        await masterCatalogRepository.create(mainId, payload)
-        showToast('Product added to the master catalog.', { type: 'success' })
-      }
-      setShowEdit(false); setForm({}); setEditing(null)
-      load()
-    } catch (e) { showToast('Could not save the product. Please try again.', { type: 'error' }) }
-    setSaving(false)
-  }
-
-  async function deleteMaster() {
-    if (!deleteTarget) return
-    try {
-      await masterCatalogRepository.remove(deleteTarget.id, mainId)
-      showToast('Product removed from the master catalog.', { type: 'success' })
-      setDeleteTarget(null)
-      load()
-    } catch (e) { showToast('Could not delete the product.', { type: 'error' }) }
-  }
-
-  // ── Branch activation matrix ────────────────────────────────────────────────
-  function openManage(master) {
-    setManageTarget(master)
-    const drafts = {}
-    ;(locs || []).forEach((loc) => {
-      const link = links[loc.id]?.[master.id]
-      drafts[loc.id] = link?.override_price != null ? String(link.override_price) : ''
-    })
-    setOverrides(drafts)
-  }
-
-  async function toggleBranch(master, loc) {
-    const link = links[loc.id]?.[master.id]
-    const overrideText = (overrides[loc.id] || '').trim()
-    if (!link?.active) {
-      // A typed override is only sent when valid; empty means "inherit the
-      // master default". The RPC rejects 0 and negatives server-side, so we
-      // catch it here with a clear message first.
-      if (overrideText && Number(overrideText) <= 0) {
-        showToast('Override price must be greater than zero.', { type: 'warning' })
-        return
-      }
+      const result = await masterCatalogRepository.getPage(mainId, { ...filters, offset, limit: PAGE_SIZE })
+      if (mine !== request.current) return // a newer search is on its way
+      setPage(result)
+      setStatus('ready')
+    } catch (e) {
+      if (mine !== request.current) return
+      log('load', e)
+      setStatus('error')
     }
+  }, [mainId, isOwner, filters, offset])
+  useEffect(() => { load() }, [load])
+
+  const categoryLabel = (item) => categories.find((c) => c.code === item.category_code)?.label || item.category || ''
+  const selectedItems = page.items.filter((i) => selected.includes(i.id))
+  const locationsItem = page.items.find((i) => i.id === locationsItemId) || null
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+  async function saveItem(payload) {
+    if (!formItem && !allow('adding products')) return
     setBusy(true)
     try {
-      if (link?.active) {
-        await masterCatalogRepository.deactivate(loc.id, master.id)
-        showToast(`Deactivated at ${branchName(loc)}. Stock stays with the branch.`, { type: 'success' })
+      if (formItem) {
+        await masterCatalogRepository.update(formItem.id, mainId, payload)
+        const linked = (formItem.carried || []).length
+        showToast(linked ? 'Item saved. Press Push on it to update the locations that carry it.' : 'Item saved.', { type: 'success', duration: linked ? 7000 : 4000 })
       } else {
-        await masterCatalogRepository.activate(loc.id, master.id, overrideText ? Number(overrideText) : null)
-        showToast(`Activated at ${branchName(loc)} with stock 0. Add stock in Inventory.`, { type: 'success' })
+        await masterCatalogRepository.create(mainId, payload)
+        showToast('Item added to the catalogue. Use Carry to stock it at your locations.', { type: 'success' })
       }
+      setFormItem(undefined)
       load()
-    } catch (e) { showToast('Could not update this branch. Please try again.', { type: 'error' }) }
+    } catch (e) {
+      log('save', e)
+      showToast(isDuplicateError(e) ? 'An item with this name is already in the catalogue. Search for it instead.' : 'Could not save the item: ' + reason(e), { type: 'error' })
+    }
     setBusy(false)
   }
 
-  async function pushMaster() {
-    if (!pushTarget) return
-    try {
-      const count = await masterCatalogRepository.push(pushTarget.id, mainId)
-      const n = typeof count === 'number' ? count : null
-      showToast(n != null ? `Pushed to ${n} branch(es).` : 'Pushed to all active branches.', { type: 'success' })
-      setPushTarget(null)
-    } catch (e) { showToast('Could not push changes.', { type: 'error' }) }
+  async function carry(locationIds, price, items = carryItems) {
+    if (!allow('adding products')) return
+    const ids = items.map((i) => i.id)
+    setBusy(true)
+    const failed = []
+    for (const locId of locationIds) {
+      try { await masterCatalogRepository.carry(locId, ids, price) } catch (e) {
+        log('carry', e)
+        failed.push(`${locationName(locations.find((l) => l.id === locId))} (${reason(e)})`)
+      }
+    }
+    setBusy(false)
+    if (failed.length) showToast('Not carried at ' + failed.join(', '), { type: 'error', duration: 10000 })
+    else showToast(`${ids.length === 1 ? items[0].name : ids.length + ' items'} carried at ${locationIds.length} location${locationIds.length === 1 ? '' : 's'}.`, { type: 'success' })
+    setCarryItems(null)
+    setSelected([])
+    load()
   }
 
-  const activeLinkCount = (master) =>
-    Object.values(links).filter((byMaster) => byMaster?.[master.id]?.active).length
+  async function stopAt(locationId) {
+    setBusy(true)
+    try {
+      await masterCatalogRepository.deactivate(locationId, locationsItemId)
+      showToast('Stopped. The location keeps its stock and sales history.', { type: 'success' })
+      load()
+    } catch (e) { log('stop', e); showToast('Could not stop carrying: ' + reason(e), { type: 'error' }) }
+    setBusy(false)
+  }
 
-  const totalActiveLinks = Object.values(links)
-    .reduce((s, byMaster) => s + Object.values(byMaster).filter(l => l.active).length, 0)
+  async function push() {
+    const item = pushTarget
+    setPushTarget(null)
+    try {
+      const n = await masterCatalogRepository.push(item.id, mainId)
+      showToast(typeof n === 'number' ? `${item.name} updated at ${n} product${n === 1 ? '' : 's'} across your locations.` : 'Pushed to your locations.', { type: 'success' })
+      load()
+    } catch (e) { log('push', e); showToast('Could not push: ' + reason(e), { type: 'error' }) }
+  }
+
+  async function archive() {
+    const items = archiveTargets
+    setArchiveTargets(null)
+    setBusy(true)
+    const results = await Promise.allSettled(items.map((i) => masterCatalogRepository.archive(i.id, mainId)))
+    setBusy(false)
+    const failed = results.filter((r) => r.status === 'rejected')
+    failed.forEach((r) => log('archive', r.reason))
+    showToast(failed.length ? `${failed.length} of ${items.length} items could not be archived.` : `${items.length === 1 ? items[0].name : items.length + ' items'} archived.`, { type: failed.length ? 'error' : 'success' })
+    setSelected([])
+    load()
+  }
+
+  async function restore(item) {
+    try {
+      await masterCatalogRepository.restore(item.id, mainId)
+      showToast(`${item.name} restored.`, { type: 'success' })
+      load()
+    } catch (e) {
+      log('restore', e)
+      showToast(isDuplicateError(e) ? 'Another item with this name is in the catalogue. Rename one of them first.' : 'Could not restore: ' + reason(e), { type: 'error' })
+    }
+  }
+
+  const select = (id, on) => setSelected((s) => (on ? [...s, id] : s.filter((x) => x !== id)))
+  const allOnPage = page.items.filter((i) => !i.archived_at)
+  const allSelected = allOnPage.length > 0 && allOnPage.every((i) => selected.includes(i.id))
 
   if (!isOwner) return (
-    <div style={{ padding: '32px', textAlign: 'center', color: gray400 }}>
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}><Lock size={40} /></div>
-      <div style={{ fontSize: '16px', fontWeight: '700', color: gray600 }}>The master catalog is managed by the business Owner</div>
+    <div style={{ padding: '32px', textAlign: 'center', color: theme.gray400 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}><Lock size={40} aria-hidden='true' /></div>
+      <div style={{ fontSize: '16px', fontWeight: 700, color: theme.gray600 }}>The master catalogue is managed by the business owner</div>
     </div>
   )
 
-  const manageMaster = manageTarget ? masters.find(m => m.id === manageTarget.id) : null
+  const filtered = filters.search || filters.category || filters.rx
+  const from = page.total ? offset + 1 : 0
+  const to = Math.min(offset + page.items.length, page.total)
 
   return (
     <div>
-      <SectionHead title='Master Catalog' sub='One canonical product list. Choose which branches carry each product' btn='+ Add Product' onBtn={openAdd} />
+      <SectionHead title='Master Catalog' sub='Every product of your business in one list. Carry items at your locations and keep them in step.'
+        btn='+ Add item' onBtn={() => { if (allow('adding products')) setFormItem(null) }} />
 
-      <div style={{ marginBottom: '20px', padding: '20px', borderRadius: theme.radius.lg, background: navy, color: 'white' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: '16px' }}>
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: '900', color: tealBright }}>{masters.length}</div>
-            <div style={{ fontSize: '11px', opacity: 0.5 }}>Master products</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: '900' }}>{totalActiveLinks}</div>
-            <div style={{ fontSize: '11px', opacity: 0.5 }}>Active branch links</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '24px', fontWeight: '900' }}>{locs.length}</div>
-            <div style={{ fontSize: '11px', opacity: 0.5 }}>Locations</div>
-          </div>
-        </div>
+      <div style={{ marginBottom: '16px', padding: '16px 20px', borderRadius: theme.radius.lg, background: navy, color: 'white', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: '12px' }}>
+        <div><div style={{ fontSize: '22px', fontWeight: 900, color: tealBright }}>{status === 'ready' || page.total ? page.total.toLocaleString() : '–'}</div><div style={{ fontSize: '11px', opacity: 0.6 }}>{filters.archived ? 'Archived items' : filtered ? 'Matching items' : 'Catalogue items'}</div></div>
+        <div><div style={{ fontSize: '22px', fontWeight: 900 }}>{locations.length}</div><div style={{ fontSize: '11px', opacity: 0.6 }}>Locations</div></div>
+        <div><div style={{ fontSize: '22px', fontWeight: 900 }}>{categories.length || '–'}</div><div style={{ fontSize: '11px', opacity: 0.6 }}>Standard categories</div></div>
       </div>
 
-      {loading ? <Loading /> : masters.length === 0 ? (
-        <Empty icon={<Layers size={40} />} message='No master products yet' action='+ Add First Product' onAction={openAdd} />
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {masters.map(master => {
-            const activeCount = activeLinkCount(master)
-            return (
-              <Card key={master.id} style={{ padding: '18px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', minWidth: 0 }}>
-                    <div style={{ width: '48px', height: '48px', borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Layers size={22} />
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{master.name}</span>
-                        {master.category && <Pill label={master.category} type='blue' />}
-                        {activeCount === 0 && <Pill label='No active branches' type='red' />}
-                      </div>
-                      <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{master.description || 'No description'}</div>
-                      <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: tealDeep, fontWeight: '700' }}>Default {fmt(master.default_price || 0)}</span>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: gray500 }}><Building2 size={12} /> {activeCount} active branch{activeCount === 1 ? '' : 'es'}</span>
-                      </div>
-                      {activeCount > 0 && (
-                        <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
-                          {locs.filter(loc => links[loc.id]?.[master.id]?.active).map(loc => {
-                            const link = links[loc.id][master.id]
-                            return (
-                              <span key={loc.id} style={{ fontSize: '11px', padding: '3px 10px', borderRadius: 999, background: tealMist, color: tealDeep, fontWeight: '600' }}>
-                                {branchName(loc)}{link.override_price != null ? ' · ' + fmt(link.override_price) : ''}
-                              </span>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <GhostBtn onClick={() => openManage(master)} style={{ padding: '8px 14px', fontSize: '12px' }}>Manage branches</GhostBtn>
-                    <TealBtn onClick={() => { setPushTarget(master) }} style={{ padding: '8px 14px', fontSize: '12px' }}>
-                      <RefreshCw size={13} style={{ marginRight: 5 }} /> Push
-                    </TealBtn>
-                    <GhostBtn onClick={() => openEdit(master)} style={{ padding: '8px 14px', fontSize: '12px' }}>Edit</GhostBtn>
-                    <RedBtn onClick={() => { setDeleteTarget(master) }} style={{ padding: '8px 12px', fontSize: '12px' }}>
-                      <Trash2 size={13} />
-                    </RedBtn>
-                  </div>
-                </div>
-              </Card>
-            )
-          })}
+      {!page.upgraded && status === 'ready' && (
+        <div role='status' style={{ marginBottom: '16px', padding: '12px 14px', borderRadius: theme.radius.md, background: theme.warningBg, color: theme.warning, fontSize: '13px' }}>
+          Categories, prescription status, filters and per-location details appear once the catalogue update is installed on the database.
         </div>
       )}
 
-      {/* Add / edit product */}
-      <Modal show={showEdit} onClose={() => { setShowEdit(false); setForm({}); setEditing(null) }}
-        title={editing ? 'Edit Product' : 'Add Master Product'}
-        footer={<><GhostBtn onClick={() => { setShowEdit(false); setForm({}); setEditing(null) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveProduct} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : editing ? 'Save Product' : 'Add Product'}</TealBtn></>}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {editing && (
-            <div style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep }}>
-              Branches match master products by name. After renaming, re-activate the product at each branch (or delete and re-add) so branches pick up the new name.
-            </div>
-          )}
-          <Inp label='Product Name *' value={form.name} onChange={v => f('name', v)} placeholder='e.g. Paracetamol 500mg' required />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Sel label='Category' value={form.category} onChange={v => f('category', v)} options={PRODUCT_CATS} />
-            <Inp label='Default Price (₦) *' type='number' value={form.default_price} onChange={v => f('default_price', v)} placeholder='0' required />
+      {/* Search and filters */}
+      <div role='search' style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '10px', marginBottom: '12px', alignItems: 'end' }}>
+        <label style={{ position: 'relative', display: 'block' }}>
+          <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Search the catalogue</span>
+          <Search size={15} aria-hidden='true' style={{ position: 'absolute', left: 12, top: 13, color: gray500 }} />
+          <input type='search' value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder='Name, generic name or barcode'
+            style={{ width: '100%', boxSizing: 'border-box', padding: '11px 12px 11px 34px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '14px' }} />
+        </label>
+        <Sel id='mc-filter-category' aria-label='Category' value={filters.category} onChange={(v) => setFilters((f) => ({ ...f, category: v }))}
+          options={categories.map((c) => ({ value: c.code, label: c.label }))} placeholder='All categories' disabled={!page.upgraded} />
+        <Sel id='mc-filter-rx' aria-label='Prescription status' value={filters.rx} onChange={(v) => setFilters((f) => ({ ...f, rx: v }))}
+          options={RX_STATUSES.map((s) => ({ value: s.value, label: s.label }))} placeholder='Any prescription status' disabled={!page.upgraded} />
+        <GhostBtn onClick={() => setFilters((f) => ({ ...f, archived: !f.archived }))} aria-pressed={filters.archived} disabled={!page.upgraded} style={{ padding: '11px 14px' }}>
+          {filters.archived ? 'Show current items' : 'Show archived'}
+        </GhostBtn>
+      </div>
+
+      {/* Bulk actions for the selection */}
+      {page.upgraded && !filters.archived && allOnPage.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', padding: '10px 12px', marginBottom: '12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', position: 'sticky', top: 0, zIndex: 2 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+            <input type='checkbox' checked={allSelected} onChange={(e) => setSelected(e.target.checked ? allOnPage.map((i) => i.id) : [])} style={{ width: 18, height: 18 }} />
+            Select all on this page
+          </label>
+          <span aria-live='polite' style={{ fontSize: '13px', color: gray500 }}>{selected.length ? `${selected.length} selected` : ''}</span>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <TealBtn onClick={() => setCarryItems(selectedItems)} disabled={!selected.length || busy} style={{ padding: '8px 14px', fontSize: '12px' }}>
+              <Building2 size={13} aria-hidden='true' style={{ marginRight: 5 }} /> Carry at locations
+            </TealBtn>
+            <GhostBtn onClick={() => setArchiveTargets(selectedItems)} disabled={!selected.length || busy}>Archive</GhostBtn>
           </div>
-          <Textarea label='Description' value={form.description} onChange={v => f('description', v)} placeholder='Brief description shown to branches' />
         </div>
-      </Modal>
+      )}
 
-      {/* Branch activation matrix */}
-      <Modal show={!!manageMaster} onClose={() => { setManageTarget(null) }}
-        title={manageMaster ? `Branches carrying ${manageMaster.name}` : ''}
-        footer={<GhostBtn onClick={() => { setManageTarget(null) }} style={{ flex: 1, padding: '12px' }}>Done</GhostBtn>}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep }}>
-            Activating a branch creates its sellable product at stock 0. Add stock in that branch's Inventory. Set a price to override the default; leave it blank to inherit.
+      {status === 'loading' && !page.items.length ? <Loading text='Loading the catalogue…' />
+        : status === 'error' ? <ErrorState message="We couldn't load the catalogue. Check your connection and try again." onRetry={load} />
+        : page.items.length === 0 ? (
+          filtered || filters.archived
+            ? <Empty icon={<Search size={40} aria-hidden='true' />} message={filters.archived ? 'No archived items' : 'No items match your search'} cause='filtered'
+                action={filters.archived ? 'Show current items' : 'Clear search and filters'}
+                onAction={() => { setSearchText(''); setFilters({ search: '', category: '', rx: '', archived: false }) }} />
+            : <Empty icon={<Layers size={40} aria-hidden='true' />} title='Your catalogue is empty'
+                description='Products added at any location appear here automatically. You can also add items here and carry them at your locations.'
+                action='+ Add first item' onAction={() => { if (allow('adding products')) setFormItem(null) }} />
+        ) : (
+          <div aria-busy={status === 'loading'} style={{ display: 'flex', flexDirection: 'column', gap: '10px', opacity: status === 'loading' ? 0.6 : 1 }}>
+            {page.items.map((item) => (
+              <MasterItemCard key={item.id} item={item} locations={locations} categoryLabel={categoryLabel(item)} upgraded={page.upgraded}
+                selected={selected.includes(item.id)} onSelect={select} onEdit={setFormItem} onLocations={(i) => setLocationsItemId(i.id)}
+                onPush={setPushTarget} onArchive={setArchiveTargets} onRestore={restore} />
+            ))}
           </div>
-          {(locs || []).map(loc => {
-            const link = links[loc.id]?.[manageMaster?.id]
-            const active = !!link?.active
-            return (
-              <div key={loc.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: bg }}>
-                <div style={{ flex: 1, minWidth: 120 }}>
-                  <div style={{ fontWeight: '700', fontSize: '13px', color: navy }}>{branchName(loc)}</div>
-                  <div style={{ fontSize: '11px', color: gray500, marginTop: '2px' }}>
-                    {active
-                      ? (link.override_price != null ? `Sells at ${fmt(link.override_price)} (override)` : `Sells at master default ${fmt(manageMaster?.default_price || 0)}`)
-                      : 'Not carried'}
-                  </div>
-                </div>
-                <div style={{ width: 130 }}>
-                  <Inp type='number' value={overrides[loc.id] || ''} onChange={v => setOverrides(p => ({ ...p, [loc.id]: v }))} placeholder='Override ₦' aria-label={`Override price at ${branchName(loc)}`} />
-                </div>
-                {active
-                  ? <GhostBtn onClick={() => toggleBranch(manageMaster, loc)} disabled={busy} style={{ padding: '8px 14px', fontSize: '12px' }}>Deactivate</GhostBtn>
-                  : <TealBtn onClick={() => toggleBranch(manageMaster, loc)} disabled={busy} style={{ padding: '8px 14px', fontSize: '12px' }}>Activate</TealBtn>}
-              </div>
-            )
-          })}
-          {(!locs || locs.length === 0) && (
-            <div style={{ textAlign: 'center', color: gray400, fontSize: '13px', padding: '16px 0' }}>No locations found.</div>
-          )}
-        </div>
-      </Modal>
+        )}
 
-      <ConfirmDialog show={!!pushTarget} onClose={() => setPushTarget(null)} onConfirm={pushMaster}
-        title='Push to branches?' consequence={`Sends the name, category and price of "${pushTarget?.name}" to every branch carrying it. Branches with their own override price keep it.`}
-        confirmLabel='Push' danger={false} />
+      {page.total > PAGE_SIZE && (
+        <nav aria-label='Catalogue pages' style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
+          <GhostBtn onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))} disabled={offset === 0 || status === 'loading'}>← Previous</GhostBtn>
+          <span style={{ fontSize: '13px', color: gray500 }}>{from.toLocaleString()}–{to.toLocaleString()} of {page.total.toLocaleString()}</span>
+          <GhostBtn onClick={() => setOffset((o) => o + PAGE_SIZE)} disabled={offset + PAGE_SIZE >= page.total || status === 'loading'}>Next →</GhostBtn>
+        </nav>
+      )}
 
-      <ConfirmDialog show={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={deleteMaster}
-        title='Delete this master product?'
-        consequence={`Removes "${deleteTarget?.name}" from the master catalog and its links at every branch. Branches keep existing stock. They just stop receiving pushes.`} />
+      <MasterItemForm show={formItem !== undefined} item={formItem || null} categories={categories} upgraded={page.upgraded}
+        saving={busy} onSave={saveItem} onClose={() => setFormItem(undefined)} />
+
+      <CarryDialog show={!!carryItems} items={carryItems || []} locations={locations} busy={busy}
+        onCarry={(locIds, price) => carry(locIds, price)} onClose={() => setCarryItems(null)} />
+
+      {locationsItem && page.upgraded && (
+        <ItemLocationsModal item={locationsItem} locations={locations} busy={busy}
+          onCarry={(locId, price) => carry([locId], price, [locationsItem])} onStop={stopAt} onClose={() => setLocationsItemId(null)} />
+      )}
+      {locationsItem && !page.upgraded && (
+        <CarryDialog show items={[locationsItem]} locations={locations} busy={busy}
+          onCarry={(locIds, price) => carry(locIds, price, [locationsItem])} onClose={() => setLocationsItemId(null)} />
+      )}
+
+      <ConfirmDialog show={!!pushTarget} onClose={() => setPushTarget(null)} onConfirm={push}
+        title='Push to your locations?' confirmLabel='Push' danger={false}
+        consequence={`Sends the name, generic name, category, barcode and prescription status of "${pushTarget?.name}" to every location's product. The price changes only where a location follows the master price; locations with their own price keep it.`} />
+
+      <ConfirmDialog show={!!archiveTargets} onClose={() => setArchiveTargets(null)} onConfirm={archive} confirmLabel='Archive'
+        title={archiveTargets?.length === 1 ? `Archive ${archiveTargets[0].name}?` : `Archive ${archiveTargets?.length || 0} items?`}
+        consequence='Archived items leave the catalogue list. Locations keep their products, stock and history, and you can restore an item at any time.' />
 
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
     </div>

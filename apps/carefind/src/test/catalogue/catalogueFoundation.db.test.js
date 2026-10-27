@@ -285,6 +285,9 @@ describe('master_catalog_page', () => {
 
     const rx = await as('owner@a.com', (q) => q(`select * from master_catalog_page('${A}', null, 'antibiotics')`))
     expect(rx.map((r) => r.item.name)).toEqual(['Amoxil 500'])
+
+    const prescription = await as('owner@a.com', (q) => q(`select * from master_catalog_page('${A}', p_rx => 'prescription_only')`))
+    expect(prescription.map((r) => r.item.name)).toEqual(['Amoxil 500'])
   })
 
   it('shows archived items only when asked, and nothing of another business', async () => {

@@ -364,11 +364,12 @@ end $$;
 
 -- ── 7. The Master Catalog screen ─────────────────────────────────────────────────────────────────────────────────────
 -- One page of master items with, for each, the locations carrying it (price, stock, whether the price follows the
--- master, and whether the location still carries it), filtered by search (name, generic name, barcode), standard category and archive state. `total` is the
--- number of matching items. SECURITY INVOKER: RLS limits it to the caller's business tree.
+-- master, and whether the location still carries it). Filters: search (name, generic name, barcode), standard
+-- category, prescription status and archive state. `total` is the number of matching items.
+-- SECURITY INVOKER: RLS limits it to the caller's business tree.
 create or replace function public.master_catalog_page(
   p_business_id uuid, p_search text default null, p_category text default null,
-  p_archived boolean default false, p_offset integer default 0, p_limit integer default 50)
+  p_archived boolean default false, p_offset integer default 0, p_limit integer default 50, p_rx text default null)
 returns table (item jsonb, carried jsonb, total bigint)
 language sql stable security invoker set search_path = public, pg_temp as $$
   with matching as (
@@ -376,6 +377,7 @@ language sql stable security invoker set search_path = public, pg_temp as $$
      where m.business_id = p_business_id
        and (case when p_archived then m.archived_at is not null else m.archived_at is null end)
        and (p_category is null or m.category_code = p_category)
+       and (p_rx is null or m.rx_status = p_rx)
        and (coalesce(btrim(p_search), '') = ''
             or m.name ilike '%' || btrim(p_search) || '%'
             or m.generic_name ilike '%' || btrim(p_search) || '%'
@@ -402,7 +404,7 @@ revoke all on function public.products_link_master() from public, anon, authenti
 revoke all on function public.products_price_source() from public, anon, authenticated;
 revoke all on function public.business_root(uuid) from public, anon;
 revoke all on function public.carry_master_items(uuid, uuid[], numeric) from public, anon;
-revoke all on function public.master_catalog_page(uuid, text, text, boolean, integer, integer) from public, anon;
+revoke all on function public.master_catalog_page(uuid, text, text, boolean, integer, integer, text) from public, anon;
 grant execute on function public.business_root(uuid), public.carry_master_items(uuid, uuid[], numeric),
-  public.master_catalog_page(uuid, text, text, boolean, integer, integer), public.category_code_for(text),
+  public.master_catalog_page(uuid, text, text, boolean, integer, integer, text), public.category_code_for(text),
   public.rx_status_for(text) to authenticated, service_role;
