@@ -1,3 +1,4 @@
+import { saleNet } from '../pos/salesReport'
 import { useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
@@ -60,7 +61,7 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
     canSeeAppts && errAppts && refetchAppts,
   ].filter(Boolean)
 
-  const todayTotal = todaySales.reduce((s, x) => s + (x.total || 0), 0)
+  const todayTotal = todaySales.reduce((s, x) => s + saleNet(x), 0)
   const heldSales = openSales.filter(s => s.is_on_hold)
   const creditSales = openSales.filter(s => s.is_credit && s.balance > 0)
   const creditTotal = creditSales.reduce((s, x) => s + (x.balance || 0), 0)

@@ -73,6 +73,8 @@ export function isServerRejection(e) {
   return !!(m && Number(m[1]) < 500)
 }
 
+const rpc = (request, name, body) => request(`rpc/${name}`, { method: 'POST', body: JSON.stringify(body) })
+
 // ── Sale repository ───────────────────────────────────────────────────────────
 // A deep module over the `sales` table plus the offline queue that backs it.
 // Callers issue one intent — "record this sale" — and never decide for
@@ -84,6 +86,15 @@ export function isServerRejection(e) {
 //   offline  — the queue store above (all/push/replace)
 //   isOnline — connectivity, so both branches of create() are reachable in tests
 // Production binds the real ones (defaults); tests bind in-memory adapters.
+// A completed sale: not on hold, and not a held/deleted/resumed/converted shell.
+// PostgREST form of salesReport.isCompletedSale — Recent sales and the
+// dashboard must apply it (`is_on_hold=false` alone let deleted and resumed
+// holds show up as sales).
+const COMPLETED = 'is_on_hold=eq.false&or=(status.is.null,status.eq.completed)'
+// A live held sale: still on hold and not already completed (converted).
+// Filtered here, not in the query, because `status=neq.x` drops NULL rows.
+const isLiveHold = (s) => s.is_on_hold === true && (s.status == null || s.status === 'held')
+
 function newestFirst(a, b) {
   return String(b.created_at || '').localeCompare(String(a.created_at || ''))
 }
@@ -107,10 +118,10 @@ export function createSaleRepository({
     async getOpen(businessId) {
       const [held, credit] = await Promise.all([
         pagedQuery(request, `sales?business_id=eq.${businessId}&is_on_hold=eq.true&order=created_at.desc,id.asc&select=*`),
-        pagedQuery(request, `sales?business_id=eq.${businessId}&is_credit=eq.true&balance=gt.0&order=created_at.desc,id.asc&select=*`),
+        pagedQuery(request, `sales?business_id=eq.${businessId}&is_credit=eq.true&balance=gt.0&${COMPLETED}&order=created_at.desc,id.asc&select=*`),
       ])
       const byId = new Map()
-      for (const s of [...held, ...credit]) byId.set(String(s.id), s)
+      for (const s of [...held.filter(isLiveHold), ...credit]) byId.set(String(s.id), s)
       return [...byId.values()].sort(newestFirst)
     },
 
@@ -124,13 +135,13 @@ export function createSaleRepository({
 
     // How many sales a business has, counted by the database (no rows sent).
     async count(businessId) {
-      const res = await requestWithCount(`sales?business_id=eq.${businessId}&select=id`, { head: true })
+      const res = await requestWithCount(`sales?business_id=eq.${businessId}&${COMPLETED}&select=id`, { head: true })
       return res && Number.isFinite(res.total) ? res.total : 0
     },
 
     // The latest completed (not held) sales, for a "recent sales" list.
     async getRecent(businessId, limit = 50) {
-      return request(`sales?business_id=eq.${businessId}&is_on_hold=eq.false&order=created_at.desc,id.asc&select=*&limit=${limit}`)
+      return request(`sales?business_id=eq.${businessId}&${COMPLETED}&order=created_at.desc,id.asc&select=*&limit=${limit}`)
     },
 
     // Unpaged and capped at 1000 rows by the server: only for small, filtered
@@ -139,6 +150,7 @@ export function createSaleRepository({
       let query = `sales?business_id=eq.${businessId}&order=created_at.desc&select=*`
       if (filters.date) query += `&created_at=gte.${filters.date}T00:00:00`
       if (filters.onHold !== undefined) query += `&is_on_hold=eq.${filters.onHold}`
+      if (filters.completed) query += `&${COMPLETED}`
       if (filters.isCredit !== undefined) query += `&is_credit=eq.${filters.isCredit}`
       return request(query)
     },
@@ -168,7 +180,7 @@ export function createSaleRepository({
     async getToday(businessId) {
       const today = new Date().toISOString().split('T')[0]
       return request(
-        `sales?business_id=eq.${businessId}&created_at=gte.${today}T00:00:00&is_on_hold=eq.false&order=created_at.desc&select=*`
+        `sales?business_id=eq.${businessId}&created_at=gte.${today}T00:00:00&${COMPLETED}&order=created_at.desc&select=*`
       )
     },
 
@@ -246,6 +258,42 @@ export function createSaleRepository({
       })
     },
 
+    // Re-saves a HELD sale's contents (products, customer, note) in place. The
+    // database refuses any attempt to change its hold status from here: a held
+    // sale only ends by being completed (create with `resumed_from`).
+    async updateHeld(saleId, businessId, { items, subtotal, discount, total, clientName, notes }) {
+      return request(`sales?id=eq.${saleId}&business_id=eq.${businessId}&is_on_hold=eq.true`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          items: JSON.stringify(items), subtotal, discount, total, balance: total,
+          client_name: clientName, notes,
+        }),
+        prefer: 'return=minimal',
+      })
+    },
+
+    // ── Owner corrections (Financial Reports) ─────────────────────────────────
+    // Edit and delete go through database functions that check the caller is the
+    // Owner, move the sale, payments ledger, stock, debt and audit trail in one
+    // transaction, and recompute every total on the server. Nothing here can
+    // PATCH a completed sale — the database refuses that for signed-in clients.
+    async correct(saleId, { items, discount, clientId, clientName, reason }) {
+      return rpc(request, 'edit_sale', {
+        p_sale_id: saleId, p_items: items, p_discount: discount,
+        p_client_id: clientId || null, p_client_name: clientName, p_reason: reason,
+      })
+    },
+
+    async remove(saleId, reason) {
+      return rpc(request, 'delete_sale', { p_sale_id: saleId, p_reason: reason })
+    },
+
+    // The audit trail for one sale, newest first (audit_log is readable by the
+    // business's own members).
+    async history(businessId, saleId) {
+      return request(`audit_log?branch_id=eq.${businessId}&target_type=eq.sale&target_id=eq.${saleId}&order=created_at.desc&select=id,action,actor_type,metadata,created_at`)
+    },
+
     queuedSales() {
       return offline.all()
     },
@@ -301,8 +349,6 @@ export const saleRepository = createSaleRepository()
 // "not available yet" notice) instead of failing.
 // (One rule for the whole app: lib/dbErrors.js.)
 export { isMissingObject }
-
-const rpc = (request, name, body) => request(`rpc/${name}`, { method: 'POST', body: JSON.stringify(body) })
 
 export function createPaymentRepository({ request = sbFetch } = {}) {
   return {

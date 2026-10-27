@@ -8,7 +8,6 @@ import { theme } from '../../styles/theme'
 import { Card, Pill, Empty, ErrorState, Loading, Sel, Inp, StatCard, Toast, useToast } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useSettings } from '../../hooks/queries'
-import { isManagerRole } from '../../lib/permissions'
 import { fmt, todayDate } from '../../lib/utils'
 import { auditRepository } from '../audit/repositories'
 import {
@@ -32,6 +31,9 @@ const shortTime = (d) => (d ? d.toLocaleString('en-NG', { day: '2-digit', month:
 // reconciles what was sold against the money that came in, by period, and an
 // owner or manager can do the same per staff member and per shift.
 //
+// Refunds, edits and deletions of completed sales are NOT done here: they are
+// the Owner's, from Financial Reports (Reports.jsx), where they are audited.
+//
 // Who sees what: roles with canViewReports (Owner, Manager, custom roles
 // granted it) see every cashier and get the cashier filter; everyone else sees
 // only the sales and payments they handled. That is a screen rule — the
@@ -47,7 +49,6 @@ export default function SalesReport({ brand, role, perms, staffName }) {
   const invalidate = useInvalidateSalesReport()
 
   const seeAll = role === 'Owner' || !!perms?.canViewReports
-  const canRefund = role === 'Owner' || isManagerRole(role)
 
   const [period, setPeriod] = useState('today')
   const [from, setFrom] = useState(todayDate())
@@ -300,7 +301,7 @@ export default function SalesReport({ brand, role, perms, staffName }) {
       )}
 
       <SaleDetailModal show={!!openSaleId} sale={openSaleId ? data?.salesById[openSaleId] : null} onClose={() => setOpenSaleId(null)}
-        shiftsById={view?.shiftsById} brand={brand} settings={settings} canRefund={canRefund} ledgerAvailable={!!data?.ledgerAvailable}
+        shiftsById={view?.shiftsById} brand={brand} settings={settings} ledgerAvailable={!!data?.ledgerAvailable}
         showToast={showToast} onChanged={invalidate} />
       <Toast msg={toastMsg} type={toastType} />
     </div>

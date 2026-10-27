@@ -1,3 +1,4 @@
+import { saleNet } from '../pos/salesReport'
 import { useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
@@ -76,7 +77,7 @@ export default function Overview({ brand, role, perms }) {
   const allStaff = Object.values(branchData).flatMap(b => b.staff)
 
   const todaySales = Object.values(branchData).flatMap(b => b.today)
-  const todayTotal = todaySales.reduce((sum, s) => sum + (s.total || 0), 0)
+  const todayTotal = todaySales.reduce((sum, s) => sum + saleNet(s), 0)
 
   const upcomingAppts = allAppts
     .filter(a => (a.date || '') >= todayStr && a.status !== 'cancelled' && a.status !== 'completed')

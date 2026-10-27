@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus, Sparkles } from 'lucide-react'
 import { staffRepository } from './repositories'
+import StaffActivity from './StaffActivity'
 import { provisionStaffAuth } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
 import { rolesForType, getModulesForType, isRoleGrantable } from '../../lib/permissions'
@@ -12,7 +13,7 @@ import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Ghos
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, success, successBg, warning, warningBg, bg } = theme
 
-export default function Staff({ brand, role, perms }) {
+function StaffTeam({ brand, role, perms }) {
   const [staff, setStaff] = useState([])
   const [claims, setClaims] = useState([])
   const [roles, setRoles] = useState([])
@@ -594,6 +595,31 @@ export default function Staff({ brand, role, perms }) {
         confirmLabel='Delete Role' />
 
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
+    </div>
+  )
+}
+
+// Staff page: the team (accounts, roles, permissions) and, for the Owner only,
+// an Activity tab showing what every staff member has done. The Owner is the
+// business login (role 'Owner'); the database enforces it for the activity data.
+export default function Staff(props) {
+  const [tab, setTab] = useState('team')
+  const isOwner = props.role === 'Owner'
+  const tabs = isOwner ? [['team', 'Team'], ['activity', 'Activity']] : []
+  return (
+    <div>
+      {tabs.length > 0 && (
+        <div role='tablist' aria-label='Staff' style={{ display: 'flex', gap: 4, padding: '0 0 0', marginBottom: 16, borderBottom: `1px solid ${border}` }}>
+          {tabs.map(([id, label]) => {
+            const on = tab === id
+            return (
+              <button key={id} role='tab' aria-selected={on} onClick={() => setTab(id)}
+                style={{ padding: '10px 16px', fontSize: 13, fontWeight: on ? 800 : 600, color: on ? tealDeep : gray600, background: on ? tealMist : 'transparent', border: 'none', borderBottom: `2px solid ${on ? tealDeep : 'transparent'}`, cursor: 'pointer', borderRadius: '10px 10px 0 0' }}>{label}</button>
+            )
+          })}
+        </div>
+      )}
+      {isOwner && tab === 'activity' ? <StaffActivity brand={props.brand} /> : <StaffTeam {...props} />}
     </div>
   )
 }

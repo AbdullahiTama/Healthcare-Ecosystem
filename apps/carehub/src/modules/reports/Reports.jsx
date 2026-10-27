@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Download, CheckCircle, AlertTriangle, Search, X, ChevronRight } from 'lucide-react'
 // Reports owns no table of its own — it is a read-only projection over three
 // aggregates that belong to other modules. So it gets no repository of its
 // own; it composes theirs. Adding a `reportRepository` here would be an
@@ -12,19 +12,37 @@ import { expenseDate, sumExpenses, sumByCategory } from '../expenses/expenseRule
 import { purchaseRepository } from '../purchases/repositories'
 import { adrReportRepository } from '../adr/repositories'
 import { inPeriod, periodRange } from './periodFilter'
+import { searchSales } from './transactionSearch'
+import { isCompletedSale, saleNet, saleRefunded, paymentStatus } from '../pos/salesReport'
+import SaleDetailModal from '../pos/SaleDetailModal'
+import { useInvalidateSalesReport } from '../pos/useSalesReportData'
+import { useProductCatalog } from '../inventory/hooks/useProductCatalog'
+import { useSettings, useClients } from '../../hooks/queries'
 import { fmt, currentMonth } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { usePlanGate } from '../../hooks/usePlanGate'
-import { Card, StatCard, Loading, TealBtn, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, Loading, TealBtn, Pill, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, warning, bg } = theme
+
+const PAGE = 50
+const STATUS_PILL = { Paid: 'green', 'Part-paid': 'amber', Unpaid: 'red' }
 
 export default function Reports({ brand, role, perms, embedded = false }) {
   const [period, setPeriod] = useState('month')
   const [customMonth, setCustomMonth] = useState(currentMonth())
-  const { msg, show: showToast } = useToast()
+  const [query, setQuery] = useState('')
+  const [limit, setLimit] = useState(PAGE)
+  const [openSaleId, setOpenSaleId] = useState(null)
+  const { msg, type: toastType, show: showToast } = useToast()
   const plan = usePlanGate(showToast)
-
+  // Editing, refunding and deleting a completed sale is the Owner's alone, and
+  // only from here. This only decides what is offered; the database enforces it.
+  const canCorrect = role === 'Owner'
+  const { data: settings } = useSettings(brand?.id)
+  const clientsQuery = useClients(brand?.id)
+  const catalog = useProductCatalog(canCorrect ? brand?.id : undefined)
+  const invalidate = useInvalidateSalesReport()
   // Only the selected period is read from the server (sales and purchases are
   // filtered by date there, and every read pages past the 1000-row cap), so a
   // business with years of history does not download all of it to show one
@@ -55,13 +73,20 @@ export default function Reports({ brand, role, perms, embedded = false }) {
 
   const inRange = (item, dateOf) => inPeriod(item, { period, month: customMonth, dateOf })
 
-  const fSales = sales.filter(s => inRange(s)).filter(s => !s.is_on_hold)
+  // Held, resumed and deleted rows are not sales.
+  const fSales = sales.filter(s => inRange(s)).filter(isCompletedSale)
   // Expenses belong to the date the user recorded (same rule as the Expenses page and the database).
   const fExpenses = expenses.filter(x => inRange(x, expenseDate))
   const fPurchases = purchases.filter(p => inRange(p))
   const fAdrReports = adrReports.filter(r => inRange(r))
+  // The search narrows the transaction list (and its CSV rows) within the chosen
+  // period; the summary cards above always describe the whole period.
+  const searched = searchSales(fSales, query)
+  const openSale = openSaleId ? fSales.find(s => s.id === openSaleId) : null
 
-  const totalRevenue = fSales.reduce((s, x) => s + (x.total || 0), 0)
+  // Revenue is net of refunds, so a refund or an Owner edit shows here at once.
+  const totalRevenue = fSales.reduce((s, x) => s + saleNet(x), 0)
+  const totalRefunded = fSales.reduce((s, x) => s + saleRefunded(x), 0)
   const totalExpenses = sumExpenses(fExpenses)
   const totalPurchases = fPurchases.reduce((s, x) => s + (x.total_cost || 0), 0)
   const netProfit = totalRevenue - totalExpenses - totalPurchases
@@ -69,12 +94,12 @@ export default function Reports({ brand, role, perms, embedded = false }) {
   const cashCollected = fSales.filter(s => s.is_credit && s.amount_paid > 0).reduce((s, x) => s + (x.amount_paid || 0), 0)
 
   const byMethod = {}
-  fSales.forEach(s => { byMethod[s.payment_method] = (byMethod[s.payment_method] || 0) + (s.total || 0) })
+  fSales.forEach(s => { byMethod[s.payment_method] = (byMethod[s.payment_method] || 0) + saleNet(s) })
 
   const byExpCat = sumByCategory(fExpenses)
 
   const dailySales = {}
-  fSales.forEach(s => { const d = s.created_at?.split('T')[0] || ''; dailySales[d] = (dailySales[d] || 0) + (s.total || 0) })
+  fSales.forEach(s => { const d = s.created_at?.split('T')[0] || ''; dailySales[d] = (dailySales[d] || 0) + saleNet(s) })
   const dailyDates = Object.keys(dailySales).sort().slice(-14)
   const maxDaily = Math.max(...Object.values(dailySales), 1)
 
@@ -93,8 +118,8 @@ export default function Reports({ brand, role, perms, embedded = false }) {
       ['Credit Outstanding', creditBalance],
       [],
       ['SALES DETAIL'],
-      ['Date', 'Transaction No', 'Client', 'Total', 'Payment Method', 'Credit?'],
-      ...fSales.map(s => [s.created_at?.split('T')[0] || '', s.txn_no || '', s.client_name || 'Walk-in', s.total || 0, s.payment_method || '', s.is_credit ? 'Yes' : 'No']),
+      ['Date', 'Transaction No', 'Client', 'Total', 'Refunded', 'Net', 'Payment Method', 'Credit?'],
+      ...searched.map(s => [s.created_at?.split('T')[0] || '', s.txn_no || '', s.client_name || 'Walk-in', s.total || 0, saleRefunded(s), saleNet(s), s.payment_method || '', s.is_credit ? 'Yes' : 'No']),
       [],
       ['EXPENSES DETAIL'],
       ['Date', 'Category', 'Description', 'Amount', 'Staff'],
@@ -148,6 +173,17 @@ export default function Reports({ brand, role, perms, embedded = false }) {
         )}
       </div>
 
+      <div role='search' style={{ position: 'relative', marginBottom: '20px', maxWidth: 520 }}>
+        <Search size={15} color={gray400} aria-hidden='true' style={{ position: 'absolute', left: 12, top: 12 }} />
+        <input type='search' value={query} onChange={e => { setQuery(e.target.value); setLimit(PAGE) }}
+          aria-label='Search transactions' placeholder='Search customer, receipt no., amount, product, cashier…'
+          style={{ width: '100%', boxSizing: 'border-box', padding: '10px 36px 10px 34px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
+        {query && (
+          <button onClick={() => { setQuery(''); setLimit(PAGE) }} aria-label='Clear search'
+            style={{ position: 'absolute', right: 6, top: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 6, display: 'flex', color: gray400 }}><X size={15} /></button>
+        )}
+      </div>
+
       {loading ? <Loading /> : loadError ? (
         <Card style={{ padding: '24px', textAlign: 'center' }} role='alert'>
           <div style={{ fontWeight: '800', color: navy, marginBottom: '4px' }}>Reports could not be loaded</div>
@@ -161,7 +197,7 @@ export default function Reports({ brand, role, perms, embedded = false }) {
             <Card style={{ padding: '20px', borderLeft: `4px solid ${success}` }}>
               <div style={{ fontSize: '12px', color: gray500, fontWeight: '600', marginBottom: '4px' }}>Total revenue</div>
               <div style={{ fontSize: '28px', fontWeight: '900', color: success }}>{fmt(totalRevenue)}</div>
-              <div style={{ fontSize: '12px', color: gray400, marginTop: '4px' }}>{fSales.length} transactions</div>
+              <div style={{ fontSize: '12px', color: gray400, marginTop: '4px' }}>{fSales.length} transactions{totalRefunded > 0 ? ` · after ${fmt(totalRefunded)} refunded` : ''}</div>
             </Card>
             <Card style={{ padding: '20px', borderLeft: `4px solid ${danger}` }}>
               <div style={{ fontSize: '12px', color: gray500, fontWeight: '600', marginBottom: '4px' }}>Total expenditure</div>
@@ -233,28 +269,56 @@ export default function Reports({ brand, role, perms, embedded = false }) {
             </Card>
           )}
 
-          {/* Recent transactions */}
+          {/* Transactions: every completed sale in the period, searchable. Opening one
+              shows it in full; the Owner can edit, refund or delete it there. */}
           <Card style={{ marginBottom: '20px' }}>
-            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${border}`, fontWeight: '800', fontSize: '15px', color: navy }}>Recent transactions</div>
+            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${border}`, fontWeight: '800', fontSize: '15px', color: navy, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+              <span>Transactions</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: gray500 }} aria-live='polite'>
+                {query.trim() ? `${searched.length} of ${fSales.length} match` : `${fSales.length} in this period`}
+              </span>
+            </div>
             {fSales.length === 0 ? (
               <div style={{ padding: '32px', textAlign: 'center', color: gray400, fontSize: '13px' }}>No transactions in this period</div>
-            ) : fSales.slice(0, 20).map(s => (
-              <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', borderBottom: `1px solid ${gray100}` }}>
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{s.client_name || 'Walk-in'}</div>
-                  <div style={{ fontSize: '11px', color: gray400 }}>{s.txn_no} · {s.created_at?.split('T')[0]} · {s.payment_method}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '14px', fontWeight: '900', color: tealDeep }}>{fmt(s.total || 0)}</div>
-                  {s.is_credit && <span style={{ fontSize: '10px', color: warning, fontWeight: '700' }}>Credit</span>}
-                </div>
+            ) : searched.length === 0 ? (
+              <div style={{ padding: '32px', textAlign: 'center', color: gray400, fontSize: '13px' }}>
+                No transactions match &ldquo;{query.trim()}&rdquo;. <button onClick={() => setQuery('')} style={{ background: 'none', border: 'none', color: tealDeep, fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Clear search</button>
               </div>
-            ))}
+            ) : searched.slice(0, limit).map(s => {
+              const refunded = saleRefunded(s)
+              return (
+                <button key={s.id} onClick={() => setOpenSaleId(s.id)} aria-label={`Open ${s.txn_no}, ${s.client_name || 'Walk-in'}, ${fmt(s.total || 0)}`}
+                  style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 20px', border: 'none', borderBottom: `1px solid ${gray100}`, background: 'white', cursor: 'pointer', textAlign: 'left' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{s.client_name || 'Walk-in'}</div>
+                    <div style={{ fontSize: '11px', color: gray400 }}>{s.txn_no} · {s.created_at?.split('T')[0]} · {s.payment_method}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '14px', fontWeight: '900', color: tealDeep }}>{fmt(s.total || 0)}</div>
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                        {s.is_credit && <Pill label={paymentStatus(s)} type={STATUS_PILL[paymentStatus(s)]} />}
+                        {refunded > 0 && <Pill label={`Refunded ${fmt(refunded)}`} type='gray' />}
+                        {s.edited_at && <Pill label='Edited' type='blue' />}
+                      </div>
+                    </div>
+                    <ChevronRight size={14} color={gray400} aria-hidden='true' />
+                  </div>
+                </button>
+              )
+            })}
+            {searched.length > limit && (
+              <div style={{ padding: 12, textAlign: 'center' }}>
+                <button onClick={() => setLimit(l => l + PAGE)} style={{ padding: '8px 16px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Show more ({searched.length - limit} left)</button>
+              </div>
+            )}
           </Card>
         </>
       )}
 
-      <Toast msg={msg} />
+      <SaleDetailModal show={!!openSale} sale={openSale} onClose={() => setOpenSaleId(null)} brand={brand} settings={settings}
+        canCorrect={canCorrect} ledgerAvailable products={catalog.products} clients={clientsQuery.data || []} showToast={showToast} onChanged={invalidate} />
+      <Toast msg={msg} type={toastType} />
     </div>
   )
 }

@@ -68,9 +68,11 @@ All arithmetic lives in `apps/carehub/src/modules/pos/salesReport.js` (tested in
 - `pos_shifts`: `open_pos_shift()` / `close_pos_shift()`. Optional. One open
   shift per person per business. The opener, the owner or a manager can close
   it; the server computes expected cash.
-- `refund_sale()`: owner or manager role (`is_business_manager`), reason
-  required, capped at what was received net of earlier refunds. Money only;
-  returned stock goes through Inventory.
+- `refund_sale()`: **Owner only** since `carehub_20261216_sales_owner_corrections.sql`
+  (was owner or manager), reason required, audited, capped at the payments ledger's
+  net balance. Money only; returned stock goes through Inventory. Refunds, edits
+  and deletes are done from Financial Reports, not from this report: see
+  `Sales-Corrections.md`.
 - `record_export_audit()` allow-list gains `sales_report.xlsx`.
 
 Migration 2 restricts client UPDATE on `sales` to `status, is_on_hold, notes`
@@ -81,8 +83,8 @@ the functions above.
 
 | Role | Sees | Cashier filter | Excel | Refund |
 |---|---|---|---|---|
-| Owner | all staff | yes | yes | yes |
-| Manager / any role with `canViewReports` | all staff | yes | if `canExportReports` (server-checked) | if role name contains "manager" |
+| Owner | all staff | yes | yes | no here (Financial Reports) |
+| Manager / any role with `canViewReports` | all staff | yes | if `canExportReports` (server-checked) | no |
 | Cashier, Pharmacist, Therapist | own transactions only | no | no | no |
 
 The "own transactions only" rule is a **screen rule**. The `sales` policy lets

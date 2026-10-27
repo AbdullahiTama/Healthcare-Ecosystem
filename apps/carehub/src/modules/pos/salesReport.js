@@ -103,6 +103,9 @@ function parseSplit(split) {
 export const saleReceived = (s) => money(Math.min(num(s.amount_paid), num(s.total)))
 export const saleOutstanding = (s) => money(Math.max(num(s.total) - saleReceived(s), 0))
 export const saleRefunded = (s) => money(s.refunded_amount)
+// What a sale is worth to the business once refunds are taken off: the figure
+// revenue, the dashboard and Financial Reports add up.
+export const saleNet = (s) => money(Math.max(num(s.total) - saleRefunded(s), 0))
 
 export function paymentStatus(s) {
   if (saleOutstanding(s) <= 0) return 'Paid'

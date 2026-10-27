@@ -57,7 +57,7 @@ describe('saleRepository targeted reads (no whole-history downloads)', () => {
     const calls = []
     const repo = createSaleRepository({ request: async () => [], requestWithCount: async (path, opts) => { calls.push([path, opts]); return { total: 4321 } } })
     expect(await repo.count(A)).toBe(4321)
-    expect(calls).toEqual([[`sales?business_id=eq.${A}&select=id`, { head: true }]])
+    expect(calls).toEqual([[`sales?business_id=eq.${A}&is_on_hold=eq.false&or=(status.is.null,status.eq.completed)&select=id`, { head: true }]])
   })
 })
 
@@ -401,5 +401,60 @@ describe('saleRepository', () => {
     expect(result.synced).toBe(0)
     expect(client.rows('sales')).toHaveLength(0)
     expect(offline.all()).toHaveLength(1)
+  })
+})
+
+// ── Held sales never count as sales; corrections are owner RPCs ───────────────
+describe('saleRepository: held, deleted and resumed rows are not sales', () => {
+  const today = new Date().toISOString().split('T')[0]
+  const at = `${today}T09:00:00`
+  const seed = {
+    sales: [
+      { id: 'done', business_id: A, is_on_hold: false, status: null, created_at: at },
+      { id: 'done2', business_id: A, is_on_hold: false, status: 'completed', created_at: at },
+      { id: 'deleted', business_id: A, is_on_hold: false, status: 'deleted', created_at: at },
+      { id: 'resumed', business_id: A, is_on_hold: false, status: 'resumed', created_at: at },
+      { id: 'held', business_id: A, is_on_hold: true, status: null, created_at: at },
+      { id: 'converted', business_id: A, is_on_hold: true, status: 'converted', created_at: at },
+      { id: 'credit-deleted', business_id: A, is_on_hold: false, status: 'deleted', is_credit: true, balance: 90, created_at: at },
+      { id: 'credit-live', business_id: A, is_on_hold: false, status: null, is_credit: true, balance: 50, created_at: at },
+    ],
+  }
+
+  it('getToday and getRecent count only completed sales (the dashboard leak)', async () => {
+    const { repo } = build({ seed })
+    const ids = (rows) => rows.map((r) => r.id).sort()
+    expect(ids(await repo.getToday(A))).toEqual(['credit-live', 'done', 'done2'])
+    expect(ids(await repo.getRecent(A, 50))).toEqual(['credit-live', 'done', 'done2'])
+  })
+
+  it('getOpen lists live holds and live credit sales, never a converted hold or a deleted credit sale', async () => {
+    const { repo } = build({ seed })
+    expect((await repo.getOpen(A)).map((r) => r.id).sort()).toEqual(['credit-live', 'held'])
+  })
+
+  it('updateHeld patches only a row that is still on hold, keeping the app\'s encoded items', async () => {
+    const calls = []
+    const repo = createSaleRepository({ request: async (path, opts) => { calls.push([path, opts]); return [] }, isOnline: () => true })
+    await repo.updateHeld('h1', A, { items: [{ id: 'p', qty: 2 }], subtotal: 10, discount: 0, total: 10, clientName: 'Ada', notes: 'n' })
+    const [path, opts] = calls[0]
+    expect(path).toBe(`sales?id=eq.h1&business_id=eq.${A}&is_on_hold=eq.true`)
+    expect(opts.method).toBe('PATCH')
+    const body = JSON.parse(opts.body)
+    expect(JSON.parse(body.items)).toEqual([{ id: 'p', qty: 2 }])
+    expect(body).toMatchObject({ total: 10, balance: 10, client_name: 'Ada', notes: 'n' })
+    expect(body).not.toHaveProperty('is_on_hold')
+    expect(body).not.toHaveProperty('status')
+  })
+
+  it('correct, remove and history call the owner-only database functions and the audit trail', async () => {
+    const calls = []
+    const repo = createSaleRepository({ request: async (path, opts) => { calls.push([path, opts && JSON.parse(opts.body)]); return [] }, isOnline: () => true })
+    await repo.correct('s1', { items: [{ id: 'p', qty: 1, price: 5 }], discount: 0, clientId: 'c1', clientName: 'Ada', reason: 'typo' })
+    await repo.remove('s1', 'duplicate')
+    await repo.history(A, 's1')
+    expect(calls[0]).toEqual(['rpc/edit_sale', { p_sale_id: 's1', p_items: [{ id: 'p', qty: 1, price: 5 }], p_discount: 0, p_client_id: 'c1', p_client_name: 'Ada', p_reason: 'typo' }])
+    expect(calls[1]).toEqual(['rpc/delete_sale', { p_sale_id: 's1', p_reason: 'duplicate' }])
+    expect(calls[2][0]).toBe(`audit_log?branch_id=eq.${A}&target_type=eq.sale&target_id=eq.s1&order=created_at.desc&select=id,action,actor_type,metadata,created_at`)
   })
 })
