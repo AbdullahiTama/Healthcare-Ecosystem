@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -30,7 +31,7 @@ async function renderPOS() {
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
-  await act(async () => { root.render(<POS brand={{ id: 'biz-1', name: 'Pharm Tama' }} products={PRODUCTS} setProducts={vi.fn()} role='Owner' perms={{ canEditPrice: true }} />) })
+  await act(async () => { root.render(<MemoryRouter initialEntries={['/dashboard/pos']}><POS brand={{ id: 'biz-1', name: 'Pharm Tama' }} products={PRODUCTS} setProducts={vi.fn()} role='Owner' perms={{ canEditPrice: true }} /></MemoryRouter>) })
   await act(async () => {})
 }
 // As a scanner does: the barcode typed into the search box, then Enter, adds the product to the sale.
