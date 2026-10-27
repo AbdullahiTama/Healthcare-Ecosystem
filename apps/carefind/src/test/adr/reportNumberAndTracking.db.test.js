@@ -122,7 +122,9 @@ describe('after the migration', () => {
   })
 
   it('the database refuses a duplicate number', async () => {
-    await expect(db.query(`update adr_reports set report_number=(select report_number from adr_reports limit 1) where report_id=(select report_id from adr_reports order by report_id desc limit 1)`)).rejects.toThrow(/unique|duplicate/i)
+    // The first and the last report by id: always two different rows (an
+    // unordered `limit 1` could pick the target itself and duplicate nothing).
+    await expect(db.query(`update adr_reports set report_number=(select report_number from adr_reports order by report_id asc limit 1) where report_id=(select report_id from adr_reports order by report_id desc limit 1)`)).rejects.toThrow(/unique|duplicate/i)
   })
 
   it('business-facing reports are unique too', async () => {
