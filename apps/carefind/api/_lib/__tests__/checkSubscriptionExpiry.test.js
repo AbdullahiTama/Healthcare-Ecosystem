@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+// Lives under api/_lib (not next to the handler) because every file under api/ that does not start with _ is a
+// Vercel function, and CareFind is at the Hobby plan's 12-function limit.
 // The daily plan-expiry reminder. It must refuse to run without the cron secret (Financial-Architecture-Audit F-21:
 // a request with no Authorization header used to skip the check), and it reminds main businesses only: a branch
 // follows its main business's plan and has no owner email of its own (carehub_20261212_branches_without_email).
@@ -22,7 +24,7 @@ function query(table) {
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ from: query }) }))
 vi.mock('@care-ecosystem/shared-email', () => ({ EmailService: class { processBatch() { return h.processBatch() } } }))
 
-import handler from './check-subscription-expiry.js'
+import handler from '../../cron/check-subscription-expiry.js'
 
 const res = () => { const r = { statusCode: 0, body: null }; r.status = (c) => { r.statusCode = c; return r }; r.json = (b) => { r.body = b; return r }; return r }
 const call = (headers = {}) => { const r = res(); return handler({ method: 'GET', headers }, r).then(() => r) }
