@@ -1,33 +1,38 @@
 import { useNavigate } from 'react-router-dom'
 import { theme } from '../../styles/theme'
+import { usePlanStatus } from '../../hooks/usePlanStatus'
+import { bannerText, seesPlanAlerts } from '../../lib/planStatus'
+import PlanNotice from './PlanNotice'
 
 const { danger, dangerBg, warning, warningBg } = theme
 
-// Non-blocking by design (see the CareHub subscription design conversation):
-// a hard lockout risks a hospital losing access to patient records mid-shift
-// over a billing lapse, so this only ever nags, never restricts. Renders
-// nothing outside the warning window.
-export default function PlanExpiryBanner({ brand }) {
+// The plan alert on every dashboard page, for the owner and managers, from 14 days before expiry, through the 7-day
+// grace period and while the plan is restricted (lib/planStatus.js). It never blocks the page: an expired plan pauses
+// adding staff, branches and products, imports and exports, but records stay readable and the POS keeps selling, so a
+// pharmacy or hospital is never cut off from patients over a billing lapse. Also mounts the once-a-day popup.
+export default function PlanExpiryBanner({ brand, role = 'Owner' }) {
   const navigate = useNavigate()
-  if (!brand?.plan_expires_at) return null
+  const status = usePlanStatus()
+  if (!seesPlanAlerts(role)) return null
+  const text = bannerText(status)
+  if (!text) return null
 
-  const daysLeft = Math.ceil((new Date(brand.plan_expires_at) - new Date()) / 86400000)
-  if (daysLeft > 7) return null
-
-  const expired = daysLeft < 0
+  const urgent = status.state === 'grace' || status.state === 'restricted'
   return (
-    <button
-      onClick={() => navigate('/dashboard/settings')}
-      style={{
-        width: '100%', padding: '8px 20px', textAlign: 'center', fontSize: '13px', fontWeight: '700', cursor: 'pointer', border: 'none',
-        background: expired ? dangerBg : warningBg, color: expired ? danger : warning,
-        borderBottom: `1px solid ${expired ? danger : warning}`,
-      }}
-    >
-      {expired
-        ? `Your plan expired ${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? '' : 's'} ago. Renew in Settings to keep your account in good standing.`
-        : `Your plan renews in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Renew now in Settings.`}
-      {' '}→
-    </button>
+    <>
+      <button
+        type='button'
+        onClick={() => navigate('/dashboard/settings')}
+        aria-label={`${text} Open Settings to renew.`}
+        style={{
+          width: '100%', padding: '8px 20px', textAlign: 'center', fontSize: '13px', fontWeight: '700', cursor: 'pointer', border: 'none',
+          background: urgent ? dangerBg : warningBg, color: urgent ? danger : warning,
+          borderBottom: `1px solid ${urgent ? danger : warning}`,
+        }}
+      >
+        {text} <span aria-hidden='true'>Renew →</span>
+      </button>
+      <PlanNotice brandId={brand?.id} status={status} onRenew={() => navigate('/dashboard/settings')} />
+    </>
   )
 }

@@ -18,6 +18,8 @@ import { upsertProducts } from '../inventory/productListState'
 import { PurchasePaymentModal, SupplierBalances, purchaseStatus } from './SupplierPayments'
 import PurchaseDetailModal from './PurchaseDetail'
 import { purchaseItemsFromForm } from './purchaseInvoice'
+import { usePlanGate } from '../../hooks/usePlanGate'
+import { restrictedMessage } from '../../lib/planStatus'
 import { PRODUCT_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
@@ -61,6 +63,7 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
   const [form, setForm] = useState({ supplyDate: todayDate(), items: [blankItem()] })
   const [saving, setSaving] = useState(false)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
+  const plan = usePlanGate(showToast)
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const setItem = (i, k, v) => setForm(p => {
     const items = p.items.map((it, idx) => idx === i ? { ...it, [k]: v } : it)
@@ -118,6 +121,15 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
     if (badQty) { showToast('Quantities must be whole numbers (e.g. 2, not 2.5).', { type: 'warning' }); return }
     if (validItems.length === 0) { showToast('Enter at least one item with a name, quantity and unit cost.', { type: 'warning' }); return }
     if (catalogLoading) { showToast('Your products are still loading. Try again in a moment so items match your existing products.', { type: 'warning' }); return }
+    // An expired (restricted) plan still records purchases that restock products already in stock, but cannot create
+    // new products (the database refuses them); say which lines before anything is saved, not halfway through.
+    if (plan.restricted) {
+      const newNames = [...new Set(validItems.map(i => i.name.trim()).filter(n => !findDuplicate(inventory, n, '', null)))]
+      if (newNames.length) {
+        showToast(restrictedMessage('adding new products') + ' Remove or rename these lines to match products you already stock: ' + newNames.join(', ') + '.', { type: 'warning' })
+        return
+      }
+    }
     setSaving(true)
     try {
       const total = computedTotal

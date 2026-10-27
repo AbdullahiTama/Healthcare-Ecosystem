@@ -5,6 +5,7 @@ import { useAuth } from '../../providers/AuthProvider'
 import Sidebar from '../../components/layout/Sidebar'
 import TopBar from '../../components/layout/TopBar'
 import PlanExpiryBanner from '../../components/layout/PlanExpiryBanner'
+import { PlanStatusProvider } from '../../hooks/usePlanStatus'
 import { Toast, useToast, DashboardShell, Loading } from '../../components/ui'
 import { useProductCatalog } from '../../modules/inventory/hooks/useProductCatalog'
 // Cross-aggregate read: the permission flags a staff member's role grants are
@@ -170,7 +171,7 @@ export default function BusinessDashboard() {
   const pageProps = { brand, products, setProducts, catalog, role, perms, showToast, loadProducts, staffName: staffUser?.full_name || '' }
 
   return (
-    <>
+    <PlanStatusProvider brand={brand}>
       <OutboxRunner />
       <DashboardShell
         gutter={0}
@@ -207,7 +208,7 @@ export default function BusinessDashboard() {
                 You are offline. Sales are saved on this device and will sync when you reconnect.
               </div>
             )}
-            <PlanExpiryBanner brand={brand} />
+            <PlanExpiryBanner brand={brand} role={role} />
           </>
         }
       >
@@ -287,7 +288,7 @@ export default function BusinessDashboard() {
         </>
       </DashboardShell>
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
-    </>
+    </PlanStatusProvider>
   )
 }
 

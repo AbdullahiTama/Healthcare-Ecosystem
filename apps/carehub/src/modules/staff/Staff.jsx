@@ -5,6 +5,7 @@ import { provisionStaffAuth } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
 import { rolesForType, getModulesForType, isRoleGrantable } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
+import { usePlanGate } from '../../hooks/usePlanGate'
 import { getTemplatesForBusinessType, applyTemplate } from '../../lib/roleTemplates'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, GhostBtn, TealBtn, RedBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
@@ -33,6 +34,7 @@ export default function Staff({ brand, role, perms }) {
   const [savingRole, setSavingRole] = useState(false)
   const [showTemplatePicker, setShowTemplatePicker] = useState(false)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
+  const plan = usePlanGate(showToast)
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isOwner = role === 'Owner'
   const bType = brand?.business_type || brand?.type
@@ -168,6 +170,7 @@ export default function Staff({ brand, role, perms }) {
 
   async function save() {
     if (!form.fullName || !form.email || !form.role) { showToast('Please fill in all required fields.', { type: 'warning' }); return }
+    if (!plan.allow('adding staff')) return
     const limit = planLimitsFor(brand?.plan).maxStaff
     if (staff.length >= limit) {
       showToast(`Your ${PLAN_LABELS[brand?.plan] || 'current'} plan allows up to ${limit} staff. Upgrade your plan in Settings to add more.`, { type: 'warning' })
@@ -291,7 +294,7 @@ export default function Staff({ brand, role, perms }) {
   return (
     <div>
       <SectionHead title={isEnterprise ? 'Sales Team' : 'Staff Management'} sub='Manage your team and their access levels'
-        btn={isOwner ? '+ Add Staff Member' : undefined} onBtn={isOwner ? () => setShowAdd(true) : undefined} />
+        btn={isOwner ? '+ Add Staff Member' : undefined} onBtn={isOwner ? () => plan.allow('adding staff') && setShowAdd(true) : undefined} />
 
       {!isOwner && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', borderRadius: theme.radius.md, background: warningBg, border: `1px solid ${warning}`, marginBottom: '20px', fontSize: '13px', color: warning }}>
@@ -338,7 +341,7 @@ export default function Staff({ brand, role, perms }) {
       </div>
 
       {loading ? <Loading /> : staff.length === 0 ? (
-        <Empty icon={<User size={40} />} message='No staff added yet' action={isOwner ? '+ Add Staff Member' : undefined} onAction={() => setShowAdd(true)} />
+        <Empty icon={<User size={40} />} message='No staff added yet' action={isOwner ? '+ Add Staff Member' : undefined} onAction={() => plan.allow('adding staff') && setShowAdd(true)} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {staff.map(s => (
