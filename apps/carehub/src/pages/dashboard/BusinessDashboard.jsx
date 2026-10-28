@@ -40,6 +40,7 @@ const Settings = lazy(() => import('../../modules/settings/Settings'))
 const CareFind = lazy(() => import('../../modules/carefind/CareFind'))
 const Locations = lazy(() => import('../../modules/locations/Locations'))
 const MasterCatalog = lazy(() => import('../../modules/master-catalog/MasterCatalog'))
+const StockTransfers = lazy(() => import('../../modules/transfers/StockTransfers'))
 const Ecommerce = lazy(() => import('../../modules/ecommerce/Ecommerce'))
 const Warehouses = lazy(() => import('../../modules/warehouses/Warehouses'))
 const Territories = lazy(() => import('../../modules/territories/Territories'))
@@ -66,7 +67,7 @@ const PvTracker = lazy(() => import('../../modules/adr/PvTracker'))
 const PvCaseDetail = lazy(() => import('../../modules/adr/PvCaseDetail'))
 
 const PAGE_TITLES = {
-  dashboard: 'Dashboard', pos: 'POS / Sales', inventory: 'Inventory', mastercatalog: 'Master Catalog',
+  dashboard: 'Dashboard', pos: 'POS / Sales', inventory: 'Inventory', mastercatalog: 'Master Catalog', transfers: 'Stock Transfers',
   clients: 'Clients', appointments: 'Appointments', consultation: 'Consultations',
   expenses: 'Expenses', debts: 'Debts', purchases: 'Purchases', demand: 'Demand',
   staff: 'Staff', reports: 'Financial Reports', settings: 'Settings', carefind: 'CareFind Profile',
@@ -252,6 +253,7 @@ export default function BusinessDashboard() {
               <Route path='carefind' element={guard('carefind', <><TopBar title='CareFind Profile' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><CareFind {...pageProps} /></div></>)} />
               <Route path='locations' element={guard('locations', <><TopBar title='Locations' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Locations {...pageProps} /></div></>)} />
               <Route path='mastercatalog' element={guard('mastercatalog', <><TopBar title='Master Catalog' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><MasterCatalog {...pageProps} /></div></>)} />
+              <Route path='transfers' element={guard('transfers', <><TopBar title='Stock Transfers' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><StockTransfers {...pageProps} /></div></>)} />
               <Route path='ecommerce' element={guard('ecommerce', <><TopBar title='Online Store' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Ecommerce {...pageProps} /></div></>)} />
               {/* a shop order opened from a notification: the same page, with that order's drawer open */}
               <Route path='ecommerce/orders/:orderId' element={guard('ecommerce', <><TopBar title='Online Store' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Ecommerce {...pageProps} /></div></>)} />

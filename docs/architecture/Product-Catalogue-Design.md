@@ -1,6 +1,6 @@
 # Product Catalogue: Review and Design
 
-Status: approved 2026-10-27. **Phases 1 and 2 are built** (sections 6 and 7); phases 3–5 are not started.
+Status: approved 2026-10-27. **Phases 1–3 are built** (sections 6–8); phases 4 and 5 are not started.
 
 ## 1. Review (live data, 2026-10-27)
 
@@ -301,3 +301,74 @@ and every new product is linked automatically.
 - **Manual, after applying the migration:**
   1. Search for an antibiotic on CareFind and check that it shows "Available: ask the pharmacist".
   2. Check that the shop no longer lists it.
+
+## 8. Phase 3 as built: moving stock between branches
+
+**Owner's decision (2026-10-27):** the owner and managers send stock; any staff member of the receiving location
+receives it.
+
+**Finding:** a `stock_transfers` table already existed (carehub_20260810). It had 0 rows, no app code and one product
+per row, and its only policy (FOR ALL, without WITH CHECK) let any member write rows directly. It is extended rather
+than replaced.
+
+### Database (`supabase/migrations/carehub_20261222_branch_stock_transfers.sql`)
+
+| Object | What it does |
+|---|---|
+| `stock_transfers` (extended) | The transfer: number (`TRF-YYMMDD-XXXXX`), from and to location, main business, status `in_transit` → `received` or `cancelled`, and who sent, received or cancelled it and when, with notes. The old single-product columns are now optional and unused. |
+| `stock_transfer_lines` | One row per master item: quantity sent, quantity received, the product at each end, and unit cost. |
+| `send_stock_transfer(from, to, lines, note)` | Owner or manager of the sending location (`is_business_manager`), with both locations in the same business. For each item, the sending location's product is locked, its stock checked and reduced at once, and a ledger movement (`branch_transfer_out`) written. The receiving location's owner is notified. Up to 200 items, and an item may not be listed twice. |
+| `receive_stock_transfer(transfer, lines, note)` | Any staff member of the receiving location. Lines left out arrived in full; any other line records what arrived (from 0 to what was sent). Stock is added to the receiving location's product. If that location did not carry the item, the product is created from the master item at the master price. Movements are recorded as `branch_transfer_in`. A shortfall is recorded on the line and the sender is notified. |
+| `cancel_stock_transfer(transfer, reason)` | Owner or manager of the sending location, while still in transit. Every item returns to the sending product (`branch_transfer_cancel`). |
+| Policies | Read-only: both locations, and the owner above them, see a transfer and its lines. Direct inserts, updates and deletes are refused; only the three functions change transfers. |
+
+Every function is atomic: an error anywhere leaves both locations' stock unchanged.
+
+### App (`apps/carehub/src/modules/transfers`)
+
+- **Stock Transfers page** (`StockTransfers.jsx`), in the Operations menu for every built-in role. Custom roles need
+  the owner to tick it.
+  - It lists the transfers in and out of the current location, with filters (All, Incoming, Outgoing, In transit) and a
+    banner counting transfers waiting to be received.
+  - It handles loading, error with retry, not installed, a single location, and filtered and empty lists.
+- **New transfer** (`NewTransferModal.jsx`): choose the receiving location, search this location's stock (items linked
+  to the master catalogue and in stock), and enter quantities. Quantities are checked against the stock here before
+  sending.
+- **Transfer details** (`TransferDetailModal.jsx`): items with sent and received quantities, and who did what.
+  - The receiving location enters what arrived; empty means all of it arrived.
+  - The sending location's owner or a manager can cancel, after confirming, while the transfer is in transit.
+- **Shortcut:** the Master Catalog has a "Stock transfers" button when the business has more than one location.
+- The database's refusal is shown as written ("Only 10 of Paracetamol in stock at Ikeja."), and anything else as a
+  plain retry message.
+
+### Security implications
+
+- The three functions are SECURITY DEFINER because a transfer changes stock in two locations. Each checks the caller
+  itself: a sending-location manager, or a receiving-location member. Both locations must belong to the same main
+  business.
+- Quantities and stock are validated in the database with row locks, so two people cannot send the same stock twice.
+- The direct write access the old policy allowed is removed.
+- The page only offers Send and Cancel to owners and managers. The database is the boundary.
+
+### Test plan
+
+- **PGlite:** `apps/carefind/src/test/stock-transfers/branchStockTransfers.db.test.js` (9 tests):
+  - a manager sends: stock leaves at once, with lines, ledger and notification;
+  - refusals: a cashier, more than in stock, an item not carried, another business, the same location, zero, and
+    duplicate lines;
+  - no direct writes;
+  - any staff member receives, with a shortfall recorded and the sender told;
+  - an item the receiving location did not carry is created from the master item;
+  - a transfer cannot be received twice or cancelled once received;
+  - a received quantity above what was sent is refused;
+  - a cancel returns the stock, and only a sending-location manager can cancel;
+  - visibility to both locations and the owner, but not another business;
+  - re-running the migration is safe.
+- **Unit and UI:**
+  - `transfers/__tests__/transferRules.test.js`: the rules and the repository's calls;
+  - `transfers/__tests__/StockTransfers.test.jsx`: list and filters; a cashier receives with a shortfall; a manager
+    sends; too much is stopped before sending; cancel; error and not-installed states.
+- **Manual, after applying the migration:**
+  1. Send a few units of an item from one branch to another. The sending branch's stock drops at once.
+  2. Receive the transfer at the other branch, entering one unit short. That branch's stock rises, and the sender sees
+     the shortfall.

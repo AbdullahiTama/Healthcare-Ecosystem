@@ -26,6 +26,7 @@ const MODULE_IMPORTS = {
   carefind: () => import('../modules/carefind/CareFind'),
   locations: () => import('../modules/locations/Locations'),
   mastercatalog: () => import('../modules/master-catalog/MasterCatalog'),
+  transfers: () => import('../modules/transfers/StockTransfers'),
   ecommerce: () => import('../modules/ecommerce/Ecommerce'),
   warehouses: () => import('../modules/warehouses/Warehouses'),
   territories: () => import('../modules/territories/Territories'),

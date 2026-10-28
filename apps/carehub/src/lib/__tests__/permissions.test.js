@@ -67,14 +67,14 @@ describe('permissions role matrix', () => {
     expect(perms.canDelete).toBe(false)
     expect(perms.canViewFinance).toBe(false)
     expect(perms.canManageStaff).toBe(false)
-    expect(perms.nav).toEqual(['dashboard', 'pos', 'inventory', 'clients', 'consultation', 'rx_inbox', 'adr-reports'])
+    expect(perms.nav).toEqual(['dashboard', 'pos', 'inventory', 'transfers', 'clients', 'consultation', 'rx_inbox', 'adr-reports'])
   })
 
   it('gives Receptionist no sales or finance rights', () => {
     const perms = getPerms('Receptionist')
     expect(perms.canMakeSales).toBe(false)
     expect(perms.canViewFinance).toBe(false)
-    expect(perms.nav).toEqual(['dashboard', 'clients', 'appointments', 'reception'])
+    expect(perms.nav).toEqual(['dashboard', 'clients', 'appointments', 'reception', 'transfers'])
   })
 
   it('falls back to safe defaults for any unknown role name', () => {
@@ -245,10 +245,10 @@ describe('module registry (business type → modules)', () => {
 
   it('produces the same nav tuples the legacy exported lists carried', () => {
     // Spot-check that the derived exports still match the pre-registry shapes.
-    // Counts reflect wallet + mastercatalog + ecommerce being ALL_TYPES (added after initial registry) + discovery for enterprise + pv-tracker for enterprise.
-    expect(ALL_NAV_DEFAULT.length).toBe(20)
-    expect(ALL_NAV_HOSPITAL.length).toBe(24)
-    expect(ALL_NAV_ENTERPRISE.length).toBe(18) // the Business Directory, Business Discovery and Territory Intelligence are platform-admin-only
+    // Counts reflect wallet + mastercatalog + ecommerce + transfers being ALL_TYPES (added after initial registry) + discovery for enterprise + pv-tracker for enterprise.
+    expect(ALL_NAV_DEFAULT.length).toBe(21)
+    expect(ALL_NAV_HOSPITAL.length).toBe(25)
+    expect(ALL_NAV_ENTERPRISE.length).toBe(19) // the Business Directory, Business Discovery and Territory Intelligence are platform-admin-only
     expect(ALL_NAV_ENTERPRISE.map(([id]) => id)).toContain('pv-tracker')
     expect(ALL_NAV_DEFAULT[0]).toEqual(['overview', expect.anything(), 'Overview'])
     expect(ALL_NAV_DEFAULT[2]).toEqual(['pos', expect.anything(), 'POS / Sales'])
