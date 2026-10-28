@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { Lock } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { settingsRepository } from './repositories'
+import BillingHistory from './BillingHistory'
+import { confirmPlanPayment } from './services/billing'
 import { businessLucideIcon, businessName } from '../../lib/utils'
 import { NIG_STATES } from '../../config/constants'
 import { useAuth } from '../../providers/AuthProvider'
@@ -24,6 +26,7 @@ export default function Settings({ brand, role, perms }) {
   const [uploading, setUploading] = useState(null)
   const [savingBooking, setSavingBooking] = useState(false)
   const [renewing, setRenewing] = useState(false)
+  const [billingReload, setBillingReload] = useState(0)
   const [searchParams] = useSearchParams()
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const isOwner = role === 'Owner'
@@ -51,6 +54,17 @@ export default function Settings({ brand, role, perms }) {
   // Return from Paystack — verify server-side before showing the plan as
   // renewed. Same "never trust the URL, ask Paystack" shape as CareFind's
   // wallet top-up fix.
+  // The plan's new expiry, from a renewal confirmed here or in Billing history.
+  function applyNewExpiry(newExpiry) {
+    const newAuth = { ...auth, brand: { ...brand, plan_expires_at: newExpiry } }
+    setAuth(newAuth)
+    try { localStorage.setItem('carehub_auth', JSON.stringify(newAuth)) } catch (e) {}
+    setBillingReload(k => k + 1)
+  }
+
+  // Return from Paystack — verify server-side before showing the plan as
+  // renewed. Same "never trust the URL, ask Paystack" shape as CareFind's
+  // wallet top-up fix.
   useEffect(() => {
     async function handlePaystackReturn() {
       const ref = searchParams.get('reference') || searchParams.get('trxref')
@@ -59,25 +73,15 @@ export default function Settings({ brand, role, perms }) {
       if (!session) { window.history.replaceState({}, '', '/dashboard/settings'); return }
 
       try {
-        const response = await fetch('/api/verify-plan-payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ reference: ref }),
-        })
-        const data = await response.json()
+        const data = await confirmPlanPayment(ref)
         window.history.replaceState({}, '', '/dashboard/settings')
-
-        if (!response.ok) { showToast(`Could not confirm payment: ${data.error || 'unknown error'}`, { type: 'error' }); return }
-        if (data.alreadyProcessed) return
-
-        const newBrand = { ...brand, plan_expires_at: data.newExpiry }
-        const newAuth = { ...auth, brand: newBrand }
-        setAuth(newAuth)
-        try { localStorage.setItem('carehub_auth', JSON.stringify(newAuth)) } catch (e) {}
-        showToast('Plan renewed! Your new expiry date is ' + new Date(data.newExpiry).toLocaleDateString(), { type: 'success' })
+        if (data.alreadyProcessed) { setBillingReload(k => k + 1); return }
+        applyNewExpiry(data.newExpiry)
+        showToast('Plan renewed! Your new expiry date is ' + new Date(data.newExpiry).toLocaleDateString() + '. Your receipt is in Billing history.', { type: 'success' })
       } catch (e) {
         window.history.replaceState({}, '', '/dashboard/settings')
-        showToast('Could not confirm payment. If you were charged, contact support with your reference.', { type: 'error' })
+        setBillingReload(k => k + 1)
+        showToast(`Could not confirm payment: ${e.message || 'unknown error'}. If you were charged, use "Check payment" in Billing history.`, { type: 'error' })
       }
     }
     handlePaystackReturn()
@@ -333,7 +337,7 @@ export default function Settings({ brand, role, perms }) {
       {/* Billing */}
       <Card style={{ padding: '24px', marginBottom: '20px' }}>
         <div style={{ fontSize: '16px', fontWeight: '800', marginBottom: '4px', color: navy }}>Billing</div>
-        <div style={{ fontSize: '13px', color: gray500, marginBottom: '16px' }}>Your plan and renewal</div>
+        <div style={{ fontSize: '13px', color: gray500, marginBottom: '16px' }}>Your plan, usage, payments and receipts</div>
 
         {hospitalBlocked && (
           <div style={{ marginBottom: '12px', padding: '12px 14px', borderRadius: theme.radius.md, background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, color: theme.danger, fontSize: '13px', fontWeight: '600' }}>
@@ -378,6 +382,8 @@ export default function Settings({ brand, role, perms }) {
         ) : (
           <p style={{ fontSize: '12px', color: gray400 }}>Only the business Owner can renew the plan.</p>
         )}
+
+        <BillingHistory businessId={brand?.id} reloadKey={billingReload} onRenewed={applyNewExpiry} showToast={showToast} />
       </Card>
 
       {/* Business Type Badge */}

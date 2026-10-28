@@ -41,6 +41,12 @@ export function createSettingsRepository(request = sbFetch) {
       return request('rpc/business_plan_status', { method: 'POST', body: JSON.stringify({ p_business_id: businessId }) })
     },
 
+    // The Owner's subscription history (business_billing_overview, carehub_20261218): plan, usage against limits,
+    // receipts and attempts that produced no payment. Returns null for anyone but the Owner or a platform admin.
+    async getBillingOverview(businessId) {
+      return request('rpc/business_billing_overview', { method: 'POST', body: JSON.stringify({ p_business_id: businessId }) })
+    },
+
     async get(businessId) {
       const rows = await request(`business_settings?business_id=eq.${businessId}&select=*`)
       return rows[0] || null
