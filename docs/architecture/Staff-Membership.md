@@ -52,6 +52,15 @@ edit them.
 Auth-user ids recorded on audit, stock and attendance rows (`audit_log.actor_id`, `stock_movements.actor_id`,
 `sale_payments.received_by`, `staff_checkins.user_id`) are kept as they are. They are history, not membership.
 
+## Status
+
+**Applied to production 2026-10-28** (run from the SQL editor, recorded as `carehub_20261219_staff_offboarding_and_scope`).
+Verified the same day:
+- every object exists, and only `authenticated` may run `remove_staff_member`;
+- direct deletes are refused, and the invitation records `owns_login`;
+- 3 of the 4 existing staff logins are marked CareHub-owned; the pre-existing personal account is not;
+- the Activity feed is patched.
+
 ## Existing data (2026-10-28)
 
 - Three inactive staff records use emails that later became other businesses' owner logins. They grant no access,
