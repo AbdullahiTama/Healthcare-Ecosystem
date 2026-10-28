@@ -18,7 +18,8 @@ const mockSupabase = vi.hoisted(() => {
       search_logs: [],
     },
   }
-  const rows = (table) => data.tables[table] || []
+  // carefind_products is the public view of products (carehub_20261221).
+  const rows = (table) => data.tables[table === 'carefind_products' ? 'products' : table] || []
   const matches = (row, cons) =>
     Object.entries(cons).every(([col, vals]) => {
       const arr = Array.isArray(vals) ? vals : [vals]
