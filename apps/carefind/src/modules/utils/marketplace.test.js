@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   canShowPrice,
+  noPriceLabel,
+  isRxRestricted,
   coordsFrom,
   businessCoords,
   productCoords,
@@ -211,5 +213,19 @@ describe('telLink', () => {
 
   it('strips formatting characters from the dial string', () => {
     expect(telLink('+234 (801) 234-5678')).toBe('tel:+2348012345678')
+  })
+})
+describe('prescription medicines (carehub_20261221)', () => {
+  it('a prescription-only or controlled medicine never shows a price, even if one arrives', () => {
+    expect(canShowPrice({ price: 1200, rx_restricted: true })).toBe(false)
+    expect(canShowPrice({ price: 1200, rx_status: 'prescription_only' })).toBe(false)
+    expect(canShowPrice({ price: 1200, rx_status: 'controlled' })).toBe(false)
+    expect(canShowPrice({ price: 1200, rx_status: 'pharmacy_only' })).toBe(true)
+  })
+
+  it('says "Available: ask the pharmacist" for them, and "Ask for price" otherwise', () => {
+    expect(noPriceLabel({ rx_restricted: true, price: null })).toBe('Available: ask the pharmacist')
+    expect(noPriceLabel({ show_price: false, price: 500 })).toBe('Ask for price')
+    expect(isRxRestricted(null)).toBe(false)
   })
 })

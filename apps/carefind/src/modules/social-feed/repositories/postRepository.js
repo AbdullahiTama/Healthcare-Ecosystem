@@ -135,7 +135,7 @@ export function createPostRepository({ client = supabase } = {}) {
 
     async searchProducts(query, limit = 4) {
       const { data, error } = await client
-        .from('products').select('id, name, emoji')
+        .from('carefind_products').select('id, name, emoji')
         .eq('list_on_carefind', true)
         .ilike('name', `%${query}%`)
         .limit(limit)

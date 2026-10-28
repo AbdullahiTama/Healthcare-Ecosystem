@@ -1,6 +1,6 @@
 # Product Catalogue: Review and Design
 
-Status: approved 2026-10-27. **Phase 1 is built** (section 6); phases 2–5 are not started.
+Status: approved 2026-10-27. **Phases 1 and 2 are built** (sections 6 and 7); phases 3–5 are not started.
 
 ## 1. Review (live data, 2026-10-27)
 
@@ -234,3 +234,70 @@ and every new product is linked automatically.
   2. Filter Antibiotics and check that they are prescription-only.
   3. Carry one item at a branch, then check that the branch's Inventory shows it at stock 0.
   4. Change a branch price in Inventory, push the item, and check that the branch keeps its price.
+
+## 7. Phase 2 as built: prescription-only safety
+
+**Owner's decisions:**
+- Prescription-only and controlled medicines show on CareFind as **"Available: ask the pharmacist"**, with no price and
+  no online ordering (2026-10-27).
+- Shop listings marked "prescription required" are treated the same way (2026-10-28).
+
+**Finding (live, 2026-10-28):**
+- 884 prescription-only products were listed on CareFind, and 861 of them showed a price to anyone. Any listed row,
+  price included, could be read directly from the products table.
+- One shop listing of a prescription-only product could be ordered online, and two "prescription required" listings
+  could be ordered too.
+
+### Database (`supabase/migrations/carehub_20261221_prescription_safety.sql`)
+
+| Object | What it does |
+|---|---|
+| `is_rx_restricted(rx_status)` | True for `prescription_only` and `controlled`. |
+| Policy "public can view listed products" | Restricted items are no longer readable from the products table by the public. The business's members, the listing's own seller and an approved claimant still see them in full. |
+| View `carefind_products` | The public list of every listed product. Restricted items come with `price` null, `show_price` false and `rx_restricted` true. It omits cost price and lists only listed products. It is owned by the database owner (not security_invoker) so that it can include restricted items without their price. |
+| Policy "ecommerce_products public read" and view `shop_public_products` | The shop no longer lists restricted products or "prescription required" listings. |
+| Trigger `shop_order_items_no_prescription` | Refuses any order line for a restricted product or a "prescription required" listing, whoever inserts it, so `create_shop_order` fails as a whole with "… is a prescription medicine and is not sold online. Please ask the pharmacist." |
+
+**Previous definitions** (for rollback):
+- "public can view listed products": `for select using (list_on_carefind = true)`.
+- "ecommerce_products public read": `status = 'Active' and is_restricted = false and is_ecommerce_vendor_approved(business_id)
+  and exists (select 1 from products p where p.id = product_id and (p.stock is null or p.stock > 0))`.
+- `shop_public_products`: the same columns, without the two prescription conditions.
+
+### App (CareFind)
+
+- `utils/marketplace.js`:
+  - `isRxRestricted(product)`;
+  - `canShowPrice` never shows a price for a restricted item;
+  - `noPriceLabel(product)` returns "Available: ask the pharmacist" for restricted items and "Ask for price" otherwise.
+- The search, featured products, drug profile and business profile screens read `carefind_products` (healthcare and
+  business-profile repositories) and use `noPriceLabel`. The post composer's product lookup reads the view too.
+- Restricted items do not appear in the shop, so they cannot reach the cart or checkout.
+
+### Security implications
+
+- The changes only narrow what the public can read and order.
+- `carefind_products` is the one place restricted items are exposed, and only without a price.
+- The order-line trigger enforces the rule in the database, so it holds even if a screen is wrong or an API caller
+  builds an order by hand.
+- Separate finding, not changed here: the public can still read `products.cost_price` of non-restricted listed items
+  from the table. CareFind screens no longer need the table, so a later change can move all public reads to
+  `carefind_products` and remove the table's public policy.
+
+### Test plan
+
+- **PGlite:** `apps/carefind/src/test/prescription-safety/prescriptionSafety.db.test.js` (9 tests):
+  - the public cannot read restricted items from the table;
+  - the business, the seller and a claimant still can;
+  - the view lists everything, with no price for restricted items and no cost;
+  - unlisted items are excluded, and the view is read-only;
+  - the shop hides restricted and "prescription required" listings;
+  - order lines are refused, and an ordinary line is accepted;
+  - re-running the migration is safe.
+- **Unit and UI:**
+  - `utils/marketplace.test.js`: the price rule and the label;
+  - `BusinessProfile.test.jsx`: a restricted item reads "Available: ask the pharmacist" with no price, and comes from
+    `carefind_products`.
+- **Manual, after applying the migration:**
+  1. Search for an antibiotic on CareFind and check that it shows "Available: ask the pharmacist".
+  2. Check that the shop no longer lists it.

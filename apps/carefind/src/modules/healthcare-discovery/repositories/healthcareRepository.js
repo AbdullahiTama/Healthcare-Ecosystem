@@ -1,11 +1,13 @@
 import { supabase } from '../../../config/supabaseClient'
 
+// Public product reads go through carefind_products (carehub_20261221): it lists every product on CareFind, and
+// sends prescription-only and controlled medicines without a price (rx_restricted).
 export function createHealthcareRepository({ client = supabase } = {}) {
   return {
     async searchProductsByName(decodedName) {
       const { data, error } = await client
-        .from('products')
-        .select('id, name, generic_name, price, show_price, stock, emoji, image_url, description, whatsapp, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, owner_id, business_id, businesses(id, name, city, state, whatsapp, visible_on_carefind, latitude, longitude, lat, lng, phone, show_prices)')
+        .from('carefind_products')
+        .select('id, name, generic_name, price, show_price, rx_restricted, stock, emoji, image_url, description, whatsapp, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, owner_id, business_id, businesses(id, name, city, state, whatsapp, visible_on_carefind, latitude, longitude, lat, lng, phone, show_prices)')
         .ilike('name', `%${decodedName}%`)
         .eq('list_on_carefind', true)
       if (error) throw error
@@ -49,8 +51,8 @@ export function createHealthcareRepository({ client = supabase } = {}) {
 
     async getFeaturedProducts() {
       const { data, error } = await client
-        .from('products')
-        .select('id, name, emoji, price, show_price, latitude, longitude, business_id, list_on_carefind, businesses(name, latitude, longitude, lat, lng, show_prices)')
+        .from('carefind_products')
+        .select('id, name, emoji, price, show_price, rx_restricted, latitude, longitude, business_id, list_on_carefind, businesses(name, latitude, longitude, lat, lng, show_prices)')
         .order('created_at', { ascending: false })
         .limit(14)
       if (error) throw error
@@ -70,8 +72,8 @@ export function createHealthcareRepository({ client = supabase } = {}) {
 
     async searchProducts(q, saleType) {
       let pq = client
-        .from('products')
-        .select('id, name, emoji, price, show_price, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, business_id, owner_id, list_on_carefind, created_at, businesses(name, city, state, whatsapp, phone, latitude, longitude, lat, lng, show_prices)')
+        .from('carefind_products')
+        .select('id, name, emoji, price, show_price, rx_restricted, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, business_id, owner_id, list_on_carefind, created_at, businesses(name, city, state, whatsapp, phone, latitude, longitude, lat, lng, show_prices)')
       if (q) pq = pq.or(`name.ilike.%${q}%,generic_name.ilike.%${q}%,category.ilike.%${q}%`)
       if (saleType && saleType !== 'all') pq = pq.eq('sale_type', saleType)
       pq = pq.order('created_at', { ascending: false }).limit(100)

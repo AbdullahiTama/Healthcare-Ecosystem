@@ -14,8 +14,8 @@ export function createBusinessProfileRepository({ client = supabase } = {}) {
 
     async getBusinessProducts(businessId) {
       const { data, error } = await client
-        .from('products')
-        .select('id, name, generic_name, price, show_price, stock, emoji, image_url, price_unit, sale_type, min_purchase, list_on_carefind, latitude, longitude, businesses(show_prices, latitude, longitude, lat, lng)')
+        .from('carefind_products')
+        .select('id, name, generic_name, price, show_price, rx_restricted, stock, emoji, image_url, price_unit, sale_type, min_purchase, list_on_carefind, latitude, longitude, businesses(show_prices, latitude, longitude, lat, lng)')
         .eq('business_id', businessId)
       if (error) throw error
       return data || []

@@ -18,7 +18,7 @@ import { Avatar, Card, Empty, Toast, useToast } from '../../components/ui'
 import StoryAvatar from '../../components/StoryAvatar.jsx'
 import StoryViewer from '../social-feed/components/StoryViewer.jsx'
 import { markStoriesViewed } from '../social-feed/storyViews.js'
-import { canShowPrice, SALE_TYPE_LABELS, productCoords, businessCoords, haversineMeters, formatDistance, distanceLabel } from '../utils/marketplace.js'
+import { canShowPrice, noPriceLabel, SALE_TYPE_LABELS, productCoords, businessCoords, haversineMeters, formatDistance, distanceLabel } from '../utils/marketplace.js'
 import { recordContactLead } from '../utils/contactLeads.js'
 import MarketplaceTabs from '../marketplace/MarketplaceTabs.jsx'
 import Logo from '../social-feed/Logo.jsx'
@@ -478,7 +478,7 @@ function Search() {
                       <p style={{ margin: '0 0 3px 0', fontSize: 13, fontWeight: 700, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
                       {canShowPrice(p)
                         ? <p style={{ margin: '0 0 2px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
-                        : <p style={{ margin: '0 0 2px 0', fontSize: 11, fontWeight: 700, color: theme.textMid }}>Ask for price</p>}
+                        : <p style={{ margin: '0 0 2px 0', fontSize: 11, fontWeight: 700, color: theme.textMid }}>{noPriceLabel(p)}</p>}
                       <p style={{ margin: 0, fontSize: 11, color: theme.textMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.businesses?.name || ''}</p>
                     </Card>
                   </Link>

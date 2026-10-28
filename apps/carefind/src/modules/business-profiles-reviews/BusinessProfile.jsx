@@ -12,7 +12,7 @@ import { notifyReview } from '../../services/reviewNotifications.js'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { useGeolocation } from '../../hooks/useGeolocation'
-import { canShowPrice, distanceLabel, coordsFrom } from '../utils/marketplace'
+import { canShowPrice, noPriceLabel, distanceLabel, coordsFrom } from '../utils/marketplace'
 import AppShell from '../../components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import { getSentimentSummary } from './sentiment'
@@ -917,7 +917,7 @@ function BusinessProfile() {
                               <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
                               {p.price_unit && <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>per {p.price_unit}</p>}
                             </>
-                          : <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}
+                          : <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: theme.textLight }}>{noPriceLabel(p)}</p>}
                         {p.stock != null && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>Stock: {p.stock}</p>}
                       </div>
                     </Card>

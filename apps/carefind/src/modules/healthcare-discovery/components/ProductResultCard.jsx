@@ -5,7 +5,7 @@ import {
 import { theme } from '../../../styles/theme'
 import { Card, Pill } from '../../../components/ui'
 import {
-  SALE_TYPE_LABELS, canShowPrice, whatsappLink, telLink,
+  SALE_TYPE_LABELS, canShowPrice, noPriceLabel, whatsappLink, telLink,
 } from '../../utils/marketplace.js'
 import { sellerName, sellerContact, sellerPhone } from '../../utils/sellerLookup.js'
 
@@ -99,7 +99,7 @@ export default function ProductResultCard({ product: p, index = 0, distance = nu
               {p.price_unit && <p style={{ margin: 0, fontSize: 9.5, color: theme.textMid }}>per {p.price_unit}</p>}
             </>
           ) : (
-            <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: theme.textMid }}>Ask for price</p>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: theme.textMid }}>{noPriceLabel(p)}</p>
           )}
         </div>
       </div>

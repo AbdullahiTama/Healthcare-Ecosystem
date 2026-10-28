@@ -16,7 +16,8 @@ const mockSupabase = vi.hoisted(() => {
       service_availability: [],
     },
   }
-  const rows = (table) => data.tables[table] || []
+  // carefind_products is the public view of products (carehub_20261221).
+  const rows = (table) => data.tables[table === 'carefind_products' ? 'products' : table] || []
   const matches = (row, cons) =>
     Object.entries(cons).every(([col, vals]) => {
       const arr = Array.isArray(vals) ? vals : [vals]
@@ -156,6 +157,18 @@ describe('BusinessProfile — facility actions and per-business search', () => {
     mockSupabase.data.tables.service_availability = []
     if (typeof sessionStorage !== 'undefined') sessionStorage.clear()
     global.fetch = fetchMock
+  })
+
+  it('a prescription medicine shows "Available: ask the pharmacist" and no price', async () => {
+    mockSupabase.data.tables.businesses = [makeBiz({ id: 'b1' })]
+    mockSupabase.data.tables.products = [
+      makeProduct({ id: 'p1', name: 'Amoxil 500', price: null, show_price: false, rx_restricted: true }),
+      makeProduct({ id: 'p2', name: 'Vitamin C', price: 500, rx_restricted: false }),
+    ]
+    renderProfile()
+    expect(await screen.findByText('Available: ask the pharmacist')).toBeInTheDocument()
+    expect(screen.getByText('₦500')).toBeInTheDocument()
+    expect(mockSupabase.supabase.from).toHaveBeenCalledWith('carefind_products')
   })
 
   it('removes WhatsApp/Call from facility profile (keeps Directions)', async () => {

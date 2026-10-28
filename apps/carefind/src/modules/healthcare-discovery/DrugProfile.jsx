@@ -19,7 +19,7 @@ import { analyzeReviews } from '../business-profiles-reviews/reviewAI'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Loading, StarPicker, Stars } from '../../components/ui'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
-import { canShowPrice, distanceLabel, SALE_TYPE_LABELS, whatsappLink, telLink } from '../utils/marketplace.js'
+import { canShowPrice, noPriceLabel, distanceLabel, SALE_TYPE_LABELS, whatsappLink, telLink } from '../utils/marketplace.js'
 import { recordContactLead } from '../utils/contactLeads.js'
 import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
 
@@ -408,7 +408,7 @@ function DrugProfile() {
                         {p.price_unit && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>per {p.price_unit}</p>}
                       </>
                     ) : (
-                      <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: theme.textLight }}>Ask for price</p>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: theme.textLight }}>{noPriceLabel(p)}</p>
                     )}
                     {p.business_id && p.stock != null && <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>Stock: {p.stock}</p>}
                     {(() => {
@@ -489,7 +489,7 @@ function DrugProfile() {
                 >
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {sellerName(p)}{canShowPrice(p) ? ` · ₦${Number(p.price).toLocaleString()}` : ' · Ask for price'}
+                      {sellerName(p)}{canShowPrice(p) ? ` · ₦${Number(p.price).toLocaleString()}` : ' · ' + noPriceLabel(p)}
                     </option>
                   ))}
                 </select>
