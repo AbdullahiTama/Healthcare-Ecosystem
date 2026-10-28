@@ -1,27 +1,4 @@
 import { sbFetch } from '../../../services/supabase'
-import { translateConstraintError } from '../../../lib/dbErrors'
-
-// Fifteen tables reference `staff` and none of those foreign keys cascade, so a
-// staff member who has done almost anything cannot be deleted. These are the
-// reasons, grouped — the exact constraint matters less to the user than what
-// they have to do about it.
-const DELETE_BLOCKERS = [
-  ['rep_territories_staff_id_fkey', 'is assigned to a territory. Unassign them in Territories first.'],
-  ['enterprise_locations_manager_staff_id_fkey', 'manages a warehouse. Reassign that location to another manager first.'],
-  ['orders_created_by_staff_id_fkey', 'has raised orders. Those records are kept, so this account can be set to inactive but not deleted.'],
-  ['orders_approver_staff_id_fkey', 'has approved orders. Those records are kept, so this account can be set to inactive but not deleted.'],
-  ['order_watchers_staff_id_fkey', 'is watching an order. Remove them from that order first.'],
-  ['internal_messages_sender_staff_id_fkey', 'has sent internal messages, which are kept as a record. Set the account to inactive instead.'],
-  ['internal_message_recipients_staff_id_fkey', 'has received internal messages, which are kept as a record. Set the account to inactive instead.'],
-  ['field_activities_staff_id_fkey', 'has logged field activity, which is kept as a record. Set the account to inactive instead.'],
-  ['activity_comments_staff_id_fkey', 'has commented on field activity, which is kept as a record. Set the account to inactive instead.'],
-  ['activity_reactions_staff_id_fkey', 'has reacted to field activity, which is kept as a record. Set the account to inactive instead.'],
-  ['activity_viewers_staff_id_fkey', 'is a viewer on field activity. Remove them from those activities first.'],
-  ['activity_default_viewers_staff_id_fkey', 'is set as a default activity viewer. Clear that setting first.'],
-  ['activity_default_viewers_viewer_staff_id_fkey', 'is set as a default activity viewer. Clear that setting first.'],
-  ['staff_claims_staff_id_fkey', 'has a CareFind profile claim against them. Resolve the claim first.'],
-  ['staff_notifications_staff_id_fkey', 'has notifications on record. Set the account to inactive instead.'],
-]
 
 // ── Staff repository ──────────────────────────────────────────────────────────
 // A deep module over the people side of a business: `staff` (who works here),
@@ -45,26 +22,15 @@ const DELETE_BLOCKERS = [
 //                   the boundary. Documented at the method rather than left to
 //                   look like an oversight.
 //
-// NOT here on purpose: staff *authentication*. Since C2 dropped staff.password
-// (20260813_purge_plaintext_password_columns.sql) there is no credential check
-// left — login goes through Supabase Auth, and the only auth-adjacent reads
-// are `getStaffByEmail` (resolve the session's email to a row, post-login) and
-// `provisionStaffAuth` (Staff.jsx mints the new member's auth account), both of
-// which stay in services/supabase.js. Neither can use a business-scoped
-// repository: the former runs from Login.jsx before any business context
-// exists, and the latter is a single server-side RPC.
+// NOT here on purpose: staff *authentication*. Login goes through Supabase
+// Auth, and the only auth-adjacent read is `getStaffByEmail` (resolve the
+// session's email to a row, post-login) in services/supabase.js, which runs
+// from Login.jsx before any business context exists.
 export function createStaffRepository(request = sbFetch) {
   return {
     // ── Staff ────────────────────────────────────────────────────────────────
     async getAll(businessId) {
       return request(`staff?business_id=eq.${businessId}&order=created_at.desc&select=*`)
-    },
-
-    async create(businessId, staff) {
-      return request('staff', {
-        method: 'POST',
-        body: JSON.stringify({ ...staff, business_id: businessId }),
-      })
     },
 
     // Previously an id-only PATCH. Drives the active/inactive toggle and the
@@ -77,17 +43,14 @@ export function createStaffRepository(request = sbFetch) {
       })
     },
 
-    // Previously an id-only DELETE. `name` is only used to build a readable
-    // failure message; the page already has the row.
-    async delete(staffId, businessId, name = 'This staff member') {
-      try {
-        return await request(`staff?id=eq.${staffId}&business_id=eq.${businessId}`, {
-          method: 'DELETE',
-          prefer: 'return=minimal',
-        })
-      } catch (e) {
-        throw translateConstraintError(name, e, DELETE_BLOCKERS)
-      }
+    // Removes a person completely (remove_staff_member, carehub_20261219_staff_offboarding_and_scope.sql): the
+    // staff row, their CareHub-only login and personal data, while the business's sales, payments, shifts, orders and
+    // reports stay, unlinked, under the name stored on them. The database decides who may do this; a direct DELETE
+    // is refused. Joining is by invitation (modules/staff/services/invitations.js), so there is no create here.
+    // → { removed, login_deleted, login_kept }
+    async remove(staffId) {
+      const res = await request('rpc/remove_staff_member', { method: 'POST', body: JSON.stringify({ p_staff_id: staffId }) })
+      return Array.isArray(res) ? res[0] : res
     },
 
     // ── Roles ────────────────────────────────────────────────────────────────
