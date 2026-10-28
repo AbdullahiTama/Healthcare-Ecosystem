@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { debtTotals, matchesParty } from './debtTotals'
 import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck } from 'lucide-react'
 import { debtRepository } from './repositories'
 import { settleDebt } from './settleDebt'
@@ -143,14 +144,12 @@ export default function Debts({ brand, role, perms, staffName }) {
     }
   }
 
-  const filtered = debts.filter(d => {
-    const matchSearch = !search || d.party_name.toLowerCase().includes(search.toLowerCase())
-    const matchMonth = !filterMonth || d.created_at?.startsWith(filterMonth)
-    return matchSearch && matchMonth
-  })
-
-  const owedToUs = debts.filter(d => d.direction === 'owes_us').reduce((s, d) => s + (d.balance || 0), 0)
-  const weOwe = debts.filter(d => d.direction === 'we_owe').reduce((s, d) => s + (d.balance || 0), 0)
+  const filtered = debts.filter(d => matchesParty(d, search) && (!filterMonth || d.created_at?.startsWith(filterMonth)))
+  const isFiltered = !!search.trim() || !!filterMonth
+  const { owedToUs, weOwe } = debtTotals(debts)
+  // The outstanding amount of the debts the filter shows (e.g. everything one customer owes).
+  const shown = debtTotals(filtered)
+  const filterLabel = [search.trim() && `"${search.trim()}"`, filterMonth && new Date(filterMonth + '-01T00:00:00').toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })].filter(Boolean).join(' · ')
 
   return (
     <div>
@@ -170,16 +169,26 @@ export default function Debts({ brand, role, perms, staffName }) {
       <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '180px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
           <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search party name...'
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search party name...' aria-label='Search debts by customer or party name'
             style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
         </div>
-        <input type='month' value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
+        <input type='month' aria-label='Filter debts by month' value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
           style={{ padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
         {filterMonth && <button onClick={() => setFilterMonth('')} style={{ padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>Clear</button>}
       </div>
 
+      {isFiltered && !loading && !loadError && (
+        <div role='status' aria-live='polite' style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 18px', padding: '12px 16px', marginBottom: '14px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}` }}>
+          <span style={{ fontSize: '12.5px', color: gray600 }}>{shown.count} debt{shown.count !== 1 ? 's' : ''} for {filterLabel}</span>
+          <span style={{ fontSize: '13px', color: gray600 }}>Outstanding, owed to you: <strong style={{ color: success, fontSize: '15px' }}>{fmt(shown.owedToUs)}</strong>{shown.openOwedToUs > 0 && <span style={{ color: gray500 }}> ({shown.openOwedToUs} open)</span>}</span>
+          {shown.weOwe > 0 && <span style={{ fontSize: '13px', color: gray600 }}>You owe: <strong style={{ color: danger, fontSize: '15px' }}>{fmt(shown.weOwe)}</strong></span>}
+        </div>
+      )}
+
       {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : filtered.length === 0 ? (
-        <Empty icon={<Landmark size={40} />} message='No debts recorded' action='+ Record Debt' onAction={() => setShowAdd(true)} />
+        isFiltered
+          ? <Empty icon={<Search size={40} />} message={`No debts match ${filterLabel}`} cause='filtered' action='Clear filters' onAction={() => { setSearch(''); setFilterMonth('') }} />
+          : <Empty icon={<Landmark size={40} />} message='No debts recorded' action='+ Record Debt' onAction={() => setShowAdd(true)} />
       ) : (
         <DataTable
           rows={filtered}

@@ -261,11 +261,12 @@ export function createSaleRepository({
     // Re-saves a HELD sale's contents (products, customer, note) in place. The
     // database refuses any attempt to change its hold status from here: a held
     // sale only ends by being completed (create with `resumed_from`).
-    async updateHeld(saleId, businessId, { items, subtotal, discount, total, clientName, notes }) {
+    async updateHeld(saleId, businessId, { items, subtotal, discount, total, clientId, clientName, notes }) {
       return request(`sales?id=eq.${saleId}&business_id=eq.${businessId}&is_on_hold=eq.true`, {
         method: 'PATCH',
         body: JSON.stringify({
           items: JSON.stringify(items), subtotal, discount, total, balance: total,
+          ...(clientId !== undefined ? { client_id: clientId } : {}),
           client_name: clientName, notes,
         }),
         prefer: 'return=minimal',

@@ -42,6 +42,13 @@ export function saleToReceipt(s) {
   }
 }
 
+// A held sale → an invoice: the same layout as a receipt, titled INVOICE, with the amount due instead of payment
+// lines and a plain "not a receipt" note. Nothing has been paid on a held sale.
+export function heldSaleToInvoice(s) {
+  const r = saleToReceipt(s)
+  return { ...r, kind: 'invoice', method: null, cashGiven: 0, splitAmounts: null, amtPaid: 0, balance: Number(s.total) || 0, note: s.notes || '' }
+}
+
 // Display-only tax. The tax line is a computed total × rate shown on the
 // receipt for the customer's information; the stored sale total and the amount
 // charged are deliberately unchanged. Returns 0 when there is nothing to show.
@@ -83,6 +90,7 @@ export async function buildReceiptQrDataUrl(receipt = {}, settings = {}) {
 
 export function buildReceiptHtml({ receipt = {}, business = {}, settings = {}, qrDataUrl = null }) {
   const r = receipt
+  const isInvoice = r.kind === 'invoice'
   const biz = business
   const width = settings.receipt_width === '58' ? '58' : '80'
   const p = PAPER[width] || PAPER['80']
@@ -157,7 +165,16 @@ export function buildReceiptHtml({ receipt = {}, business = {}, settings = {}, q
     || 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + encodeURIComponent(settings.qr_code_url || `${typeof window !== 'undefined' ? window.location.origin : ''}/receipt/${r.id}`)
   const qrCode = `<img src="${qrSrc}" alt="QR Code" style="width:80px;height:80px;border:1px solid #999;margin:4px auto;display:block" />`
 
-  return `<!DOCTYPE html><html><head><title>Receipt</title><style>
+  // ── INVOICE ──────────────────────────────────────────────────────────────
+  // A held sale has not been paid: the invoice shows what is due, never a payment method or change.
+  const dueRows = metaRow('Amount paid', fmt(0)) +
+    '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:4px;font-weight:bold;font-size:' + p.totalSize + '"><div>AMOUNT DUE</div><div style="text-align:right">' + fmt(total + tax) + '</div></div>' +
+    metaRow('Status', 'Not paid')
+  const invoiceNote = (r.note ? '<div style="margin-bottom:6px">Note: ' + esc(r.note) + '</div>' : '') +
+    '<div style="text-align:center;font-weight:bold">This is an invoice, not a receipt.</div>' +
+    '<div style="text-align:center;margin-top:2px">Payment has not been received. A receipt is issued when the sale is paid.</div>'
+
+  return `<!DOCTYPE html><html><head><title>${isInvoice ? 'Invoice' : 'Receipt'}</title><style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:Arial,Helvetica,sans-serif;font-size:${p.fontSize};width:${p.paper};margin:0 auto;padding:${p.pad};-webkit-print-color-adjust:exact;print-color-adjust:exact}
     @page{size:${p.paper} auto;margin:0}
@@ -171,8 +188,9 @@ export function buildReceiptHtml({ receipt = {}, business = {}, settings = {}, q
       ${bizWhatsapp}
       ${headerLine}
     </div>
+    ${isInvoice ? '<div style="text-align:center;font-weight:bold;font-size:' + p.totalSize + ';margin-top:6px;letter-spacing:2px">INVOICE</div>' : ''}
     ${hr}
-    ${metaRow('Receipt:', esc(r.id))}
+    ${metaRow(isInvoice ? 'Invoice:' : 'Receipt:', esc(r.id))}
     ${metaRow('Date:', esc(date))}
     ${metaRow('Client:', esc(r.client))}
     ${hr}
@@ -183,12 +201,9 @@ export function buildReceiptHtml({ receipt = {}, business = {}, settings = {}, q
     <div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:4px;font-weight:bold;font-size:${p.totalSize}"><div>TOTAL</div><div style="text-align:right">${fmt(r.total)}</div></div>
     ${taxRows}
     ${hr}
-    ${metaRow('Payment', esc(r.method))}
-    ${paymentRows}
-    ${splitLine}
-    ${hr}
-    ${settings.refund_policy ? '<div style="text-align:center;margin-bottom:6px">' + esc(settings.refund_policy) + '</div>' + hr : ''}
-    <div style="text-align:center;margin-top:6px">${esc(settings.receipt_footer || 'Thank you for your patronage!')}</div>
-    <div style="text-align:center;margin-top:8px">${qrCode}</div>
+    ${isInvoice ? dueRows + hr + invoiceNote : metaRow('Payment', esc(r.method)) + paymentRows + splitLine + hr +
+      (settings.refund_policy ? '<div style="text-align:center;margin-bottom:6px">' + esc(settings.refund_policy) + '</div>' + hr : '') +
+      '<div style="text-align:center;margin-top:6px">' + esc(settings.receipt_footer || 'Thank you for your patronage!') + '</div>' +
+      '<div style="text-align:center;margin-top:8px">' + qrCode + '</div>'}
 </body></html>`
 }
