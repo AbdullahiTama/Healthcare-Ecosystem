@@ -54,6 +54,11 @@ webhook uses the same settlement, so a payment is never applied twice.
 
 ## Deployment
 
+**Applied to production 2026-10-28** (Supabase migration `carehub_20261218_subscription_billing`). Verified: the
+existing payment was backfilled as `CH-2026-000001` (Basic, 1 month, Paystack 6647230774); the receipt trigger exists;
+the overview returns data for the Owner and NULL for a staff member and another business's owner; anon cannot execute it.
+
+
 Apply the migration before or with the app. If the app ships first, the Billing history shows "We couldn't load your
 billing history" with a retry button until the migration is applied. Renewals keep working either way.
 
