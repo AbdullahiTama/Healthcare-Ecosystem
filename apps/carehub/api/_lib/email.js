@@ -65,6 +65,38 @@ function footer() {
   `
 }
 
+// Staff invitation. Sent server-side only (api/_handlers/staff-invitations.js).
+// Carries a single-use link, never a password: the invitee chooses their own
+// when they accept. Every value is owner-typed, so it is escaped.
+export async function emailStaffInvitation({ staffName, staffEmail, businessName, role, acceptUrl, expiresAt }) {
+  const expires = expiresAt ? new Date(expiresAt).toUTCString().replace(/:\d\d GMT$/, ' GMT') : '7 days'
+  const html = `
+    <div style="${baseStyle}">
+      ${logoHeader()}
+      <div style="${cardStyle}">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h2 style="color: #0f172a; margin: 0 0 8px;">You're invited to join ${esc(businessName)}</h2>
+          <p style="color: #888; margin: 0;">Hi ${esc(staffName)},</p>
+        </div>
+        <p style="color: #555; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">
+          You have been invited to join <strong>${esc(businessName)}</strong> on CareHub as
+          <strong>${esc(role)}</strong>. Accept the invitation to choose your own password and sign in.
+        </p>
+        <div style="text-align: center;">
+          <a href="${esc(acceptUrl)}" style="${btnStyle}">Accept invitation →</a>
+        </div>
+        <p style="color: #888; font-size: 12px; line-height: 1.7; margin-top: 24px;">
+          This link works once and expires on ${esc(expires)}. If you already have a CareHub or CareFind
+          account with this email, you will be asked to sign in with your existing password — it will not be changed.
+          If you were not expecting this invitation, you can ignore this email.
+        </p>
+      </div>
+      ${footer()}
+    </div>
+  `
+  return sendEmail({ to: staffEmail, subject: `You're invited to join ${businessName} on CareHub`, html })
+}
+
 export function buildRegistrationOwnerHtml({ businessName, ownerName }) {
   return `
     <div style="${baseStyle}">

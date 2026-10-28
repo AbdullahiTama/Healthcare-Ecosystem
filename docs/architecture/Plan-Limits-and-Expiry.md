@@ -11,11 +11,13 @@
 | Email "Renew" link | `/billing`, which CareHub does not have | `/dashboard/settings` |
 | Live data | 25 of 31 businesses past their expiry, most since 17–18 Aug 2026 | They get a fresh 7-day grace from the day the migration is applied |
 
-**Separate finding:** adding staff currently fails in production. `Staff.jsx` inserts the staff row directly, and
-the live `guard_staff_writes` trigger refuses that ("Staff members are added by invitation"); the last staff member
-was added on 2026-10-08. The invitation flow (`create_staff_invitation`, live) is being built on the
-`claude/eloquent-franklin-m3cyzm` / `claude/kind-thompson-x3qlrt` branches and is not merged. The plan check below
-applies to that flow too.
+**Separate finding (fixed):** adding staff failed in production because `Staff.jsx` inserted the staff row directly,
+which the live `guard_staff_writes` trigger refuses ("Staff members are added by invitation"). Staff.jsx now calls the
+live invitation flow: `POST /api/staff-invitations` (`api/_handlers/staff-invitations.js`) runs `create_staff_invitation`
+and emails a single-use, 7-day link; the invitee sets their own password on `/accept-invite`. Pending invitations show
+as "Invited" with a "Resend invite" action and count toward the plan's staff limit. Requires `SUPABASE_SERVICE_ROLE_KEY`,
+the email provider keys, and optionally `CAREHUB_APP_URL` (the invite link base) in the server environment.
+The plan check below applies to that flow too.
 
 ## Policy (owner's decisions)
 

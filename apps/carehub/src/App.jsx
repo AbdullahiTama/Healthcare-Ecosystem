@@ -15,6 +15,7 @@ const Register = lazy(() => import('./pages/auth/Register'))
 const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'))
 const LinkExpired = lazy(() => import('./pages/auth/LinkExpired'))
+const AcceptInvite = lazy(() => import('./pages/auth/AcceptInvite'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const BusinessDashboard = lazy(() => import('./pages/dashboard/BusinessDashboard'))
 const AgentLogin = lazy(() => import('./pages/agent/AgentLogin'))
@@ -175,6 +176,7 @@ let loggingOut = false
             <Route path='/forgot-password' element={<ForgotPassword />} />
             <Route path='/reset-password' element={<ResetPassword />} />
             <Route path='/link-expired' element={<LinkExpired />} />
+            <Route path='/accept-invite' element={<AcceptInvite />} />
             <Route path='/apply-agent' element={<ApplyAgent />} />
             <Route path='/agent/login' element={agent ? <Navigate to='/agent' /> : <AgentLogin />} />
             <Route path='/agent/*' element={agent ? <AgentDashboard /> : <Navigate to='/agent/login' />} />

@@ -26,6 +26,7 @@ import initiatePlanPaymentHandler from './_handlers/initiate-plan-payment.js'
 import notifyBusinessStatusHandler from './_handlers/notify-business-status.js'
 import notifyRegistrationHandler from './_handlers/notify-registration.js'
 import registerBusinessHandler from './_handlers/register-business.js'
+import staffInvitationsHandler from './_handlers/staff-invitations.js'
 import resolveAccountHandler from './_handlers/resolve-account.js'
 import kycHandler from './_handlers/kyc.js'
 import payoutAccountsHandler from './_handlers/payout-accounts.js'
@@ -84,6 +85,7 @@ const HANDLERS = {
   'verify-plan-payment':          verifyPlanPaymentHandler,
   'verify-appointment-payment':   verifyAppointmentPaymentHandler,
   'resolve-account':              resolveAccountHandler,
+  'staff-invitations':            staffInvitationsHandler,
   'notify-registration':          notifyRegistrationHandler,
   'register-business':            registerBusinessHandler,
   'notify-business-status':       notifyBusinessStatusHandler,
