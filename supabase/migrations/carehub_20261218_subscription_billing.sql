@@ -28,7 +28,7 @@
 --     number is assigned by a trigger, not by the caller.
 --
 -- Rollback: drop function business_billing_overview(uuid); restore renew_business_plan from
---   carefind_20261007_commission_engine.sql; drop trigger plan_payments_assign_receipt; the added columns can stay
+--   carefind_20261007_commission_engine.sql; drop the plan_payments_assign_receipt trigger; the added columns can stay
 --   (nullable, unused by older code).
 
 -- ── 1. Receipt fields ────────────────────────────────────────────────────────
@@ -58,10 +58,15 @@ begin
 end;
 $$;
 
-drop trigger if exists plan_payments_assign_receipt on public.plan_payments;
-create trigger plan_payments_assign_receipt
-  before insert on public.plan_payments
-  for each row execute function public.plan_payments_assign_receipt();
+-- Created only when missing (re-running keeps the existing one; the function above is replaced in place).
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname = 'plan_payments_assign_receipt' and tgrelid = 'public.plan_payments'::regclass) then
+    create trigger plan_payments_assign_receipt
+      before insert on public.plan_payments
+      for each row execute function public.plan_payments_assign_receipt();
+  end if;
+end $$;
 
 -- Backfill rows written before this migration, oldest first so numbers follow payment order. Their period was never
 -- recorded, so it is shown as the months bought from the payment date: exact when the plan had lapsed at payment
