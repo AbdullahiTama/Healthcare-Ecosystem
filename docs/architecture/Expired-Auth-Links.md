@@ -51,6 +51,30 @@ A new CareHub business owner registers without a password. `POST /api/register-b
 
 Full flow, database objects, and the rollout runbook: [Owner email verification](Owner-Email-Verification.md).
 
+## CareHub links carry a token hash (2026-10-28)
+
+**Bug:** every CareHub reset link showed "Link expired" the moment it was opened. Admin `generateLink` links use the
+implicit flow: after `/verify`, Supabase returns the session in the URL hash (`#access_token=…`). CareHub's browser
+client uses `flowType: 'pkce'`, and auth-js rejects an implicit callback in PKCE mode ("Not a valid PKCE flow url"). So
+no session was ever created, and `ResetPassword.jsx` showed its expired state. CareFind uses the implicit flow, so it was
+not affected.
+
+**Fix:**
+- `sendAuthEmail` builds CareHub links (branding flag `tokenHashLinks`) as
+  `<redirect>?token_hash=<hashed_token>&type=<verification_type>`, through `tokenHashLink()` in `authEmail.js`. The
+  redirect's own query is kept (e.g. `?welcome=1`), and a bare origin goes to `/reset-password`. CareFind links are
+  unchanged.
+- `ResetPassword.jsx` shows the form at once. It calls `verifyOtp({ token_hash, type })` only when the person submits a
+  new password, so a mail scanner that opens the link cannot use up the single-use token. A used or expired token shows
+  the expired state at that point.
+- `token_hash` is removed from the address bar on load.
+- Links sent before the fix (session in the hash) are adopted with `setSession` and the tokens are cleared from the URL.
+  A hash carrying `error_code` shows the expired state.
+- The link no longer goes through Supabase's `/verify` redirect, so the redirect allow-list does not apply to it.
+
+Tests: `pages/auth/__tests__/ResetPassword.tokenHash.test.jsx`; `packages/shared-email/src/__tests__/authEmail.test.js`
+("auth links per app").
+
 ## Security
 
 - **The page never shows text from the URL.** `error_description` is attacker-controllable, since anyone can send a crafted `carefind.app/#error_description=Call+this+number` link. The page reads only the allow-listed `reason` and `kind` values (`readLinkExpiredParams`) and shows its own copy.

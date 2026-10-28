@@ -41,7 +41,25 @@ const APP_BRANDING = {
     label: 'CareHub',
     fromEmail: APP_SENDERS.carehub,
     defaultRedirect: process.env.APP_URL || 'https://carefindhub.com',
+    // CareHub's browser client uses the PKCE flow, which rejects the session Supabase's own verify link returns in
+    // the URL hash ("Not a valid PKCE flow url"), so every reset link looked expired. CareHub links instead carry the
+    // one-time token hash to the app's own page, which verifies it (verifyOtp) only when the person submits a new
+    // password: a mail scanner that opens the link cannot use the token up.
+    tokenHashLinks: true,
   },
+}
+
+// <redirect>?token_hash=…&type=… — the redirect's own query (e.g. ?welcome=1) is kept. A bare origin (the fallback
+// when the caller passed no redirect) goes to the page that can use the token.
+export function tokenHashLink(redirect, properties, fallbackPath = '/reset-password') {
+  const hash = properties?.hashed_token
+  const type = properties?.verification_type
+  if (!redirect || !hash || !type) return ''
+  const url = new URL(redirect)
+  if (url.pathname === '/' || url.pathname === '') url.pathname = fallbackPath
+  url.searchParams.set('token_hash', hash)
+  url.searchParams.set('type', type)
+  return url.toString()
 }
 
 function renderDate(d) {
@@ -151,7 +169,9 @@ export async function sendAuthEmail({
     })
     if (error || !data) return { ok: true, sent: false }
 
-    const actionLink = data?.properties?.action_link || data?.properties?.email_otp || ''
+    const actionLink = branding.tokenHashLinks
+      ? tokenHashLink(baseRedirect, data?.properties)
+      : data?.properties?.action_link || data?.properties?.email_otp || ''
     if (!actionLink) throw new Error('Could not generate auth link')
 
     const resolved = cleanName(resolveDisplayName ? await resolveDisplayName(data.user) : '')

@@ -40,7 +40,8 @@ afterEach(() => {
 
 const linkResponse = {
   data: {
-    properties: { action_link: 'https://stub.supabase.co/auth/v1/verify?token=abc' },
+    // The shape Supabase's admin generateLink returns.
+    properties: { action_link: 'https://stub.supabase.co/auth/v1/verify?token=abc', hashed_token: 'hash-abc', verification_type: 'recovery' },
     user: { id: 'user-1', email: 'someone@example.com' },
   },
   error: null,
@@ -69,7 +70,7 @@ describe('sendAuthEmail staff_setup', () => {
     expect(enqueue).toHaveBeenCalledTimes(1)
     const row = enqueue.mock.calls[0][0]
     expect(row.templateKey).toBe('staff_welcome')
-    expect(row.payload.setupLink).toBe('https://stub.supabase.co/auth/v1/verify?token=abc')
+    expect(row.payload.setupLink).toBe('https://carefindhub.com/reset-password?token_hash=hash-abc&type=recovery')
     expect(row.payload.businessName).toBe('HealthPlus')
     expect(row.payload.role).toBe('Pharmacist')
     // The whole point of the flow: no credential material in the payload.
@@ -102,7 +103,7 @@ describe('sendAuthEmail owner_setup', () => {
     })
     const row = enqueue.mock.calls[0][0]
     expect(row.templateKey).toBe('owner_setup')
-    expect(row.payload).toMatchObject({ fullName: 'Ada Eze', businessName: 'Lifeline Pharmacy', setupLink: 'https://stub.supabase.co/auth/v1/verify?token=abc' })
+    expect(row.payload).toMatchObject({ fullName: 'Ada Eze', businessName: 'Lifeline Pharmacy', setupLink: 'https://carefindhub.com/reset-password?welcome=1&token_hash=hash-abc&type=recovery' })
     expect(row.subject).toBe('CareHub: verify your email and set your password')
   })
 
@@ -153,7 +154,9 @@ describe('sendAuthEmail password reset', () => {
     // set via resolveAppFromSender(); a CareFind sender here would render the
     // wrong brand for a CareHub user.
     expect(row.fromEmail).toBe('CareHub <support@mail.carefindhub.com>')
-    expect(row.payload.resetLink).toBe('https://stub.supabase.co/auth/v1/verify?token=abc')
+    // CareHub's PKCE client cannot read the session Supabase's verify link returns in the URL hash, so CareHub
+    // links carry the token hash to its own page, which verifies it on submit.
+    expect(row.payload.resetLink).toBe('https://carefindhub.com/reset-password?token_hash=hash-abc&type=recovery')
   })
 
   it('never throws for an unknown address, and enqueues nothing', async () => {
@@ -353,5 +356,19 @@ ${'y'.repeat(300)}`, app: 'carefind' })
     const name = enqueue.mock.calls[0][0].payload.fullName
     expect(name).not.toMatch(/[ -]/)
     expect(name.length).toBeLessThanOrEqual(80)
+  })
+})
+
+describe('auth links per app', () => {
+  it('CareFind keeps Supabase\'s own verify link', async () => {
+    generateLink.mockResolvedValue(linkResponse)
+    await sendAuthEmail({ action: 'password_reset', email: 'someone@example.com', redirectTo: 'https://carefind.app/reset', app: 'carefind' })
+    expect(enqueue.mock.calls[0][0].payload.resetLink).toBe('https://stub.supabase.co/auth/v1/verify?token=abc')
+  })
+
+  it('a CareHub link to a bare origin goes to the reset page', async () => {
+    generateLink.mockResolvedValue(linkResponse)
+    await sendAuthEmail({ action: 'password_reset', email: 'someone@example.com', redirectTo: 'https://carefindhub.com', app: 'carehub' })
+    expect(enqueue.mock.calls[0][0].payload.resetLink).toBe('https://carefindhub.com/reset-password?token_hash=hash-abc&type=recovery')
   })
 })
