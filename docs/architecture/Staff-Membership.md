@@ -63,8 +63,9 @@ Verified the same day:
 
 ## Existing data (2026-10-28)
 
-- Three inactive staff records use emails that later became other businesses' owner logins. They grant no access,
-  cannot be reactivated, and the Owner can remove them.
+- Three inactive staff records whose emails later became other businesses' owner logins were removed on 2026-10-28
+  through `remove_staff_member`, acting as each business's owner. Each removal has a `staff.removed` audit row, and no
+  staff email is a business login any more.
 - One active staff member (no login) belongs to a business with a branch. After this change they can reach only
   their own business.
 
