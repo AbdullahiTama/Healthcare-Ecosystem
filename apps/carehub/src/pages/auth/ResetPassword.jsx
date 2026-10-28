@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, AlertTriangle, CheckCircle } from 'lucide-react'
 import { authClient } from '../../lib/authClient'
@@ -25,27 +25,62 @@ export default function ResetPassword() {
   // telling an owner "Email verified" when it is not leaves them unable to sign in with no idea why.
   const [confirmChecked, setConfirmChecked] = useState(!welcome)
   const [unconfirmed, setUnconfirmed] = useState(false)
+  // CareHub's emailed links carry ?token_hash=&type= (shared-email tokenHashLink). The token is single-use, so it is
+  // verified only when the person submits a new password: a mail scanner that opens the link cannot use it up.
+  // Read once, then removed from the address bar so it does not linger in history or referrers.
+  const [otp] = useState(() => {
+    if (typeof window === 'undefined') return null
+    const url = new URL(window.location.href)
+    const tokenHash = url.searchParams.get('token_hash')
+    const type = url.searchParams.get('type')
+    return tokenHash && type ? { tokenHash, type } : null
+  })
+  const verified = useRef(false)
+  useEffect(() => {
+    if (!otp) return
+    const url = new URL(window.location.href)
+    url.searchParams.delete('token_hash'); url.searchParams.delete('type')
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash)
+  }, [otp])
 
   useEffect(() => {
     let cancelled = false
     async function init() {
       setChecking(true)
-      // Supabase recovery: link sets session via code in URL (query or hash). Try exchange if present.
+      if (otp) {
+        // Verified on submit (handleSubmit); the confirmed-email check for the welcome variant happens there too.
+        setSessionReady(true)
+        setConfirmChecked(true)
+        setChecking(false)
+        return
+      }
       const url = new URL(window.location.href)
-      const code = url.searchParams.get('code') || new URLSearchParams(url.hash.replace(/^#/, '?')).get('code')
-      const accessToken = new URLSearchParams(url.hash.replace(/^#/, '?')).get('access_token')
-      if (code) {
+      const hash = new URLSearchParams(url.hash.replace(/^#/, ''))
+      const code = url.searchParams.get('code') || hash.get('code')
+      if (hash.get('error_code') || hash.get('error')) {
+        // Supabase sends otp_expired / access_denied here for a used or expired link.
+        console.warn('[reset] link error', hash.get('error_code') || hash.get('error'))
+        if (!cancelled) { setSessionReady(false); setChecking(false) }
+        return
+      }
+      if (hash.get('access_token') && hash.get('refresh_token')) {
+        // A link minted before token-hash links (Supabase's own verify URL) returns the session in the hash, which
+        // the PKCE client does not read by itself. Adopt it, then clear the tokens from the address bar.
+        try {
+          const { error } = await authClient.auth.setSession({ access_token: hash.get('access_token'), refresh_token: hash.get('refresh_token') })
+          if (error) console.warn('[reset] setSession error', error.message)
+        } catch (e) {
+          console.warn('[reset] setSession threw', e.message)
+        }
+        window.history.replaceState(window.history.state, '', url.pathname + url.search)
+      } else if (code) {
         try {
           const { error } = await authClient.auth.exchangeCodeForSession(window.location.href)
           if (error) console.warn('[reset] exchangeCode error', error.message)
         } catch (e) {
           console.warn('[reset] exchange threw', e.message)
         }
-      } else if (accessToken) {
-        // Hash fragment session (older flow) — getSession will pick it up via detectSessionInUrl
       }
-      // Also handle hash fragment flow (older Supabase)
-      // getSession will pick up session from storage/detection
       try {
         const { data } = await authClient.auth.getSession()
         if (cancelled) return
@@ -69,7 +104,7 @@ export default function ResetPassword() {
   // Runs once the session is ready, whichever path made it ready (initial check or the PASSWORD_RECOVERY event).
   // A failed or throwing lookup means "unknown", and unknown never blocks the owner: the form is shown as before.
   useEffect(() => {
-    if (!welcome || sessionReady !== true) return
+    if (!welcome || sessionReady !== true || otp) return
     let cancelled = false
     ;(async () => {
       try {
@@ -90,6 +125,21 @@ export default function ResetPassword() {
     if (pass !== confirm) { setErr('Passwords do not match.'); return }
     setLoading(true); setErr('')
     try {
+      if (otp && !verified.current) {
+        const { data, error } = await authClient.auth.verifyOtp({ token_hash: otp.tokenHash, type: otp.type })
+        if (error || !data?.session) {
+          console.warn('[reset] verifyOtp failed', error?.message)
+          setSessionReady(false)
+          setLoading(false)
+          return
+        }
+        verified.current = true
+        if (welcome && !data.user?.email_confirmed_at) {
+          setUnconfirmed(true)
+          setLoading(false)
+          return
+        }
+      }
       const { error } = await authClient.auth.updateUser({ password: pass })
       if (error) {
         setErr(error.message || 'Could not update password. Link may have expired.')
@@ -174,8 +224,8 @@ export default function ResetPassword() {
             <ChevronLeft size={15} /> Back to sign in
           </Link>
           <div style={{ margin: '0 auto 16px', display: 'flex', justifyContent: 'center' }}><Logo size={64} /></div>
-          <div style={{ fontFamily: fontDisplay, fontSize: 30, fontWeight: 700, color: navy }}>{welcome ? 'Email verified' : 'Set new password'}</div>
-          <div style={{ fontSize: 14, color: gray600, marginTop: 6 }}>{welcome ? 'Choose a password to finish creating your account.' : 'Choose a strong password'}</div>
+          <div style={{ fontFamily: fontDisplay, fontSize: 30, fontWeight: 700, color: navy }}>{welcome ? (otp ? 'Finish setting up' : 'Email verified') : 'Set new password'}</div>
+          <div style={{ fontSize: 14, color: gray600, marginTop: 6 }}>{welcome ? (otp ? 'Choose a password to verify your email and finish creating your account.' : 'Choose a password to finish creating your account.') : 'Choose a strong password'}</div>
         </div>
 
         <Card style={{ padding: 32, borderRadius: theme.radius.xl, border: 'none', boxShadow: theme.elevation[3] }}>
