@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Lock, Layers, Search, Building2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Lock, Layers, Search, Building2, ArrowLeftRight } from 'lucide-react'
 import { masterCatalogRepository, PAGE_SIZE } from './repositories'
 import { locationsRepository } from '../locations/repositories'
 import { isDuplicateError } from '../../lib/dbErrors'
@@ -23,6 +24,7 @@ const reason = (e) => String(e?.message || e || '').replace(/^Supabase error \(\
 export default function MasterCatalog({ brand, role }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const { allow } = usePlanGate(showToast)
+  const navigate = useNavigate()
   const mainId = brand?.parent_business_id || brand?.id // master items live on the main business (ADR-004)
   const isOwner = role === 'Owner'
 
@@ -181,7 +183,8 @@ export default function MasterCatalog({ brand, role }) {
   return (
     <div>
       <SectionHead title='Master Catalog' sub='Every product of your business in one list. Carry items at your locations and keep them in step.'
-        btn='+ Add item' onBtn={() => { if (allow('adding products')) setFormItem(null) }} />
+        btn='+ Add item' onBtn={() => { if (allow('adding products')) setFormItem(null) }}
+        extraBtns={locations.length > 1 ? [{ label: 'Stock transfers', icon: <ArrowLeftRight size={14} aria-hidden='true' />, onClick: () => navigate('/dashboard/transfers') }] : []} />
 
       <div style={{ marginBottom: '16px', padding: '16px 20px', borderRadius: theme.radius.lg, background: navy, color: 'white', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: '12px' }}>
         <div><div style={{ fontSize: '22px', fontWeight: 900, color: tealBright }}>{status === 'ready' || page.total ? page.total.toLocaleString() : '–'}</div><div style={{ fontSize: '11px', opacity: 0.6 }}>{filters.archived ? 'Archived items' : filtered ? 'Matching items' : 'Catalogue items'}</div></div>

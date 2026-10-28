@@ -6,12 +6,12 @@ import {
   Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
   Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map as MapIcon, Mail,
   ClipboardList, LayoutDashboard, Layers, AlertTriangle, FileCheck, CalendarClock, Store,
-  MapPin, ListChecks, Sliders,
+  MapPin, ListChecks, Sliders, ArrowLeftRight,
 } from 'lucide-react'
 
 export const ROLES = {
   Owner: {
-    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','wallet','reports','adr-reports','pv-tracker','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging','ecommerce'],
+    nav: ['overview','dashboard','pos','inventory','mastercatalog','transfers','clients','appointments','consultation','expenses','debts','purchases','demand','staff','wallet','reports','adr-reports','pv-tracker','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging','ecommerce'],
     canEditPrice: true,
     canEditStock: true,
     canDelete: true,
@@ -25,7 +25,7 @@ export const ROLES = {
     label: 'Owner (full access)',
   },
   Manager: {
-    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','adr-reports','pv-tracker','carefind','messages','stock','orders','activity'],
+    nav: ['dashboard','pos','inventory','transfers','clients','appointments','consultation','expenses','debts','purchases','demand','reports','adr-reports','pv-tracker','carefind','messages','stock','orders','activity'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -38,7 +38,7 @@ export const ROLES = {
     label: 'Manager',
   },
   Pharmacist: {
-    nav: ['dashboard','pos','inventory','clients','consultation','rx_inbox','adr-reports'],
+    nav: ['dashboard','pos','inventory','transfers','clients','consultation','rx_inbox','adr-reports'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -51,7 +51,7 @@ export const ROLES = {
     label: 'Pharmacist',
   },
   Therapist: {
-    nav: ['dashboard','pos','clients','appointments','consultation'],
+    nav: ['dashboard','pos','clients','appointments','consultation','transfers'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -64,7 +64,7 @@ export const ROLES = {
     label: 'Therapist',
   },
   Receptionist: {
-    nav: ['dashboard','clients','appointments','reception'],
+    nav: ['dashboard','clients','appointments','reception','transfers'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -77,7 +77,7 @@ export const ROLES = {
     label: 'Receptionist',
   },
   Cashier: {
-    nav: ['dashboard','pos','clients'],
+    nav: ['dashboard','pos','clients','transfers'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -90,7 +90,7 @@ export const ROLES = {
     label: 'Cashier',
   },
   Nurse: {
-    nav: ['dashboard','triage','clients','adr-reports'],
+    nav: ['dashboard','triage','clients','adr-reports','transfers'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -103,7 +103,7 @@ export const ROLES = {
     label: 'Nurse',
   },
   Doctor: {
-    nav: ['dashboard','doctor','consultation','clients','adr-reports'],
+    nav: ['dashboard','doctor','consultation','clients','adr-reports','transfers'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -116,7 +116,7 @@ export const ROLES = {
     label: 'Doctor',
   },
   'Lab Technician': {
-    nav: ['dashboard','lab','clients'],
+    nav: ['dashboard','lab','clients','transfers'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -246,6 +246,8 @@ export const MODULES = {
   pos: { label: 'POS / Sales', icon: ShoppingCart, types: ALL_TYPES, section: 'operations' },
   inventory: { label: 'Stock Management', icon: Package, types: ALL_TYPES, section: 'operations' },
   mastercatalog: { label: 'Master Catalog', icon: Layers, types: ALL_TYPES, section: 'ecosystem' },
+  // Moving stock between a business's locations (carehub_20261222). Any staff member receives, so every role sees it.
+  transfers: { label: 'Stock Transfers', icon: ArrowLeftRight, types: ALL_TYPES, section: 'operations' },
   clients: { label: 'Clients', icon: Users, types: ALL_TYPES, labelByType: { hospital: 'Patients', clinic: 'Patients' }, section: 'patients' },
   appointments: { label: 'Appointments', icon: Calendar, types: RETAIL_TYPES, section: 'operations' },
   consultation: { label: 'Consultations', icon: Clipboard, types: CONSULT_TYPES, section: 'operations' },
@@ -323,11 +325,11 @@ export const SECTION_ORDER = ['overview', 'field', 'field-team', 'operations', '
 // legacy nav lists ordered their modules differently and nothing should
 // depend on a reorder happening silently.
 const NAV_ORDER = {
-   default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
+   default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'transfers', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
     // Clinics lead with the appointment book and consultation notes.
-    clinic: ['overview', 'dashboard', 'appointments', 'consultation', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
-    hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
-    enterprise: ['overview', 'dashboard', 'activity', 'field-reports', 'field-map', 'field-customers', 'field-checkins', 'field-approvals', 'field-places', 'field-fields', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
+    clinic: ['overview', 'dashboard', 'appointments', 'consultation', 'pos', 'inventory', 'mastercatalog', 'transfers', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
+    hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'transfers', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
+    enterprise: ['overview', 'dashboard', 'activity', 'field-reports', 'field-map', 'field-customers', 'field-checkins', 'field-approvals', 'field-places', 'field-fields', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'transfers', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
 }
 
 function familyOf(businessType) {
