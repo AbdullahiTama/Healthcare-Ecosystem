@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus, Sparkles } from 'lucide-react'
 import { staffRepository } from './repositories'
 import StaffActivity from './StaffActivity'
-import { provisionStaffAuth } from '../../services/supabase'
-import { authClient } from '../../lib/authClient'
+import { invitationService, readableError } from './services/invitations'
 import { rolesForType, getModulesForType, isRoleGrantable } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
 import { usePlanGate } from '../../hooks/usePlanGate'
@@ -173,68 +172,34 @@ function StaffTeam({ brand, role, perms }) {
     if (!form.fullName || !form.email || !form.role) { showToast('Please fill in all required fields.', { type: 'warning' }); return }
     if (!plan.allow('adding staff')) return
     const limit = planLimitsFor(brand?.plan).maxStaff
-    if (staff.length >= limit) {
+    if (staff.filter(m => m.status === 'active' || m.status === 'invited').length >= limit) {
       showToast(`Your ${PLAN_LABELS[brand?.plan] || 'current'} plan allows up to ${limit} staff. Upgrade your plan in Settings to add more.`, { type: 'warning' })
       return
     }
     setSaving(true)
-    let createdStaffId = null
     try {
-      const created = await staffRepository.create(brand.id, {
-        full_name: form.fullName,
-        email: form.email.toLowerCase(),
-        role: form.role,
-        phone: form.phone || '',
-        status: 'active',
-        show_on_carefind: form.showOnCareFind || false,
-        public_title: form.publicTitle || form.role,
-      })
-      createdStaffId = Array.isArray(created) ? created[0]?.id : created?.id
-      // The staff ROW is only half an account since C2 dropped staff.password:
-      // its login lives in Supabase Auth, minted by provisionStaffAuth (which
-      // verifies this caller owns the business). If provisioning fails, the row
-      // would have no way to sign in, so it is rolled back rather than left
-      // behind as a member who can never log in.
-      // Provision with a random, single-use placeholder password generated
-      // locally and never persisted, logged, or emailed. The staff member's
-      // real password is set by themselves through the expiring recovery link
-      // in the setup email below — the owner never sees or chooses it.
-      const placeholderPassword = crypto.getRandomValues(new Uint8Array(24)).reduce((s, b) => s + b.toString(36), '').slice(0, 24) + 'A1!'
-      await provisionStaffAuth(brand.id, form.email.toLowerCase(), placeholderPassword)
-      // Send the setup email: "Your CareHub account has been created" with a
-      // secure, expiring Set Password link (Supabase recovery action link).
-      let emailResult = null
-      try {
-        const { data: { session } } = await authClient.auth.getSession()
-        // staff_setup is authorised server-side: it needs the owner's session, and the business name, role and the
-        // person's name are read from the database there, so they are not sent.
-        const res = await fetch('/api/auth-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
-          body: JSON.stringify({
-            action: 'staff_setup',
-            email: form.email.toLowerCase(),
-            redirectTo: window.location.origin + '/reset-password',
-          }),
-        })
-        emailResult = { success: res.ok, error: res.ok ? null : 'Setup email request failed' }
-      } catch (e) {}
-      if (emailResult && !emailResult.success) {
-        showToast('Staff member added, but the welcome email could not be sent.', { type: 'warning' })
-      } else {
-        showToast('Staff member added and signed in! Welcome email sent.', { type: 'success' })
-      }
+      // Staff join by invitation: the server (api/staff-invitations) verifies the
+      // owner, creates an 'invited' staff row and emails a single-use, expiring
+      // link. The staff member sets their own password on /accept-invite, so
+      // no credential is ever created, shown or emailed here. The database
+      // refuses direct staff inserts (guard_staff_writes).
+      const { emailSent } = await invitationService.invite(brand.id, form)
+      if (emailSent) showToast('Invitation sent. They can join once they accept it.', { type: 'success' })
+      else showToast('Invitation created, but the email could not be sent. Use "Resend invite" to try again.', { type: 'warning' })
       setForm({}); setShowAdd(false); load()
     } catch (e) {
-      // Undo the just-created staff row if the auth provisioning failed, so we
-      // never leave a staff member with a row but no login account.
-      if (createdStaffId) { try { await staffRepository.delete(createdStaffId, brand.id, form.fullName) } catch (e2) {} }
-      // The message names the real cause instead of blaming the email, which
-      // was never checked — e.g. "Supabase error (42501)" on an RLS failure
-      // or the actual duplicate key if one exists.
-      showToast('Could not add staff member: ' + (e.message || 'Please try again.'), { type: 'error' })
+      showToast('Could not add staff member: ' + readableError(e, 'Please try again.'), { type: 'error' })
     }
     setSaving(false)
+  }
+
+  async function resendInvite(s) {
+    try {
+      const { emailSent } = await invitationService.resend(s.id)
+      if (emailSent) showToast('Invitation resent.', { type: 'success' })
+      else showToast('The invitation was renewed, but the email could not be sent. Please try again.', { type: 'warning' })
+      load()
+    } catch (e) { showToast('Could not resend: ' + readableError(e, 'Please try again.'), { type: 'error' }) }
   }
 
   async function toggleStatus(s) {
@@ -335,10 +300,11 @@ function StaffTeam({ brand, role, perms }) {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '14px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '14px', marginBottom: '20px' }}>
         <StatCard icon={<User />} label='Total Staff' value={staff.length} />
         <StatCard icon={<CheckCircle />} label='Active' value={staff.filter(s => s.status === 'active').length} />
-        <StatCard icon={<Pause />} label='Inactive' value={staff.filter(s => s.status !== 'active').length} />
+        <StatCard icon={<Bell />} label='Invited' value={staff.filter(s => s.status === 'invited').length} />
+        <StatCard icon={<Pause />} label='Inactive' value={staff.filter(s => s.status === 'inactive').length} />
       </div>
 
       {loading ? <Loading /> : staff.length === 0 ? (
@@ -355,7 +321,7 @@ function StaffTeam({ brand, role, perms }) {
                   {s.public_title && <div style={{ fontSize: '12px', color: tealDeep, fontWeight: '600', marginTop: '2px' }}>{s.public_title}</div>}
                   <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
                     <Pill label={s.role} type={roleColor(s.role)} />
-                    <Pill label={s.status === 'active' ? 'Active' : 'Inactive'} type={s.status === 'active' ? 'green' : 'gray'} />
+                    <Pill label={s.status === 'active' ? 'Active' : s.status === 'invited' ? 'Invited' : 'Inactive'} type={s.status === 'active' ? 'green' : s.status === 'invited' ? 'amber' : 'gray'} />
                     {s.show_on_carefind && <Pill label='On CareFind' type='teal' />}
                   </div>
                 </div>
@@ -370,10 +336,16 @@ function StaffTeam({ brand, role, perms }) {
                     style={{ padding: '7px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: s.show_on_carefind ? warning : tealDeep, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
                     {s.show_on_carefind ? 'Hide from CareFind' : 'Show on CareFind'}
                   </button>
-                  <button onClick={() => toggleStatus(s)}
+                  {s.status === 'invited' && (
+                    <button onClick={() => resendInvite(s)}
+                      style={{ padding: '7px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: tealDeep, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
+                      Resend invite
+                    </button>
+                  )}
+                  {s.status !== 'invited' && <button onClick={() => toggleStatus(s)}
                     style={{ padding: '7px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: s.status === 'active' ? warning : success, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
                     {s.status === 'active' ? 'Deactivate' : 'Activate'}
-                  </button>
+                  </button>}
                   <RedBtn onClick={() => askDelete(s)} style={{ padding: '6px 12px' }}>Remove</RedBtn>
                 </div>
               )}
@@ -383,7 +355,7 @@ function StaffTeam({ brand, role, perms }) {
       )}
 
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({}) }} title='Add Staff Member'
-        footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Add Staff'}</TealBtn></>}>
+        footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Sending...' : 'Send Invitation'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <Inp label='Full Name *' value={form.fullName} onChange={v => f('fullName', v)} placeholder='Staff full name' required />
           <Inp label='Email Address *' value={form.email} onChange={v => f('email', v)} type='email' placeholder='staff@yourbusiness.ng' required />
@@ -414,7 +386,7 @@ function StaffTeam({ brand, role, perms }) {
           )}
 
           <div style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep, lineHeight: '1.7' }}>
-            We create their account and email them a secure, expiring link to set their own password. You never see or share their credentials. They will only see pages their role allows.
+            We email them a secure, single-use invitation that expires in 7 days. They set their own password when they accept, so you never see or share their credentials. They will only see pages their role allows.
             <br /><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12} /> <strong>Only Owner role</strong> can edit stock prices and delete records.</span>
           </div>
           <div style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${border}` }}>
