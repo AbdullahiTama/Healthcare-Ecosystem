@@ -179,6 +179,8 @@ export function useInvalidateSales(brandId) {
     qc.invalidateQueries({ queryKey: keys.todaySales(brandId) })
     qc.invalidateQueries({ queryKey: keys.openSales(brandId) })
     qc.invalidateQueries({ queryKey: keys.recentSales(brandId) })
+    // A sale changes its client's visits and total spent (kept by the database).
+    qc.invalidateQueries({ queryKey: keys.clients(brandId) })
   }
 }
 

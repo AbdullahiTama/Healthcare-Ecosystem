@@ -15,7 +15,7 @@ import { debtRepository } from '../debts/repositories'
 import { clientRepository } from '../clients/repositories'
 import { consultationRepository } from '../consultation/repositories'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
-import { buildReceiptHtml, buildReceiptQrDataUrl, saleToReceipt } from './receiptPrint'
+import { buildReceiptHtml, buildReceiptQrDataUrl, saleToReceipt, heldSaleToInvoice } from './receiptPrint'
 import { buildReceiptEscpos } from './receiptEscpos'
 import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscpos, requestPrinter } from './escposUsb'
 import { theme } from '../../styles/theme'
@@ -284,10 +284,11 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   // it creates get linked to that client's record (customer database).
   // A customer picked in CustomerPicker wins over a name match, so two
   // customers with the same name are never confused.
+  // The customer record a sale is linked to: the one picked, or the single client whose name matches what was typed
+  // (case and spacing ignored). Two clients with the same name are never guessed between. The link is what counts
+  // the sale in the client's visits and total spent.
   function resolveClientId(name) {
-    if (pickedClient && pickedClient.full_name === name) return pickedClient.id
-    const match = clients.find(c => c.full_name === name)
-    return match?.id || null
+    return creditCustomerFor(pickedClient, name, clients)?.id || null
   }
 
   // The customer a credit sale would be recorded against, or null (blocked).
@@ -488,9 +489,15 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     } finally { setCharging(false) }
   }
 
-  async function holdSale() {
+  // Holds the cart. With `withInvoice`, prints an invoice for the customer once the held sale is saved: the print
+  // window is opened first, inside the click, so the browser does not block it as a pop-up.
+  async function holdSale(withInvoice = false) {
     if (!cart.length) return
     const txnNo = genId('HLD')
+    const invoiceWindow = withInvoice ? openPrintWindow() : null
+    if (withInvoice && !invoiceWindow) return
+    const clientName = client || 'Walk-in'
+    const clientId = resolveClientId(clientName)
     // A held sale is validated at insert like any other: if the server
     // rejects it (price guard), saveSale already toasted the reason — keep the
     // cart and the modal intact instead of clearing them.
@@ -499,11 +506,12 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         // Editing a held sale: save the changes onto the same held row.
         await saleRepository.updateHeld(resumedSale.id, brand.id, {
           items: cart, subtotal: sub, discount: discAmt, total,
-          clientName: client || 'Walk-in', notes: holdNote || resumedSale.notes || '',
+          clientId, clientName, notes: holdNote || resumedSale.notes || '',
         })
       } else await saveSale({
         txn_no: txnNo,
-        client_name: client || 'Walk-in',
+        client_id: clientId,
+        client_name: clientName,
         items: JSON.stringify(cart),
         subtotal: sub,
         discount: discAmt,
@@ -516,8 +524,16 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         notes: holdNote,
       })
     } catch (e) {
+      invoiceWindow?.close()
       if (resumedSale) showToast('Could not save the changes to this held sale. Please try again.', { type: 'error' })
       return
+    }
+    if (invoiceWindow) {
+      printInvoice({
+        kind: 'invoice', id: resumedSale ? resumedSale.txn_no : txnNo, client: clientName, items: cart,
+        subtotal: sub, disc: discAmt, total, amtPaid: 0, balance: total, date: new Date().toISOString(),
+        note: holdNote || resumedSale?.notes || '',
+      }, invoiceWindow)
     }
     showToast(resumedSale ? 'Held sale updated.' : 'Sale held. Resume it from Held Sales.', { type: 'success' })
     setShowHoldModal(false)
@@ -549,13 +565,26 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   // Universal fallback path: render an HTML page and let the browser/OS
   // rasterize it via the system print dialog. Always works, but thermal
   // printers print softer than with raw commands.
-  async function legacyPrint(r) {
+  function openPrintWindow() {
     const w = window.open('', '_blank', 'width=400,height=700')
-    if (!w) { showToast('The pop-up was blocked. Allow pop-ups for this site, then print the receipt again.', { type: 'warning' }); return }
-    const qrDataUrl = await buildReceiptQrDataUrl(r, settings || {})
+    if (!w) showToast('The pop-up was blocked. Allow pop-ups for this site, then print again.', { type: 'warning' })
+    return w
+  }
+
+  async function legacyPrint(r, win = null) {
+    const w = win || openPrintWindow()
+    if (!w) return
+    // An invoice carries no QR code: it is not proof of payment.
+    const qrDataUrl = r.kind === 'invoice' ? null : await buildReceiptQrDataUrl(r, settings || {})
     w.document.write(buildReceiptHtml({ receipt: r, business: brand || {}, settings: settings || {}, qrDataUrl }))
     w.document.close()
     setTimeout(() => { w.focus(); w.print() }, 400)
+  }
+
+  // Invoices print through the browser dialog, on A4 or the receipt printer alike: a customer may need it on paper
+  // to pay or for approval, and it must never be mistaken for a receipt.
+  function printInvoice(r, win = null) {
+    legacyPrint({ ...r, kind: 'invoice' }, win)
   }
 
   // ESC/POS-first. Pairing persists per-origin via navigator.usb.getDevices(),
@@ -729,6 +758,8 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
                   <TealBtn onClick={() => resumeHeld(s)} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }}><Play size={13} /> Open &amp; edit</TealBtn>
+                  <GhostBtn onClick={() => printInvoice(heldSaleToInvoice(s))} aria-label={'Print invoice for ' + (s.client_name || 'Walk-in') + ', ' + fmt(s.total)}
+                    style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6 }}><Printer size={13} aria-hidden='true' /> Print invoice</GhostBtn>
                 </div>
               </div>
             </Card>
@@ -1125,12 +1156,15 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
 
       {/* Hold modal */}
       <Modal show={showHoldModal} onClose={() => setShowHoldModal(false)} title='Hold sale'
-        footer={<><GhostBtn onClick={() => setShowHoldModal(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={holdSale} style={{ flex: 1, padding: '12px' }}>Hold sale</TealBtn></>}>
+        footer={<><GhostBtn onClick={() => setShowHoldModal(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+          <GhostBtn onClick={() => holdSale(true)} style={{ flex: 1, padding: '12px' }}>Hold &amp; print invoice</GhostBtn>
+          <TealBtn onClick={() => holdSale()} style={{ flex: 1, padding: '12px' }}>Hold sale</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={{ padding: '12px', borderRadius: theme.radius.md, background: bg, fontSize: '13px', color: gray600 }}>
             Cart total: <strong>{fmt(total)}</strong> · {cart.length} item(s) for <strong>{client || 'Walk-in'}</strong>
           </div>
           <Inp label='Note (optional)' value={holdNote} onChange={setHoldNote} placeholder='e.g. Customer coming back in 30 minutes' />
+          <div style={{ fontSize: '12px', color: gray500 }}>An invoice shows the customer what is due. It is not a receipt: the sale is recorded, with its payment, only when it is charged.</div>
         </div>
       </Modal>
 
