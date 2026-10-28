@@ -40,12 +40,6 @@ describe('staffRepository', () => {
       expect(rows.some((r) => r.business_id === B)).toBe(false)
     })
 
-    it('create injects business_id', async () => {
-      const { repo, client } = seeded()
-      await repo.create(A, { full_name: 'Chidi', email: 'chidi@a.test', status: 'active' })
-      expect(client.rows('staff').find((r) => r.full_name === 'Chidi').business_id).toBe(A)
-    })
-
     it('update scopes by id and business', async () => {
       const { repo, client } = seeded()
       await repo.update('s1', A, { status: 'inactive' })
@@ -65,16 +59,15 @@ describe('staffRepository', () => {
       expect(row(client, 'staff', 's9').status).toBe('active')
     })
 
-    it('delete scopes by id and business', async () => {
-      const { repo, client } = seeded()
-      await repo.delete('s1', A, 'Ada')
-      expect(client.rows('staff').map((r) => r.id)).not.toContain('s1')
+    it('remove goes through remove_staff_member, never a direct DELETE', async () => {
+      const { calls, repo } = recording([{ removed: 'Ada', login_deleted: true, login_kept: false }])
+      expect(await repo.remove('s1')).toEqual({ removed: 'Ada', login_deleted: true, login_kept: false })
+      expect(calls).toEqual([{ path: 'rpc/remove_staff_member', method: 'POST', body: { p_staff_id: 's1' } }])
     })
 
-    it('delete never crosses the tenant boundary', async () => {
-      const { repo, client } = seeded()
-      await repo.delete('s9', A, 'Other tenant')
-      expect(client.rows('staff').map((r) => r.id)).toContain('s9')
+    it('remove passes the database refusal through', async () => {
+      const repo = createStaffRepository(async () => { throw new Error('Supabase error (403): Only the business owner can remove a staff member who manages staff.') })
+      await expect(repo.remove('s1')).rejects.toThrow('Only the business owner')
     })
   })
 
@@ -146,39 +139,8 @@ describe('staffRepository', () => {
     })
   })
 
-  describe('delete failure messages', () => {
-    const failingWith = (constraint) =>
-      createStaffRepository(async () => {
-        throw new Error(`Supabase error (409): update or delete on table "staff" violates foreign key constraint "${constraint}" on table "x"`)
-      })
-
-    it('explains a staff member assigned to a territory', async () => {
-      await expect(failingWith('rep_territories_staff_id_fkey').delete('s1', A, 'Ada'))
-        .rejects.toThrow('"Ada" is assigned to a territory. Unassign them in Territories first.')
-    })
-
-    it('explains a staff member who manages a warehouse', async () => {
-      await expect(failingWith('enterprise_locations_manager_staff_id_fkey').delete('s1', A, 'Ada'))
-        .rejects.toThrow('manages a warehouse')
-    })
-
-    // The common case: anyone who has actually used the system has records
-    // that are kept, so the honest answer is "deactivate, do not delete".
-    it('points at deactivation when the record is one that is kept', async () => {
-      await expect(failingWith('orders_created_by_staff_id_fkey').delete('s1', A, 'Ada'))
-        .rejects.toThrow('set to inactive but not deleted')
-      await expect(failingWith('field_activities_staff_id_fkey').delete('s1', A, 'Ada'))
-        .rejects.toThrow('Set the account to inactive instead.')
-    })
-
-    it('rethrows an unrecognised error untouched', async () => {
-      const repo = createStaffRepository(async () => { throw new Error('NetworkError: connection reset') })
-      await expect(repo.delete('s1', A, 'Ada')).rejects.toThrow('NetworkError: connection reset')
-    })
-  })
-
   it('exports a default staffRepository instance', () => {
-    for (const m of ['getAll', 'create', 'update', 'delete', 'getRoles', 'createRole', 'updateRole', 'deleteRole', 'getPendingClaims', 'decideClaim']) {
+    for (const m of ['getAll', 'update', 'remove', 'getRoles', 'createRole', 'updateRole', 'deleteRole', 'getPendingClaims', 'decideClaim']) {
       expect(typeof staffRepository[m]).toBe('function')
     }
   })

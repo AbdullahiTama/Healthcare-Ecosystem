@@ -233,18 +233,17 @@ function StaffTeam({ brand, role, perms }) {
 
   function askDelete(s) { setDeleteTarget(s) }
   async function handleDelete() {
-    const id = deleteTarget?.id
+    const target = deleteTarget
     setDeleteTarget(null)
-    // Fifteen tables reference `staff` and none of those foreign keys cascade,
-    // so anyone who has actually used the system cannot be deleted. The
-    // repository turns that refusal into a reason worth reading — usually
-    // "deactivate instead" — so it is surfaced rather than replaced with a
-    // generic retry message the user cannot act on.
+    // remove_staff_member deletes the person, their CareHub-only login and personal data; the business's records
+    // stay under the name stored on them. Its refusals are written for the person managing staff, so show them.
     try {
-      await staffRepository.delete(id, brand.id, deleteTarget?.full_name)
+      await staffRepository.remove(target.id)
       load()
-      showToast('Staff member removed.', { type: 'success' })
-    } catch (e) { showToast(e.message || 'Could not remove staff member. Please try again.', { type: 'error' }) }
+      showToast(target.status === 'invited'
+        ? 'Invitation revoked.'
+        : `${target.full_name} has been removed and can no longer sign in to ${brand?.name || 'this business'}.`, { type: 'success' })
+    } catch (e) { showToast(readableError(e, 'Could not remove staff member. Please try again.'), { type: 'error' }) }
   }
 
   async function handleApproveClaim(claimId) {
@@ -346,7 +345,7 @@ function StaffTeam({ brand, role, perms }) {
                     style={{ padding: '7px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: s.status === 'active' ? warning : success, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
                     {s.status === 'active' ? 'Deactivate' : 'Activate'}
                   </button>}
-                  <RedBtn onClick={() => askDelete(s)} style={{ padding: '6px 12px' }}>Remove</RedBtn>
+                  <RedBtn onClick={() => askDelete(s)} style={{ padding: '6px 12px' }}>{s.status === 'invited' ? 'Revoke' : 'Remove'}</RedBtn>
                 </div>
               )}
             </Card>
@@ -557,9 +556,11 @@ function StaffTeam({ brand, role, perms }) {
       </Modal>
 
       <ConfirmDialog show={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete}
-        title='Remove this staff member?'
-        consequence={`This permanently deletes ${deleteTarget?.full_name || 'this staff member'}'s account and revokes their login access immediately. This cannot be undone, so you'll need to add them again from scratch if you change your mind.`}
-        confirmLabel='Remove' />
+        title={deleteTarget?.status === 'invited' ? 'Revoke this invitation?' : 'Remove this staff member?'}
+        consequence={deleteTarget?.status === 'invited'
+          ? `The invitation link sent to ${deleteTarget?.email || 'this person'} stops working immediately.`
+          : `${deleteTarget?.full_name || 'This staff member'} is removed from your business and signed out for good: their login, notifications, territory and customer lists are deleted. Sales, payments, shifts, orders, reports and attendance they recorded stay in your records under their name. This cannot be undone.`}
+        confirmLabel={deleteTarget?.status === 'invited' ? 'Revoke' : 'Remove'} />
 
       <ConfirmDialog show={!!roleDeleteTarget} onClose={() => setRoleDeleteTarget(null)} onConfirm={handleDeleteRole}
         title='Delete this role?'
