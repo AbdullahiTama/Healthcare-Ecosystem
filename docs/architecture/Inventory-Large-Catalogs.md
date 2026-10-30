@@ -52,7 +52,7 @@ The catalog is still loaded **in full once per session** (`BusinessDashboard.loa
 
 Other screens (`Purchases`, `Orders`, `Stock`, `Locations`) still call `productRepository.getAll` for their own needs; they were not part of the reported problem.
 
-`modules/inventory/hooks/useInventory.js` duplicates the old Inventory logic and is not imported anywhere. It was left untouched; removing it is a separate clean-up.
+`modules/inventory/hooks/useInventory.js` duplicated the old Inventory logic and was not imported anywhere; it was deleted on 2026-10-30, together with the equally unused `components/ProductForm.jsx` (and its test). Both still carried the absolute `stock` writes that erased sales.
 
 ## Security
 
