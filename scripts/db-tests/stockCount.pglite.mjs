@@ -140,4 +140,42 @@ const cfg = (await sup(`select prosecdef, proconfig from pg_proc where proname =
 ok('one function only, SECURITY INVOKER (RLS stays the boundary), pinned search_path', cfg.length === 1 && cfg[0].prosecdef === false
   && String(cfg[0].proconfig).includes('search_path=public, pg_temp'), JSON.stringify(cfg))
 
+// ---- carehub_20261227: the history is written only by the function ---------------------------------
+const histBefore = await sessions()
+let directInsert = null
+try { await as('repA1', `insert into stock_validation_sessions (business_id, user_name) values ($1, 'forged')`, [S.A]) } catch (e) { directInsert = e.message }
+ok('BEFORE the lock: a member could write count history directly', directInsert === null && (await sessions()) === histBefore + 1, directInsert)
+
+await applyMigrations(['carehub_20261227_lock_stock_count_history.sql'])
+
+const writeRefused = async (sql, params) => { try { await as('repA1', sql, params); return false } catch (e) { return /permission denied/.test(e.message) } }
+ok('a member can no longer insert, edit or delete count history directly',
+  await writeRefused(`insert into stock_validation_sessions (business_id, user_name) values ($1, 'forged')`, [S.A])
+  && await writeRefused(`update stock_validation_items set new_stock = 999 where session_id = $1`, [s1])
+  && await writeRefused(`delete from stock_validation_sessions where id = $1`, [s1])
+  && await writeRefused(`delete from stock_validation_items where session_id = $1`, [s1]))
+ok('and the history is intact', (await sup('select new_stock from stock_validation_items where session_id = $1', [s1])).rows[0].new_stock === 6)
+ok('members still read their own history; another business sees none of it',
+  (await as('repA1', 'select count(*)::int c from stock_validation_sessions where id = $1', [s1])).rows[0].c === 1
+  && (await as('repA1', 'select count(*)::int c from stock_validation_items where session_id = $1', [s1])).rows[0].c === 1
+  && (await as('repB1', 'select count(*)::int c from stock_validation_sessions where id = $1', [s1])).rows[0].c === 0)
+const anonPriv = (await sup(`select count(*)::int c from information_schema.role_table_grants where grantee = 'anon' and table_name in ('stock_validation_sessions', 'stock_validation_items')`)).rows[0].c
+ok('visitors hold no privilege on either table', anonPriv === 0, anonPriv)
+
+const lockA = await product('After lock', 10)
+const s4 = await as('repA1', `select public.save_stock_validation_session($1, $2, 'Forged name', 1, 1, $3::jsonb, 'count-locked') id`,
+  [S.A, USERS.repB1.sub, JSON.stringify([line(lockA, 'After lock', 10, 2, '-')])]).then((r) => r.rows[0].id)
+const s4row = (await sup('select user_id, user_name from stock_validation_sessions where id = $1', [s4])).rows[0]
+ok('saving a count still works for a member, through the ledger', (await stock(lockA)) === 8 && (await moves(s4)).length === 1)
+ok('who counted comes from the login, not the screen (sent another user id and "Forged name")', s4row.user_id === USERS.repA1.sub && s4row.user_name === 'Rep One', JSON.stringify(s4row))
+const s5 = await as('a', `select public.save_stock_validation_session($1, null, 'Typed name', 1, 1, $2::jsonb, 'count-owner') id`,
+  [S.A, JSON.stringify([line(lockA, 'After lock', 8, 1, '+')])]).then((r) => r.rows[0].id)
+ok('the business login is recorded as Owner', (await sup('select user_name from stock_validation_sessions where id = $1', [s5])).rows[0].user_name === 'Owner')
+await expectError('another business still cannot save into it', () => save('repB1', [line(lockA, 'After lock', 9, 1, '+')], 'count-b2', S.A), 'COUNT_FORBIDDEN')
+await expectError('nor can someone with no business', () => save('outsider', [line(lockA, 'After lock', 9, 1, '+')], 'count-o', S.A), 'COUNT_FORBIDDEN')
+ok('so its stock is unchanged', (await stock(lockA)) === 9)
+const def = (await sup(`select prosecdef, proconfig from pg_proc where proname = 'save_stock_validation_session'`)).rows
+ok('the function is now the definer with a pinned search_path, still one signature', def.length === 1 && def[0].prosecdef === true
+  && String(def[0].proconfig).includes('search_path=public, pg_temp'))
+
 finish()
