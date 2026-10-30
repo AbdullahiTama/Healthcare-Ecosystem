@@ -1,6 +1,7 @@
 // Inventory summary maths — the single definition of every figure the
 // Inventory KPI row shows. Previously these were five separate filter/reduce
-// passes inlined in Inventory.jsx (and duplicated in hooks/useInventory.js);
+// passes inlined in Inventory.jsx (and duplicated in hooks/useInventory.js,
+// since deleted);
 // keeping them here makes the money figures unit-testable and means the
 // profit/margin rules live in one place.
 //

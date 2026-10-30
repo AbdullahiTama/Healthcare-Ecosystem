@@ -1,5 +1,6 @@
 // Product matching helpers — the single definition for duplicate detection
-// across the app. Previously triplicated in Inventory.jsx and useInventory.js;
+// across the app. Previously triplicated in Inventory.jsx and a since-deleted
+// copy of its logic (hooks/useInventory.js);
 // Purchases.jsx also uses findDuplicate to sync purchased items into existing
 // inventory instead of creating duplicates.
 export function normalize(str) {

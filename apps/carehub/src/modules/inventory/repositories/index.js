@@ -12,6 +12,24 @@ import { pagedQuery } from '../../../lib/pagedQuery'
 // sbFetch's shape: (path, options) => Promise<rows>. Production binds the real
 // PostgREST-backed sbFetch (the default below); tests bind an in-memory adapter.
 // That injected transport is the seam — one interface, two adapters.
+const MERGE_REFUSALS = {
+  MERGE_NOT_ALLOWED: 'Only the owner, or a role allowed to delete products, can merge duplicates.',
+  MERGE_NOT_FOUND: 'Some of these products changed or were removed since the list loaded. Refresh and try again.',
+  MERGE_LISTING_CONFLICT: 'More than one of these products has a shop listing. Remove the extra listing, then merge.',
+  MERGE_TRACKED_UNSUPPORTED: 'Products tracked by batch cannot be merged here yet.',
+  MERGE_INVALID: 'A service cannot be merged with a stocked product.',
+  INSUFFICIENT_STOCK: 'Their combined stock would be below zero. Count the stock and correct it first.',
+  E_COMMERCE_NOT_APPROVED: 'A shop listing cannot be moved until online shop access is approved.',
+}
+
+export function translateMergeError(error) {
+  const code = Object.keys(MERGE_REFUSALS).find((c) => (error?.message || '').includes(c))
+  if (!code) return error
+  const friendly = new Error(MERGE_REFUSALS[code])
+  friendly.code = code
+  return friendly
+}
+
 export function createProductRepository(request = sbFetch) {
   return {
     // PostgREST clamps every response to db-max-rows (1000 on this project —
@@ -82,16 +100,11 @@ export function createProductRepository(request = sbFetch) {
       })
     },
 
-    // Deletes many products in one round-trip, scoped to the tenant so an id
-    // list can never reach across the business boundary. Empty list is a no-op
-    // (an unscoped `id=in.()` would otherwise be a malformed request).
-    async deleteBulk(productIds, businessId) {
-      if (!productIds || productIds.length === 0) return
-      return request(`products?id=in.(${productIds.join(',')})&business_id=eq.${businessId}`, {
-        method: 'DELETE',
-        prefer: 'return=minimal',
-      })
-    },
+    // NOTE: a `deleteBulk` used to live here for the duplicate cleanup. A bare
+    // DELETE of duplicate products cascaded their reviews, shop listing and
+    // stock-count history away and failed on any with batches or orders, so
+    // the cleanup now merges through mergeDuplicates() and deleteBulk had no
+    // callers left. Removed rather than kept as a trap.
 
     // Atomic replenishment via the increment_product_stock RPC (C5/C12,
     // 20260804_sale_stock_movement.sql). Purchases used to read stock, add the
@@ -115,6 +128,34 @@ export function createProductRepository(request = sbFetch) {
       // PostgREST returns the scalar the function returns — the new stock
       // level, or null when no row matched (wrong tenant, deleted product).
       return Array.isArray(result) ? result[0] : result
+    },
+
+    // Merges duplicates into one keeper via merge_duplicate_products
+    // (20261220_merge_duplicate_products.sql), in ONE database transaction:
+    // each duplicate's CURRENT stock moves into the keeper through the stock
+    // ledger, every row pointing at a duplicate (batches, orders, reviews, shop
+    // listing, stock counts) is repointed, then the duplicates are deleted.
+    // Returns { keeper_id, merged, units_moved, stock }.
+    //
+    // The function's refusals carry a code; only those are translated into a
+    // sentence for the toast (the error keeps `.code`). Anything unrecognised,
+    // a network failure above all, is rethrown untouched, as lib/dbErrors.js
+    // asks: a transport error must never be flattened into a confident, wrong
+    // reason.
+    async mergeDuplicates(businessId, keeperId, duplicateIds) {
+      try {
+        const result = await request('rpc/merge_duplicate_products', {
+          method: 'POST',
+          body: JSON.stringify({
+            p_business_id: businessId,
+            p_keeper_id: keeperId,
+            p_duplicate_ids: duplicateIds,
+          }),
+        })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateMergeError(e)
+      }
     },
 
     // NOTE: `getStockBatches`/`addStockBatch` used to live here too. They had
