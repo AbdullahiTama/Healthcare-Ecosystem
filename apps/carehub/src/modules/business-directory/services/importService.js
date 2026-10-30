@@ -12,6 +12,7 @@ import {
 import { canonicalState } from './constants'
 import { matchCategory } from './queryParser'
 import { createDedupIndex, classifyBatch, buildMergePatch, DUP_STATUS, RESOLUTION } from './deduplication'
+import { parseCsv, readSheetRows } from '../../../lib/spreadsheet'
 
 export const MAX_FILE_BYTES = 15 * 1024 * 1024
 export const MAX_ROWS = 20000
@@ -80,76 +81,18 @@ export async function buildTemplateXlsx(categories = []) {
 
 // ── Parsing ───────────────────────────────────────────────────────────────────
 /** RFC 4180 CSV -> array of rows. Handles quotes, embedded newlines, BOM and ; / tab delimiters. */
-export function parseCsv(text) {
-  let s = String(text ?? '')
-  if (s.charCodeAt(0) === 0xfeff) s = s.slice(1)
-  const firstLine = s.split(/\r?\n/, 1)[0] || ''
-  const stripped = firstLine.replace(/"[^"]*"/g, '')
-  const counts = { ',': 0, ';': 0, '\t': 0 }
-  for (const ch of stripped) if (ch in counts) counts[ch]++
-  const delim = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0]
-
-  const rows = []
-  let row = []
-  let field = ''
-  let inQuotes = false
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i]
-    if (inQuotes) {
-      if (ch === '"') {
-        if (s[i + 1] === '"') { field += '"'; i++ } else inQuotes = false
-      } else field += ch
-    } else if (ch === '"' && field === '') inQuotes = true
-    else if (ch === delim) { row.push(field); field = '' }
-    else if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && s[i + 1] === '\n') i++
-      row.push(field); field = ''
-      rows.push(row); row = []
-    } else field += ch
-  }
-  if (field !== '' || row.length) { row.push(field); rows.push(row) }
-  return rows
-}
-
-function cellText(v) {
-  if (v === null || v === undefined) return ''
-  if (typeof v === 'object') {
-    if (v instanceof Date) return v.toISOString()
-    if (Array.isArray(v.richText)) return v.richText.map((r) => r.text).join('')
-    if ('result' in v) return cellText(v.result)
-    if ('text' in v) return cellText(v.text)
-    if ('hyperlink' in v) return String(v.hyperlink)
-    return ''
-  }
-  return String(v)
-}
+// Reading the file is shared with the other importers (lib/spreadsheet.js).
+export { parseCsv }
 
 /**
  * File/Blob -> array of rows (strings). Rejects oversized files, legacy .xls and
  * anything that is not .csv / .xlsx before reading it.
  */
 export async function readSpreadsheet(file) {
-  if (!file) throw new Error('Choose a file first.')
-  if (file.size > MAX_FILE_BYTES) throw new Error('This file is larger than ' + MAX_FILE_BYTES / 1024 / 1024 + ' MB. Split it into smaller files.')
-  const name = String(file.name || '').toLowerCase()
-  if (name.endsWith('.csv') || name.endsWith('.txt')) return parseCsv(await file.text())
-  if (name.endsWith('.xlsx')) {
-    const ExcelJS = (await import('exceljs')).default
-    const wb = new ExcelJS.Workbook()
-    await wb.xlsx.load(await file.arrayBuffer())
-    const ws = wb.getWorksheet('Businesses') || wb.worksheets[0]
-    if (!ws) throw new Error('The workbook has no sheets.')
-    const rows = []
-    ws.eachRow({ includeEmpty: false }, (row) => {
-      const cells = []
-      const n = Math.max(row.cellCount, TEMPLATE_COLUMNS.length)
-      for (let c = 1; c <= n; c++) cells.push(cellText(row.getCell(c).value))
-      rows.push(cells)
-    })
-    return rows
-  }
-  if (name.endsWith('.xls')) throw new Error('Old .xls files are not supported. In Excel choose Save As → Excel Workbook (.xlsx) or CSV.')
-  throw new Error('Unsupported file type. Upload the CareHub template as .xlsx or .csv.')
+  return readSheetRows(file, {
+    maxBytes: MAX_FILE_BYTES, sheet: 'Businesses', minColumns: TEMPLATE_COLUMNS.length,
+    unsupported: 'Unsupported file type. Upload the CareHub template as .xlsx or .csv.',
+  })
 }
 
 /** Map header cells to template keys; report what is missing/unknown. */

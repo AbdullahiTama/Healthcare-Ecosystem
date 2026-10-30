@@ -1,3 +1,5 @@
+import { refusalMessage } from '../../lib/dbErrors'
+
 // Pure helpers for the Stock Transfers screen: how a transfer reads from one
 // location's point of view, and checks on what the user typed.
 
@@ -44,8 +46,4 @@ export function checkReceived(lines, received) {
 }
 
 // The database's refusal, as a sentence for the person.
-export function transferError(e) {
-  const m = String(e?.message || e || '').replace(/^Supabase error \(\d+\):\s*/, '')
-  if (/^[A-Z][^{}<>_"`]{3,200}[.!]$/.test(m)) return m
-  return 'Could not complete this. Please try again.'
-}
+export const transferError = (e) => refusalMessage(e)

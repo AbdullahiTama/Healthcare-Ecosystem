@@ -84,3 +84,15 @@ export function isMissingColumn(e, column) {
   return new RegExp(`Could not find the '${column}' column`).test(m)
 }
 
+
+// ── A database function's refusal ─────────────────────────────────────────────
+// Functions such as send_stock_transfer or link_master_to_catalog refuse with a
+// plain sentence written for the person using the screen ("Only 10 of
+// Paracetamol in stock at Ikeja."). sbFetch wraps it as "Supabase error (4xx):
+// <sentence>". This returns that sentence, and `fallback` for anything that
+// does not read as one (network, server, raw database output).
+export function refusalMessage(error, fallback = 'Could not complete this. Please try again.') {
+  const m = String(error?.message || error || '').replace(/^Supabase error \(\d+\):\s*/, '')
+  if (/^[A-Z][^{}<>_"`]{3,200}[.!]$/.test(m)) return m
+  return fallback
+}
