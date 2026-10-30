@@ -15,15 +15,7 @@ The dashboard is guarded on the **first** lane:
 <Route path='/dashboard/*' element={auth && !auth.isAdmin ? <BusinessDashboard /> : <Navigate to='/login' />} />
 ```
 
-Every data call needs the **second** lane, because `sbFetch` resolves a token:
-
-```js
-// services/supabase.js
-const { data } = await authClient.auth.getSession()
-if (data?.session?.access_token) return data.session.access_token
-// ... one refreshSession() attempt ...
-return SB_KEY            // ← no session: send the anon key
-```
+Every data call needs the **second** lane. Since 2026-10-30 `sbFetch`, `sbFetchWithCount`, `sbUpload` and `sbSignUrl` resolve the token through `lib/sessionFetch.js` (`fetchWithSession`): the anon key only when nobody is signed in, never as a fallback for a signed-in user. See "Idle sessions on a slow device clock" below. (Before that, `sbFetch` fell back to the anon key whenever `getSession()` came back empty, which is the state this document's original incident describes.)
 
 ## Why both can disagree
 
@@ -73,16 +65,16 @@ Guarded on `auth` so the separate Referral-Agent lane (`carehub_agent_auth`),
 which has no Supabase session, is never touched.
 
 **Symptom (`services/supabase.js`).** The recovery branch matches `401 || 403`,
-**only when `isAnon`**:
+**only when nobody is signed in**:
 
 ```js
-if ((res.status === 401 || res.status === 403) && isAnon) {
-  authClient.auth.signOut().catch(() => {})
+if ((res.status === 401 || res.status === 403) && !(await getAccessToken().catch(() => true))) {
+  authClient.auth.signOut({ scope: 'local' }).catch(() => {})
   throw new Error('Session expired. Please log in again.')
 }
 ```
 
-`isAnon` is the safety catch: with a real session the failure is a genuine
+The signed-out check is the safety catch: with a real session the failure is a genuine
 permission problem and must keep its original detail — masking it as "expired"
 would hide real access bugs. Successful anon reads (public CareFind forms,
 pre-login lookups) are untouched because they never fail this way.
@@ -92,12 +84,35 @@ Do **not** "fix" this by having `sbFetch` sign out on its own without the
 `localStorage['carehub_auth']`, so `/login` (`auth && !auth.isAdmin ? Navigate
 to '/dashboard' : <Login />`) would bounce straight back into the dashboard.
 
+## Idle sessions on a slow device clock (2026-10-30)
+
+Reported: CareHub left open 30 minutes to hours "goes to sleep"; on return it is slow, stops responding, and needs a fresh login.
+
+**What production showed (2026-10-29, one pharmacy account, one shop IP).** All 392 CareHub 401s that day were `authenticated` requests carrying an access token the server had expired 5 minutes to 17.8 hours earlier, including 12 failed `POST /sales`. Healthy sessions in the same shop rotated their token 10–12 times; each of the five broken sessions used **exactly one token for its whole life**. supabase-js judges expiry by the device clock, so on a till whose clock runs behind it never refreshes, and `getSession()` keeps returning the expired token. The laptop stale-session fix above never ran because it only tried a refresh when `getSession()` came back empty. An hour after sign-in everything 401'd until staff signed out and in again, buying one more hour; the logs show that cycle five times in one day.
+
+Two smaller causes showed up in the same logs:
+- **Global sign-out cascade.** `logout()` called `signOut()` with its default `scope: 'global'`, revoking every session of the account. Shops share one login across tills, so one cashier signing out ended the others at their next refresh (`refresh_token_not_found` ×4 within 7 minutes of a global sign-out, then re-logins).
+- **No recovery from SIGNED_OUT.** The handler redirected to `/login` but left `carehub_auth` in place, so `/login` bounced back to the dashboard until the boot reconciliation caught up.
+
+**What changed.**
+- `lib/sessionFetch.js` (`fetchWithSession`). The server decides expiry: a refused token (PostgREST 401; Storage's InvalidJWT 400/403) gets one forced `refreshSession()` and one retry, single-flight across concurrent requests. A signed-in user's request never goes out as anon: a session that cannot be refreshed throws `SessionUnavailableError`. A refresh the server refuses signs this device out locally, which fires SIGNED_OUT. Used by `sbFetch`, `sbFetchWithCount`, `sbUpload`, `sbSignUrl`, the plan renewal and appointment payment calls, and the staff-invitation service.
+- Sign-outs use `scope: 'local'` (`logout`, `logoutAgent`, AcceptInvite, the anon-401 branch). That still revokes this device's session server-side; it no longer revokes other devices'. `ResetPassword` keeps its deliberate global sign-out.
+- `App.jsx` SIGNED_OUT handler clears `carehub_auth`/`carehub_agent_auth` (and ADR draft backups) before redirecting. When a cache was still present, so the session ended on its own, Login/AgentLogin show "Your session has ended. Please sign in again." The boot reconciliation shows the same notice. The flag travels in `sessionStorage['carehub_session_ended']` across the full-page redirect.
+- `components/layout/ClockSkewBanner.jsx` warns when the device clock is behind, read from each fresh token's `iat`. Only a clock running behind is reported, because an old stored token can only make the clock look ahead.
+- `main.jsx` reloads once on `vite:preloadError`, for a tab left open across a deploy whose lazy route chunks no longer exist.
+
+**Security.** Nothing is weakened. RLS decides every row as before. Local sign-out still revokes this device's refresh token. A 401 for a signed-in user is retried at most once with a freshly issued token, never with the anon key.
+
+**Still on the old pattern.** 17 call sites read `getSession().access_token` directly: wallet top-up/withdrawal/PIN/OTP/payout accounts, billing `confirmPlanPayment`, `lib/email.js`, resolve-account, `useSalesReportData`, StockValidation, Ecommerce and AdminDashboard. On a slow clock they can be refused until any `sbFetch` call renews the session. Move them to `fetchWithSession`.
+
 ## Tests
 
 | File | Covers |
 | --- | --- |
 | `src/App.reconcile.test.jsx` | expired cache cleared; live session preserved; no cache → no sign-out |
-| `src/services/__tests__/anonAuthFailures.test.js` | anon 401/403 → sign-in prompt; **real-session failure keeps its detail**; anon success untouched |
+| `src/services/__tests__/anonAuthFailures.test.js` | anon 401/403 → sign-in prompt; **real-session failure keeps its detail** (after one renewal); anon success untouched |
+| `src/lib/__tests__/sessionFetch.test.js` | renew-and-retry on a refused token, single flight, never anon for a signed-in user, local sign-out on a refused refresh, clock-skew reading |
+| `src/services/__tests__/sessionRenewal.test.js` | `sbFetch`/`sbUpload` complete after renewing an expired token; ordinary errors are not retried |
 
 ## If you hit this in the wild
 

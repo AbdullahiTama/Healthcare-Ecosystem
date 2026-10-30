@@ -1,53 +1,27 @@
 import { authClient } from '../lib/authClient.js'
 import { SB_URL, SB_KEY } from '../config/supabase.js'
 import { pagedQuery } from '../lib/pagedQuery.js'
+import { fetchWithSession, getAccessToken } from '../lib/sessionFetch.js'
 
 // C10 fix: forward the real logged-in session's token when one exists, so
 // auth.uid()/auth.email() populate in Postgres (required for RLS, see
-// phase2_rls_pilot.sql) — falls back to the anon key otherwise, which is
-// the same key every call used unconditionally before this fix, so
-// pre-login calls (login itself, duplicate-email checks) are unaffected.
-// Laptop stale-session fix (spec-stock-validation-laptop-fix): if getSession
-// returns null, try refreshSession once before falling back to anon — the
-// StockValidation confirmSave also does an explicit pre-save check with
-// Session expired toast, but authToken must not silently send anon when a
-// refresh would succeed, otherwise the RPC hits RLS 42501.
-async function authToken() {
-  const { data } = await authClient.auth.getSession()
-  if (data?.session?.access_token) {
-    console.log('[Auth] Valid session found for:', data.session.user?.email)
-    return data.session.access_token
-  }
-  console.warn('[Auth] No valid session, attempting refresh...')
-  try {
-    const { data: refreshed } = await authClient.auth.refreshSession()
-    if (refreshed?.session?.access_token) {
-      console.log('[Auth] Session refreshed for:', refreshed.session.user?.email)
-      return refreshed.session.access_token
-    }
-  } catch (e) {
-    console.error('[Auth] Refresh failed:', e)
-  }
-  console.error('[Auth] Falling back to anon key - no valid session!')
-  return SB_KEY
-}
-
+// phase2_rls_pilot.sql). Pre-login calls (login itself, duplicate-email
+// checks) still go out with the anon key. fetchWithSession renews a token the
+// server refuses and never sends a signed-in user's request as anon — see
+// lib/sessionFetch.js for why both matter. It replaces the laptop
+// stale-session fix (spec-stock-validation-laptop-fix), which only tried a
+// refresh when getSession came back empty: on a device whose clock is behind,
+// getSession keeps returning the expired token, so that path never ran.
 export async function sbFetch(path, options = {}) {
-  const token = await authToken()
-  const isAnon = token === SB_KEY
-  // Never log any part of a signed-in token. The anon fallback is worth a warning:
-  // it is how an expired session shows up as empty RLS-filtered reads.
-  if (isAnon) console.warn('[sbFetch] Using anon key for:', path)
-  const res = await fetch(SB_URL + '/rest/v1/' + path, {
+  const res = await fetchWithSession(SB_URL + '/rest/v1/' + path, {
     method: options.method || 'GET',
     headers: {
       'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + token,
       'Content-Type': 'application/json',
       'Prefer': options.prefer || 'return=representation',
     },
     body: options.body || undefined,
-  })
+  }, { anonToken: SB_KEY })
   const text = await res.text()
   if (!res.ok) {
     let detail = text
@@ -56,16 +30,28 @@ export async function sbFetch(path, options = {}) {
     // PostgREST reports an anon request denied by an authenticated RLS helper
     // as 401, not 403 (verified live against can_access_adr_report_row: code
     // 42501, status 401), so match both — otherwise the caller surfaces a raw
-    // database error instead of the sign-in prompt. isAnon is required: with a
-    // real session this is a genuine permission problem, not an expired
-    // sign-in, and it must keep its original detail.
-    if ((res.status === 401 || res.status === 403) && isAnon) {
-      authClient.auth.signOut().catch(() => {})
+    // database error instead of the sign-in prompt. Only when nobody is signed
+    // in: a signed-in user's refused token was already renewed and retried by
+    // fetchWithSession, so a 401/403 here is a genuine permission problem and
+    // must keep its original detail. The local sign-out fires SIGNED_OUT,
+    // which App.jsx turns into the trip to the login page.
+    if ((res.status === 401 || res.status === 403) && !(await getAccessToken().catch(() => true))) {
+      authClient.auth.signOut({ scope: 'local' }).catch(() => {})
       throw new Error('Session expired. Please log in again.')
     }
     throw new Error('Supabase error (' + res.status + '): ' + detail)
   }
   return text ? JSON.parse(text) : []
+}
+
+// Storage reports a refused token as 400/403 with an InvalidJWT / "exp" claim
+// body rather than PostgREST's 401, so it needs its own test for "renew and
+// retry". Reads a clone so the caller can still read the body.
+async function isStorageAuthFailure(res) {
+  if (res.status === 401) return true
+  if (res.status !== 400 && res.status !== 403) return false
+  const text = await res.clone().text().catch(() => '')
+  return /jwt|"exp"|exp claim/i.test(text)
 }
 
 // Shared by the three upload functions below — was previously triplicated
@@ -75,15 +61,14 @@ function encodeStoragePath(path) {
 }
 export async function sbUpload(bucket, path, file, contentType, errorLabel) {
   const encodedPath = encodeStoragePath(path)
-  const res = await fetch(SB_URL + '/storage/v1/object/' + bucket + '/' + encodedPath, {
+  const res = await fetchWithSession(SB_URL + '/storage/v1/object/' + bucket + '/' + encodedPath, {
     method: 'POST',
     headers: {
       'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + await authToken(),
       'Content-Type': contentType,
     },
     body: file,
-  })
+  }, { anonToken: SB_KEY, isAuthFailure: isStorageAuthFailure })
   if (!res.ok) {
     const text = await res.text()
     let detail = text
@@ -97,15 +82,14 @@ export async function sbUpload(bucket, path, file, contentType, errorLabel) {
 // private bucket's files are played; for a public bucket it also works, so callers can use it
 // before and after a bucket is made private. Throws if the session may not read the file.
 export async function sbSignUrl(bucket, path, expiresInSeconds = 3600) {
-  const res = await fetch(SB_URL + '/storage/v1/object/sign/' + bucket + '/' + encodeStoragePath(path), {
+  const res = await fetchWithSession(SB_URL + '/storage/v1/object/sign/' + bucket + '/' + encodeStoragePath(path), {
     method: 'POST',
     headers: {
       'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + await authToken(),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ expiresIn: expiresInSeconds }),
-  })
+  }, { anonToken: SB_KEY, isAuthFailure: isStorageAuthFailure })
   if (!res.ok) throw new Error('Could not open the file (' + res.status + ')')
   const data = await res.json()
   if (!data || !data.signedURL) throw new Error('Could not open the file (no link returned)')
@@ -560,16 +544,15 @@ export async function getBusinessesFiltered({ search = '', status = '', page = 1
 export async function sbFetchWithCount(path, options = {}) {
   let prefer = options.prefer ? options.prefer + ',count=exact' : 'count=exact'
   if (options.head) prefer += ',head=true'
-  const res = await fetch(SB_URL + '/rest/v1/' + path, {
+  const res = await fetchWithSession(SB_URL + '/rest/v1/' + path, {
     method: options.method || 'GET',
     headers: {
       'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + await authToken(),
       'Content-Type': 'application/json',
       'Prefer': prefer,
     },
     body: options.body || undefined,
-  })
+  }, { anonToken: SB_KEY })
   const text = await res.text()
   if (!res.ok) {
     let detail = text

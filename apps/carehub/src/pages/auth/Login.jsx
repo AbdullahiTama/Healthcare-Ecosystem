@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { AlertTriangle, ChevronLeft, Plus } from 'lucide-react'
+import { AlertTriangle, Info, ChevronLeft, Plus } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
 import { resolveAccountByEmail } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
@@ -18,7 +18,7 @@ export default function Login() {
   const [unverified, setUnverified] = useState(false)
   const [resending, setResending] = useState(false)
   const [resent, setResent] = useState(false)
-  const { login } = useAuth()
+  const { login, sessionNotice } = useAuth()
   const navigate = useNavigate()
 
   const handleLogin = async () => {
@@ -132,6 +132,7 @@ export default function Login() {
                 : <button type="button" onClick={resendLink} disabled={resending} style={{ display: 'block', marginTop: 8, background: 'none', border: 'none', padding: 0, color: tealDeep, fontWeight: 700, fontSize: 13, cursor: resending ? 'default' : 'pointer', opacity: resending ? 0.6 : 1 }}>{resending ? 'Sending…' : 'Send a new link'}</button>}
             </div>
           )}
+          {sessionNotice && !err && <div role='status' style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '12px 14px', borderRadius: 10, background: theme.infoBg, border: `1px solid ${theme.info}`, color: theme.info, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}><Info size={15} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{sessionNotice}</span></div>}
           {err && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '12px 14px', borderRadius: 10, background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, color: theme.danger, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}><AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{err}</span></div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>

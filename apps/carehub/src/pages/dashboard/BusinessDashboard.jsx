@@ -5,6 +5,7 @@ import { useAuth } from '../../providers/AuthProvider'
 import Sidebar from '../../components/layout/Sidebar'
 import TopBar from '../../components/layout/TopBar'
 import PlanExpiryBanner from '../../components/layout/PlanExpiryBanner'
+import ClockSkewBanner from '../../components/layout/ClockSkewBanner'
 import { PlanStatusProvider } from '../../hooks/usePlanStatus'
 import { Toast, useToast, DashboardShell, Loading } from '../../components/ui'
 import { useProductCatalog } from '../../modules/inventory/hooks/useProductCatalog'
@@ -209,6 +210,7 @@ export default function BusinessDashboard() {
                 You are offline. Sales are saved on this device and will sync when you reconnect.
               </div>
             )}
+            <ClockSkewBanner />
             <PlanExpiryBanner brand={brand} role={role} />
           </>
         }

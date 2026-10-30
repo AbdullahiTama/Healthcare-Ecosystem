@@ -68,8 +68,12 @@ describe('sbFetch anon auth failures', () => {
     expect(h.signOut).toHaveBeenCalled()
   })
 
+  // A signed-in 401 first earns one token renewal and one retry
+  // (lib/sessionFetch.js). Refused again with a fresh token, it is a genuine
+  // permission problem: its detail stands and nobody is signed out.
   it('keeps a real session failure verbatim instead of masking it as expiry', async () => {
     withSession()
+    h.refreshSession.mockResolvedValue({ data: { session: { access_token: 'token-2' } }, error: null })
     response = reply({
       status: 401,
       json: { code: '42501', message: 'permission denied for function can_access_adr_report_row' },
@@ -78,6 +82,7 @@ describe('sbFetch anon auth failures', () => {
     await expect(getBusinesses()).rejects.toThrow(
       'Supabase error (401): permission denied for function can_access_adr_report_row'
     )
+    expect(global.fetch.mock.calls.map(([, init]) => init.headers.Authorization)).toEqual(['Bearer token-1', 'Bearer token-2'])
     expect(h.signOut).not.toHaveBeenCalled()
   })
 
