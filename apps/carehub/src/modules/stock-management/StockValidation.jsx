@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react'
 import { Search, Plus, Minus, Package } from 'lucide-react'
 import { stockValidationRepository } from './repositories'
 import { useAuth } from '../../providers/AuthProvider'
-import { authClient } from '../../lib/authClient'
+import { SessionUnavailableError } from '../../lib/sessionFetch'
 import { theme } from '../../styles/theme'
 import { Pill, Modal, GhostBtn, TealBtn, Empty, useToast, Toast } from '../../components/ui'
 import { fmt } from '../../lib/utils'
@@ -146,26 +146,9 @@ export default function StockValidation({ brand, products, loadProducts }) {
     setInlineError('')
     const items = rawItems.filter(it => it.adjustment_qty !== 0)
 
-    // Pre-save session check: ensure auth is fresh, otherwise laptop would fall back to anon and get RLS 42501
-    try {
-      const { data: { session } } = await authClient.auth.getSession()
-      if (!session) {
-        try {
-          const { data: refreshed } = await authClient.auth.refreshSession()
-          if (!refreshed?.session) {
-            showToast('Session expired, please re-login', { type: 'error' })
-            return
-          }
-        } catch {
-          showToast('Session expired, please re-login', { type: 'error' })
-          return
-        }
-      }
-    } catch {
-      showToast('Session expired, please re-login', { type: 'error' })
-      return
-    }
-
+    // No session check here: the save goes through sbFetch, which renews a token the server refuses and retries
+    // once, and never sends a signed-in user's request as anon (lib/sessionFetch.js). This used to check and refresh
+    // the session itself, then save a second time after any error that looked auth-related.
     setSaving(true)
     try {
       await stockValidationRepository.saveSession(
@@ -189,35 +172,12 @@ export default function StockValidation({ brand, products, loadProducts }) {
       const isCheckViolation = msg.includes('23514') || code === '23514'
       if (isCheckViolation) {
         showToast('Quantity cannot be negative, so the adjustment was blocked.', { type: 'error' })
+      } else if (error instanceof SessionUnavailableError) {
+        // The session could not be used (ended, or CareHub unreachable): nothing was saved, say why.
+        showToast(error.message, { type: 'error' })
       } else {
-        const isAuthError = msg.includes('42501') || code === '42501' || /permission|not authenticated|JWT|auth|not allowed/i.test(msg)
-        if (isAuthError) {
-        // Retry once after refreshSession — covers laptop stale session case
-        try {
-          const { data: refreshed } = await authClient.auth.refreshSession()
-          if (refreshed?.session) {
-            await stockValidationRepository.saveSession(
-              brand.id,
-              {
-                user_name: auth.staff?.full_name || 'Owner',
-                products_checked: worksheet.length,
-                products_adjusted: worksheet.filter(w => parseAdjustmentQty(w.adjustmentQty) > 0).length,
-              },
-              items,
-              auth.staff?.id || null
-            )
-            showToast('Validation saved successfully', { type: 'success' })
-            setWorksheet([])
-            setShowSummary(false)
-            setInlineError('')
-            if (typeof loadProducts === 'function') loadProducts()
-            return
-          }
-        } catch {}
-        showToast('Session expired, please re-login', { type: 'error' })
-        } else {
-          showToast('Could not save validation: ' + msg, { type: 'error' })
-        }
+        // Includes a genuine permission refusal: sbFetch already renewed the token, so it is not a session problem.
+        showToast('Could not save validation: ' + msg, { type: 'error' })
       }
     } finally {
       setSaving(false)

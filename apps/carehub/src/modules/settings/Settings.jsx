@@ -7,7 +7,6 @@ import { confirmPlanPayment } from './services/billing'
 import { businessLucideIcon, businessName } from '../../lib/utils'
 import { NIG_STATES } from '../../config/constants'
 import { useAuth } from '../../providers/AuthProvider'
-import { authClient } from '../../lib/authClient'
 import { fetchWithSession, SessionUnavailableError } from '../../lib/sessionFetch'
 import { PLAN_LABELS, PLAN_MONTHLY_NAIRA, PLAN_YEARLY_NAIRA, PLAN_LIMITS, isPlanAllowedForBusinessType } from '../../lib/planLimits'
 import { theme } from '../../styles/theme'
@@ -70,8 +69,8 @@ export default function Settings({ brand, role, perms }) {
     async function handlePaystackReturn() {
       const ref = searchParams.get('reference') || searchParams.get('trxref')
       if (!ref) return
-      const { data: { session } } = await authClient.auth.getSession()
-      if (!session) { window.history.replaceState({}, '', '/dashboard/settings'); return }
+      // No session gate: confirmPlanPayment renews the session itself. A gate here silently dropped the reference
+      // when the session was only momentarily unavailable (offline on wake); now any failure says so below.
 
       try {
         const data = await confirmPlanPayment(ref)

@@ -3,15 +3,17 @@
 // → shared-email provider → Resend). This module must never contain Resend
 // credentials, template markup, or a Resend client.
 
-import { authClient } from './authClient.js'
+import { fetchWithSession } from './sessionFetch.js'
 
+// fetchWithSession renews a refused token and retries once. /api/email/send
+// answers 401 only when the token itself is refused, before anything is
+// mailed, so the retry cannot send an email twice. Signed out, it throws with
+// the session message, which is returned as `error` like any other failure.
 async function postEmailEvent(templateKey, toEmail, payload, subject) {
   try {
-    const { data: { session } } = await authClient.auth.getSession()
-    if (!session) return { success: false, error: 'Not signed in' }
-    const res = await fetch('/api/email/send', {
+    const res = await fetchWithSession('/api/email/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ templateKey, toEmail, payload, subject }),
     })
     const data = await res.json().catch(() => ({}))

@@ -1,19 +1,38 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { authClient } from '../../lib/authClient'
 import { saleRepository, paymentRepository, shiftRepository } from './repositories'
 
 // The signed-in user's auth id. The app's `auth` object carries the business
 // and staff row but not the auth user, and the report needs it to show a
-// cashier their own sales and to find their open shift.
-export function useAuthUserId() {
+// cashier their own sales and to find their open shift. No token is sent, so
+// there is nothing to renew here; but `null` makes the report tell the cashier
+// to sign out and in again, so it is only given when the session is really
+// over. A refresh that failed for lack of a connection (a laptop waking, Wi-Fi
+// still rejoining) leaves no session in hand for a moment while the session
+// itself is fine, so keep resolving (the report shows "Loading") and ask again.
+export const AUTH_USER_RETRY_MS = 5000
+
+export function useAuthUserId({ getSession = () => authClient.auth.getSession(), retryMs = AUTH_USER_RETRY_MS } = {}) {
   const [userId, setUserId] = useState(undefined) // undefined = still resolving
   useEffect(() => {
     let live = true
-    authClient.auth.getSession()
-      .then(({ data }) => { if (live) setUserId(data?.session?.user?.id || null) })
-      .catch(() => { if (live) setUserId(null) })
-    return () => { live = false }
+    let timer = null
+    const again = () => { if (live) timer = setTimeout(resolve, retryMs) }
+    async function resolve() {
+      try {
+        const { data, error } = await getSession()
+        if (!live) return
+        if (data?.session?.user?.id) { setUserId(data.session.user.id); return }
+        if (error && isAuthRetryableFetchError(error)) { again(); return }
+        setUserId(null)
+      } catch (e) {
+        again()
+      }
+    }
+    resolve()
+    return () => { live = false; clearTimeout(timer) }
   }, [])
   return userId
 }

@@ -3,13 +3,15 @@ import fs from 'fs'
 import path from 'path'
 
 const getSession = vi.hoisted(() => vi.fn())
-vi.mock('../authClient.js', () => ({ authClient: { auth: { getSession } } }))
+const refreshSession = vi.hoisted(() => vi.fn())
+vi.mock('../authClient.js', () => ({ authClient: { auth: { getSession, refreshSession, signOut: vi.fn(async () => ({})) } } }))
 
 import { emailAgentApproved, emailAgentRejected } from '../email.js'
 
 describe('client email events', () => {
   beforeEach(() => {
     getSession.mockReset()
+    refreshSession.mockReset()
     vi.restoreAllMocks()
   })
 
@@ -17,7 +19,21 @@ describe('client email events', () => {
     getSession.mockResolvedValue({ data: { session: null } })
     const res = await emailAgentApproved({ agentEmail: 'a@b.com', agentName: 'X' })
     expect(res.success).toBe(false)
-    expect(res.error).toMatch(/signed in/i)
+    expect(res.error).toMatch(/sign in again/i)
+  })
+
+  // A till whose clock is behind keeps an expired token; the server's 401 earns one renewal and one retry. The handler
+  // refuses before mailing anything, so this cannot send twice.
+  it('renews a token the server refused and sends on the retry', async () => {
+    getSession.mockResolvedValue({ data: { session: { access_token: 'old' } } })
+    refreshSession.mockResolvedValue({ data: { session: { access_token: 'new' } }, error: null })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, opts) => opts.headers.Authorization === 'Bearer new'
+      ? { ok: true, status: 200, json: async () => ({}) }
+      : { ok: false, status: 401, json: async () => ({ error: 'Invalid or expired session' }) })
+    const res = await emailAgentApproved({ agentEmail: 'a@b.com', agentName: 'X' })
+    expect(res.success).toBe(true)
+    expect(spy.mock.calls.map(([, o]) => o.headers.Authorization)).toEqual(['Bearer old', 'Bearer new'])
   })
 
   it('posts agent_approved with an Authorization header', async () => {

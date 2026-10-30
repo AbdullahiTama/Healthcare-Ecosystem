@@ -16,6 +16,7 @@ import {
   getUnverifiedOwnerBusinessIds, partitionByOwnerVerification, summarizeBulkApproval, collectBulkResults
 } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
+import { fetchWithSession } from '../../lib/sessionFetch'
 import { businessLucideIcon, DARK, fmt, fmtDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Pill, Modal, Inp, Sel, GhostBtn, TealBtn, Avatar, Loading, useToast, Toast, Logo, Empty, ErrorState, ConfirmDialog } from '../../components/ui'
@@ -1599,12 +1600,9 @@ export default function AdminDashboard() {
     await updateBusiness(id, { status })
     setBusinesses(prev => (prev || []).map(b => b.id === id ? { ...b, status } : b))
     setPulseAt(Date.now()); setLastSynced('just now')
-    try {
-      const { data: { session } } = await authClient.auth.getSession()
-      if (session?.access_token) {
-        fetch('/api/notify-business-status', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ businessId: id, status }) }).catch(()=>{})
-      }
-    } catch(e){}
+    // Best effort, as before: the status change above is what matters. Through fetchWithSession so a token the server
+    // refuses is renewed once; the handler answers 401 before it notifies anyone, so nothing is sent twice.
+    fetchWithSession('/api/notify-business-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessId: id, status }) }).catch(() => {})
   }, [])
 
   const logout = () => { authLogout(); navigate('/login') }

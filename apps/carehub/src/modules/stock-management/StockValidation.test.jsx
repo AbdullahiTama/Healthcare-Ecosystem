@@ -23,6 +23,7 @@ vi.mock('../../providers/AuthProvider', () => ({
 import StockValidation, { parseAdjustmentQty, buildValidationItems } from './StockValidation.jsx'
 import { authClient } from '../../lib/authClient.js'
 import { stockValidationRepository } from './repositories/index.js'
+import { SessionUnavailableError } from '../../lib/sessionFetch.js'
 import { useAuth } from '../../providers/AuthProvider.jsx'
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -363,10 +364,12 @@ describe('StockValidation hardening (spec-stock-validation-laptop-fix)', () => {
     })
   })
 
-  describe('session expired handling (laptop stale token)', () => {
-    it('shows Session expired when getSession is null and refresh fails, no RPC fired', async () => {
-      authClient.auth.getSession.mockResolvedValueOnce({ data: { session: null } })
-      authClient.auth.refreshSession.mockResolvedValueOnce({ data: { session: null } })
+  // The save goes through sbFetch, which renews a refused token and retries once (lib/sessionFetch.js, covered by
+  // services/__tests__/sessionRenewal.test.js). This screen no longer touches the session itself: it reports what
+  // the save says, and never saves a second time on its own.
+  describe('session problems (laptop stale token)', () => {
+    it('shows the session message when the session cannot be used, and does not save again', async () => {
+      saveSpy.mockRejectedValueOnce(new SessionUnavailableError('Your session has ended. Please sign in again.', { ended: true }))
       const { host } = await renderStockValidation()
       await addProductToWorksheet(host, 'Amoxicillin')
       await act(async () => { setNativeValue(getQtyInput(host), '5') })
@@ -375,30 +378,13 @@ describe('StockValidation hardening (spec-stock-validation-laptop-fix)', () => {
       await act(async () => {})
       await act(async () => { getModalSaveButton(host).click() })
       await act(async () => {})
-      expect(stockValidationRepository.saveSession).not.toHaveBeenCalled()
-      expect(host.textContent).toContain('Session expired')
-      expect(authClient.auth.refreshSession).toHaveBeenCalled()
-    })
-
-    it('retries once after refreshSession succeeds', async () => {
-      // first getSession null, refresh succeeds, then save should proceed
-      authClient.auth.getSession.mockResolvedValueOnce({ data: { session: null } })
-      authClient.auth.refreshSession.mockResolvedValueOnce({ data: { session: { access_token: 'fresh' } } })
-      const { host } = await renderStockValidation()
-      await addProductToWorksheet(host, 'Amoxicillin')
-      await act(async () => { setNativeValue(getQtyInput(host), '2') })
-      await act(async () => {})
-      await act(async () => { getSaveValidationButton(host).click() })
-      await act(async () => {})
-      await act(async () => { getModalSaveButton(host).click() })
-      await act(async () => {})
+      expect(host.textContent).toContain('Your session has ended. Please sign in again.')
       expect(stockValidationRepository.saveSession).toHaveBeenCalledTimes(1)
-      expect(host.textContent).toContain('Validation saved successfully')
+      expect(authClient.auth.refreshSession).not.toHaveBeenCalled()
     })
 
-    it('on 42501 error, retries after refresh and shows Session expired if retry fails', async () => {
-      saveSpy.mockRejectedValueOnce(new Error('Supabase error (42501): permission denied'))
-      authClient.auth.refreshSession.mockResolvedValueOnce({ data: { session: null } })
+    it('reports a genuine permission refusal as such, without retrying or calling it a session problem', async () => {
+      saveSpy.mockRejectedValueOnce(new Error('Supabase error (403): permission denied for function save_stock_validation_session'))
       const { host } = await renderStockValidation()
       await addProductToWorksheet(host, 'Amoxicillin')
       await act(async () => { setNativeValue(getQtyInput(host), '1') })
@@ -407,9 +393,9 @@ describe('StockValidation hardening (spec-stock-validation-laptop-fix)', () => {
       await act(async () => {})
       await act(async () => { getModalSaveButton(host).click() })
       await act(async () => {})
-      // should have tried save, then refresh, then shown Session expired
-      expect(authClient.auth.refreshSession).toHaveBeenCalled()
-      expect(host.textContent).toContain('Session expired')
+      expect(host.textContent).toContain('Could not save validation: Supabase error (403): permission denied')
+      expect(stockValidationRepository.saveSession).toHaveBeenCalledTimes(1)
+      expect(authClient.auth.refreshSession).not.toHaveBeenCalled()
     })
   })
 })

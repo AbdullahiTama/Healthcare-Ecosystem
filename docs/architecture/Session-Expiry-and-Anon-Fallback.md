@@ -107,7 +107,11 @@ Two smaller causes showed up in the same logs:
 
 Retrying these calls is safe because every handler involved answers 401 only when the token itself is refused (`verifyBusiness`: no token, or no business for it), before any PIN or code check and before any money moves. A wrong PIN is 403 and a wrong code 400, so a retry never replays a PIN or code attempt; `walletRequest.test.js` pins this.
 
-**Still on the old pattern.** `lib/email.js`, `useSalesReportData`, StockValidation and AdminDashboard (notify-business-status) still read `getSession().access_token` directly. On a slow clock they can be refused until another request renews the session.
+**The rest (2026-10-30, follow-up).** No CareHub code sends a token it read itself any more. The remaining `getSession()` calls only read who is signed in (boot reconciliation, realtime, password reset, invitations, Ecommerce's applicant id).
+- `lib/email.js` (`/api/email/send`) and AdminDashboard's `/api/notify-business-status` go through `fetchWithSession`. Both handlers answer 401 only for a refused token, before anything is mailed.
+- StockValidation no longer checks or refreshes the session itself, and no longer saves a second time after any error that looked auth-related. The save goes through `sbFetch`, which renews and retries; an unusable session shows its message, and a genuine permission refusal shows as such.
+- The sales report's `useAuthUserId` sends no token, but a `null` id makes the report say "sign out and in again". It now keeps resolving through a connection failure (a refresh that failed on wake) and gives `null` only when the session is really over.
+- Settings no longer gates the Paystack return on a session. The gate silently dropped the payment reference when the session was momentarily unavailable; `confirmPlanPayment` handles the session itself and a failure points the owner to "Check payment".
 
 ## Tests
 
@@ -118,6 +122,8 @@ Retrying these calls is safe because every handler involved answers 401 only whe
 | `src/lib/__tests__/sessionFetch.test.js` | renew-and-retry on a refused token, single flight, never anon for a signed-in user, local sign-out on a refused refresh, clock-skew reading |
 | `src/services/__tests__/sessionRenewal.test.js` | `sbFetch`/`sbUpload` complete after renewing an expired token; ordinary errors are not retried |
 | `src/modules/wallet/walletRequest.test.js` | a withdrawal completes after one renewal with the same body; **a wrong PIN (403) is never retried**; ended session and no connection read distinctly; the shared payout client renews through `payoutClientOptions` |
+| `src/modules/pos/useAuthUserId.test.jsx` | keeps resolving through a connection failure; `null` only when the session is over or absent; stops when unmounted |
+| `src/modules/stock-management/StockValidation.test.jsx` | an unusable session shows its message and is not saved twice; a permission refusal is not retried |
 | `packages/shared-payout-ui/src/stores.test.js` | a supplied `fetchImpl` carries every payout call; the global fetch is untouched |
 
 ## If you hit this in the wild
