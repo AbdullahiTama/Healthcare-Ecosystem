@@ -20,7 +20,7 @@ vi.mock('../../providers/AuthProvider', () => ({
   AuthContext: { Provider: ({ children }) => children },
 }))
 
-import StockValidation, { parseAdjustmentQty, buildValidationItems } from './StockValidation.jsx'
+import StockValidation, { parseAdjustmentQty, buildValidationItems, removesTooMuch } from './StockValidation.jsx'
 import { authClient } from '../../lib/authClient.js'
 import { stockValidationRepository } from './repositories/index.js'
 import { SessionUnavailableError } from '../../lib/sessionFetch.js'
@@ -157,24 +157,30 @@ describe('StockValidation hardening (spec-stock-validation-laptop-fix)', () => {
       const items = buildValidationItems(ws)
       expect(items[0].reason).toBeNull()
       expect(items[0].adjustment_qty).toBe(10000)
-      expect(items[0].new_stock).toBe(10000)
+      expect(items[0].new_stock).toBe(10010)
     })
 
-    it('upper clamp 10000 — when adjustment would make new_stock >10000, client clamps to 10000', () => {
+    // The server applies the adjustment, not new_stock, so the preview is not capped: it must show what will be saved.
+    it('the quantity is capped at 10000 per line; New Stock is the honest preview of stock plus adjustment', () => {
       expect(parseAdjustmentQty(15000)).toBe(10000)
       expect(parseAdjustmentQty('99999')).toBe(10000)
       expect(parseAdjustmentQty(10000)).toBe(10000)
       expect(parseAdjustmentQty(0)).toBe(0)
-      // prev 9900 + qty 500 => raw 10400 should clamp to 10000
       const ws1 = [{ product: PRODUCT, currentStock: 9900, adjustmentQty: 500, direction: '+', reason: '' }]
-      expect(buildValidationItems(ws1)[0].new_stock).toBe(10000)
-      // prev 20 + clamped qty 15000 => qty becomes 10000, new_stock clamped to 10000
+      expect(buildValidationItems(ws1)[0].new_stock).toBe(10400)
       const ws2 = [{ product: PRODUCT, currentStock: 20, adjustmentQty: 15000, direction: '+', reason: '' }]
       const items2 = buildValidationItems(ws2)
       expect(items2[0].adjustment_qty).toBe(10000)
-      expect(items2[0].new_stock).toBe(10000)
-      // still succeeds (no negative guard), new_stock is int
+      expect(items2[0].new_stock).toBe(10020)
       expect(typeof items2[0].new_stock).toBe('number')
+    })
+
+    it('a negative stock is shown and sent as it is: -5, Add 8 previews 3 and is allowed', () => {
+      const add = { product: PRODUCT, currentStock: -5, adjustmentQty: 8, direction: '+', reason: '' }
+      expect(buildValidationItems([add])[0]).toMatchObject({ previous_stock: -5, adjustment_qty: 8, new_stock: 3 })
+      expect(removesTooMuch(add)).toBe(false)
+      expect(removesTooMuch({ ...add, adjustmentQty: 2 })).toBe(false)
+      expect(removesTooMuch({ ...add, direction: '-', adjustmentQty: 1 })).toBe(true)
     })
 
     it('NaN qty treated as 0', () => {
@@ -367,6 +373,75 @@ describe('StockValidation hardening (spec-stock-validation-laptop-fix)', () => {
   // The save goes through sbFetch, which renews a refused token and retries once (lib/sessionFetch.js, covered by
   // services/__tests__/sessionRenewal.test.js). This screen no longer touches the session itself: it reports what
   // the save says, and never saves a second time on its own.
+  describe('saving the same count twice', () => {
+    async function readyToSave(host) {
+      await addProductToWorksheet(host, 'Amoxicillin')
+      await act(async () => { setNativeValue(getQtyInput(host), '5') })
+      await act(async () => {})
+      await act(async () => { getSaveValidationButton(host).click() })
+      await act(async () => {})
+    }
+
+    it('a retry of the same worksheet after a failed save sends the same key', async () => {
+      saveSpy.mockRejectedValueOnce(new Error('Failed to fetch'))
+      const { host } = await renderStockValidation()
+      await readyToSave(host)
+      await act(async () => { getModalSaveButton(host).click() })
+      await act(async () => {})
+      await act(async () => { getModalSaveButton(host).click() })
+      await act(async () => {})
+      expect(saveSpy).toHaveBeenCalledTimes(2)
+      const [first, second] = saveSpy.mock.calls.map((c) => c[4])
+      expect(first).toMatch(/^stock-count:biz-1:/)
+      expect(second).toBe(first)
+      expect(host.textContent).toContain('Validation saved successfully')
+    })
+
+    it('changing the worksheet after a failed save makes it a new count with a new key', async () => {
+      saveSpy.mockRejectedValueOnce(new Error('Failed to fetch'))
+      const { host } = await renderStockValidation()
+      await readyToSave(host)
+      await act(async () => { getModalSaveButton(host).click() })
+      await act(async () => {})
+      await act(async () => { setNativeValue(getQtyInput(host), '6') })
+      await act(async () => {})
+      await act(async () => { getModalSaveButton(host).click() })
+      await act(async () => {})
+      const [first, second] = saveSpy.mock.calls.map((c) => c[4])
+      expect(second).toMatch(/^stock-count:biz-1:/)
+      expect(second).not.toBe(first)
+      expect(saveSpy.mock.calls[1][2][0].adjustment_qty).toBe(6)
+    })
+
+    it('shows the server\'s refusal sentence, naming the product', async () => {
+      const refusal = Object.assign(new Error('Amoxicillin has 2 in stock now, so 5 cannot be removed. Reload the count and check it again.'), { code: 'INSUFFICIENT_STOCK' })
+      saveSpy.mockRejectedValueOnce(refusal)
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { host } = await renderStockValidation()
+      await readyToSave(host)
+      await act(async () => { getModalSaveButton(host).click() })
+      await act(async () => {})
+      expect(host.textContent).toContain('Amoxicillin has 2 in stock now, so 5 cannot be removed.')
+      expect(host.textContent).not.toContain('Could not save validation')
+      warn.mockRestore()
+    })
+
+    it('a product with negative stock can be brought back up from the count screen', async () => {
+      const { host } = await renderStockValidation({ products: [{ ...PRODUCT, stock: -5 }] })
+      await addProductToWorksheet(host, 'Amoxicillin')
+      await act(async () => { setNativeValue(getQtyInput(host), '8') })
+      await act(async () => {})
+      expect(host.textContent).toContain('Current Stock: -5')
+      expect(host.textContent).toContain('New Stock: 3')
+      expect(host.textContent).not.toContain('Cannot go below 0')
+      await act(async () => { getSaveValidationButton(host).click() })
+      await act(async () => {})
+      await act(async () => { getModalSaveButton(host).click() })
+      await act(async () => {})
+      expect(saveSpy.mock.calls[0][2][0]).toMatchObject({ previous_stock: -5, adjustment_qty: 8, new_stock: 3 })
+    })
+  })
+
   describe('session problems (laptop stale token)', () => {
     it('shows the session message when the session cannot be used, and does not save again', async () => {
       saveSpy.mockRejectedValueOnce(new SessionUnavailableError('Your session has ended. Please sign in again.', { ended: true }))

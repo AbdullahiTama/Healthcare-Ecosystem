@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createStockValidationRepository, stockValidationRepository } from './index.js'
+import { createStockValidationRepository, stockValidationRepository, translateCountError, isCountRefusal } from './index.js'
 
 const BIZ = 'biz-1'
 const USER = 'user-1'
@@ -43,7 +43,40 @@ describe('stockValidationRepository', () => {
         p_products_checked: session.products_checked,
         p_products_adjusted: session.products_adjusted,
         p_items: items,
+        p_request_key: null,
       })
+    })
+
+    it('sends the worksheet key so a retried save is recognised by the server', async () => {
+      const { calls, repo } = recording('session-uuid-123')
+      await repo.saveSession(BIZ, session, items, USER, 'stock-count:biz-1:k1')
+      expect(calls[0].body.p_request_key).toBe('stock-count:biz-1:k1')
+    })
+
+    it('keeps a negative stock as shown instead of turning it into 0', async () => {
+      const { calls, repo } = recording('s')
+      await repo.saveSession(BIZ, session, [{ product_id: 'p1', previous_stock: '-5', adjustment_qty: 8, adjustment_direction: '+', new_stock: 3 }], USER)
+      expect(calls[0].body.p_items[0].previous_stock).toBe(-5)
+    })
+
+    it('turns the server\'s own refusal into its sentence, keeping the code', async () => {
+      const request = vi.fn(async () => {
+        throw new Error('Supabase error (400): INSUFFICIENT_STOCK: Panadol has 2 in stock now, so 5 cannot be removed. Reload the count and check it again.')
+      })
+      const repo = createStockValidationRepository(request)
+      const err = await repo.saveSession(BIZ, session, items, USER, 'k').catch((e) => e)
+      expect(err.message).toBe('Panadol has 2 in stock now, so 5 cannot be removed. Reload the count and check it again.')
+      expect(err.code).toBe('INSUFFICIENT_STOCK')
+      expect(isCountRefusal(err)).toBe(true)
+    })
+
+    it('rethrows anything else untouched (network, permission)', async () => {
+      const original = new Error('Supabase error (403): permission denied for function save_stock_validation_session')
+      expect(translateCountError(original)).toBe(original)
+      expect(isCountRefusal(original)).toBe(false)
+      const offline = new Error('Failed to fetch')
+      const repo = createStockValidationRepository(vi.fn(async () => { throw offline }))
+      await expect(repo.saveSession(BIZ, session, items, USER)).rejects.toBe(offline)
     })
 
     it('returns sessionId and itemsCount', async () => {

@@ -1,14 +1,36 @@
 import { sbFetch } from '../../../services/supabase'
 
+const COUNT_REFUSALS = ['INSUFFICIENT_STOCK', 'BATCH_REQUIRED', 'PRODUCT_NOT_FOUND', 'COUNT_INVALID']
+
+// save_stock_validation_session writes each refusal for the person counting,
+// after its code ("INSUFFICIENT_STOCK: Panadol has 2 in stock now, so 5 cannot
+// be removed. ..."). Those become that sentence, with `.code` kept; anything
+// else (network, session, permission) is rethrown untouched.
+export function translateCountError(error) {
+  const raw = error?.message || ''
+  const code = COUNT_REFUSALS.find((c) => raw.includes(c + ': '))
+  if (!code) return error
+  const friendly = new Error(raw.slice(raw.indexOf(code + ': ') + code.length + 2).trim())
+  friendly.code = code
+  return friendly
+}
+
+export function isCountRefusal(error) {
+  return COUNT_REFUSALS.includes(error?.code)
+}
+
 export function createStockValidationRepository(request = sbFetch) {
   return {
-    async saveSession(businessId, session, items, userId) {
+    // requestKey names this worksheet: saving it again (a lost reply, a second
+    // tap) returns the first session instead of adjusting the stock twice.
+    async saveSession(businessId, session, items, userId, requestKey = null) {
       if (!businessId) throw new Error('Missing business — businessId is required')
       if (!Array.isArray(items)) throw new Error('p_items must be an array')
       // Ensure integer payloads — phone +/- and laptop typed+Enter must produce identical JSON
       const sanitized = items.map(it => {
         const copy = { ...it }
-        if (copy.previous_stock != null) copy.previous_stock = Math.max(0, parseInt(copy.previous_stock, 10) || 0)
+        // The stock the screen showed, negative included: the server compares it with the stock now.
+        if (copy.previous_stock != null) copy.previous_stock = parseInt(copy.previous_stock, 10) || 0
         if (copy.adjustment_qty != null) {
           const parsed = parseInt(copy.adjustment_qty, 10)
           const n = Number.isNaN(parsed) ? 0 : parsed
@@ -30,18 +52,24 @@ export function createStockValidationRepository(request = sbFetch) {
         return copy
       })
 
-      // Keep seam: single sbFetch call, error detail bubbling via thrown Supabase error
-      const result = await request('rpc/save_stock_validation_session', {
-        method: 'POST',
-        body: JSON.stringify({
-          p_business_id: businessId,
-          p_user_id: userId,
-          p_user_name: session.user_name,
-          p_products_checked: session.products_checked,
-          p_products_adjusted: session.products_adjusted,
-          p_items: sanitized,
-        }),
-      })
+      // Keep seam: single sbFetch call; the server's own refusals become sentences
+      let result
+      try {
+        result = await request('rpc/save_stock_validation_session', {
+          method: 'POST',
+          body: JSON.stringify({
+            p_business_id: businessId,
+            p_user_id: userId,
+            p_user_name: session.user_name,
+            p_products_checked: session.products_checked,
+            p_products_adjusted: session.products_adjusted,
+            p_items: sanitized,
+            p_request_key: requestKey,
+          }),
+        })
+      } catch (e) {
+        throw translateCountError(e)
+      }
       return { sessionId: result, itemsCount: items.length }
     },
 

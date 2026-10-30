@@ -13,6 +13,7 @@ import { fmt, todayDate } from '../../lib/utils'
 import { PRODUCT_CATS } from '../../config/constants'
 import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
 import { findAllDuplicateGroups, createDuplicateIndex } from '../../lib/productMatches'
+import { intentKey } from '../../lib/intentKey'
 import { upsertProducts, removeProducts, toRows } from './productListState'
 import { CatalogStatusBanner, CatalogSkeleton } from './components/CatalogStatus'
 import { theme } from '../../styles/theme'
@@ -1027,14 +1028,6 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
       </div>
     </Modal>
   )
-}
-
-// A key naming one user intent (one restock dialog, one "Update Existing
-// Product" warning) for receive_stock's idempotency: the same intent retried
-// is recognised and not counted twice.
-function intentKey(prefix) {
-  const rand = globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
-  return prefix + ':' + rand
 }
 
 function RestockModal({ product, onRestock, onClose, showToast }) {
