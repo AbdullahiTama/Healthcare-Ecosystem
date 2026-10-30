@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 // Every write the screen makes, in order, so tests can assert what was sent.
 const calls = []
+let receiveImpl = null
 
 vi.mock('../repositories', () => ({
   purchaseRepository: {
@@ -16,13 +17,14 @@ vi.mock('../repositories', () => ({
 }))
 vi.mock('../../inventory/repositories', () => ({
   productRepository: {
-    incrementStock: async (...a) => { calls.push(['product.incrementStock', ...a]); return 1 },
+    receiveStock: async (...a) => {
+      calls.push(['product.receiveStock', ...a])
+      if (receiveImpl) return receiveImpl(...a)
+      return { stock: 99, replayed: false }
+    },
     update: async (...a) => { calls.push(['product.update', ...a]); return { id: a[0], ...a[2] } },
     create: async (...a) => { calls.push(['product.create', ...a]); return [{ id: 'new1' }] },
   },
-}))
-vi.mock('../../stock/repositories', () => ({
-  stockRepository: { createBatch: async (...a) => { calls.push(['stock.createBatch', ...a]); return null } },
 }))
 vi.mock('../../../services/supabase', () => ({ sbFetch: vi.fn(), sbFetchWithCount: vi.fn() }))
 vi.mock('../../debts/repositories', () => ({
@@ -44,6 +46,7 @@ let host
 let root
 beforeEach(() => {
   calls.length = 0
+  receiveImpl = null
   localStorage.clear()
   global.IS_REACT_ACT_ENVIRONMENT = true
   host = document.createElement('div')
@@ -137,7 +140,7 @@ describe('Purchases — bulk stock entry', () => {
     expect(document.activeElement).toBe(field(1, 'qty'))
   })
 
-  it('restocks one product once but records each batch separately, then clears the draft', async () => {
+  it('receives each line through the stock ledger with its own batch and key, then clears the draft', async () => {
     await render()
     await openForm()
     await type(host.querySelector('#purchase-supplier'), 'MedSupply Ltd')
@@ -154,10 +157,19 @@ describe('Purchases — bulk stock entry', () => {
     await click(button('Save Purchase'))
     await flush()
 
-    expect(calls.filter(c => c[0] === 'product.incrementStock')).toEqual([['product.incrementStock', 'p1', 'B1', 15]])
+    const receipts = calls.filter(c => c[0] === 'product.receiveStock')
+    expect(receipts.map(c => [c[1], c[2], c[3], c[4].batchNumber, c[4].expiryDate])).toEqual([
+      ['B1', 'p1', 10, 'A1', '2027-01-01'],
+      ['B1', 'p1', 5, 'A2', '2027-06-01'],
+    ])
+    for (const [, , , , opts] of receipts) {
+      expect(opts).toMatchObject({ movementType: 'purchase_receipt', sourceType: 'purchase', sourceId: 'pur1', supplier: 'MedSupply Ltd', reason: 'Purchase from MedSupply Ltd' })
+      expect(opts.idempotencyKey).toMatch(/^purchase:pur1:/)
+    }
+    expect(new Set(receipts.map(c => c[4].idempotencyKey)).size).toBe(2)
     expect(calls.filter(c => c[0] === 'product.create')).toHaveLength(0)
-    const batches = calls.filter(c => c[0] === 'stock.createBatch').map(c => c[2])
-    expect(batches.map(b => [b.batch_number, b.expiry_date, b.quantity])).toEqual([['A1', '2027-01-01', 10], ['A2', '2027-06-01', 5]])
+    // Cost is written once per product, never stock.
+    expect(calls.filter(c => c[0] === 'product.update').map(c => c[3])).toEqual([{ cost_price: 800 }])
     const purchase = calls.find(c => c[0] === 'purchase.create')[2]
     expect(purchase).toMatchObject({ supplier_name: 'MedSupply Ltd', quantity: 15, total_cost: 12000, amount_paid: 12000, status: 'paid' })
     expect(host.querySelector('[role="dialog"]')).toBeNull()
@@ -213,6 +225,53 @@ describe('Purchases — bulk stock entry', () => {
     await click(button('Save Purchase'))
     await flush()
     expect(calls.filter(c => c[0] === 'product.create')).toHaveLength(0)
-    expect(calls.filter(c => c[0] === 'product.incrementStock')).toEqual([['product.incrementStock', 'p1', 'B1', 3]])
+    expect(calls.filter(c => c[0] === 'product.receiveStock').map(c => [c[2], c[3]])).toEqual([['p1', 3]])
+  })
+
+  it('creates a new product empty, then receives its units as this purchase', async () => {
+    await render()
+    await openForm()
+    await type(host.querySelector('#purchase-supplier'), 'MedSupply Ltd')
+    await type(field(0, 'name'), 'Brand New Syrup')
+    await type(field(0, 'qty'), '6')
+    await type(field(0, 'cost'), '400')
+    await click(button('Save Purchase'))
+    await flush()
+
+    expect(calls.find(c => c[0] === 'product.create')[2]).toMatchObject({ name: 'Brand New Syrup', stock: 0, cost_price: 400 })
+    expect(calls.filter(c => c[0] === 'product.receiveStock').map(c => [c[2], c[3], c[4].movementType])).toEqual([['new1', 6, 'purchase_receipt']])
+  })
+
+  it('asks for the batch and expiry of a product tracked by batch before saving anything', async () => {
+    const INSULIN = { id: 'p9', name: 'Insulin Pen', category: 'Medicines', price: 9000, cost_price: 6000, stock: 4, tracking_mode: 'batch_expiry' }
+    await render(OWNER, { products: [AMOXIL, INSULIN] })
+    await openForm()
+    await type(host.querySelector('#purchase-supplier'), 'MedSupply Ltd')
+    await type(field(0, 'name'), 'Insulin Pen')
+    await type(field(0, 'qty'), '2')
+    expect(host.textContent).toContain('tracked by batch and expiry')
+    await click(button('Save Purchase'))
+    await flush()
+
+    expect(calls.filter(c => c[0] === 'purchase.create')).toHaveLength(0)
+    expect(field(0, 'batch').getAttribute('aria-invalid')).toBe('true')
+    expect(field(0, 'expiry').getAttribute('aria-invalid')).toBe('true')
+    expect(host.textContent).toContain('Batch number needed')
+  })
+
+  it('names a line the stock ledger refused, with the reason', async () => {
+    receiveImpl = async () => {
+      const e = new Error('This product is tracked by batch. Enter its batch number.')
+      e.code = 'BATCH_REQUIRED'
+      throw e
+    }
+    await render()
+    await openForm()
+    await type(host.querySelector('#purchase-supplier'), 'MedSupply Ltd')
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    await type(field(0, 'qty'), '2')
+    await click(button('Save Purchase'))
+    await flush()
+    expect(host.textContent).toContain('Not added to Inventory: Amoxil 500mg (This product is tracked by batch. Enter its batch number.)')
   })
 })

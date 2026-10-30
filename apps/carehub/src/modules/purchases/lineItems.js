@@ -48,8 +48,11 @@ export function applyProduct(item, product) {
 
 // Field-level problems for one line, empty when the line can be saved.
 // Quantities must be whole numbers: every stock column is integral, and a
-// decimal used to truncate silently via parseInt.
-export function itemProblems(item) {
+// decimal used to truncate silently via parseInt. `product` is the catalogue
+// product the line is linked to, if any: a product tracked by batch needs a
+// batch number (and an expiry when tracked by expiry), which the stock ledger
+// would otherwise refuse after the purchase record was already saved.
+export function itemProblems(item, product = null) {
   if (isBlankItem(item)) return {}
   const problems = {}
   if (!String(item.name || '').trim()) problems.name = 'Enter the product name'
@@ -57,6 +60,9 @@ export function itemProblems(item) {
   if (item.qty === '' || item.qty == null) problems.qty = 'Enter the quantity'
   else if (!Number.isInteger(qty) || qty <= 0) problems.qty = 'Whole number above 0'
   if (!(Number(item.cost) > 0)) problems.cost = 'Enter the unit cost'
+  const mode = product?.tracking_mode || 'none'
+  if (mode !== 'none' && !String(item.batch || '').trim()) problems.batch = 'Batch number needed'
+  if (mode === 'batch_expiry' && !item.expiry) problems.expiry = 'Expiry date needed'
   return problems
 }
 
@@ -66,11 +72,12 @@ export function isPastExpiry(item, today) {
   return !!item.expiry && item.expiry < today
 }
 
-// Group the saveable lines by product. Stock is incremented once per product
-// (two lines of one product must not hit the "create" branch twice and make a
-// duplicate catalogue entry), but each line keeps its own batch/expiry: two
-// batches of the same medicine are two batches, with two expiry dates.
-// `resolve(line)` returns the existing product for a line, or null.
+// Group the saveable lines by product, so a new product is created once (two
+// lines of one product must not hit the "create" branch twice and make a
+// duplicate catalogue entry) and the product's cost and price are written
+// once. Each line is still received on its own (`lines`): its own ledger
+// movement and its own batch, so two batches of one medicine keep two expiry
+// dates. `resolve(line)` returns the existing product for a line, or null.
 export function groupLinesByProduct(lines, resolve) {
   const groups = new Map()
   for (const line of lines) {
@@ -80,12 +87,12 @@ export function groupLinesByProduct(lines, resolve) {
     const qty = Number(line.qty)
     const cost = Number(line.cost)
     const sell = Number(line.sell) > 0 ? Number(line.sell) : null
-    if (!groups.has(key)) groups.set(key, { existing, name, qty: 0, cost, sell: null, cat: line.cat || 'Medicines', batches: [] })
+    if (!groups.has(key)) groups.set(key, { existing, name, qty: 0, cost, sell: null, cat: line.cat || 'Medicines', lines: [] })
     const g = groups.get(key)
     g.qty += qty
     g.cost = cost
     if (sell) g.sell = sell
-    if (line.batch || line.expiry) g.batches.push({ batch: line.batch || null, expiry: line.expiry || null, qty })
+    g.lines.push({ id: line.id, qty, batch: String(line.batch || '').trim() || null, expiry: line.expiry || null })
   }
   return [...groups.values()]
 }

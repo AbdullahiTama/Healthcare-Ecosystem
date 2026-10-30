@@ -160,34 +160,47 @@ describe('productRepository', () => {
     expect(repo.updateStock).toBeUndefined()
   })
 
-  // ── Atomic replenishment (C5/C12) ──────────────────────────────────────────
-  // The point of this method is that the addition happens in the database, not
-  // in JavaScript — a read-modify-write here would clobber the sale trigger's
-  // decrement. So the assertion is about the call it makes, not a resulting
-  // row: it must post to the RPC with the tenant and quantity, and never read
-  // stock first.
-  it('incrementStock calls the RPC with the tenant and quantity, reading nothing first', async () => {
+  // ── Received stock goes through the ledger (receive_stock) ─────────────────
+  // The addition happens in the database through apply_stock_change, never as
+  // a read-modify-write here (that would clobber the sale trigger's
+  // decrement), and it is keyed so a retry cannot add twice.
+  it('receiveStock posts one keyed call to receive_stock, reading nothing first', async () => {
     const calls = []
     const repo = createProductRepository(async (path, options) => {
-      calls.push({ path, method: options?.method, body: options?.body ? JSON.parse(options.body) : null })
-      return 12
+      calls.push({ path, method: options?.method, body: JSON.parse(options.body) })
+      return { stock: 12, batch_id: 'b1', movement_id: 'm1', replayed: false }
     })
 
-    const newStock = await repo.incrementStock('prod-1', A, 5)
+    const result = await repo.receiveStock(A, 'prod-1', 5, {
+      movementType: 'purchase_receipt', idempotencyKey: 'purchase:p1:l1', sourceType: 'purchase', sourceId: 'p1',
+      sourceLineId: 'l1', reason: 'Purchase from MedSupply', batchNumber: 'B-7', expiryDate: '2027-01-31', supplier: 'MedSupply',
+    })
 
-    expect(calls).toHaveLength(1) // no read-modify-write
-    expect(calls[0].path).toBe('rpc/increment_product_stock')
-    expect(calls[0].method).toBe('POST')
-    expect(calls[0].body).toEqual({ p_product_id: 'prod-1', p_business_id: A, p_qty: 5 })
-    expect(newStock).toBe(12)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toEqual({
+      path: 'rpc/receive_stock', method: 'POST',
+      body: {
+        p_business_id: A, p_product_id: 'prod-1', p_qty: 5, p_movement_type: 'purchase_receipt',
+        p_idempotency_key: 'purchase:p1:l1', p_source_type: 'purchase', p_source_id: 'p1', p_source_line_id: 'l1',
+        p_reason: 'Purchase from MedSupply', p_batch_number: 'B-7', p_expiry_date: '2027-01-31', p_date_received: null, p_supplier: 'MedSupply',
+      },
+    })
+    expect(result.stock).toBe(12)
   })
 
-  it('incrementStock is a no-op for a zero or negative quantity', async () => {
-    let called = false
-    const repo = createProductRepository(async () => { called = true; return null })
-    expect(await repo.incrementStock('prod-1', A, 0)).toBeNull()
-    expect(await repo.incrementStock('prod-1', A, -3)).toBeNull()
-    expect(called).toBe(false)
+  it('receiveStock turns the function\'s refusals into readable reasons and rethrows anything else', async () => {
+    const refused = createProductRepository(async () => { throw new Error('Supabase error (400): BATCH_REQUIRED: this product is tracked by batch; enter its batch number') })
+    await expect(refused.receiveStock(A, 'p', 1, { movementType: 'adjustment', idempotencyKey: 'k' })).rejects.toMatchObject({
+      code: 'BATCH_REQUIRED', message: 'This product is tracked by batch. Enter its batch number.',
+    })
+    const network = new TypeError('Failed to fetch')
+    const offline = createProductRepository(async () => { throw network })
+    await expect(offline.receiveStock(A, 'p', 1, { movementType: 'adjustment', idempotencyKey: 'k' })).rejects.toBe(network)
+  })
+
+  it('no longer exposes incrementStock, which bypassed the ledger', () => {
+    const { repo } = seeded()
+    expect(repo.incrementStock).toBeUndefined()
   })
 
   // ── search: consultation-form type-ahead ───────────────────────────────────
@@ -233,6 +246,6 @@ describe('productRepository', () => {
   it('exports a default productRepository instance', () => {
     expect(typeof productRepository.getAll).toBe('function')
     expect(typeof productRepository.mergeDuplicates).toBe('function')
-    expect(typeof productRepository.incrementStock).toBe('function')
+    expect(typeof productRepository.receiveStock).toBe('function')
   })
 })

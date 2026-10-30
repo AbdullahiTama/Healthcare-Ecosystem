@@ -16,7 +16,7 @@ A pharmacy with 3,193 products reported slow pages and data that "doesn't load w
 ## What changed
 
 * **Saves update the list in place.** `productRepository.update` now returns the saved row (`return=representation`). `Inventory.jsx` applies what the server returned with the pure helpers in `modules/inventory/productListState.js` (`upsertProducts`, `removeProducts`); nothing re-downloads the catalog after a save. Bulk import applies all created rows once at the end; cleanup applies each batch as it finishes, so a failure half way still leaves the list accurate.
-* **Restock is atomic.** It calls `productRepository.incrementStock` (the `increment_product_stock` RPC, `stock = stock + qty` in the database) and shows the stock the database returns. Zero or negative quantities are refused before any request.
+* **Restock is atomic.** It calls `productRepository.incrementStock` (the `increment_product_stock` RPC, `stock = stock + qty` in the database) and shows the stock the database returns. Zero or negative quantities are refused before any request. *(Superseded 2026-10-30: restock now goes through the stock ledger with `receive_stock`; see `Stock-Ledger.md`.)*
 * **Duplicate checks are O(1).** `createDuplicateIndex` in `lib/productMatches.js` is built once per catalog change and gives exactly `findDuplicate`'s answer (the first product, in list order, whose normalised name or generic name matches). The add form, CSV preview and CSV import use it.
 * **Memoised catalog passes.** Duplicate groups, categories and the preview's duplicate count recompute only when the catalog (or the uploaded file) changes.
 * **Offline cache follows the list.** `BusinessDashboard` writes the `products_<businessId>` cache 1.5 s after the list stops changing, instead of once per full download. It never writes before the first load has finished (so the empty initial list, or the previous business's list after a switch, cannot overwrite a good cache).
@@ -75,7 +75,7 @@ Manual test plan (a business with 1,000+ products, DevTools Network tab open):
 1. Open Products: one paged load of the catalog (one request per 1,000 rows).
 2. Edit a product's price: one PATCH, no `products?...select=*` GETs; the row shows the new price.
 3. Add a product: one POST; it appears in name order; the count goes up by one.
-4. Restock 5 units: one `rpc/increment_product_stock` call; the stock goes up by 5. Restock 0: a warning, no request.
+4. Restock 5 units: one `rpc/receive_stock` call (was `increment_product_stock` before 2026-10-30); the stock goes up by 5 and a ledger row is written. Restock 0: a warning, no request.
 5. Toggle CareFind: one PATCH; the icon changes. Go offline and toggle: an error toast.
 6. Delete a product: one DELETE; the row disappears.
 7. Import a CSV of 500 rows with some existing names: the preview opens without a freeze and counts the duplicates; the import shows the new rows without a reload.
