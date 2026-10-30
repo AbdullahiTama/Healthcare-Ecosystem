@@ -30,10 +30,22 @@ At first capture the ledger held 3,343 rows, every one an `opening` movement wri
 | Shop orders (CareFind) | `create_shop_order` → `shop_take_stock` (`sale`, source `shop_order`, one movement per order line, key `shop_order:<order>:<line>`) | Yes, since `carehub_20261225_shop_order_stock_ledger` |
 | Shop order cancel, expiry, cleanup, approved return | `cancel_shop_order`, `expire_unpaid_shop_orders`, `cleanup_pending_shop_orders`, `process_shop_return` → `shop_restore_inventory_on_cancel` (`sale_reversal`, or `return_restock` after an approved return; at most once per line) | Yes, same migration |
 | Stock counts (Stock Management ▸ Stock Validation) | `save_stock_validation_session` (`adjustment`, source `stock_count`, one movement per adjusted line, key `stock_count:<session>:<line>`; the count itself is idempotent on the screen's worksheet key) | Yes, since `carehub_20261226_stock_count_ledger` |
-| Branch transfers | `send_stock_transfer` / `receive_stock_transfer` / `cancel_stock_transfer` | **No** (checked by source; verify before relying on it) |
+| Branch transfers | `send_stock_transfer` / `receive_stock_transfer` / `cancel_stock_transfer` (`transfer`, sources `branch_transfer_out` / `_in` / `_cancel`, one movement per line, key `transfer:<transfer>:<line>:out|in|cancel`) | Yes, since `carehub_20261228_branch_transfers_ledger` |
 | Batch adjust and move | `adjust_stock_batch`, `transfer_stock_batch` (callable by signed-in users, `SECURITY INVOKER`) | **No** |
 
-Each movement records the locked row's real before and after quantities, so rows stay correct individually. Consecutive rows for a product chain (one row's `qty_after` is the next row's `qty_before`) only while every writer journals; branch transfers and the batch adjust / move functions still do not, so a product touched by one of them has a gap at that point. Those are the remaining steps.
+Each movement records the locked row's real before and after quantities, so rows stay correct individually. Consecutive rows for a product chain (one row's `qty_after` is the next row's `qty_before`) only while every writer journals; the batch adjust / move functions (`adjust_stock_batch`, `transfer_stock_batch`) still do not, so a product touched by one of them has a gap at that point. They are the remaining step.
+
+## Branch transfers on the ledger (2026-10-30)
+
+`carehub_20261228_branch_transfers_ledger` (applied live as version 20261030221602). Tests: `apps/carefind/src/test/stock-transfers/branchStockTransfers.db.test.js` (13 checks: the original suite now runs on the new path, plus chaining, per transfer totals, batch refusal and keys), on PGlite with the live ledger snapshot.
+
+What was wrong: the three transfer functions (carehub_20261222) already wrote `stock_movements` rows, but wrote `products.stock` themselves and inserted the rows by hand. A send recorded a positive quantity for stock that left (40 to 25 journalled as +15), the opposite sign of every other decrease, so a product's movements did not add up; there was no idempotency key or source line, and a batch-tracked product would have moved without its batches. Live there were no transfers yet (0 transfers, 0 movements, one business with a branch), so nothing needed correcting.
+
+What changed, and only this: each line now moves stock through `apply_stock_change` (send `-qty`, receive `+qty received`, cancel `+qty sent`), keyed per line, with the line as `source_line_id`. Permissions, checks, messages, notifications and return values are unchanged, and the screen needed no change. A batch-tracked product is refused with a sentence when sent or received into (none is tracked live; carrying batch and expiry between branches is a later step).
+
+Verified live: a rolled-back probe as the real owner of the one business with a branch (send 5: 20 to 15 journalled as -5; receive 4 of 5: the branch's product created from the master item with 4, shortfall 1; send 2 and cancel: back to 15; send 99 refused; every row consistent and keyed). After applying, the three bodies match the repository and the security advisor findings are unchanged.
+
+Rollback: re-run the three functions from `carehub_20261222_branch_stock_transfers.sql`. Re-running that file on its own also restores the old bodies, so `carehub_20261228` must always be run after it.
 
 ## Stock counts on the ledger (2026-10-30)
 
