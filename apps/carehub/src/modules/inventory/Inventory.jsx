@@ -164,16 +164,19 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     try {
       const category = data.cat || data.category || 'Medicines'
       // Build clean productData — explicitly exclude 'cat' since Supabase only has 'category'
-      const { cat, ...rest } = data
+      const { cat, stock, ...rest } = data
       const productData = {
         ...rest,
         category,
         price: parseFloat(data.price) || 0,
         cost_price: parseFloat(data.cost_price) || 0,
-        stock: category === 'Services' ? 999 : parseInt(data.stock) || 0,
         reorder_level: parseInt(data.reorder_level) || 5,
         shelf_label: data.shelf_label || null,
       }
+      // Stock is only written when the caller sent it: ProductModal omits it on
+      // an edit that did not change it (see ProductModal.save).
+      if (category === 'Services') productData.stock = 999
+      else if (stock !== undefined) productData.stock = parseInt(stock) || 0
 
       if (!isEdit) {
         if (!plan.allow('adding products')) return
@@ -211,80 +214,83 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     }
   }
 
-  // Called when user confirms they want to update the existing duplicate instead of creating new
+  // Called when user confirms they want to update the existing duplicate instead of creating new.
+  // The incoming units are added in the database (increment_product_stock),
+  // not written as existing.stock + incoming.stock: `existing` comes from the
+  // page's product list, which goes stale as POS sells, so an absolute write
+  // erased every sale made since it loaded. Fields are updated first so a
+  // failure there adds no stock and a retry cannot double count it. Prices
+  // change only for roles allowed to edit prices: this updates an existing
+  // product, so Add Product's "new products may be priced" rule does not apply.
   async function updateExistingFromDuplicate() {
     if (!duplicateWarning) return
     try {
       const { existing, incoming } = duplicateWarning
-      const saved = await productRepository.update(existing.id, brand.id, {
-        price: incoming.price,
-        cost_price: incoming.cost_price,
-        stock: (existing.stock || 0) + (incoming.stock || 0),
+      const updates = {
         reorder_level: incoming.reorder_level,
         category: incoming.category,
         barcode: incoming.barcode || existing.barcode,
         list_on_carefind: incoming.list_on_carefind,
-      })
+      }
+      if (perms?.canEditPrice) { updates.price = incoming.price; updates.cost_price = incoming.cost_price }
+      const saved = await productRepository.update(existing.id, brand.id, updates)
       if (!saved) throw new Error('product not found')
-      applySaved(saved)
-      showToast('Existing product updated. Stock was combined.', { type: 'success' })
+      const added = incoming.category === 'Services' ? 0 : (parseInt(incoming.stock) || 0)
+      let newStock = null
+      if (added > 0) {
+        newStock = await productRepository.incrementStock(existing.id, brand.id, added)
+        if (newStock == null) throw new Error('product not found')
+      }
+      applySaved({ ...saved, ...(newStock != null ? { stock: newStock } : {}) })
+      showToast('Existing product updated' + (added > 0 ? ': ' + added + ' units added, now ' + newStock + ' in stock' : '') + '.', { type: 'success' })
       setDuplicateWarning(null)
       setShowAdd(false)
       setEditItem(null)
     } catch (e) {
       console.error('updateExistingFromDuplicate error:', e)
-      showToast('Could not update product. Please try again.', { type: 'error' })
+      showToast('Could not update the product. Check its stock before trying again.', { type: 'error' })
     }
   }
 
-  // Merge ALL detected duplicate groups in one go — batched version:
-  // updates and deletes run in safe-sized parallel batches to avoid overwhelming
-  // the connection or hitting URL length limits with very large duplicate counts
+  // Each group is merged by merge_duplicate_products in ONE database
+  // transaction: the duplicates' CURRENT stock moves into the kept product
+  // through the stock ledger, everything that pointed at a duplicate (batches,
+  // orders, reviews, shop listing, stock counts) is repointed, then the
+  // duplicates are deleted. The old version wrote the kept product's stock as
+  // the sum of this page's stale counts and bulk deleted the rest, which
+  // erased sales, let reviews and listings cascade away, and failed halfway on
+  // products with batches or orders. Groups run one at a time, so a group the
+  // database refuses (for example a shop listing on two of them) leaves every
+  // other group to merge normally.
   async function mergeAllDuplicates() {
+    if (!perms?.canDelete) return
     setCleaningUp(true)
-    try {
-      const idsToDelete = []
-      const updates = [] // { id, stock }
-
-      for (const group of duplicateGroups) {
-        // Pick the "keeper" — prefer the one with a cost_price set, then the one with more stock, then the first
-        const keeper = [...group].sort((a, b) => {
-          const aScore = (a.cost_price > 0 ? 2 : 0) + (a.barcode ? 1 : 0)
-          const bScore = (b.cost_price > 0 ? 2 : 0) + (b.barcode ? 1 : 0)
-          if (aScore !== bScore) return bScore - aScore
-          return (b.stock || 0) - (a.stock || 0)
-        })[0]
-        const others = group.filter(p => p.id !== keeper.id)
-        const combinedStock = group.reduce((s, p) => s + (p.stock || 0), 0)
-
-        updates.push({ id: keeper.id, stock: combinedStock })
-        others.forEach(o => idsToDelete.push(o.id))
+    let mergedGroups = 0
+    let removed = 0
+    const refused = []
+    for (let gi = 0; gi < duplicateGroups.length; gi++) {
+      const group = duplicateGroups[gi]
+      const keeper = keeperOf(group)
+      const others = group.filter(p => p.id !== keeper.id).map(p => p.id)
+      try {
+        const result = await productRepository.mergeDuplicates(brand.id, keeper.id, others)
+        if (result?.stock != null) applySaved({ id: keeper.id, stock: result.stock })
+        applyRemoved(others)
+        mergedGroups++
+        removed += others.length
+      } catch (e) {
+        console.error('[inventory] merge refused for', keeper.name, e)
+        refused.push(keeper.name + ': ' + (e.code ? e.message : 'could not confirm the merge'))
       }
-
-      // Run stock updates in parallel batches of 25 at a time (not all 900+ at once)
-      const UPDATE_BATCH_SIZE = 25
-      for (let i = 0; i < updates.length; i += UPDATE_BATCH_SIZE) {
-        const batch = updates.slice(i, i + UPDATE_BATCH_SIZE)
-        const saved = await Promise.all(batch.map(u => productRepository.update(u.id, brand.id, { stock: u.stock })))
-        applySaved(saved.filter(Boolean))
-        showToast('Updating products... ' + Math.min(i + UPDATE_BATCH_SIZE, updates.length) + ' / ' + updates.length, { type: 'info' })
-      }
-
-      // Delete duplicates in batches of 50 IDs per request to keep the URL short and safe
-      const DELETE_BATCH_SIZE = 50
-      let deletedSoFar = 0
-      for (let i = 0; i < idsToDelete.length; i += DELETE_BATCH_SIZE) {
-        const batch = idsToDelete.slice(i, i + DELETE_BATCH_SIZE)
-        await productRepository.deleteBulk(batch, brand.id)
-        applyRemoved(batch)
-        deletedSoFar += batch.length
-        showToast('Removing duplicates... ' + deletedSoFar + ' / ' + idsToDelete.length, { type: 'info' })
-      }
-
-      showToast('Cleaned up ' + duplicateGroups.length + ' duplicate group(s). Removed ' + idsToDelete.length + ' duplicate item(s)', { type: 'success' })
-    } catch (e) {
-      console.error('Error during cleanup:', e)
-      showToast('Could not finish the cleanup. Try again. (' + (e.message || 'unknown error') + ')', { type: 'error' })
+      showToast('Merging duplicates... ' + (gi + 1) + ' / ' + duplicateGroups.length, { type: 'info' })
+    }
+    // After any failure, reload so the list shows what the database really
+    // holds (a network error can land after the merge committed).
+    if (refused.length > 0 && loadProducts) loadProducts()
+    if (refused.length === 0) {
+      showToast('Merged ' + mergedGroups + ' duplicate group(s). Removed ' + removed + ' duplicate item(s); their stock, batches and sales history now sit on the product kept.', { type: 'success' })
+    } else {
+      showToast('Merged ' + mergedGroups + ' of ' + duplicateGroups.length + ' group(s). Not merged: ' + refused.slice(0, 3).join(' · ') + (refused.length > 3 ? ' · and ' + (refused.length - 3) + ' more' : ''), { type: 'warning', duration: 12000 })
     }
     setCleaningUp(false)
     setShowCleanup(false)
@@ -306,21 +312,28 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 
   // Restock adds inside the database (increment_product_stock) rather than
   // writing back a total computed here, so a sale made on a till at the same
-  // moment is not overwritten. The RPC returns the new stock level.
-  async function handleRestock(product, qty, note) {
-    const amount = parseInt(qty, 10)
-    if (!Number.isFinite(amount) || amount <= 0) {
-      showToast('Enter a quantity greater than zero.', { type: 'warning' })
-      return
-    }
+  // moment is not overwritten. The RPC returns the new stock level, or null
+  // when the product no longer exists. Returns true when the restock dialog
+  // should close (done, or the product is gone) and false when the user should
+  // be able to retry with what they typed.
+  async function handleRestock(product, amount) {
     try {
       const newStock = await productRepository.incrementStock(product.id, brand.id, amount)
-      if (newStock === null || newStock === undefined) throw new Error('product not found')
+      if (newStock === null || newStock === undefined) {
+        applyRemoved([product.id])
+        showToast('That product no longer exists in your inventory.', { type: 'error' })
+        return true
+      }
       applySaved({ id: product.id, stock: newStock })
-      showToast(amount + ' units added to ' + product.name, { type: 'success' })
+      showToast(amount + ' units added to ' + product.name + ': now ' + newStock + ' in stock', { type: 'success' })
+      return true
     } catch (e) {
       console.error('handleRestock error:', e)
-      showToast('Could not update stock. Please try again.', { type: 'error' })
+      // A network failure can happen after the database applied the change,
+      // so do not claim nothing changed: refresh and ask the user to check.
+      if (loadProducts) loadProducts()
+      showToast('Could not confirm the stock was added. Check the current stock before trying again.', { type: 'error' })
+      return false
     }
   }
 
@@ -490,7 +503,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               {exporting ? <Loader2 size={14} className="spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />} {exporting ? 'Exporting…' : 'Export Excel'}
             </button>
           )}
-          {catalogReady && totalDuplicateItems > 0 && (
+          {perms?.canDelete && catalogReady && totalDuplicateItems > 0 && (
             <button onClick={() => setShowCleanup(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${warning}`, background: warningBg, color: warning, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
               <AlertTriangle size={14} /> Clean up {totalDuplicateItems} duplicate{totalDuplicateItems > 1 ? 's' : ''}
             </button>
@@ -679,7 +692,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
           }}
           actions={p => (
             <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-              {(p.cat || p.category || '') !== 'Services' && <button onClick={() => setShowRestock(p)} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>+ Stock</button>}
+              {perms?.canEditStock && (p.cat || p.category || '') !== 'Services' && <button onClick={() => setShowRestock(p)} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>+ Stock</button>}
               <GhostBtn onClick={() => setEditItem(p)}>Edit</GhostBtn>
               {perms?.canDelete && <RedBtn onClick={() => askDelete(p)}>Del</RedBtn>}
             </div>
@@ -704,7 +717,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         <RestockModal
           product={showRestock}
           showToast={showToast}
-          onRestock={async (qty, note) => { await handleRestock(showRestock, qty, note); setShowRestock(null) }}
+          onRestock={async (qty) => { if (await handleRestock(showRestock, qty)) setShowRestock(null) }}
           onClose={() => setShowRestock(null)}
         />
       )}
@@ -768,20 +781,21 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       <Modal show={showCleanup} onClose={() => setShowCleanup(false)} title='Clean Up Duplicate Products'>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ padding: '14px', borderRadius: '12px', background: warningBg, border: `1px solid ${warning}`, fontSize: '13px', color: theme.amberText, lineHeight: '1.7' }}>
-            Found <strong>{duplicateGroups.length}</strong> group(s) of duplicate products already in your inventory. These match on brand name or generic name. Merging will combine the stock of each group into one product and remove the rest.
+            Found <strong>{duplicateGroups.length}</strong> group(s) of duplicate products already in your inventory. These match on brand name or generic name. Merging keeps one product per group and adds the others' current stock to it. Their batches, orders, reviews and shop listing move to the product kept, then the rest are removed.
           </div>
 
           <div style={{ maxHeight: '320px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {duplicateGroups.map((group, gi) => {
-              const totalStock = group.reduce((s, p) => s + (p.stock || 0), 0)
+              const keeper = keeperOf(group)
               return (
                 <div key={gi} style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${warning}`, background: warningBg }}>
                   <div style={{ fontSize: '11px', fontWeight: '700', color: warning, marginBottom: '8px' }}>
-                    GROUP {gi + 1}: {group.length} duplicates · will combine to {totalStock} units
+                    GROUP {gi + 1}: {group.length} duplicates · keeps {keeper.name}
                   </div>
                   {group.map(p => (
                     <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '6px', background: theme.gray50, marginBottom: '4px', fontSize: '12px' }}>
                       <div>
+                        {p.id === keeper.id && <Pill label='Kept' type='teal' style={{ marginRight: 6 }} />}
                         <span style={{ fontWeight: '600' }}>{p.name}</span>
                         {(p.generic_name || p.genericName) && <span style={{ color: gray400 }}> · {p.generic_name || p.genericName}</span>}
                       </div>
@@ -835,7 +849,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             </div>
 
             <div style={{ padding: '10px 14px', borderRadius: '10px', background: theme.gray50, fontSize: '12px', color: theme.gray600 }}>
-              Updating will combine stock ({duplicateWarning.existing.stock} + {duplicateWarning.incoming.stock} = {(duplicateWarning.existing.stock || 0) + (duplicateWarning.incoming.stock || 0)} units) and apply the new price you entered.
+              Updating will add {duplicateWarning.incoming.stock || 0} units to the existing product's stock{perms?.canEditPrice ? ' and apply the new price you entered' : '. Prices stay as they are: only roles with price permission can change them'}.
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
@@ -855,6 +869,18 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     </div>
     </>
   )
+}
+
+// Which product a duplicate group keeps: the one with a cost price, then a
+// barcode, then the most stock (the rule the cleanup has always used, now also
+// shown in the dialog so the owner sees it before merging).
+function keeperOf(group) {
+  return [...group].sort((a, b) => {
+    const aScore = (a.cost_price > 0 ? 2 : 0) + (a.barcode ? 1 : 0)
+    const bScore = (b.cost_price > 0 ? 2 : 0) + (b.barcode ? 1 : 0)
+    if (aScore !== bScore) return bScore - aScore
+    return (b.stock || 0) - (a.stock || 0)
+  })[0]
 }
 
 function ProductModal({ product, perms, onSave, onClose, showToast }) {
@@ -893,7 +919,14 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
           ...(listedOnCareFind ? { show_price: form.show_price !== false } : {}),
         }
       : {}
-    await onSave({ ...restForm, ...saleData, price: parseFloat(form.price) || 0, cost_price: parseFloat(form.cost_price) || 0, stock: isService ? 999 : parseInt(form.stock) || 0, reorder_level: parseInt(form.reorder_level) || 5, category: form.cat || form.category || 'Medicines', expiry_date: form.expiry_date || null })
+    // On an edit, stock is only sent when the user changed it. The form was
+    // filled from the page's product list, which goes stale as POS sells, so
+    // sending it back unchanged reset stock to that old figure on every price
+    // or name edit. A changed value is a deliberate count correction.
+    const { stock: _stock, ...withoutStock } = restForm
+    const stockTouched = !isEdit || String(form.stock ?? '') !== String(product.stock ?? '')
+    const stockData = isService ? { stock: 999 } : stockTouched ? { stock: parseInt(form.stock) || 0 } : {}
+    await onSave({ ...withoutStock, ...saleData, ...stockData, price: parseFloat(form.price) || 0, cost_price: parseFloat(form.cost_price) || 0, reorder_level: parseInt(form.reorder_level) || 5, category: form.cat || form.category || 'Medicines', expiry_date: form.expiry_date || null })
     setSaving(false)
   }
 
@@ -968,22 +1001,32 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
 
 function RestockModal({ product, onRestock, onClose, showToast }) {
   const [qty, setQty] = useState('')
-  const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+  // Whole numbers only: stock is integral, and parseInt used to turn 2.5 into
+  // 2 without a word.
+  const units = Number(qty)
+  const valid = qty !== '' && Number.isInteger(units) && units > 0
   const handle = async () => {
-    if (!qty || parseInt(qty) <= 0) { showToast('Enter a valid quantity.', { type: 'warning' }); return }
-    setSaving(true); await onRestock(qty, note); setSaving(false)
+    // Every press is a real increment, so a second tap while the first is in
+    // flight must not add the stock twice.
+    if (saving) return
+    if (!valid) { showToast('Enter a whole number of units above 0 (e.g. 2, not 2.5).', { type: 'warning' }); return }
+    setSaving(true)
+    await onRestock(units)
+    setSaving(false)
   }
   return (
     <Modal show title='Restock Product' onClose={onClose}
-      footer={<><GhostBtn onClick={onClose} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handle} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : '+ Add Stock'}</TealBtn></>}>
+      footer={<><GhostBtn onClick={onClose} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handle} disabled={saving} aria-busy={saving} style={{ flex: 1, padding: '12px', opacity: saving ? 0.7 : 1, cursor: saving ? 'wait' : 'pointer' }}>{saving ? 'Saving...' : '+ Add Stock'}</TealBtn></>}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ padding: '12px', borderRadius: '10px', background: bg, display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
           <span style={{ color: gray500 }}>Current stock</span><span style={{ fontWeight: '700' }}>{product.stock} units</span>
         </div>
-        <Inp label='Units to Add *' value={qty} onChange={setQty} type='number' placeholder='e.g. 100' required />
-        {qty && parseInt(qty) > 0 && <div style={{ fontSize: '12px', color: success, fontWeight: '700' }}>New total: {product.stock + parseInt(qty)} units</div>}
-        <Inp label='Note (optional)' value={note} onChange={setNote} placeholder='Supplier name, invoice number...' />
+        <Inp label='Units to Add' id='restock-units' value={qty} onChange={setQty} type='number' inputMode='numeric' min='1' step='1' placeholder='e.g. 100' required />
+        {valid && <div style={{ fontSize: '12px', color: success, fontWeight: '700' }}>Expected new total: {(product.stock || 0) + units} units</div>}
+        {/* The old "Note" field was never saved anywhere. Deliveries with a
+            supplier, cost, batch or expiry belong in Purchases, which keeps them. */}
+        <div style={{ fontSize: '12px', color: gray500, lineHeight: 1.5 }}>Receiving a supplier delivery? Record it in Purchases to keep the supplier, cost, batch and expiry with the stock.</div>
         {product.list_on_carefind !== false && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px', borderRadius: '8px', background: theme.gray50, fontSize: '12px', color: tealDeep }}><Search size={13} /> After restocking this product will show as available on CareFind</div>}
       </div>
     </Modal>

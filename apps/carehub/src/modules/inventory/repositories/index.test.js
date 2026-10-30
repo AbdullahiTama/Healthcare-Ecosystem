@@ -119,28 +119,37 @@ describe('productRepository', () => {
     expect(client.rows('products').map((r) => r.id)).toContain('9')
   })
 
-  // ── Bug 1: deleteBulk was called by the cleanup flow but never defined ──────
-  it('deleteBulk removes exactly the given ids for the tenant', async () => {
-    const { repo, client } = seeded()
-    await repo.deleteBulk(['1', '3'], A)
-    expect(client.rows('products').map((r) => r.id).sort()).toEqual(['2', '9'])
-  })
-
-  it('deleteBulk never crosses the tenant boundary', async () => {
-    const { repo, client } = seeded()
-    // id '9' belongs to B; passing it under A's scope must not delete it
-    await repo.deleteBulk(['1', '9'], A)
-    expect(client.rows('products').map((r) => r.id).sort()).toEqual(['2', '3', '9'])
-  })
-
-  it('deleteBulk is a no-op on an empty list (issues no request)', async () => {
-    let called = false
-    const repo = createProductRepository(async () => {
-      called = true
-      return []
+  // ── Duplicate merge goes through the database function ─────────────────────
+  it('mergeDuplicates calls merge_duplicate_products scoped to the business and returns its result', async () => {
+    const calls = []
+    const repo = createProductRepository(async (path, opts) => {
+      calls.push([path, JSON.parse(opts.body)])
+      return { keeper_id: '1', merged: 2, units_moved: 5, stock: 15 }
     })
-    await repo.deleteBulk([], A)
-    expect(called).toBe(false)
+    const result = await repo.mergeDuplicates(A, '1', ['2', '3'])
+    expect(calls).toEqual([['rpc/merge_duplicate_products', { p_business_id: A, p_keeper_id: '1', p_duplicate_ids: ['2', '3'] }]])
+    expect(result).toEqual({ keeper_id: '1', merged: 2, units_moved: 5, stock: 15 })
+  })
+
+  it('mergeDuplicates turns the function\'s refusals into readable reasons with a code', async () => {
+    const repo = createProductRepository(async () => {
+      throw new Error('Supabase error (400): MERGE_LISTING_CONFLICT: more than one of these products has a shop listing; remove the extra listing first')
+    })
+    await expect(repo.mergeDuplicates(A, '1', ['2'])).rejects.toMatchObject({
+      code: 'MERGE_LISTING_CONFLICT',
+      message: 'More than one of these products has a shop listing. Remove the extra listing, then merge.',
+    })
+  })
+
+  it('mergeDuplicates rethrows an unrecognised failure untouched', async () => {
+    const network = new TypeError('Failed to fetch')
+    const repo = createProductRepository(async () => { throw network })
+    await expect(repo.mergeDuplicates(A, '1', ['2'])).rejects.toBe(network)
+  })
+
+  it('no longer exposes the cascading deleteBulk', () => {
+    const { repo } = seeded()
+    expect(repo.deleteBulk).toBeUndefined()
   })
 
   // ── Bug 2: updateStock was dead and malformed (unscoped PATCH with a
@@ -223,7 +232,7 @@ describe('productRepository', () => {
 
   it('exports a default productRepository instance', () => {
     expect(typeof productRepository.getAll).toBe('function')
-    expect(typeof productRepository.deleteBulk).toBe('function')
+    expect(typeof productRepository.mergeDuplicates).toBe('function')
     expect(typeof productRepository.incrementStock).toBe('function')
   })
 })
