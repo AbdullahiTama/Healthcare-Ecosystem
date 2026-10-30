@@ -8,6 +8,7 @@ import { businessLucideIcon, businessName } from '../../lib/utils'
 import { NIG_STATES } from '../../config/constants'
 import { useAuth } from '../../providers/AuthProvider'
 import { authClient } from '../../lib/authClient'
+import { fetchWithSession, SessionUnavailableError } from '../../lib/sessionFetch'
 import { PLAN_LABELS, PLAN_MONTHLY_NAIRA, PLAN_YEARLY_NAIRA, PLAN_LIMITS, isPlanAllowedForBusinessType } from '../../lib/planLimits'
 import { theme } from '../../styles/theme'
 import { sbUpload } from '../../services/supabase'
@@ -90,13 +91,10 @@ export default function Settings({ brand, role, perms }) {
 
   async function handleRenew(months) {
     setRenewing(true)
-    const { data: { session } } = await authClient.auth.getSession()
-    if (!session) { showToast('Please log in again to renew your plan.', { type: 'warning' }); setRenewing(false); return }
-
     try {
-      const response = await fetch('/api/initiate-plan-payment', {
+      const response = await fetchWithSession('/api/initiate-plan-payment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ months, callback_url: `${window.location.origin}/dashboard/settings` }),
       })
       const data = await response.json()
@@ -107,7 +105,7 @@ export default function Settings({ brand, role, perms }) {
         setRenewing(false)
       }
     } catch (e) {
-      showToast('Network error. Please check your connection and try again.', { type: 'error' })
+      showToast(e instanceof SessionUnavailableError ? e.message : 'Network error. Please check your connection and try again.', { type: 'error' })
       setRenewing(false)
     }
   }

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -49,7 +50,8 @@ async function mount(path) {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
-  await act(async () => { root.render(<MemoryRouter initialEntries={[path]}><Keyed /></MemoryRouter>) })
+  // As in production (main.jsx): the shell's resume refresh uses the app's QueryClient.
+  await act(async () => { root.render(<QueryClientProvider client={new QueryClient()}><MemoryRouter initialEntries={[path]}><Keyed /></MemoryRouter></QueryClientProvider>) })
   for (let i = 0; i < 20; i++) await act(async () => { await new Promise((r) => setTimeout(r, 15)) })
   return { host, unmount: async () => { await act(async () => { root.unmount() }); host.remove() } }
 }

@@ -1,19 +1,21 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createInvitationService, readableError } from './invitations.js'
 
-function harness({ status = 200, body = { invitation: { email: 'ada@x.com' }, email_sent: true }, session = { access_token: 'jwt-1' } } = {}) {
+function harness({ status = 200, statuses = null, body = { invitation: { email: 'ada@x.com' }, email_sent: true }, session = { access_token: 'jwt-1' }, refreshed = null } = {}) {
   const calls = []
   const fetchImpl = vi.fn(async (url, options) => {
     calls.push({ url, options })
-    return { ok: status < 400, status, json: async () => body }
+    const s = statuses ? statuses[calls.length - 1] : status
+    return { ok: s < 400, status: s, json: async () => body }
   })
   const request = vi.fn(async () => ({ state: 'valid' }))
-  const service = createInvitationService({
-    fetchImpl,
-    getSession: async () => ({ data: { session } }),
-    request,
-  })
-  return { service, calls, request }
+  const auth = {
+    getSession: async () => ({ data: { session }, error: null }),
+    refreshSession: vi.fn(async () => ({ data: { session: refreshed }, error: refreshed ? null : { message: 'refused' } })),
+    signOut: vi.fn(async () => ({ error: null })),
+  }
+  const service = createInvitationService({ fetchImpl, auth, request })
+  return { service, calls, request, auth }
 }
 
 describe('invite', () => {
@@ -41,6 +43,13 @@ describe('invite', () => {
     const { service } = harness({ status: 400, body: { error: "This email is a business owner's CareHub login." } })
     await expect(service.invite('biz-1', { fullName: 'A', email: 'owner@x.com', role: 'Cashier' }))
       .rejects.toThrow("This email is a business owner's CareHub login.")
+  })
+
+  it('renews a token the server refused and retries once', async () => {
+    const { service, calls, auth } = harness({ statuses: [401, 200], refreshed: { access_token: 'jwt-2' } })
+    await service.invite('biz-1', { fullName: 'A', email: 'a@x.com', role: 'Cashier' })
+    expect(auth.refreshSession).toHaveBeenCalledTimes(1)
+    expect(calls.map(c => c.options.headers.Authorization)).toEqual(['Bearer jwt-1', 'Bearer jwt-2'])
   })
 
   it('refuses to call the server without a session', async () => {

@@ -105,6 +105,8 @@ export function createSaleRepository({
   offline = localOfflineQueue,
   isOnline = () => navigator.onLine,
 } = {}) {
+  let syncing = null
+
   return {
     // ── Targeted reads ────────────────────────────────────────────────────────
     // Screens must not download a business's whole sales history: it grows
@@ -312,29 +314,49 @@ export function createSaleRepository({
     // so a partial failure — three of five accepted, two rejected — destroyed
     // the two that never reached the database. Failures stay queued and are
     // retried on the next sync.
-    async syncQueued(businessId) {
-      if (!isOnline()) return { synced: 0, rejected: [] }
-      const queue = offline.all()
-      if (!queue.length) return { synced: 0, rejected: [] }
-
-      const unsynced = []
-      const rejected = []
-      let count = 0
-      for (const sale of queue) {
-        try {
-          // A sale is posted under the location it was rung up at (queued sales carry it): the owner may have
-          // switched location since. Only a sale queued by an older version without one takes the current location.
-          const { _offline_id, ...data } = sale
-          await request('sales', { method: 'POST', body: JSON.stringify({ ...data, business_id: data.business_id || businessId }) })
-          count++
-        } catch (e) {
-          if (isServerRejection(e)) rejected.push({ txn_no: sale.txn_no, error: e.message })
-          unsynced.push(sale)
-        }
-      }
-      if (count > 0) offline.replace(unsynced)
-      return { synced: count, rejected }
+    //
+    // Single flight: sync also runs when the counter comes back from idle or
+    // regains its connection (lib/resume.js), which can coincide with mount
+    // or the Sync button. Two overlapping runs would each POST the same queued
+    // sales, and `sales` has no unique key on txn_no, so the sale would be
+    // recorded twice (double revenue, double stock decrement). An overlapping
+    // call joins the run in progress instead.
+    syncQueued(businessId) {
+      if (!syncing) syncing = replayQueue(businessId).finally(() => { syncing = null })
+      return syncing
     },
+  }
+
+  // Entries parked by push() carry an _offline_id; anything queued before
+  // ids existed is identified by its stored content, which reads back
+  // identically from the same storage.
+  function queueKey(sale) {
+    return sale._offline_id || JSON.stringify(sale)
+  }
+
+  async function replayQueue(businessId) {
+    if (!isOnline()) return { synced: 0, rejected: [] }
+    const queue = offline.all()
+    if (!queue.length) return { synced: 0, rejected: [] }
+
+    const syncedIds = new Set()
+    const rejected = []
+    for (const sale of queue) {
+      try {
+        // A sale is posted under the location it was rung up at (queued sales carry it): the owner may have
+        // switched location since. Only a sale queued by an older version without one takes the current location.
+        const { _offline_id, ...data } = sale
+        await request('sales', { method: 'POST', body: JSON.stringify({ ...data, business_id: data.business_id || businessId }) })
+        syncedIds.add(queueKey(sale))
+      } catch (e) {
+        if (isServerRejection(e)) rejected.push({ txn_no: sale.txn_no, error: e.message })
+      }
+    }
+    // Remove what landed from the queue as it is NOW, not as it was read:
+    // the till keeps selling during a sync, and a sale parked meanwhile must
+    // not be overwritten by the snapshot taken before it existed.
+    if (syncedIds.size > 0) offline.replace(offline.all().filter((s) => !syncedIds.has(queueKey(s))))
+    return { synced: syncedIds.size, rejected }
   }
 }
 

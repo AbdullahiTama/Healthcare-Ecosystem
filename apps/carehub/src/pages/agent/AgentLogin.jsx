@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { AlertTriangle, ChevronLeft, MapPin } from 'lucide-react'
+import { AlertTriangle, Info, ChevronLeft, MapPin } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
 import { getAgentByEmail } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
@@ -15,7 +15,7 @@ export default function AgentLogin() {
   const [show, setShow] = useState(false)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
-  const { loginAgent } = useAuth()
+  const { loginAgent, sessionNotice } = useAuth()
   const navigate = useNavigate()
 
   const handleLogin = async () => {
@@ -63,6 +63,7 @@ export default function AgentLogin() {
         </div>
 
         <Card style={{ padding: 32, borderRadius: theme.radius.xl, border: 'none', boxShadow: theme.elevation[3] }}>
+          {sessionNotice && !err && <div role='status' style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '12px 14px', borderRadius: 10, background: theme.infoBg, border: `1px solid ${theme.info}`, color: theme.info, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}><Info size={15} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{sessionNotice}</span></div>}
           {err && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '12px 14px', borderRadius: 10, background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, color: theme.danger, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}><AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{err}</span></div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>

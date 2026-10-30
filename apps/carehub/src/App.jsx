@@ -9,6 +9,9 @@ import { purgeUnsentReports } from './modules/live-activity/outbox/purge'
 import AuthProvider from './providers/AuthProvider'
 
 // Lazy-loaded pages for code splitting
+const SESSION_ENDED_KEY = 'carehub_session_ended'
+const SESSION_ENDED_MESSAGE = 'Your session has ended. Please sign in again.'
+
 const Landing = lazy(() => import('./pages/Landing'))
 const Login = lazy(() => import('./pages/auth/Login'))
 const Register = lazy(() => import('./pages/auth/Register'))
@@ -67,6 +70,16 @@ export default function App() {
     } catch (e) { return null }
   })
 
+  // Shown on the sign-in pages when the session ended on its own (revoked,
+  // refresh refused, gone while the tab was closed) rather than by a Sign Out
+  // click. Every route to sign-in here is a full page load, so it travels in
+  // sessionStorage; read in the initializer, cleared in an effect (StrictMode
+  // runs initializers twice).
+  const [sessionNotice] = useState(() => {
+    try { return sessionStorage.getItem(SESSION_ENDED_KEY) ? SESSION_ENDED_MESSAGE : null } catch (e) { return null }
+  })
+  useEffect(() => { try { sessionStorage.removeItem(SESSION_ENDED_KEY) } catch (e) {} }, [])
+
   const login = (brand, staff = null, extra = {}) => {
     const authData = { brand, staff, role: staff ? staff.role : 'Owner', loginTime: Date.now(), ...extra }
     setAuth(authData)
@@ -89,7 +102,11 @@ let loggingOut = false
     if (!(options && options.keepUnsentReports === true)) {
       try { await purgeUnsentReports() } catch (e) {}
     }
-    try { await authClient.auth.signOut() } catch (e) {}
+    // scope 'local' revokes THIS device's session only. The default ('global')
+    // revoked every session of the account, and shops commonly sign several
+    // tills into one account: one cashier signing out signed every other till
+    // out at its next token refresh, mid-shift (production logs, 2026-10-29).
+    try { await authClient.auth.signOut({ scope: 'local' }) } catch (e) {}
     loggingOut = false
     window.location.href = '/login'
   }
@@ -104,7 +121,7 @@ let loggingOut = false
     localStorage.removeItem('carehub_agent_auth')
     try { clearAllDraftBackups() } catch (e) {}
     try { await purgeUnsentReports() } catch (e) {}
-    try { await authClient.auth.signOut() } catch (e) {}
+    try { await authClient.auth.signOut({ scope: 'local' }) } catch (e) {}
     window.location.href = '/login'
   }
 
@@ -131,7 +148,10 @@ let loggingOut = false
         // denied each read with "permission denied for function
         // can_access_adr_report_row". logout() clears the cache (plus the ADR
         // draft backups) and suppresses the SIGNED_OUT bounce via loggingOut.
-        if (auth) await logout({ keepUnsentReports: true })
+        if (auth) {
+          try { sessionStorage.setItem(SESSION_ENDED_KEY, '1') } catch (e) {}
+          await logout({ keepUnsentReports: true })
+        }
         return
       }
       const account = await resolveAccountByEmail(session.user.email)
@@ -157,7 +177,23 @@ let loggingOut = false
     const { data: { subscription } } = authClient.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
         if (!loggingOut) {
-          window.location.href = '/login'
+          // The session is the source of truth; carehub_auth and
+          // carehub_agent_auth only cache whose it is. Left in place, /login
+          // would bounce straight back to a dashboard whose every request is
+          // refused. A Sign Out click clears the cache before signing out, so
+          // a cache still here means the session ended on its own: say so.
+          // Unsent field reports are kept, as for any forced sign-out.
+          let hadBusiness = false
+          let hadAgent = false
+          try {
+            hadBusiness = !!localStorage.getItem('carehub_auth')
+            hadAgent = !!localStorage.getItem('carehub_agent_auth')
+            localStorage.removeItem('carehub_auth')
+            localStorage.removeItem('carehub_agent_auth')
+            if (hadBusiness || hadAgent) sessionStorage.setItem(SESSION_ENDED_KEY, '1')
+          } catch (e) {}
+          try { clearAllDraftBackups() } catch (e) {}
+          window.location.href = hadAgent && !hadBusiness ? '/agent/login' : '/login'
         }
       }
     })
@@ -166,7 +202,7 @@ let loggingOut = false
 
   return (
     <Sentry.ErrorBoundary>
-    <AuthProvider value={{ auth, setAuth, login, logout, isAdmin, agent, loginAgent, logoutAgent }}>
+    <AuthProvider value={{ auth, setAuth, login, logout, isAdmin, agent, loginAgent, logoutAgent, sessionNotice }}>
       <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <Suspense fallback={<LoadingFallback />}>
           <Routes key={location.key}>
