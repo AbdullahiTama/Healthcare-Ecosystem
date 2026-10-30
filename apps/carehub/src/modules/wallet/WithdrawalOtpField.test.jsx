@@ -165,7 +165,7 @@ describe('WithdrawalOtpField', () => {
     authClient.auth.getSession.mockResolvedValue({ data: { session: null } })
     await mount({ amount: 500000, bankCode: '058', accountNumber: '0123456789' })
     await click('Email me a 6-digit code')
-    expect(host.querySelector('[role="alert"]').textContent).toContain('log in again')
+    expect(host.querySelector('[role="alert"]').textContent).toContain('sign in again')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

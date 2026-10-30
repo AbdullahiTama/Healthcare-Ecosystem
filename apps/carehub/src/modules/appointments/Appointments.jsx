@@ -8,12 +8,12 @@ import ClientsLoadNote from '../clients/components/ClientsLoadNote'
 import { notificationRepository } from '../notifications/repositories'
 import { sbFetch } from '../../services/supabase'
 import { todayDate } from '../../lib/utils'
-import { authClient } from '../../lib/authClient'
 import { fetchWithSession, SessionUnavailableError } from '../../lib/sessionFetch'
 import { theme } from '../../styles/theme'
 import WithdrawalPinField from '../wallet/WithdrawalPinField'
 import WithdrawalOtpField, { clearWithdrawalOtpMeta } from '../wallet/WithdrawalOtpField'
 import { startBusinessWithdrawal, withdrawalErrorMessage } from '../wallet/withdrawalApi'
+import { postWithSession } from '../wallet/walletRequest'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Avatar, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, dangerBg, success, warning } = theme
@@ -115,13 +115,8 @@ export default function Appointments({ brand, role, perms }) {
     resolveTimer.current = setTimeout(async () => {
       setAccountResolving(true)
       try {
-        const { data: { session } } = await authClient.auth.getSession()
-        const res = await fetch('/api/resolve-account', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
-          body: JSON.stringify({ bankCode, accountNumber: acctNum }),
-        })
-        const data = await res.json()
+        const res = await postWithSession('/api/resolve-account', { bankCode, accountNumber: acctNum })
+        const data = res.data
         if (res.ok && data.accountName) {
           setWithdrawForm(prev => ({ ...prev, accountName: data.accountName }))
           setAccountResolved(true)

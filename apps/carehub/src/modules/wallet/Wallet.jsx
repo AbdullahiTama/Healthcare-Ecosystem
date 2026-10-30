@@ -8,7 +8,7 @@ import PayoutAccountsPanel from './PayoutAccountsPanel.jsx'
 import BankPicker from './BankPicker.jsx'
 import { createPayoutManager, rankBanks } from '@care-ecosystem/shared-payout-ui'
 import { startBusinessWithdrawal, withdrawalErrorMessage } from './withdrawalApi'
-import { authClient } from '../../lib/authClient'
+import { postWithSession, payoutClientOptions } from './walletRequest'
 import { initiateWalletTopup, verifyWalletTopup, goToPaystack, fetchTopupFeeRate, MIN_TOPUP_KOBO, MAX_TOPUP_KOBO } from './topupApi'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Pill, Inp, GhostBtn, TealBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
@@ -41,7 +41,7 @@ export default function Wallet({ brand, role, perms }) {
   const [banks, setBanks] = useState([])
   const [banksStatus, setBanksStatus] = useState('loading')
   // Saved, identity-verified payout accounts (the safe way to say where the money goes).
-  const payouts = useMemo(() => createPayoutManager({ getToken: async () => (await authClient.auth.getSession()).data.session?.access_token }), [])
+  const payouts = useMemo(() => createPayoutManager(payoutClientOptions), [])
   const payoutState = useSyncExternalStore(payouts.subscribe, payouts.getState)
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [useTyped, setUseTyped] = useState(false)
@@ -154,13 +154,8 @@ export default function Wallet({ brand, role, perms }) {
     resolveTimer.current = setTimeout(async () => {
       setAccountResolving(true)
       try {
-        const { data: { session } } = await authClient.auth.getSession()
-        const res = await fetch('/api/resolve-account', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
-          body: JSON.stringify({ bankCode, accountNumber: acctNum }),
-        })
-        const data = await res.json()
+        const res = await postWithSession('/api/resolve-account', { bankCode, accountNumber: acctNum })
+        const data = res.data
         if (res.ok && data.accountName) {
           setWithdrawForm(prev => ({ ...prev, accountName: data.accountName }))
           setAccountResolved(true)

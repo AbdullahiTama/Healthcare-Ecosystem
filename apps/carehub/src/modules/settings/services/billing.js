@@ -1,4 +1,5 @@
 import { authClient } from '../../../lib/authClient'
+import { createSessionFetch } from '../../../lib/sessionFetch'
 import { esc } from '../../../lib/escape.js'
 import { PLAN_LABELS } from '../../../lib/planLimits'
 
@@ -57,13 +58,13 @@ export function usageMeters(overview) {
 // POST /api/verify-plan-payment: the server asks Paystack and, if it was paid, renews the plan (idempotent — the
 // webhook may already have done it). Used on return from checkout and by "Check payment".
 // → { credited: true, newExpiry } | { alreadyProcessed: true }; throws with the server's reason otherwise.
-export async function confirmPlanPayment(reference, { fetchImpl = (...a) => fetch(...a), getSession = () => authClient.auth.getSession() } = {}) {
-  const { data } = await getSession()
-  const token = data?.session?.access_token
-  if (!token) throw new Error('Please sign in again.')
-  const res = await fetchImpl('/api/verify-plan-payment', {
+// Same renew-on-401 path as sbFetch (lib/sessionFetch.js), so a payment confirmed from a tab left open past the token's
+// expiry still goes through. The handler answers 401 before it asks Paystack, so the retry never asks twice.
+export async function confirmPlanPayment(reference, { fetchImpl = (...a) => fetch(...a), auth = authClient.auth } = {}) {
+  const { fetchWithSession } = createSessionFetch({ auth, fetchImpl })
+  const res = await fetchWithSession('/api/verify-plan-payment', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reference }),
   })
   let body = {}

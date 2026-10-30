@@ -54,11 +54,11 @@ describe('usageMeters', () => {
 })
 
 describe('confirmPlanPayment', () => {
-  const session = () => Promise.resolve({ data: { session: { access_token: 'tok' } } })
+  const auth = { getSession: () => Promise.resolve({ data: { session: { access_token: 'tok' } } }) }
 
   it('posts the reference with the session token', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ credited: true, newExpiry: '2027-01-01' }) }))
-    expect(await confirmPlanPayment('ref1', { fetchImpl, getSession: session })).toEqual({ credited: true, newExpiry: '2027-01-01' })
+    expect(await confirmPlanPayment('ref1', { fetchImpl, auth })).toEqual({ credited: true, newExpiry: '2027-01-01' })
     const [url, init] = fetchImpl.mock.calls[0]
     expect(url).toBe('/api/verify-plan-payment')
     expect(init.headers.Authorization).toBe('Bearer tok')
@@ -67,7 +67,23 @@ describe('confirmPlanPayment', () => {
 
   it('throws the server reason; refuses without a session', async () => {
     const fetchImpl = async () => ({ ok: false, json: async () => ({ error: 'Payment not confirmed by Paystack' }) })
-    await expect(confirmPlanPayment('r', { fetchImpl, getSession: session })).rejects.toThrow('Payment not confirmed by Paystack')
-    await expect(confirmPlanPayment('r', { fetchImpl, getSession: async () => ({ data: {} }) })).rejects.toThrow('sign in')
+    await expect(confirmPlanPayment('r', { fetchImpl, auth })).rejects.toThrow('Payment not confirmed by Paystack')
+    await expect(confirmPlanPayment('r', { fetchImpl, auth: { getSession: async () => ({ data: {} }) } })).rejects.toThrow('sign in')
+  })
+
+  // A till whose clock is behind keeps an expired token; the server's 401 earns one renewal and one retry.
+  it('renews a token the server refused and confirms on the retry', async () => {
+    const renewing = {
+      getSession: async () => ({ data: { session: { access_token: 'old' } } }),
+      refreshSession: vi.fn(async () => ({ data: { session: { access_token: 'new' } }, error: null })),
+      signOut: vi.fn(),
+    }
+    const fetchImpl = vi.fn(async (url, init) => init.headers.Authorization === 'Bearer new'
+      ? { ok: true, status: 200, json: async () => ({ credited: true, newExpiry: '2027-01-01' }) }
+      : { ok: false, status: 401, json: async () => ({ error: 'not_logged_in' }) })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(await confirmPlanPayment('ref1', { fetchImpl, auth: renewing })).toEqual({ credited: true, newExpiry: '2027-01-01' })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(renewing.signOut).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,4 @@
-import { authClient } from '../../lib/authClient'
+import { postWithSession } from './walletRequest'
 
 // Bounds mirrored from api/_handlers/initiate-wallet-topup.js. The server is
 // authoritative — these only shape the form's validation before we ask it for
@@ -10,20 +10,8 @@ export const MAX_TOPUP_KOBO = 10_000_000 // ₦100,000
 // The amount goes as whole kobo; the callback is where Paystack sends the
 // owner back with an opaque reference to verify.
 // -> { ok, data, sessionExpired?, networkError? }
-export async function initiateWalletTopup({ amountKobo, callbackUrl }) {
-  const { data: { session } } = await authClient.auth.getSession()
-  if (!session) return { ok: false, sessionExpired: true, data: {} }
-  try {
-    const res = await fetch('/api/initiate-wallet-topup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ amount: amountKobo, callback_url: callbackUrl }),
-    })
-    const data = await res.json().catch(() => ({}))
-    return { ok: res.ok, data }
-  } catch {
-    return { ok: false, networkError: true, data: {} }
-  }
+export function initiateWalletTopup({ amountKobo, callbackUrl }) {
+  return postWithSession('/api/initiate-wallet-topup', { amount: amountKobo, callback_url: callbackUrl })
 }
 
 // Confirms the reference Paystack sent the owner back with. Only the opaque
@@ -31,38 +19,14 @@ export async function initiateWalletTopup({ amountKobo, callbackUrl }) {
 // server-side after Paystack is asked, so an edited address bar cannot
 // change what lands in the wallet.
 // -> { ok, data, sessionExpired?, networkError? }
-export async function verifyWalletTopup(reference) {
-  const { data: { session } } = await authClient.auth.getSession()
-  if (!session) return { ok: false, sessionExpired: true, data: {} }
-  try {
-    const res = await fetch('/api/verify-wallet-topup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ reference }),
-    })
-    const data = await res.json().catch(() => ({}))
-    return { ok: res.ok, data }
-  } catch {
-    return { ok: false, networkError: true, data: {} }
-  }
+export function verifyWalletTopup(reference) {
+  return postWithSession('/api/verify-wallet-topup', { reference })
 }
 
 // The processing fee rate the server will add to a top-up (a ratio, 0.1 = 10%). Nothing is created; the server still
 // decides the charge. -> { ok, data: { fee_rate }, sessionExpired?, networkError? }
-export async function fetchTopupFeeRate() {
-  const { data: { session } } = await authClient.auth.getSession()
-  if (!session) return { ok: false, sessionExpired: true, data: {} }
-  try {
-    const res = await fetch('/api/initiate-wallet-topup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ quote: true }),
-    })
-    const data = await res.json().catch(() => ({}))
-    return { ok: res.ok, data }
-  } catch {
-    return { ok: false, networkError: true, data: {} }
-  }
+export function fetchTopupFeeRate() {
+  return postWithSession('/api/initiate-wallet-topup', { quote: true })
 }
 
 // Leaves the SPA for Paystack's hosted checkout. Its own seam so tests can

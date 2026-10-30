@@ -160,6 +160,38 @@ describe('fetchWithSession', () => {
   })
 })
 
+describe('fetchWithSessionResponse', () => {
+  const body = async (res) => JSON.parse(await res.text())
+
+  it('passes the answer through, renewing a refused token like fetchWithSession', async () => {
+    const auth = fakeAuth()
+    const { fetchImpl, bearers } = fakeFetch(401, 200)
+    const { fetchWithSessionResponse } = createSessionFetch({ auth, fetchImpl })
+    expect((await fetchWithSessionResponse('/api/x', {})).status).toBe(200)
+    expect(bearers).toEqual(['Bearer old', 'Bearer new'])
+  })
+
+  it('turns an ended session into a 401 answer carrying the message', async () => {
+    const { fetchWithSessionResponse } = createSessionFetch({ auth: fakeAuth({ token: null }), fetchImpl: vi.fn() })
+    const res = await fetchWithSessionResponse('/api/x', {})
+    expect(res.status).toBe(401)
+    expect((await body(res)).error).toBe(SESSION_ENDED_MESSAGE)
+  })
+
+  it('turns an unreachable session into a 503 answer carrying the message', async () => {
+    const auth = fakeAuth({ token: null, sessionError: new AuthRetryableFetchError('Failed to fetch', 0) })
+    const { fetchWithSessionResponse } = createSessionFetch({ auth, fetchImpl: vi.fn() })
+    const res = await fetchWithSessionResponse('/api/x', {})
+    expect(res.status).toBe(503)
+    expect((await body(res)).error).toBe(SESSION_UNREACHABLE_MESSAGE)
+  })
+
+  it('still throws a plain network failure, as fetch would', async () => {
+    const { fetchWithSessionResponse } = createSessionFetch({ auth: fakeAuth(), fetchImpl: vi.fn(async () => { throw new TypeError('Failed to fetch') }) })
+    await expect(fetchWithSessionResponse('/api/x', {})).rejects.toThrow('Failed to fetch')
+  })
+})
+
 describe('renewSession', () => {
   it('forces a refresh even while the device clock calls the token valid', async () => {
     const auth = fakeAuth()

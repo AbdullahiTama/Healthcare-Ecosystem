@@ -103,7 +103,11 @@ Two smaller causes showed up in the same logs:
 
 **Security.** Nothing is weakened. RLS decides every row as before. Local sign-out still revokes this device's refresh token. A 401 for a signed-in user is retried at most once with a freshly issued token, never with the anon key.
 
-**Still on the old pattern.** 17 call sites read `getSession().access_token` directly: wallet top-up/withdrawal/PIN/OTP/payout accounts, billing `confirmPlanPayment`, `lib/email.js`, resolve-account, `useSalesReportData`, StockValidation, Ecommerce and AdminDashboard. On a slow clock they can be refused until any `sbFetch` call renews the session. Move them to `fetchWithSession`.
+**Wallet and payment calls (2026-10-30, follow-up).** Every wallet and payment `/api` call now goes through the session fetch. The wallet module uses one helper, `modules/wallet/walletRequest.js` (`postWithSession`), which returns `{ ok, status, data, sessionExpired?, networkError? }` with a readable `data.error`. It covers top-up (initiate, verify, fee quote), withdrawal, the withdrawal PIN and OTP endpoints, and bank-account lookup on the Wallet and Appointments screens. Before this, seven copies of the same fetch block read `getSession().access_token` directly. The shared payout client (`@care-ecosystem/shared-payout-ui`) gained an optional `fetchImpl`; CareHub passes `fetchWithSessionResponse` through `payoutClientOptions`, which turns an unusable session into the 401/503 answer the client already shows. CareFind passes nothing and is unchanged. `confirmPlanPayment` takes `auth` like the staff-invitation service.
+
+Retrying these calls is safe because every handler involved answers 401 only when the token itself is refused (`verifyBusiness`: no token, or no business for it), before any PIN or code check and before any money moves. A wrong PIN is 403 and a wrong code 400, so a retry never replays a PIN or code attempt; `walletRequest.test.js` pins this.
+
+**Still on the old pattern.** `lib/email.js`, `useSalesReportData`, StockValidation and AdminDashboard (notify-business-status) still read `getSession().access_token` directly. On a slow clock they can be refused until another request renews the session.
 
 ## Tests
 
@@ -113,6 +117,8 @@ Two smaller causes showed up in the same logs:
 | `src/services/__tests__/anonAuthFailures.test.js` | anon 401/403 → sign-in prompt; **real-session failure keeps its detail** (after one renewal); anon success untouched |
 | `src/lib/__tests__/sessionFetch.test.js` | renew-and-retry on a refused token, single flight, never anon for a signed-in user, local sign-out on a refused refresh, clock-skew reading |
 | `src/services/__tests__/sessionRenewal.test.js` | `sbFetch`/`sbUpload` complete after renewing an expired token; ordinary errors are not retried |
+| `src/modules/wallet/walletRequest.test.js` | a withdrawal completes after one renewal with the same body; **a wrong PIN (403) is never retried**; ended session and no connection read distinctly; the shared payout client renews through `payoutClientOptions` |
+| `packages/shared-payout-ui/src/stores.test.js` | a supplied `fetchImpl` carries every payout call; the global fetch is untouched |
 
 ## If you hit this in the wild
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { createAccountResolver } from '@care-ecosystem/shared-payout-ui'
-import { authClient } from '../../lib/authClient'
+import { payoutClientOptions } from './walletRequest'
 import { theme } from '../../styles/theme'
 import { Inp, Modal, TealBtn, GhostBtn } from '../../components/ui'
 import BankPicker from './BankPicker.jsx'
@@ -10,7 +10,7 @@ const RESEND_SECONDS = 60
 // Save a bank account to be paid into. The bank tells us the account name; it is shown and saved as the bank reports it, and an
 // emailed code proves the inbox. The server enforces all of it - this form only walks the person through.
 export default function AddPayoutAccountModal({ show, onClose, manager, banks, banksStatus, onRetryBanks, isMobile }) {
-  const resolver = useMemo(() => createAccountResolver({ getToken: async () => (await authClient.auth.getSession()).data.session?.access_token }), [])
+  const resolver = useMemo(() => createAccountResolver(payoutClientOptions), [])
   const acct = useSyncExternalStore(resolver.subscribe, resolver.getState)
   const s = useSyncExternalStore(manager.subscribe, manager.getState)
   const [otp, setOtp] = useState('')

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cleanOtp, readClipboardOtp } from '@care-ecosystem/shared-payout-ui'
-import { authClient } from '../../lib/authClient'
+import { postWithSession } from './walletRequest'
 import { theme } from '../../styles/theme'
 import { Inp } from '../../components/ui'
 
@@ -93,14 +93,10 @@ export default function WithdrawalOtpField({
     }
     (async () => {
       try {
-        const { data: { session } } = await authClient.auth.getSession()
-        if (cancelled || !session) return
-        const res = await fetch('/api/withdrawal-pin/draft', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: '{}',
-        })
-        const data = await res.json().catch(() => ({}))
+        if (cancelled) return
+        // No session or no connection reads as "no draft known": the stored meta stays painted.
+        const res = await postWithSession('/api/withdrawal-pin/draft', {})
+        const data = res.data
         if (cancelled || requestedRef.current) return
         const draft = data && data.draft
         if (draft) {
@@ -161,8 +157,6 @@ export default function WithdrawalOtpField({
     setPasteError('')
     setSending(true)
     try {
-      const { data: { session } } = await authClient.auth.getSession()
-      if (!session) { setError('Please log in again.'); return }
       // The server owns the amount + destination in a draft first. An explicit re-press after the cooldown voids the
       // prior code (reissue:true).
       const body = amount === undefined
@@ -175,12 +169,9 @@ export default function WithdrawalOtpField({
             ...(accountNumber !== undefined ? { accountNumber } : {}),
             ...(reissue ? { reissue: true } : {}),
           }
-      const res = await fetch('/api/withdrawal-pin/otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json().catch(() => ({}))
+      // A signed-out or unreachable session comes back as !ok with its message in data.error (walletRequest.js).
+      const res = await postWithSession('/api/withdrawal-pin/otp', body)
+      const data = res.data
       if (res.status === 409 && data.code === 'draft_active') {
         // A code is already on its way and NO new one was sent. The body now carries that code's issue time and expiry, so
         // adopt the live draft instead of blanking the countdown - otherwise the cooldown read 0 and "Send a new code" was

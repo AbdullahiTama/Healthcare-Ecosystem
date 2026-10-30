@@ -25,7 +25,7 @@ function createStore(initial) {
 // Bank + account number -> bank-reported account name. The name is read-only
 // output; the user never types it. A stale response (user kept typing) is
 // discarded by comparing request ids.
-export function createAccountResolver({ getToken, basePath = '/api' }) {
+export function createAccountResolver({ getToken, basePath = '/api', fetchImpl }) {
   const store = createStore({
     bankCode: '', bankName: '', accountNumber: '',
     status: 'idle', // idle | loading | ok | unsupported (bank cannot be looked up) | error
@@ -43,7 +43,7 @@ export function createAccountResolver({ getToken, basePath = '/api' }) {
     store.set({ status: 'loading', accountName: '', error: '' })
     try {
       const token = await getToken()
-      const r = await resolveAccountName({ basePath, token, bankCode, accountNumber })
+      const r = await resolveAccountName({ basePath, token, bankCode, accountNumber, fetchImpl })
       if (id !== requestId) return
       if (r.ok) store.set({ status: 'ok', accountName: r.data.accountName, bankName: '', error: '' })
       else if (r.data.unsupportedBank) store.set({ status: 'unsupported', accountName: '', error: r.data.error || 'This bank does not support automatic verification.' })
@@ -72,7 +72,7 @@ export function createAccountResolver({ getToken, basePath = '/api' }) {
 
 // Set / change / reset the withdrawal PIN: request an emailed code, then submit
 // PIN + code (+ current PIN unless forgot). Surfaces server messages verbatim.
-export function createPinSetup({ getToken, basePath = '/api' }) {
+export function createPinSetup({ getToken, basePath = '/api', fetchImpl }) {
   const store = createStore({ sending: false, codeSent: false, sentTo: '', submitting: false, error: '', done: false })
 
   return {
@@ -81,7 +81,7 @@ export function createPinSetup({ getToken, basePath = '/api' }) {
     async sendCode() {
       store.set({ sending: true, error: '' })
       try {
-        const r = await sendPinOtp({ basePath, token: await getToken() })
+        const r = await sendPinOtp({ basePath, token: await getToken(), fetchImpl })
         if (r.ok) store.set({ sending: false, codeSent: true, sentTo: r.data.sentTo || '' })
         else store.set({ sending: false, error: r.data.error || 'Could not send the code.' })
         return r.ok
@@ -96,7 +96,7 @@ export function createPinSetup({ getToken, basePath = '/api' }) {
       if (!/^\d{6}$/.test(otp || '')) { store.set({ error: 'Enter the 6-digit code from your email.' }); return false }
       store.set({ submitting: true, error: '' })
       try {
-        const r = await setWithdrawalPin({ basePath, token: await getToken(), pin, otp, currentPin, forgot })
+        const r = await setWithdrawalPin({ basePath, token: await getToken(), pin, otp, currentPin, forgot, fetchImpl })
         if (r.ok) store.set({ submitting: false, done: true })
         else store.set({ submitting: false, error: r.data.error || 'Could not set your withdrawal PIN.' })
         return r.ok
@@ -112,14 +112,14 @@ export function createPinSetup({ getToken, basePath = '/api' }) {
 // Identity + saved payout accounts for one signed-in owner. One store so the screen is a simple render of its state:
 //   loading | loadError | kyc ({ verified, legalName, bvnLast4, ninLast4, tier } | null) | accounts [] | required
 //   busy ('' | 'verify' | 'otp' | 'add' | 'default' | 'remove') | error | code (server error code) | codeSent / sentTo
-export function createPayoutManager({ getToken, basePath = '/api' }) {
+export function createPayoutManager({ getToken, basePath = '/api', fetchImpl }) {
   const store = createStore({
     loading: true, loadError: '', kyc: null, kycEnabled: false, accounts: [], required: false, limits: null,
     busy: '', error: '', code: '', codeSent: false, sentTo: '',
   })
 
   async function authed(fn, args = {}) {
-    return fn({ basePath, token: await getToken(), ...args })
+    return fn({ basePath, token: await getToken(), fetchImpl, ...args })
   }
   const fail = (r, fallback) => store.set({ busy: '', error: r.data?.error || fallback, code: r.data?.code || '' })
   const network = () => store.set({ busy: '', error: 'Network error. Check your connection and try again.', code: 'network' })

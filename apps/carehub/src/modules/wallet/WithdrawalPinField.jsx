@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { cleanOtp } from '@care-ecosystem/shared-payout-ui'
-import { authClient } from '../../lib/authClient'
+import { postWithSession } from './walletRequest'
 import { theme } from '../../styles/theme'
 import { Inp, GhostBtn, TealBtn } from '../../components/ui'
 
@@ -8,16 +8,8 @@ const { gray500, danger, success, border } = theme
 
 const isPin = (v) => /^\d{4,6}$/.test(String(v || ''))
 
-async function pinRequest(action, body) {
-  const { data: { session } } = await authClient.auth.getSession()
-  if (!session) return { ok: false, status: 401, data: { error: 'Please log in again.' } }
-  const res = await fetch(`/api/withdrawal-pin/${action}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-    body: JSON.stringify(body || {}),
-  })
-  const data = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, data }
+function pinRequest(action, body) {
+  return postWithSession(`/api/withdrawal-pin/${action}`, body)
 }
 
 // The second factor for a business withdrawal (audit F-08): the owner's withdrawal PIN. Shown inside the withdraw

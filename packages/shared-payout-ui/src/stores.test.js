@@ -310,3 +310,22 @@ describe('createPayoutManager: identity verification is optional (H06)', () => {
     expect(m.getState().loadError).toMatch(/Could not load/)
   })
 })
+
+// An app can route every payout call through its own fetch (CareHub's renews a refused session token). The global
+// fetch is then never touched, and the default stays the global fetch for apps that pass nothing.
+describe('fetchImpl', () => {
+  beforeEach(() => vi.unstubAllGlobals())
+
+  it('sends every call through the supplied fetch instead of the global one', async () => {
+    vi.stubGlobal('fetch', vi.fn())
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ accountName: 'ADA OBI', sentTo: 'a***@x.com' }) }))
+    const resolver = createAccountResolver({ getToken: async () => null, fetchImpl })
+    await resolver.setBank('999991')
+    await resolver.setAccountNumber('8012345678')
+    const pin = createPinSetup({ getToken: async () => null, fetchImpl })
+    await pin.sendCode()
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual(['/api/resolve-account', '/api/withdrawal-pin/otp'])
+    expect(resolver.getState().accountName).toBe('ADA OBI')
+    expect(fetch).not.toHaveBeenCalled()
+  })
+})

@@ -121,7 +121,25 @@ export function createSessionFetch({ auth, fetchImpl }) {
     return token ? renewAccessToken(token) : null
   }
 
-  return { getAccessToken, renewAccessToken, renewSession, fetchWithSession }
+  // fetchWithSession for code that reads an HTTP answer rather than catching
+  // an exception, such as the shared payout client
+  // (@care-ecosystem/shared-payout-ui), which takes a fetchImpl. A session
+  // that cannot be used becomes the answer such code already handles: 401
+  // when it has ended, 503 when CareHub could not be reached, with the
+  // user-facing message as `error`.
+  async function fetchWithSessionResponse(url, init = {}, options = {}) {
+    try {
+      return await fetchWithSession(url, init, options)
+    } catch (e) {
+      if (!(e instanceof SessionUnavailableError)) throw e
+      return new Response(JSON.stringify({ error: e.message }), {
+        status: e.ended ? 401 : 503,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
+  return { getAccessToken, renewAccessToken, renewSession, fetchWithSession, fetchWithSessionResponse }
 }
 
 // Local clock minus server clock, in ms, read from the token's iat (the
@@ -145,7 +163,7 @@ function jwtIssuedAt(token) {
 }
 
 // Late-bound, so tests that stub global.fetch are honoured.
-export const { getAccessToken, renewSession, fetchWithSession } = createSessionFetch({
+export const { getAccessToken, renewSession, fetchWithSession, fetchWithSessionResponse } = createSessionFetch({
   auth: authClient.auth,
   fetchImpl: (...args) => fetch(...args),
 })
