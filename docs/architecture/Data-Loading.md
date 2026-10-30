@@ -38,6 +38,19 @@ PostgREST returns **at most 1000 rows per request** on this project (`db-max-row
 
 Small lists left as single requests on purpose: notifications (`limit=50`), staff, territories, warehouses, stock-check sessions, and the order detail lists (filtered by order ids).
 
+## Coming back to an idle counter (2026-10-30)
+
+Staff leave CareHub open for hours. When they come back the dashboard **resumes, it does not reload**. What was on screen stays usable at once and brings itself up to date in the background; nothing in progress (a cart, payment fields, a held sale, a half-filled form) is touched.
+
+React Query already refetches stale queries on window focus and on reconnect (rule 4). `providers/RefreshProvider.jsx`, mounted by `BusinessDashboard`, adds what it does not cover, using `lib/resume.js`:
+
+* **When.** The tab returns after 5+ minutes hidden; the device slept with the tab visible (a lid or lock screen fires no focus event, so a late timer tick gives it away); or the connection comes back. Signals that arrive together run one refresh.
+* **Session first.** `renewSession()` (`lib/sessionFetch.js`) forces a token refresh before anything refetches. On a till whose clock is behind, supabase-js never refreshes by itself; see [Session-Expiry-and-Anon-Fallback.md](./Session-Expiry-and-Anon-Fallback.md).
+* **Then everything on screen.** `refetchActiveQueries` asks React Query to refetch every active query (`cancelRefetch: false` joins a refetch React Query already started instead of doubling it). Queries keep their data while refetching, so nothing blanks. Work that is not a query joins through `useRefreshOnResume`; today that is the offline sale queue (`saleRepository.syncQueued`), registered by the shell.
+* **What staff see.** `components/layout/RefreshIndicator.jsx`, a small pill: "Updating…", then "Updated just now" for 3 s; or "Couldn't update. Showing what was loaded earlier." with Retry. Offline shows no pill, because the offline strip already says so. On the dashboard a failed refresh also shows the page's own error surface, so there are briefly two Retry buttons; both do the same thing.
+
+**Offline queue safety.** Because the queue now replays on resume and reconnect as well as on mount and the Sync button, `syncQueued` is single flight: overlapping calls join the run in progress. `sales` has no unique key on `txn_no`, so two runs would record each queued sale twice. It also removes the sales it sent from the queue *as it stands afterwards*, so a sale parked during a sync is kept (it used to rewrite the queue from its pre-sync snapshot). One gap remains: two CareHub tabs on one till share the queue and can each replay it. The durable fix is a unique `(business_id, txn_no)` with insert-or-ignore on replay.
+
 ## Tests
 
 * `modules/pos/repositories/index.test.js`: `getOpen` (held + credit, de-duplicated, newest first, tenant-scoped, pages past 1000), `getSince` ([from, to)), `getRecent`, `count` (head request, no rows).
@@ -47,6 +60,9 @@ Small lists left as single requests on purpose: notifications (`limit=50`), staf
 * `modules/inventory/repositories/index.test.js`: `getStockSummary` selects three columns and counts correctly.
 * `modules/clients/components/ClientsLoadNote.test.jsx`: the picker note and its retry.
 * Existing page tests updated: DashboardHome, POS, Orders, Ecommerce.
+* `lib/__tests__/resume.test.js`: when a resume fires (and when it does not), session before refetch, failure and offline states, one run for signals that arrive together, retry once after a failed run.
+* `providers/__tests__/refetchActiveQueries.test.js` (real QueryClient): on-screen queries refetch and keep their data meanwhile; off-screen ones are left alone; an in-flight refetch is joined; a failure rejects.
+* `modules/pos/repositories/index.test.js`: `syncQueued` joins a run in progress; a sale queued during a sync is kept.
 
 ## Manual test plan
 
@@ -59,3 +75,4 @@ Use a business with many products and sales, DevTools Network open.
 5. Purchases: record a purchase of an existing product, then open Inventory: the new stock is there without a reload.
 6. Locations with several branches: requests run in parallel and `products?…select=id,stock,reorder_level,category`; block one branch: that card says "Figures unavailable".
 7. Debts, Appointments, Demand: block `clients?…`: the picker note appears; Try again restores it; typing a name still works.
+8. Resume: open POS, add an item, switch to another tab for 5+ minutes (or close the laptop lid), come back. You should see "Updating…" then "Updated just now"; one `token?grant_type=refresh_token` request, then the screen's queries; the cart is unchanged. Block `rest/v1/*` before coming back: "Couldn't update" with Retry, and the earlier figures stay.

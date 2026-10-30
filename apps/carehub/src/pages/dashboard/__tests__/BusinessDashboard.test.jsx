@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -81,13 +82,18 @@ async function mountDashboard(path = '/dashboard') {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
+  // As in production (main.jsx): the shell's resume refresh refetches
+  // through the app's QueryClient.
+  const queryClient = new QueryClient()
   await act(async () => {
     root.render(
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path='/dashboard/*' element={<BusinessDashboard />} />
-        </Routes>
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route path='/dashboard/*' element={<BusinessDashboard />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
     )
   })
   // Flush the lazy route chunk, auth/product effects and nested renders.
@@ -99,11 +105,13 @@ async function mountDashboard(path = '/dashboard') {
     rerender: async () => {
       await act(async () => {
         root.render(
-          <MemoryRouter initialEntries={[path]}>
-            <Routes>
-              <Route path='/dashboard/*' element={<BusinessDashboard />} />
-            </Routes>
-          </MemoryRouter>
+          <QueryClientProvider client={queryClient}>
+            <MemoryRouter initialEntries={[path]}>
+              <Routes>
+                <Route path='/dashboard/*' element={<BusinessDashboard />} />
+              </Routes>
+            </MemoryRouter>
+          </QueryClientProvider>
         )
       })
       for (let i = 0; i < 8; i++) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })

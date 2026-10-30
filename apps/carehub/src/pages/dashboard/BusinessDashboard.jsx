@@ -6,6 +6,8 @@ import Sidebar from '../../components/layout/Sidebar'
 import TopBar from '../../components/layout/TopBar'
 import PlanExpiryBanner from '../../components/layout/PlanExpiryBanner'
 import ClockSkewBanner from '../../components/layout/ClockSkewBanner'
+import RefreshIndicator from '../../components/layout/RefreshIndicator'
+import RefreshProvider, { useRefreshOnResume } from '../../providers/RefreshProvider'
 import { PlanStatusProvider } from '../../hooks/usePlanStatus'
 import { Toast, useToast, DashboardShell, Loading } from '../../components/ui'
 import { useProductCatalog } from '../../modules/inventory/hooks/useProductCatalog'
@@ -79,7 +81,18 @@ const PAGE_TITLES = {
 
 const shortReason = (msg) => String(msg || '').replace(/^Supabase error \(\d{3}\):\s*/, '')
 
+// Every screen below brings itself up to date when staff come back to an idle
+// counter (providers/RefreshProvider.jsx), so the provider wraps the whole
+// dashboard.
 export default function BusinessDashboard() {
+  return (
+    <RefreshProvider>
+      <BusinessDashboardContent />
+    </RefreshProvider>
+  )
+}
+
+function BusinessDashboardContent() {
   const { auth, logout } = useAuth()
   const brand = auth?.brand
   const staffUser = auth?.staff
@@ -149,13 +162,20 @@ export default function BusinessDashboard() {
 
   useEffect(() => {
     if (!brand?.id) return
-    if (navigator.onLine) {
-      saleRepository.syncQueued(brand.id).then(r => {
-        if (r.synced > 0) showToast(r.synced + ' offline sale(s) synced!')
-        if (r.rejected.length > 0) showToast(r.rejected.length + ' queued sale(s) were blocked by the server: ' + shortReason(r.rejected[0].error), { type: 'warning' })
-      }).catch(() => {})
-    }
+    if (navigator.onLine) syncOfflineSales().catch(() => {})
   }, [brand?.id])
+
+  // Sales parked while the connection was down go up as soon as staff are
+  // back or the connection returns, not only on the next page load.
+  useRefreshOnResume(async () => {
+    if (brand?.id) await syncOfflineSales()
+  })
+
+  async function syncOfflineSales() {
+    const r = await saleRepository.syncQueued(brand.id)
+    if (r.synced > 0) showToast(r.synced + ' offline sale(s) synced!')
+    if (r.rejected.length > 0) showToast(r.rejected.length + ' queued sale(s) were blocked by the server: ' + shortReason(r.rejected[0].error), { type: 'warning' })
+  }
 
   const handleSync = async () => {
     setSyncing(true)
@@ -210,6 +230,7 @@ export default function BusinessDashboard() {
                 You are offline. Sales are saved on this device and will sync when you reconnect.
               </div>
             )}
+            <RefreshIndicator />
             <ClockSkewBanner />
             <PlanExpiryBanner brand={brand} role={role} />
           </>
