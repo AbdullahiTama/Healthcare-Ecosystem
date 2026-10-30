@@ -1,8 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Stock count history: written only by save_stock_validation_session.
 -- 2026-10-30. Docs: docs/architecture/Stock-Ledger.md
--- PENDING, NOT APPLIED. Tested (scripts/db-tests/stockCount.pglite.mjs); waiting for the
--- rolled-back production probe. Move to supabase/migrations/ when applied.
+-- APPLIED to the live carehub project 2026-10-30 after a rolled-back probe (see
+-- docs/architecture/Stock-Ledger.md). The live function body matches this file (md5).
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY
