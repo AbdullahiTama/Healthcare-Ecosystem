@@ -15,7 +15,7 @@ export default function AgentLogin() {
   const [show, setShow] = useState(false)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
-  const { login, sessionNoticeAgent } = useAuth()
+  const { loginAgent, sessionNotice } = useAuth()
   const navigate = useNavigate()
 
   const handleLogin = async () => {
