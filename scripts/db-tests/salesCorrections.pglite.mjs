@@ -68,12 +68,24 @@ await applyMigrations(['carehub_20261209_record_export_audit.sql'], { rerun: fal
 
 
 await db.exec(`
-  CREATE TABLE public.products (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid, name text, stock integer, category text);
-  CREATE TABLE public.stock_batches (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid, quantity integer);
+  -- Stock tables shaped like live (read 2026-10-30), including the ledger's
+  -- movement-type CHECK: without it the old 'sale_correction' rows passed
+  -- here while production would have refused them.
+  CREATE TABLE public.products (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid, name text, stock integer, category text,
+    tracking_mode text NOT NULL DEFAULT 'none');
+  CREATE TABLE public.stock_batches (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid, product_id uuid, product_name text,
+    batch_number text, quantity integer NOT NULL DEFAULT 0, expiry_date date, status text NOT NULL DEFAULT 'available', created_at timestamptz DEFAULT now());
   CREATE TABLE public.stock_movements (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), business_id uuid, batch_id uuid, from_location_id uuid,
-    to_location_id uuid, movement_type text, quantity integer, reason text, moved_by uuid, created_at timestamptz DEFAULT now());
+    to_location_id uuid, movement_type text NOT NULL, quantity integer NOT NULL, reason text, moved_by text, created_at timestamptz DEFAULT now(),
+    product_id uuid, source_type text, source_id text, source_line_id text, idempotency_key text, actor_id uuid, qty_before integer, qty_after integer,
+    CONSTRAINT stock_movements_type_check CHECK (movement_type = ANY (ARRAY['opening','purchase_receipt','sale','sale_reversal','return_restock',
+      'return_writeoff','adjustment','write_off','transfer','tracking_change','correction'])));
+  CREATE UNIQUE INDEX stock_movements_idem_uniq ON public.stock_movements (business_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
   GRANT ALL ON public.products, public.stock_batches, public.stock_movements TO authenticated;
 `)
+// The live stock ledger (apply_stock_change and its guards), from the snapshot
+// of production; it has no migration in this repository.
+await db.exec(fs.readFileSync(REPO + '/docs/architecture/stock-ledger-live-snapshot.sql', 'utf8'))
 await applyMigrations(['carehub_20261210_pos_accounting.sql'], { rerun: false })
 // The live sale triggers: stock moves on INSERT only.
 await db.exec(`
@@ -88,6 +100,8 @@ await db.exec(`
 `)
 await applyMigrations(['carehub_20261216_sales_owner_corrections.sql'])
 await db.exec(`CREATE TRIGGER sale_stock_movement AFTER INSERT ON public.sales FOR EACH ROW EXECUTE FUNCTION public.apply_sale_stock_movement();`)
+// Sales onto the stock ledger: replaces the sale trigger and the correction function above.
+await applyMigrations(['carehub_20261224_sale_stock_ledger.sql', 'carehub_20261224b_pin_cutover_search_path.sql'])
 
 const S = await seedStaff()
 await sup(`update businesses set owner_name = 'Ada Owner' where id = $1`, [S.A])
@@ -96,7 +110,7 @@ await sup(`update staff set role = 'Owner' where id = $1`, [S.repA2]) // an Owne
 const prodA = (await sup(`insert into products (business_id,name,stock,category) values ($1,'Paracetamol',100,'Drugs') returning id`, [S.A])).rows[0].id
 const prodB = (await sup(`insert into products (business_id,name,stock,category) values ($1,'Amoxil',50,'Drugs') returning id`, [S.A])).rows[0].id
 const prodSvc = (await sup(`insert into products (business_id,name,stock,category) values ($1,'Consult',999,'Services') returning id`, [S.A])).rows[0].id
-const batch = (await sup(`insert into stock_batches (business_id,quantity) values ($1,40) returning id`, [S.A])).rows[0].id
+const batch = (await sup(`insert into stock_batches (business_id,product_id,product_name,quantity) values ($1,$2,'Amoxil',40) returning id`, [S.A, prodB])).rows[0].id
 const stock = async (id) => (await sup('select stock from products where id=$1', [id])).rows[0].stock
 const batchQty = async () => (await sup('select quantity from stock_batches where id=$1', [batch])).rows[0].quantity
 const line = (id, name, price, qty, extra = {}) => ({ id, name, price, qty, ...extra })
@@ -192,10 +206,11 @@ await expectError('refund cannot exceed what the ledger holds', () => as('a', `s
 
 // ---- batches -----------------------------------------------------------------------------------------
 const bsale = await mk('repA1', { txn: 'S-3', total: 300, items: enc([line(prodB, 'Amoxil', 100, 3, { batch_id: batch })]) })
-await sup(`update stock_batches set quantity = 37 where id=$1`, [batch]) // the live batch trigger would have taken 3
+ok('sale: the batch named on the line gives the units, in one ledger row with the product', (await batchQty()) === 37
+  && (await sup(`select count(*)::int n from stock_movements where batch_id=$1 and product_id=$2 and movement_type='sale' and quantity=-3`, [batch, prodB])).rows[0].n === 1)
 await as('a', `select public.edit_sale($1,$2::jsonb,0,null,'Walk-in','one returned') r`, [bsale, JSON.stringify([line(prodB, 'Amoxil', 100, 2, { batch_id: batch })])])
-ok('edit: batch quantity is restored by the difference and journaled', (await batchQty()) === 38
-  && (await sup(`select quantity from stock_movements where batch_id=$1 and movement_type='sale_correction'`, [batch])).rows[0].quantity === 1)
+ok('edit: batch quantity is restored by the difference and journaled as a sale reversal', (await batchQty()) === 38
+  && (await sup(`select quantity from stock_movements where batch_id=$1 and movement_type='sale_reversal'`, [batch])).rows[0].quantity === 1)
 
 // ---- refund -------------------------------------------------------------------------------------------
 const rf = await mk('repA1', { txn: 'S-4', total: 400, items: enc([line(prodA, 'Paracetamol', 400, 1)]) })

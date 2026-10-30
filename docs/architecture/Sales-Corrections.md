@@ -2,7 +2,11 @@
 
 Migration: `supabase/migrations/carehub_20261216_sales_owner_corrections.sql`
 (**drafted, NOT applied**). Tests: `scripts/db-tests/salesCorrections.pglite.mjs`
-(61 real-Postgres checks) plus the vitest suites listed at the end.
+(66 real-Postgres checks) plus the vitest suites listed at the end.
+
+Stock: since `carehub_20261224_sale_stock_ledger` (2026-10-30), sales, edits and deletes
+move stock through the stock ledger; edits and deletes give back only what the ledger
+recorded for that sale. See `docs/architecture/Stock-Ledger.md`.
 
 ## What went wrong on 2026-10-27
 
