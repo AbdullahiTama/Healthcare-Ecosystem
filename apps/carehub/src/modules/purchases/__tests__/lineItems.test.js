@@ -1,0 +1,64 @@
+import { describe, it, expect } from 'vitest'
+import { blankItem, isBlankItem, findProductForEntry, applyProduct, itemProblems, isPastExpiry, groupLinesByProduct } from '../lineItems'
+
+const products = [
+  { id: 'p1', name: 'Amoxil 500mg', generic_name: 'Amoxicillin', category: 'Medicines', price: 1500, cost_price: 800, stock: 24, barcode: '6151100001' },
+  { id: 'p2', name: 'Panadol Extra', generic_name: 'Paracetamol', category: 'Medicines', price: 900, cost_price: 0, stock: 0 },
+]
+const line = (o) => ({ ...blankItem(), ...o })
+
+describe('purchase line items', () => {
+  it('gives every blank line a distinct id', () => {
+    expect(blankItem().id).not.toBe(blankItem().id)
+    expect(isBlankItem(blankItem())).toBe(true)
+    expect(isBlankItem(line({ qty: '3' }))).toBe(false)
+  })
+
+  it('matches a product by exact (normalised) name or barcode, never by generic name', () => {
+    expect(findProductForEntry(products, '  amoxil 500MG ')?.id).toBe('p1')
+    expect(findProductForEntry(products, '6151100001')?.id).toBe('p1')
+    expect(findProductForEntry(products, 'Paracetamol')).toBeNull()
+    expect(findProductForEntry(products, 'Amoxil')).toBeNull()
+    expect(findProductForEntry(products, '')).toBeNull()
+  })
+
+  it('prefills prices and category from the product but leaves delivery facts alone', () => {
+    const filled = applyProduct(line({ qty: '10', batch: 'B7', expiry: '2027-03-01' }), products[0])
+    expect(filled).toMatchObject({ productId: 'p1', name: 'Amoxil 500mg', cost: '800', sell: '1500', cat: 'Medicines', qty: '10', batch: 'B7', expiry: '2027-03-01' })
+    // A zero cost is left empty for the user to fill, not prefilled as "0".
+    expect(applyProduct(line({}), products[1]).cost).toBe('')
+  })
+
+  it('reports missing or invalid fields on started lines only', () => {
+    expect(itemProblems(blankItem())).toEqual({})
+    expect(Object.keys(itemProblems(line({ name: 'X' })))).toEqual(['qty', 'cost'])
+    expect(itemProblems(line({ name: 'X', qty: '2.5', cost: '10' })).qty).toMatch(/whole/i)
+    expect(itemProblems(line({ qty: '4', cost: '10' })).name).toBeTruthy()
+    expect(itemProblems(line({ name: 'X', qty: '4', cost: '10' }))).toEqual({})
+  })
+
+  it('flags an expiry date that has already passed', () => {
+    expect(isPastExpiry(line({ expiry: '2026-01-01' }), '2026-10-30')).toBe(true)
+    expect(isPastExpiry(line({ expiry: '2027-01-01' }), '2026-10-30')).toBe(false)
+    expect(isPastExpiry(line({}), '2026-10-30')).toBe(false)
+  })
+
+  it('groups lines by product but keeps one batch per line', () => {
+    const resolve = (l) => products.find(p => p.id === l.productId) || null
+    const groups = groupLinesByProduct([
+      line({ productId: 'p1', name: 'Amoxil 500mg', qty: '10', cost: '800', batch: 'A1', expiry: '2027-01-01' }),
+      line({ productId: 'p1', name: 'Amoxil 500mg', qty: '5', cost: '820', batch: 'A2', expiry: '2027-06-01' }),
+      line({ name: 'New Syrup', qty: '3', cost: '400', sell: '700' }),
+      line({ name: 'new  syrup', qty: '2', cost: '400' }),
+    ], resolve)
+    expect(groups).toHaveLength(2)
+    const amox = groups.find(g => g.existing?.id === 'p1')
+    expect(amox).toMatchObject({ qty: 15, cost: 820 })
+    expect(amox.batches).toEqual([
+      { batch: 'A1', expiry: '2027-01-01', qty: 10 },
+      { batch: 'A2', expiry: '2027-06-01', qty: 5 },
+    ])
+    const syrup = groups.find(g => !g.existing)
+    expect(syrup).toMatchObject({ name: 'New Syrup', qty: 5, sell: 700, batches: [] })
+  })
+})
