@@ -27,11 +27,31 @@ At first capture the ledger held 3,343 rows, every one an `opening` movement wri
 | New product with stock | `journal_opening_stock` trigger (`opening`) | Yes |
 | POS sales | `apply_sale_ledger` trigger → `sale_take_stock` (`sale`, one movement per product and batch, key `sale:<sale id>:<product>:<batch or ->`) | Yes, since `carehub_20261224_sale_stock_ledger` |
 | Sale edits and deletes (Owner, Financial Reports) | `edit_sale` / `delete_sale` → `sale_apply_stock_delta` (`sale_reversal` for units given back, `sale` for extra units) | Yes, same migration |
-| Shop orders and cancellations | `create_shop_order`, `cleanup_pending_shop_orders`, `shop_restore_inventory_on_cancel` | **No** |
+| Shop orders (CareFind) | `create_shop_order` → `shop_take_stock` (`sale`, source `shop_order`, one movement per order line, key `shop_order:<order>:<line>`) | Yes, since `carehub_20261225_shop_order_stock_ledger` |
+| Shop order cancel, expiry, cleanup, approved return | `cancel_shop_order`, `expire_unpaid_shop_orders`, `cleanup_pending_shop_orders`, `process_shop_return` → `shop_restore_inventory_on_cancel` (`sale_reversal`, or `return_restock` after an approved return; at most once per line) | Yes, same migration |
 | Stock counts | `save_stock_validation_session` | **No** |
-| Branch transfers | `send_stock_transfer` / `receive_stock_transfer` | **No** (checked by source; verify before relying on it) |
+| Branch transfers | `send_stock_transfer` / `receive_stock_transfer` / `cancel_stock_transfer` | **No** (checked by source; verify before relying on it) |
+| Batch adjust and move | `adjust_stock_batch`, `transfer_stock_batch` (callable by signed-in users, `SECURITY INVOKER`) | **No** |
 
-Each movement records the locked row's real before and after quantities, so rows stay correct individually. Consecutive rows for a product chain (one row's `qty_after` is the next row's `qty_before`) only while every writer journals; shop orders, stock counts and transfers still do not, so a product touched by one of them has a gap at that point. Those three are the remaining steps.
+Each movement records the locked row's real before and after quantities, so rows stay correct individually. Consecutive rows for a product chain (one row's `qty_after` is the next row's `qty_before`) only while every writer journals; stock counts, branch transfers and the batch adjust / move functions still do not, so a product touched by one of them has a gap at that point. Those are the remaining steps.
+
+## Shop orders on the ledger (2026-10-30)
+
+`carehub_20261225_shop_order_stock_ledger` (applied live as version 20261030141913). Tests: `scripts/db-tests/shopOrderStock.pglite.mjs` (23 checks), which first places orders with the live pre-ledger code (`docs/architecture/shop-stock-pre-ledger-snapshot.sql`, md5 checked against production) and then upgrades.
+
+What changed:
+
+- `create_shop_order` keeps the live body; each line is inserted first and its stock reserved by `shop_take_stock` through `apply_stock_change`. Not enough stock still refuses the whole order with `Insufficient stock for <name>: have N, need M`, which the CareFind app maps to `INSUFFICIENT_STOCK`. Unlike a till sale, an online order is refused rather than kept, because nothing has been paid yet.
+- The product must belong to the vendor. The listing write policy on `ecommerce_products` checks the listing's business but not the product's, so before this a listing pointing at another business's product would have reduced that business's stock. None does live (0 of 16); orders against such a listing are now refused. Fixing the listing policy itself is still open.
+- Batch-tracked products reserve from available, unexpired batches, earliest expiry first; expired units are not sold online even though they count in `products.stock`. (No listed product is tracked today.)
+- `shop_restore_inventory_on_cancel` is the one way order stock goes back. It gives back what the ledger recorded for each line, to the batches it came from; orders reserved before this migration give back the line quantity, as before. Each line goes back at most once whichever path calls it (key `shop_order:<order>:<line>:release:<batch or ->`), which closes a double restock: approving a second return on the same order used to restock the whole order again. It never raises, so a cancellation or refund is never blocked by stock; a line whose product is gone (7 order lines live point at deleted products) is skipped with a notice, and any other refusal with a `WARNING`, leaving stock under rather than over counted.
+- Ledger rows record the signed-in user as `actor_id` (the customer for an order or their own cancellation, vendor staff for theirs) and the label `Online shop order`, or `Online shop (automatic)` for expiry, so customer emails are not copied into the vendor's stock history.
+
+Verified live: a rolled-back probe through the real `create_shop_order` and `cancel_shop_order` (order 3: 10 → 7 with one `sale` row; ordering 20 refused with the mapped message; a listing pointing at another business refused; cancel back to 10, a second cancel `already_cancelled` with no change; restoring all 12 open pre-ledger orders twice journalled the 7 units still restorable, once). After applying, the four function bodies match the repository, the helpers are not executable by `anon` or `authenticated`, and the security advisor findings are unchanged (202).
+
+`cleanup_pending_shop_orders` has no caller in the repository or the database schedule (`expire_unpaid_shop_orders`, run by the CareFind finance job, replaced it); it now restores through the same path and can be dropped.
+
+Rollback: run the three functions in `docs/architecture/shop-stock-pre-ledger-snapshot.sql`, then `DROP FUNCTION public.shop_take_stock(uuid, uuid, integer, uuid, uuid, text, text)`.
 
 ## POS sales on the ledger (2026-10-30)
 
