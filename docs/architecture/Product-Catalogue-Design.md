@@ -1,6 +1,6 @@
 # Product Catalogue: Review and Design
 
-Status: approved 2026-10-27. **Phases 1–3 are built** (sections 6–8); phases 4 and 5 are not started.
+Status: approved 2026-10-27. **Phases 1–4 are built** (sections 6–9); phase 5 is not started.
 
 ## 1. Review (live data, 2026-10-27)
 
@@ -372,3 +372,99 @@ Every function is atomic: an error anywhere leaves both locations' stock unchang
   1. Send a few units of an item from one branch to another. The sending branch's stock drops at once.
   2. Receive the transfer at the other branch, entering one unit short. That branch's stock rises, and the sender sees
      the shortfall.
+
+## 9. Phase 4 as built: the shared CareHub product library
+
+**Finding (live, 2026-10-28):** 11,323 master items at 12 businesses. 3,021 normalised names are used by two or more
+businesses (1,735 by three or more); 1,490 barcodes are shared. No item has its own strength: it is part of the name.
+
+### Database (`supabase/migrations/carehub_20261223_shared_product_library.sql`)
+
+| Object | What it does |
+|---|---|
+| `catalog_items` | The library: name, strength, generic name, form, pack size, manufacturer, NAFDAC number, barcodes, category, prescription status, description, `status` (`pending`, `active`, `retired`) and `source` (`seeded`, `nafdac_import`, `suggested`, `admin`). `match_key` (name + strength, lower case, a number joined to its unit) is unique among items that are not retired; so is the NAFDAC number, compared without spaces or hyphens. |
+| `catalog_suggestions` | A business's proposal, a snapshot of one of its master items, with a note. One pending suggestion per item. Status `pending` → `approved`, `rejected` or `withdrawn`. |
+| `master_products.catalog_item_id` | The link. Linking fills the item's empty fields from the library (generic name, strength, form, pack size, barcode, category, description); the name and prices stay the business's. Only approved items can be linked. |
+| Trigger `master_products_library` | A linked item's prescription status is never less strict than the library's: a lower value is raised on every write. |
+| Trigger `catalog_items_raise_rx` | When an admin makes a library item stricter, every linked master item is raised and its location products follow (`catalog_mirror_products`). A looser library status changes nothing at businesses. |
+| Seeding (`catalog_seed_candidates`, run by the migration) | Every name used by two or more businesses becomes a **pending** item: the most common spelling (on a tie, the least capitalised), generic name and category, the most common prescription status (a tie goes to the stricter one), and the ten most used barcodes. A retired name is never seeded again. About 3,000 candidates on live data. |
+| `catalog_search(q)` | Approved items by barcode (exact), name or generic name; best first. Readable by everyone. |
+| `catalog_link_matches(business)` | The business's unlinked items that match an approved item: by barcode first, then by name and strength. |
+| `link_master_to_catalog`, `unlink_master_from_catalog`, `suggest_catalog_item` | Owner or manager of the main business (`is_business_manager`). Linking withdraws a pending suggestion for the item; unlinking keeps the item's details and status. |
+| `admin_catalog_page`, `admin_save_catalog_item`, `admin_review_catalog_items` (approve, retire, reopen; up to 500), `admin_merge_catalog_items`, `admin_import_catalog_items` (up to 1000 rows a call), `admin_seed_catalog_candidates`, `admin_catalog_suggestions`, `admin_decide_catalog_suggestion` (create, link, reject) | CareHub admins only (`is_platform_admin`). Retiring unlinks business items. Merging moves links and suggestions to the kept (approved) item, which gains the other's barcodes and missing details, and retires the other. Deciding a suggestion links the business's item and notifies its owner (`staff_notifications`). |
+| `master_catalog_page` | Gains `p_library` (`linked` / `unlinked`); each item now includes `library` (its library entry) and `suggestion` (its latest suggestion). |
+
+**Import rules (official list):** a row is matched by NAFDAC number, then by name and strength. A match gets the row's
+details where it has none, its barcodes, a stricter prescription status if the row has one, and is approved; anything
+else is added, approved. Rows without a name are skipped and reported. Prescription classes are read as written:
+`POM`/`Rx` → prescription only, `P` → pharmacy only, `OTC`/`GSL` → over the counter, `CD` → controlled.
+
+### App
+
+- **Admin: Trust → Product Library** (`pages/admin/trust/ProductLibrary.jsx`, `modules/product-library/admin`):
+  - **Review queue:** candidates, most widely used first, with search and source filter; approve, edit or retire one
+    item or a selection; "Find new candidates" seeds again.
+  - **Suggestions:** from which business and who; an existing library item with the same name or barcode is shown,
+    with one-click Link. Otherwise "Add to library…" (details editable first), "Link to another item…" or "Reject…"
+    with a reason.
+  - **Approved** and **Retired:** browse, edit, add, retire, reopen. Editing offers "merge into another item" for
+    duplicates.
+  - **Import list:** a .xlsx or .csv of any shape. The columns are recognised from their headings (product name,
+    generic, strength, form, pack, manufacturer, NAFDAC number, barcode, category, prescription class) and can be
+    changed; the first rows are previewed; rows go in batches of 500 with progress and Stop; the result lists added,
+    matched and skipped rows.
+- **Business: Master Catalog** (owner):
+  - a banner counting items that match the library, opening **Review matches**: tick and link in bulk, with the
+    reason for each match and any prescription status that will rise;
+  - a "CareHub library" badge on linked items and a **Library** button on each item: see the link and unlink, find
+    and link a library item, or suggest the item (with a note), and see a suggestion's outcome;
+  - a linked / not linked filter;
+  - **+ Add item** can start from a library search: details fill in, the item is linked, and the prescription status
+    list starts at the library's.
+  - Everything library-related is hidden until the migration is applied.
+- Shared pieces: `lib/spreadsheet.js` (CSV and Excel reading, now also used by the business directory import),
+  `lib/dbErrors.refusalMessage` (a database function's refusal as a sentence, now also used by transfers),
+  `modules/product-library` (repository, rules, `LibrarySearch`).
+
+### Security implications
+
+- No permission is widened. The library is read-only to the public and to businesses, and only approved items are
+  visible to them. Pending, retired and reviewer details are admin-only.
+- All writes go through SECURITY DEFINER functions that check the caller first: platform admin for the library,
+  owner or manager of that main business for links and suggestions. Direct writes to both tables are revoked, admins
+  included.
+- Prescription status only becomes stricter automatically. A business can never link its way to a looser status;
+  only a deliberate owner Push can lower a location product, and only an unlinked item can be set looser than the
+  library.
+- A suggestion stores the suggester's email for review; it is visible to admins and to that business only.
+
+### Test plan
+
+- **PGlite:** `apps/carefind/src/test/catalogue/sharedProductLibrary.db.test.js` (26 tests, on the phase 1 migration
+  and the live shapes):
+  - matching key; seeding (two or more businesses, chosen spelling, most common details, stricter tie, barcodes;
+    re-seeding adds nothing; retired names stay out);
+  - who can read, and that nobody writes the tables directly; admin functions refuse others;
+  - review: page and search, bulk approve, search by name / generic / barcode, save and duplicate refusal, reopen;
+  - links: matches by barcode then name; a cashier and another business are refused; empty fields fill; location
+    products follow; pending items cannot be linked; the prescription floor; unlink keeps details; stricter library
+    status reaches businesses and a looser one does not; adding straight from the library; the page's filter and
+    library details;
+  - suggestions: once only, linked items and outsiders refused; create, link, reject with notifications; linking
+    withdraws a pending suggestion;
+  - import: add, match by NAFDAC number in another format, fill in, approve, raise the prescription status, skip rows
+    without a name, the 1000-row limit;
+  - merge and retire; re-running the migration.
+- **Unit and UI (CareHub):** `product-library/__tests__/libraryRules.test.js` (labels, form, column guessing, row
+  mapping, batches, repository and fallbacks); `ProductLibrary.admin.test.jsx` (queue, bulk approve, retire with
+  confirmation, seed, error and not-installed states, add with refusal, suggestions create / link / reject, CSV import
+  and the missing-name check); `master-catalog/__tests__/MasterCatalog.test.jsx` (hidden before the migration, badge,
+  filter, bulk matches, link and suggest one item, refusal shown, unlink, add from the library with the status floor);
+  `catalogueRules.test.js` (status floor and form fill).
+- **Manual, after applying the migration:**
+  1. Admin → Trust → Product Library: the review queue holds about 3,000 candidates. Approve a few common ones.
+  2. Master Catalog (as an owner): the banner counts matches. Link one and check that its prescription status and the
+     location products follow.
+  3. Suggest an unlinked item; approve it as admin; check the owner's notification and the item's library badge.
+  4. Import a small official list (.csv) and check the counts.
+

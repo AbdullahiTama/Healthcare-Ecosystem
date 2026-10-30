@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Lock, Layers, Search, Building2, ArrowLeftRight } from 'lucide-react'
+import { Lock, Layers, Search, Building2, ArrowLeftRight, BadgeCheck } from 'lucide-react'
 import { masterCatalogRepository, PAGE_SIZE } from './repositories'
 import { locationsRepository } from '../locations/repositories'
-import { isDuplicateError } from '../../lib/dbErrors'
+import { isDuplicateError, refusalMessage } from '../../lib/dbErrors'
+import { libraryRepository } from '../product-library/repositories'
+import { libraryLabel } from '../product-library/libraryRules'
 import { theme } from '../../styles/theme'
 import { SectionHead, ConfirmDialog, Sel, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
 import { usePlanGate } from '../../hooks/usePlanGate'
@@ -12,15 +14,20 @@ import MasterItemCard from './MasterItemCard'
 import MasterItemForm from './MasterItemForm'
 import CarryDialog from './CarryDialog'
 import ItemLocationsModal from './ItemLocationsModal'
+import LibraryMatchesModal from './LibraryMatchesModal'
+import LibraryItemModal from './LibraryItemModal'
 
 const { tealBright, navy, gray500, border } = theme
 const log = (what, e) => console.error(`[master-catalog] ${what}:`, e)
+const NO_FILTERS = { search: '', category: '', rx: '', library: '', archived: false }
 const reason = (e) => String(e?.message || e || '').replace(/^Supabase error \(\d+\):\s*/, '')
 
 // The business's master catalogue: the home of every product (Product-Catalogue-Design.md, phase 1). Every product at
 // every location is linked to an item here by id. The owner searches and filters the list, edits an item and pushes
 // it to the locations, carries items at locations in bulk, sets a location's own price, and archives what is no longer
 // sold. Pages of 50 come from master_catalog_page; before carehub_20261215 the page shows the plain list.
+// With the CareHub library (carehub_20261223) the owner also links items to the shared library (in bulk from the
+// matches it finds, or one by one), suggests items for it, and can start a new item from it.
 export default function MasterCatalog({ brand, role }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const { allow } = usePlanGate(showToast)
@@ -33,7 +40,7 @@ export default function MasterCatalog({ brand, role }) {
   const [page, setPage] = useState({ items: [], total: 0, upgraded: true })
   const [status, setStatus] = useState('loading') // loading | ready | error
   const [searchText, setSearchText] = useState('')
-  const [filters, setFilters] = useState({ search: '', category: '', rx: '', archived: false })
+  const [filters, setFilters] = useState(NO_FILTERS)
   const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState([])
   const [busy, setBusy] = useState(false)
@@ -43,6 +50,9 @@ export default function MasterCatalog({ brand, role }) {
   const [locationsItemId, setLocationsItemId] = useState(null)
   const [pushTarget, setPushTarget] = useState(null)
   const [archiveTargets, setArchiveTargets] = useState(null)
+  const [library, setLibrary] = useState({ available: false, matches: 0 })
+  const [showMatches, setShowMatches] = useState(false)
+  const [libraryItemId, setLibraryItemId] = useState(null)
   const request = useRef(0)
 
   // Categories and locations change rarely: loaded once per business.
@@ -76,9 +86,20 @@ export default function MasterCatalog({ brand, role }) {
   }, [mainId, isOwner, filters, offset])
   useEffect(() => { load() }, [load])
 
+  // Whether the CareHub library is installed, and how many items match it and are not linked yet.
+  const loadLibrary = useCallback(async () => {
+    if (!isOwner || !mainId) return
+    try {
+      const r = await libraryRepository.linkMatches(mainId, { limit: 1 })
+      setLibrary({ available: r.available, matches: r.total })
+    } catch (e) { log('library matches', e) }
+  }, [mainId, isOwner])
+  useEffect(() => { loadLibrary() }, [loadLibrary])
+
   const categoryLabel = (item) => categories.find((c) => c.code === item.category_code)?.label || item.category || ''
   const selectedItems = page.items.filter((i) => selected.includes(i.id))
   const locationsItem = page.items.find((i) => i.id === locationsItemId) || null
+  const libraryItem = page.items.find((i) => i.id === libraryItemId) || null
 
   // ── Actions ───────────────────────────────────────────────────────────────
   async function saveItem(payload) {
@@ -165,6 +186,28 @@ export default function MasterCatalog({ brand, role }) {
     }
   }
 
+  // ── The CareHub library ───────────────────────────────────────────────────
+  async function libraryAction(fn, done) {
+    setBusy(true)
+    try { await fn(); done(); load(); loadLibrary() } catch (e) {
+      log('library', e)
+      showToast(refusalMessage(e, 'That did not work. Check your connection and try again.'), { type: 'error', duration: 8000 })
+    }
+    setBusy(false)
+  }
+  const linkTo = (item, lib) => libraryAction(() => libraryRepository.link(mainId, [{ master_product_id: item.id, catalog_item_id: lib.id }]), () => {
+    setLibraryItemId(null)
+    showToast(`${item.name} is linked to ${libraryLabel(lib)} in the CareHub library.`, { type: 'success' })
+  })
+  const unlink = (item) => libraryAction(() => libraryRepository.unlink(mainId, item.id), () => {
+    setLibraryItemId(null)
+    showToast(`${item.name} is no longer linked. It keeps its details.`, { type: 'success' })
+  })
+  const suggest = (item, note) => libraryAction(() => libraryRepository.suggest(mainId, item.id, note), () => {
+    setLibraryItemId(null)
+    showToast(`Thanks. CareHub will review ${item.name} and let you know.`, { type: 'success' })
+  })
+
   const select = (id, on) => setSelected((s) => (on ? [...s, id] : s.filter((x) => x !== id)))
   const allOnPage = page.items.filter((i) => !i.archived_at)
   const allSelected = allOnPage.length > 0 && allOnPage.every((i) => selected.includes(i.id))
@@ -176,7 +219,7 @@ export default function MasterCatalog({ brand, role }) {
     </div>
   )
 
-  const filtered = filters.search || filters.category || filters.rx
+  const filtered = filters.search || filters.category || filters.rx || filters.library
   const from = page.total ? offset + 1 : 0
   const to = Math.min(offset + page.items.length, page.total)
 
@@ -198,6 +241,14 @@ export default function MasterCatalog({ brand, role }) {
         </div>
       )}
 
+      {library.available && library.matches > 0 && !filters.archived && (
+        <div role='status' style={{ marginBottom: '16px', padding: '12px 14px', borderRadius: theme.radius.md, background: theme.tealMist, color: theme.tealDeep, fontSize: '13px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <BadgeCheck size={18} aria-hidden='true' />
+          <span style={{ flex: '1 1 220px' }}>{library.matches === 1 ? '1 item in your catalogue matches' : `${library.matches.toLocaleString()} items in your catalogue match`} the CareHub product library. Linking fills in missing details and keeps prescription status correct.</span>
+          <TealBtn onClick={() => setShowMatches(true)} style={{ padding: '8px 14px', fontSize: '12px' }}>Review matches</TealBtn>
+        </div>
+      )}
+
       {/* Search and filters */}
       <div role='search' style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '10px', marginBottom: '12px', alignItems: 'end' }}>
         <label style={{ position: 'relative', display: 'block' }}>
@@ -210,6 +261,10 @@ export default function MasterCatalog({ brand, role }) {
           options={categories.map((c) => ({ value: c.code, label: c.label }))} placeholder='All categories' disabled={!page.upgraded} />
         <Sel id='mc-filter-rx' aria-label='Prescription status' value={filters.rx} onChange={(v) => setFilters((f) => ({ ...f, rx: v }))}
           options={RX_STATUSES.map((s) => ({ value: s.value, label: s.label }))} placeholder='Any prescription status' disabled={!page.upgraded} />
+        {library.available && (
+          <Sel id='mc-filter-library' aria-label='CareHub library' value={filters.library} onChange={(v) => setFilters((f) => ({ ...f, library: v }))}
+            options={[{ value: 'linked', label: 'Linked to the library' }, { value: 'unlinked', label: 'Not linked' }]} placeholder='Any library link' />
+        )}
         <GhostBtn onClick={() => setFilters((f) => ({ ...f, archived: !f.archived }))} aria-pressed={filters.archived} disabled={!page.upgraded} style={{ padding: '11px 14px' }}>
           {filters.archived ? 'Show current items' : 'Show archived'}
         </GhostBtn>
@@ -238,7 +293,7 @@ export default function MasterCatalog({ brand, role }) {
           filtered || filters.archived
             ? <Empty icon={<Search size={40} aria-hidden='true' />} message={filters.archived ? 'No archived items' : 'No items match your search'} cause='filtered'
                 action={filters.archived ? 'Show current items' : 'Clear search and filters'}
-                onAction={() => { setSearchText(''); setFilters({ search: '', category: '', rx: '', archived: false }) }} />
+                onAction={() => { setSearchText(''); setFilters(NO_FILTERS) }} />
             : <Empty icon={<Layers size={40} aria-hidden='true' />} title='Your catalogue is empty'
                 description='Products added at any location appear here automatically. You can also add items here and carry them at your locations.'
                 action='+ Add first item' onAction={() => { if (allow('adding products')) setFormItem(null) }} />
@@ -246,8 +301,9 @@ export default function MasterCatalog({ brand, role }) {
           <div aria-busy={status === 'loading'} style={{ display: 'flex', flexDirection: 'column', gap: '10px', opacity: status === 'loading' ? 0.6 : 1 }}>
             {page.items.map((item) => (
               <MasterItemCard key={item.id} item={item} locations={locations} categoryLabel={categoryLabel(item)} upgraded={page.upgraded}
-                selected={selected.includes(item.id)} onSelect={select} onEdit={setFormItem} onLocations={(i) => setLocationsItemId(i.id)}
-                onPush={setPushTarget} onArchive={setArchiveTargets} onRestore={restore} />
+                libraryAvailable={library.available} selected={selected.includes(item.id)} onSelect={select} onEdit={setFormItem}
+                onLocations={(i) => setLocationsItemId(i.id)} onPush={setPushTarget} onArchive={setArchiveTargets} onRestore={restore}
+                onLibrary={(i) => setLibraryItemId(i.id)} />
             ))}
           </div>
         )}
@@ -261,7 +317,13 @@ export default function MasterCatalog({ brand, role }) {
       )}
 
       <MasterItemForm show={formItem !== undefined} item={formItem || null} categories={categories} upgraded={page.upgraded}
-        saving={busy} onSave={saveItem} onClose={() => setFormItem(undefined)} />
+        libraryAvailable={library.available} saving={busy} onSave={saveItem} onClose={() => setFormItem(undefined)} />
+
+      <LibraryMatchesModal show={showMatches} businessId={mainId} onClose={() => setShowMatches(false)}
+        onLinked={(n) => { showToast(`${n} item${n === 1 ? '' : 's'} linked to the CareHub library.`, { type: 'success' }); load(); loadLibrary() }} />
+      {libraryItem && (
+        <LibraryItemModal item={libraryItem} busy={busy} onLink={linkTo} onUnlink={unlink} onSuggest={suggest} onClose={() => setLibraryItemId(null)} />
+      )}
 
       <CarryDialog show={!!carryItems} items={carryItems || []} locations={locations} busy={busy}
         onCarry={(locIds, price) => carry(locIds, price)} onClose={() => setCarryItems(null)} />

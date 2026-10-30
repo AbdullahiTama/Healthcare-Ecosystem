@@ -1,18 +1,24 @@
 import { useEffect, useState } from 'react'
 import { theme } from '../../styles/theme'
+import { BadgeCheck } from 'lucide-react'
 import { Modal, Inp, Sel, Textarea, GhostBtn, TealBtn } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { RX_STATUSES, DOSE_FORMS, formFromMaster, validateMasterForm } from './catalogueRules'
+import { RX_STATUSES, DOSE_FORMS, formFromMaster, validateMasterForm, rxOptionsFor, applyLibraryToForm } from './catalogueRules'
+import LibrarySearch from '../product-library/LibrarySearch'
+import { libraryLabel } from '../product-library/libraryRules'
 
 const { tealDeep, tealMist } = theme
 
 // Add or edit a master item. Saving an edit changes the catalogue only; the page then offers Push to send it to the
-// locations. Before carehub_20261215 (`upgraded` false) only the original fields are shown.
-export default function MasterItemForm({ show, item, categories, upgraded, saving, onSave, onClose }) {
+// locations. Before carehub_20261215 (`upgraded` false) only the original fields are shown. With the CareHub library
+// (`libraryAvailable`), a new item can start from a library item: its details fill the form and the item is linked.
+// A linked item cannot be less strict than the library's prescription status.
+export default function MasterItemForm({ show, item, categories, upgraded, libraryAvailable = false, saving, onSave, onClose }) {
   const [form, setForm] = useState(formFromMaster(item))
   const [errors, setErrors] = useState({})
+  const [lib, setLib] = useState(item?.library || null)
   const { isMobile } = useBreakpoint()
-  useEffect(() => { if (show) { setForm(formFromMaster(item)); setErrors({}) } }, [show, item])
+  useEffect(() => { if (show) { setForm(formFromMaster(item)); setErrors({}); setLib(item?.library || null) } }, [show, item])
 
   const f = (k) => (v) => setForm((p) => ({ ...p, [k]: v }))
   const grid = { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }
@@ -22,8 +28,11 @@ export default function MasterItemForm({ show, item, categories, upgraded, savin
   function submit() {
     const result = validateMasterForm(form, { categories, upgraded })
     if (result.errors) { setErrors(result.errors); return }
-    onSave(result.payload)
+    onSave(!item && lib ? { ...result.payload, catalog_item_id: lib.id } : result.payload)
   }
+
+  const pickFromLibrary = (picked) => { setLib(picked); setForm((p) => applyLibraryToForm(p, picked)) }
+  const rxChoices = rxOptionsFor(lib?.rx_status)
 
   return (
     <Modal show={show} onClose={onClose} title={item ? 'Edit catalogue item' : 'Add catalogue item'}
@@ -33,6 +42,16 @@ export default function MasterItemForm({ show, item, categories, upgraded, savin
         {item && (
           <div role='note' style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep }}>
             Every location's product is linked to this item, so a new name or price reaches them when you press Push. Locations with their own price keep it.
+          </div>
+        )}
+        {upgraded && libraryAvailable && !item && !lib && (
+          <LibrarySearch label='Start from the CareHub library (optional)' onPick={pickFromLibrary} />
+        )}
+        {lib && (
+          <div role='note' style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12.5px', color: tealDeep }}>
+            <BadgeCheck size={16} aria-hidden='true' />
+            <span style={{ flex: 1 }}>Linked to the CareHub library: <strong>{libraryLabel(lib)}</strong></span>
+            {!item && <GhostBtn type='button' onClick={() => setLib(null)}>Don’t link</GhostBtn>}
           </div>
         )}
         <Inp id='mc-name' label='Product name' value={form.name} onChange={f('name')} placeholder='e.g. Amoxil 500mg capsules' required error={errors.name} />
@@ -52,9 +71,11 @@ export default function MasterItemForm({ show, item, categories, upgraded, savin
             options={categories.map((c) => ({ value: c.code, label: c.label }))} placeholder={categories.length ? 'Choose…' : 'Available after the update'} disabled={!categories.length} />
           {upgraded && (
             <Sel id='mc-rx' label='Prescription status' value={form.rx_status} onChange={f('rx_status')} error={errors.rx_status}
-              options={RX_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
-              placeholder={rxDefault ? `Category default (${rxDefault.label})` : 'Category default'}
-              helperText='Prescription-only and controlled items will show on CareFind without a price.' />
+              options={rxChoices.map((s) => ({ value: s.value, label: s.label }))}
+              placeholder={lib ? `Library (${RX_STATUSES.find((s) => s.value === lib.rx_status)?.label || 'set by the library'})` : rxDefault ? `Category default (${rxDefault.label})` : 'Category default'}
+              helperText={lib && rxChoices.length < RX_STATUSES.length
+                ? 'The CareHub library sets the least strict status this item can have.'
+                : 'Prescription-only and controlled items will show on CareFind without a price.'} />
           )}
         </div>
         <div style={grid}>

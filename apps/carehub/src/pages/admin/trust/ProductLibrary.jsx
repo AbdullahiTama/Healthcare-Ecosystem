@@ -36,7 +36,7 @@ export default function ProductLibrary({ repository = libraryRepository, categor
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div>
-        <h2 style={{ margin: 0, fontSize: 16, color: 'var(--text)' }}>Product library</h2>
+        <h2 style={{ margin: 0, fontSize: 16, color: 'var(--fg)' }}>Product library</h2>
         <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--muted)' }}>
           One shared list of real products. Businesses link their items to it; a linked item can never be less strict than the library’s prescription status.
         </p>

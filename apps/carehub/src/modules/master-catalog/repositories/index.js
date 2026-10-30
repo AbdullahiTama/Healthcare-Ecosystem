@@ -60,13 +60,15 @@ export function createMasterCatalogRepository(request = sbFetch) {
     // each location ({ branch_id, product_id, price, stock, price_source,
     // active }). `upgraded` is false before carehub_20261215 is applied: the
     // plain list is filtered here, and branch details are not available.
-    async getPage(businessId, { search = '', category = null, rx = null, archived = false, offset = 0, limit = PAGE_SIZE } = {}) {
+    // `library` ('linked' | 'unlinked') needs carehub_20261223 and is sent only when set; each item then also has
+    // `library` (its CareHub library entry or null) and `suggestion` (its latest suggestion or null).
+    async getPage(businessId, { search = '', category = null, rx = null, archived = false, library = null, offset = 0, limit = PAGE_SIZE } = {}) {
       try {
         const rows = (await request('rpc/master_catalog_page', {
           method: 'POST',
           body: JSON.stringify({
             p_business_id: businessId, p_search: search || null, p_category: category || null, p_rx: rx || null,
-            p_archived: !!archived, p_offset: offset, p_limit: limit,
+            p_archived: !!archived, p_offset: offset, p_limit: limit, ...(library ? { p_library: library } : {}),
           }),
         })) || []
         return {
@@ -76,7 +78,7 @@ export function createMasterCatalogRepository(request = sbFetch) {
         }
       } catch (e) {
         if (!isMissingObject(e)) throw e
-        if (archived || category || rx) return { items: [], total: 0, upgraded: false }
+        if (archived || category || rx || library) return { items: [], total: 0, upgraded: false }
         const term = search.trim().toLowerCase()
         const all = (await repo.getAll(businessId)).filter((m) => !term || m.name?.toLowerCase().includes(term))
         return { items: all.slice(offset, offset + limit).map((m) => ({ ...m, carried: [] })), total: all.length, upgraded: false }

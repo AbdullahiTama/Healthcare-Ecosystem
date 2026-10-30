@@ -1,4 +1,4 @@
-import { Layers, RefreshCw, Archive, RotateCcw, Building2 } from 'lucide-react'
+import { Layers, RefreshCw, Archive, RotateCcw, Building2, BadgeCheck } from 'lucide-react'
 import { fmt } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, Pill, GhostBtn, TealBtn } from '../../components/ui'
@@ -7,8 +7,9 @@ import { rxStatus, carryingByLocation, carryingSummary, locationName } from './c
 const { tealDeep, tealMist, navy, gray500, gray600, border, warning } = theme
 
 // One master item: its facts, prescription status, and where it is carried (price and stock per location). The
-// checkbox selects it for bulk actions. Wraps to a single column on a phone.
-export default function MasterItemCard({ item, locations, categoryLabel, upgraded, selected, onSelect, onEdit, onLocations, onPush, onArchive, onRestore }) {
+// checkbox selects it for bulk actions. Wraps to a single column on a phone. With the CareHub library
+// (`libraryAvailable`), a badge shows a linked item and the Library button opens its link.
+export default function MasterItemCard({ item, locations, categoryLabel, upgraded, libraryAvailable = false, selected, onSelect, onEdit, onLocations, onPush, onArchive, onRestore, onLibrary }) {
   const rows = carryingByLocation(item, locations)
   const rx = rxStatus(item.rx_status)
   const archived = !!item.archived_at
@@ -31,6 +32,12 @@ export default function MasterItemCard({ item, locations, categoryLabel, upgrade
             {categoryLabel && <Pill label={categoryLabel} type='teal' />}
             {upgraded && rx && <Pill label={rx.label} type={rx.pill} />}
             {archived && <Pill label='Archived' type='gray' />}
+            {item.library && (
+              <span title='Linked to the CareHub library' style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '11px', fontWeight: 700, color: tealDeep }}>
+                <BadgeCheck size={13} aria-hidden='true' /> CareHub library
+              </span>
+            )}
+            {!item.library && item.suggestion?.status === 'pending' && <Pill label='Suggested to library' type='gray' />}
           </div>
           {facts && <div style={{ fontSize: '12px', color: gray600, marginTop: '3px' }}>{facts}</div>}
           <div style={{ display: 'flex', gap: '12px', marginTop: '6px', flexWrap: 'wrap', fontSize: '12px' }}>
@@ -59,6 +66,7 @@ export default function MasterItemCard({ item, locations, categoryLabel, upgrade
                 <RefreshCw size={13} aria-hidden='true' style={{ marginRight: 5 }} /> Push
               </TealBtn>
               <GhostBtn onClick={() => onEdit(item)} aria-label={`Edit ${item.name}`}>Edit</GhostBtn>
+              {libraryAvailable && <GhostBtn onClick={() => onLibrary(item)} aria-label={`CareHub library for ${item.name}`}>Library</GhostBtn>}
               <GhostBtn onClick={() => onArchive([item])} aria-label={`Archive ${item.name}`}><Archive size={13} aria-hidden='true' /></GhostBtn>
             </>
           )}
