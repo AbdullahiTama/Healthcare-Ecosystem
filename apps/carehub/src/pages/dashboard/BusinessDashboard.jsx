@@ -4,6 +4,7 @@ import { useAuth } from '../../providers/AuthProvider'
 import Sidebar from '../../components/layout/Sidebar'
 import TopBar from '../../components/layout/TopBar'
 import PlanExpiryBanner from '../../components/layout/PlanExpiryBanner'
+import ClockSkewBanner from '../../components/layout/ClockSkewBanner'
 import { Toast, useToast } from '../../components/ui'
 import { getProducts, cacheData, getCached } from '../../services/supabase'
 // Cross-aggregate read: the permission flags a staff member's role grants are
@@ -174,6 +175,7 @@ export default function BusinessDashboard() {
             No internet — Offline mode. Sales will sync when connected.
           </div>
         )}
+        <ClockSkewBanner />
         <PlanExpiryBanner brand={brand} />
         <div style={{ flex: 1, overflowY: 'auto', background: theme.bg }}>
           <Routes>

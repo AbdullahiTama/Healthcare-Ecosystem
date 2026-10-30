@@ -62,7 +62,9 @@ export default function AcceptInvite() {
   async function dropOtherSession() {
     if (!signedInAsSomeoneElse) return
     logout()
-    await authClient.auth.signOut().catch(() => {})
+    // Local scope: drop the other account on this device only, never its
+    // sessions on every other device (see logout() in App.jsx).
+    await authClient.auth.signOut({ scope: 'local' }).catch(() => {})
     setSessionEmail(null)
   }
 

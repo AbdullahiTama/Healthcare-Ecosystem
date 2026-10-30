@@ -31,16 +31,25 @@ export default function App() {
     } catch (e) { return null }
   })
 
+  // Shown on the login page when the session ended on its own (revoked,
+  // refresh refused) rather than because this user clicked Log out.
+  const [sessionNotice, setSessionNotice] = useState(null)
+
   const login = (brand, staff = null, extra = {}) => {
     const authData = { brand, staff, role: staff ? staff.role : 'Owner', loginTime: Date.now(), ...extra }
     setAuth(authData)
+    setSessionNotice(null)
     localStorage.setItem('carehub_auth', JSON.stringify(authData))
   }
 
+  // scope 'local' revokes THIS device's session only. The default ('global')
+  // revoked every session of the account, and shops commonly sign several
+  // tills into one account: one cashier logging out signed every other till
+  // out at its next token refresh, mid-shift (production logs, 2026-10-29).
   const logout = () => {
     setAuth(null)
     localStorage.removeItem('carehub_auth')
-    authClient.auth.signOut().catch(() => {})
+    authClient.auth.signOut({ scope: 'local' }).catch(() => {})
   }
 
   const loginAgent = (agentRow) => {
@@ -51,8 +60,37 @@ export default function App() {
   const logoutAgent = () => {
     setAgent(null)
     localStorage.removeItem('carehub_agent_auth')
-    authClient.auth.signOut().catch(() => {})
+    authClient.auth.signOut({ scope: 'local' }).catch(() => {})
   }
+
+  // The Supabase session is the source of truth; carehub_auth and
+  // carehub_agent_auth are only caches of who it belongs to. When it ends,
+  // drop both so the routes send the user to sign in, instead of leaving a
+  // dashboard whose every request is refused. That includes a Log out in
+  // another tab, which clears the shared cache but not this tab's state.
+  // The notice is only for a session that ended on its own: an explicit
+  // Log out clears the cache before signing out, so it finds nothing here.
+  // Reads localStorage and uses setters only, so it is safe from any closure.
+  const endExpiredSession = () => {
+    const endedOnItsOwn = !!localStorage.getItem('carehub_auth') || !!localStorage.getItem('carehub_agent_auth')
+    localStorage.removeItem('carehub_auth')
+    localStorage.removeItem('carehub_agent_auth')
+    setAuth(null)
+    setAgent(null)
+    if (endedOnItsOwn) {
+      console.warn('[session] the Supabase session ended; returning to sign in')
+      setSessionNotice('Your session has ended. Please sign in again.')
+    }
+  }
+
+  useEffect(() => {
+    // Only sets state: supabase-js warns against awaiting its own calls
+    // inside this callback.
+    const { data } = authClient.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') endExpiredSession()
+    })
+    return () => data.subscription.unsubscribe()
+  }, [])
 
   const isAdmin = () => auth?.isAdmin === true
 
@@ -64,9 +102,17 @@ export default function App() {
   // they still have a valid session now.
   useEffect(() => {
     let cancelled = false
-    authClient.auth.getSession().then(async ({ data }) => {
+    authClient.auth.getSession().then(async ({ data, error }) => {
       const session = data?.session
-      if (!session || cancelled) return
+      if (cancelled) return
+      if (!session) {
+        // No session and no error: signed out for good while the tab was
+        // closed or discarded. An error means we could not reach the server
+        // (still offline after waking): keep the cache, and requests renew
+        // the session once the connection is back.
+        if (!error) endExpiredSession()
+        return
+      }
       const account = await resolveAccountByEmail(session.user.email)
       if (!account || cancelled) return
       if (account.biz.is_platform_admin) {
@@ -82,7 +128,7 @@ export default function App() {
   }, [])
 
   return (
-    <AuthProvider value={{ auth, setAuth, login, logout, isAdmin, agent, loginAgent, logoutAgent }}>
+    <AuthProvider value={{ auth, setAuth, login, logout, isAdmin, agent, loginAgent, logoutAgent, sessionNotice }}>
       <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <Routes>
           <Route path='/' element={<Landing />} />

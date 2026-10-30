@@ -9,11 +9,22 @@ if (!SB_URL || !SB_KEY) {
   )
 }
 
-// Separate from lib/realtime.js's client, which deliberately runs with
-// persistSession: false — that client only ever listens to a websocket.
-// This one carries the actual login session, so it needs to persist and
-// auto-refresh like a normal Supabase Auth client.
-export const authClient = createClient(SB_URL, SB_KEY)
+// The one Supabase client in CareHub. It carries the login session (persisted,
+// auto-refreshed) and also owns the realtime websocket (lib/realtime.js), so
+// the socket joins channels as the signed-in user and supabase-js hands it
+// every renewed token. lib/realtime.js used to run its own anon client, which
+// RLS on staff_notifications / field_activities left with no events at all.
+//
+// realtime.worker runs the socket heartbeat in a Web Worker. Browsers throttle
+// timers in background tabs to about once a minute, which made the server
+// drop the socket of a tab left in the background; a worker's timers keep
+// running. realtime-js refuses to start without Worker support (some older
+// in-app browsers, the jsdom test environment), so it is only asked for
+// where it exists.
+export const authClient = createClient(SB_URL, SB_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true },
+  realtime: { worker: typeof Worker !== 'undefined' },
+})
 
 // provisionRealAuthAccount was removed in C2 (20260813): it existed to create
 // a Supabase Auth account alongside a plaintext-password business/staff row.

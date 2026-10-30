@@ -5,7 +5,7 @@ import { appointmentRepository } from './repositories'
 // the shared services/supabase read, used by several unmigrated modules too.
 import { getClients, notify, sbFetch } from '../../services/supabase'
 import { todayDate } from '../../lib/utils'
-import { authClient } from '../../lib/authClient'
+import { fetchWithSession, SessionUnavailableError } from '../../lib/sessionFetch'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Avatar, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
@@ -136,11 +136,9 @@ export default function Appointments({ brand, role, perms }) {
     }
     setWithdrawing(true)
     try {
-      const { data: { session } } = await authClient.auth.getSession()
-      if (!session) { showToast('Please log in again.', { type: 'warning' }); return }
-      const res = await fetch('/api/initiate-business-withdrawal', {
+      const res = await fetchWithSession('/api/initiate-business-withdrawal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           business_id: brand.id,
           amount: Math.round(parseFloat(withdrawForm.amount) * 100),
@@ -160,7 +158,7 @@ export default function Appointments({ brand, role, perms }) {
       sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => { if (Array.isArray(w) && w[0]) setWallet(w[0]) }).catch(() => {})
       showToast('Withdrawal started — it will arrive shortly.', { type: 'success' })
     } catch (e) {
-      showToast('Network error. Please try again.', { type: 'error' })
+      showToast(e instanceof SessionUnavailableError ? e.message : 'Network error. Please try again.', { type: 'error' })
     }
     setWithdrawing(false)
   }
@@ -169,11 +167,9 @@ export default function Appointments({ brand, role, perms }) {
     setPayLink(appt.id)
     setPayLinkLoading(true)
     try {
-      const { data: { session } } = await authClient.auth.getSession()
-      if (!session) { showToast('Please log in again.', { type: 'warning' }); setPayLink(null); return }
-      const res = await fetch('/api/initiate-appointment-payment', {
+      const res = await fetchWithSession('/api/initiate-appointment-payment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ appointment_id: appt.id }),
       })
       const data = await res.json().catch(() => ({}))
@@ -185,7 +181,7 @@ export default function Appointments({ brand, role, perms }) {
       setPayLink({ url: data.authorization_url, ref: data.reference, fee: data.fee, clientName: appt.client_name, date: appt.date, time: appt.time })
       showToast('Payment link created — share it with the client.', { type: 'success' })
     } catch (e) {
-      showToast('Network error. Please try again.', { type: 'error' })
+      showToast(e instanceof SessionUnavailableError ? e.message : 'Network error. Please try again.', { type: 'error' })
       setPayLink(null)
     }
     setPayLinkLoading(false)

@@ -1,4 +1,5 @@
 import { authClient } from '../../../lib/authClient'
+import { createSessionFetch } from '../../../lib/sessionFetch'
 import { sbFetch } from '../../../services/supabase'
 
 // ── Staff invitations ─────────────────────────────────────────────────────────
@@ -26,16 +27,17 @@ export function readableError(e, fallback = 'Something went wrong. Please try ag
 
 export function createInvitationService({
   fetchImpl = (...args) => fetch(...args),
-  getSession = () => authClient.auth.getSession(),
+  auth = authClient.auth,
   request = sbFetch,
 } = {}) {
+  // Same renew-on-401 path as sbFetch (lib/sessionFetch.js), so inviting from
+  // a tab left open past the token's expiry still works.
+  const { fetchWithSession } = createSessionFetch({ auth, fetchImpl })
+
   async function callApi(payload) {
-    const { data } = await getSession()
-    const token = data?.session?.access_token
-    if (!token) throw new Error('Your session has expired. Please sign in again.')
-    const res = await fetchImpl('/api/staff-invitations', {
+    const res = await fetchWithSession('/api/staff-invitations', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
     let body = {}

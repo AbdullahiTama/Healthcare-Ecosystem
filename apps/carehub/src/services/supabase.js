@@ -1,28 +1,23 @@
-import { authClient } from '../lib/authClient.js'
 import { SB_URL, SB_KEY } from '../config/supabase.js'
 import { pagedQuery } from '../lib/pagedQuery.js'
+import { fetchWithSession } from '../lib/sessionFetch.js'
 
 // C10 fix: forward the real logged-in session's token when one exists, so
 // auth.uid()/auth.email() populate in Postgres (required for RLS, see
-// phase2_rls_pilot.sql) — falls back to the anon key otherwise, which is
-// the same key every call used unconditionally before this fix, so
-// pre-login calls (login itself, duplicate-email checks) are unaffected.
-async function authToken() {
-  const { data } = await authClient.auth.getSession()
-  return data?.session?.access_token || SB_KEY
-}
-
+// phase2_rls_pilot.sql). Pre-login calls (login itself, duplicate-email
+// checks) still go out with the anon key. fetchWithSession renews a token the
+// server refuses and never sends a signed-in user's request as anon — see
+// lib/sessionFetch.js for why both matter.
 export async function sbFetch(path, options = {}) {
-  const res = await fetch(SB_URL + '/rest/v1/' + path, {
+  const res = await fetchWithSession(SB_URL + '/rest/v1/' + path, {
     method: options.method || 'GET',
     headers: {
       'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + await authToken(),
       'Content-Type': 'application/json',
       'Prefer': options.prefer || 'return=representation',
     },
     body: options.body || undefined,
-  })
+  }, { anonToken: SB_KEY })
   const text = await res.text()
   if (!res.ok) {
     let detail = text
@@ -32,18 +27,27 @@ export async function sbFetch(path, options = {}) {
   return text ? JSON.parse(text) : []
 }
 
+// Storage reports a refused token as 400/403 with an InvalidJWT / "exp" claim
+// body rather than PostgREST's 401, so it needs its own test for "renew and
+// retry". Reads a clone so the caller can still read the body.
+async function isStorageAuthFailure(res) {
+  if (res.status === 401) return true
+  if (res.status !== 400 && res.status !== 403) return false
+  const text = await res.clone().text().catch(() => '')
+  return /jwt|"exp"|exp claim/i.test(text)
+}
+
 // Shared by the three upload functions below — was previously triplicated
 // with the same hardcoded-anon-key header block each copy.
 export async function sbUpload(bucket, path, file, contentType, errorLabel) {
-  const res = await fetch(SB_URL + '/storage/v1/object/' + bucket + '/' + encodeURIComponent(path), {
+  const res = await fetchWithSession(SB_URL + '/storage/v1/object/' + bucket + '/' + encodeURIComponent(path), {
     method: 'POST',
     headers: {
       'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + await authToken(),
       'Content-Type': contentType,
     },
     body: file,
-  })
+  }, { anonToken: SB_KEY, isAuthFailure: isStorageAuthFailure })
   if (!res.ok) {
     const text = await res.text()
     let detail = text

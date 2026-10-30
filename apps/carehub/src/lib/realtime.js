@@ -1,18 +1,9 @@
-import { createClient } from '@supabase/supabase-js'
-import { SB_URL, SB_KEY } from '../config/supabase.js'
+import { authClient } from './authClient.js'
 
-// This client exists ONLY to listen for live updates over a websocket.
-// Every other database call in CareHub still goes through sbFetch in supabase.js.
-let client = null
-try {
-  client = createClient(SB_URL, SB_KEY, {
-    auth: { persistSession: false },
-  })
-} catch (e) {
-  client = null
-}
-
-export const realtime = client
+// Live updates over the session client's websocket (see lib/authClient.js for
+// why it is not a separate client). Every other database call in CareHub
+// still goes through sbFetch in services/supabase.js.
+const client = authClient
 
 // Listens for new rows on a table for one business.
 // If realtime can't connect for any reason, this returns a no-op instead of

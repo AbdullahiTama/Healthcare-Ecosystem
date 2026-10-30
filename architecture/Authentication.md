@@ -25,6 +25,16 @@ Login is a raw PostgREST equality filter: `staff?email=eq.X&password=eq.Y`. Cons
 
 **Operational note:** this strategy depends on the Supabase project's "Confirm email" setting — if enabled, a silently-created account can't complete `signInWithPassword` until someone clicks a confirmation link nobody was shown, so the account would safely (harmlessly) keep falling back to the legacy path forever rather than actually migrating. Needs to be disabled (or a passwordless confirmation flow added) for the migration to actually complete for existing accounts, not just degrade safely.
 
+### Session lifetime (2026-10-30)
+
+How a signed-in CareHub session stays alive, after the idle-session incident (`planning/CODE_AUDIT.md` High, "Idle sessions stop working"):
+
+- **One client.** `lib/authClient.js` is the only Supabase client. It persists and auto-refreshes the session and owns the realtime socket, so live updates join as the user and get every renewed token. `lib/realtime.js` reuses it.
+- **The server decides expiry, not the device clock.** Every request carrying the user's token goes through `lib/sessionFetch.js` (`fetchWithSession`): a 401 (Storage: InvalidJWT 400) forces one `refreshSession()` and one retry, shared across concurrent requests. supabase-js's own refresh timer trusts the device clock and never fires on a till whose clock is behind.
+- **Never silently anon.** The anon key is sent only when nobody is signed in. If a session exists but cannot be refreshed, the request fails with `SessionUnavailableError` ("check your connection") rather than running as anon and returning RLS-empty data.
+- **Session end is handled.** A refresh the server refuses signs this device out locally; `App.jsx` reacts to `SIGNED_OUT` (and to a missing session on boot) by clearing `carehub_auth`/`carehub_agent_auth`, and the login pages say the session ended.
+- **Logout is per device.** `signOut({ scope: 'local' })` revokes this device's session only. Shops share one login across tills; the previous global default signed every till out when one cashier logged out.
+
 ## 2. CareFind admin login — fully forgeable
 
 **Where:** `api/admin-auth.js` (Vercel function).

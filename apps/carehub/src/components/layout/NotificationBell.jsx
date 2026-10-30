@@ -46,6 +46,15 @@ export default function NotificationBell({ brand }) {
     return function () { stop() }
   }, [brand?.id])
 
+  // Realtime only delivers what happens while the socket is connected. A tab
+  // that slept (laptop lid closed, tablet locked) misses those inserts, so
+  // catch up whenever the staff member comes back to it.
+  useEffect(function () {
+    function onVisible() { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', onVisible)
+    return function () { document.removeEventListener('visibilitychange', onVisible) }
+  }, [brand?.id])
+
   async function load() {
     if (!brand || !brand.id) return
     try {
