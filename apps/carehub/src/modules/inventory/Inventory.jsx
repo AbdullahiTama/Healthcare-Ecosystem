@@ -192,7 +192,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         if (name.length > 3) {
           const dupe = duplicateIndex.find(name, generic)
           if (dupe) {
-            setDuplicateWarning({ existing: dupe, incoming: productData })
+            setDuplicateWarning({ existing: dupe, incoming: productData, key: intentKey('add-existing:' + dupe.id) })
             return
           }
         }
@@ -214,7 +214,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     }
   }
 
-  // Called when user confirms they want to update the existing duplicate instead of creating new.
+  // The incoming units are added in the database through the stock ledger (receive_stock),
   // The incoming units are added in the database (increment_product_stock),
   // not written as existing.stock + incoming.stock: `existing` comes from the
   // page's product list, which goes stale as POS sells, so an absolute write
@@ -238,8 +238,27 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       const added = incoming.category === 'Services' ? 0 : (parseInt(incoming.stock) || 0)
       let newStock = null
       if (added > 0) {
-        newStock = await productRepository.incrementStock(existing.id, brand.id, added)
-        if (newStock == null) throw new Error('product not found')
+        try {
+          // Through the stock ledger, keyed to this warning: pressing the
+          // button again after a failure cannot add the units twice.
+          const result = await productRepository.receiveStock(brand.id, existing.id, added, {
+            movementType: 'adjustment',
+            idempotencyKey: duplicateWarning.key,
+            sourceType: 'inventory_add_existing',
+            reason: 'Added through Add Product',
+          })
+          newStock = result?.stock ?? null
+        } catch (e) {
+          applySaved(saved)
+          if (e.code === 'BATCH_REQUIRED' || e.code === 'EXPIRY_REQUIRED') {
+            showToast('Details updated, but no stock was added: this product is tracked by batch. Add its stock with + Stock or Purchases so the batch is recorded.', { type: 'warning', duration: 9000 })
+            setDuplicateWarning(null)
+            setShowAdd(false)
+            setEditItem(null)
+            return
+          }
+          throw e
+        }
       }
       applySaved({ ...saved, ...(newStock != null ? { stock: newStock } : {}) })
       showToast('Existing product updated' + (added > 0 ? ': ' + added + ' units added, now ' + newStock + ' in stock' : '') + '.', { type: 'success' })
@@ -310,29 +329,40 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     }
   }
 
-  // Restock adds inside the database (increment_product_stock) rather than
-  // writing back a total computed here, so a sale made on a till at the same
-  // moment is not overwritten. The RPC returns the new stock level, or null
-  // when the product no longer exists. Returns true when the restock dialog
-  // should close (done, or the product is gone) and false when the user should
-  // be able to retry with what they typed.
-  async function handleRestock(product, amount) {
+  // Restock goes through the stock ledger (receive_stock): added inside the
+  // database, never as a total computed here, so a sale on a till at the same
+  // moment is not overwritten, and journalled with who added it. `key` is
+  // fixed for the life of the dialog, so pressing Add Stock again after a
+  // failure replays the first request instead of adding twice. Returns true
+  // when the dialog should close and false when the user should retry.
+  async function handleRestock(product, amount, { key, batch, expiry }) {
     try {
-      const newStock = await productRepository.incrementStock(product.id, brand.id, amount)
-      if (newStock === null || newStock === undefined) {
-        applyRemoved([product.id])
-        showToast('That product no longer exists in your inventory.', { type: 'error' })
-        return true
-      }
-      applySaved({ id: product.id, stock: newStock })
-      showToast(amount + ' units added to ' + product.name + ': now ' + newStock + ' in stock', { type: 'success' })
+      const result = await productRepository.receiveStock(brand.id, product.id, amount, {
+        movementType: 'adjustment',
+        idempotencyKey: key,
+        sourceType: 'inventory_restock',
+        reason: 'Restock from Inventory',
+        batchNumber: batch,
+        expiryDate: expiry,
+      })
+      if (result?.stock != null) applySaved({ id: product.id, stock: result.stock })
+      showToast(amount + ' units added to ' + product.name + (result?.stock != null ? ': now ' + result.stock + ' in stock' : ''), { type: 'success' })
       return true
     } catch (e) {
       console.error('handleRestock error:', e)
-      // A network failure can happen after the database applied the change,
-      // so do not claim nothing changed: refresh and ask the user to check.
+      if (e.code === 'PRODUCT_NOT_FOUND') {
+        applyRemoved([product.id])
+        showToast(e.message, { type: 'error' })
+        return true
+      }
+      if (e.code) {
+        showToast(e.message, { type: 'warning' })
+        return false
+      }
+      // A network failure can land after the database applied the change. The
+      // key makes a retry safe, so say so instead of asking for a manual check.
       if (loadProducts) loadProducts()
-      showToast('Could not confirm the stock was added. Check the current stock before trying again.', { type: 'error' })
+      showToast('Could not confirm the stock was added. Press Add Stock again: it will not be added twice.', { type: 'error' })
       return false
     }
   }
@@ -717,7 +747,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         <RestockModal
           product={showRestock}
           showToast={showToast}
-          onRestock={async (qty) => { if (await handleRestock(showRestock, qty)) setShowRestock(null) }}
+          onRestock={async (qty, details) => { if (await handleRestock(showRestock, qty, details)) setShowRestock(null) }}
           onClose={() => setShowRestock(null)}
         />
       )}
@@ -999,9 +1029,23 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
   )
 }
 
+// A key naming one user intent (one restock dialog, one "Update Existing
+// Product" warning) for receive_stock's idempotency: the same intent retried
+// is recognised and not counted twice.
+function intentKey(prefix) {
+  const rand = globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
+  return prefix + ':' + rand
+}
+
 function RestockModal({ product, onRestock, onClose, showToast }) {
   const [qty, setQty] = useState('')
+  const [batch, setBatch] = useState('')
+  const [expiry, setExpiry] = useState('')
   const [saving, setSaving] = useState(false)
+  const [key] = useState(() => intentKey('restock:' + product.id))
+  // A product tracked by batch must be received into a named batch (and an
+  // expiry when tracked by expiry); the stock ledger refuses it otherwise.
+  const tracking = product.tracking_mode || 'none'
   // Whole numbers only: stock is integral, and parseInt used to turn 2.5 into
   // 2 without a word.
   const units = Number(qty)
@@ -1011,8 +1055,10 @@ function RestockModal({ product, onRestock, onClose, showToast }) {
     // flight must not add the stock twice.
     if (saving) return
     if (!valid) { showToast('Enter a whole number of units above 0 (e.g. 2, not 2.5).', { type: 'warning' }); return }
+    if (tracking !== 'none' && !batch.trim()) { showToast('This product is tracked by batch. Enter its batch number.', { type: 'warning' }); return }
+    if (tracking === 'batch_expiry' && !expiry) { showToast('This product is tracked by batch and expiry. Enter the expiry date.', { type: 'warning' }); return }
     setSaving(true)
-    await onRestock(units)
+    await onRestock(units, { key, batch: batch.trim() || null, expiry: expiry || null })
     setSaving(false)
   }
   return (
@@ -1024,6 +1070,12 @@ function RestockModal({ product, onRestock, onClose, showToast }) {
         </div>
         <Inp label='Units to Add' id='restock-units' value={qty} onChange={setQty} type='number' inputMode='numeric' min='1' step='1' placeholder='e.g. 100' required />
         {valid && <div style={{ fontSize: '12px', color: success, fontWeight: '700' }}>Expected new total: {(product.stock || 0) + units} units</div>}
+        {tracking !== 'none' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+            <Inp label='Batch number' id='restock-batch' value={batch} onChange={setBatch} placeholder='e.g. INS-0412' required />
+            <Inp label='Expiry date' id='restock-expiry' value={expiry} onChange={setExpiry} type='date' required={tracking === 'batch_expiry'} />
+          </div>
+        )}
         {/* The old "Note" field was never saved anywhere. Deliveries with a
             supplier, cost, batch or expiry belong in Purchases, which keeps them. */}
         <div style={{ fontSize: '12px', color: gray500, lineHeight: 1.5 }}>Receiving a supplier delivery? Record it in Purchases to keep the supplier, cost, batch and expiry with the stock.</div>

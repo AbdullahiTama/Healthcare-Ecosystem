@@ -37,13 +37,21 @@ describe('purchase line items', () => {
     expect(itemProblems(line({ name: 'X', qty: '4', cost: '10' }))).toEqual({})
   })
 
+  it('requires a batch, and an expiry when tracked by expiry, for tracked products only', () => {
+    const ready = line({ name: 'Insulin', qty: '4', cost: '900' })
+    expect(itemProblems(ready, { tracking_mode: 'none' })).toEqual({})
+    expect(itemProblems(ready, { tracking_mode: 'batch_only' })).toEqual({ batch: 'Batch number needed' })
+    expect(itemProblems(ready, { tracking_mode: 'batch_expiry' })).toEqual({ batch: 'Batch number needed', expiry: 'Expiry date needed' })
+    expect(itemProblems({ ...ready, batch: 'INS-1', expiry: '2027-01-31' }, { tracking_mode: 'batch_expiry' })).toEqual({})
+  })
+
   it('flags an expiry date that has already passed', () => {
     expect(isPastExpiry(line({ expiry: '2026-01-01' }), '2026-10-30')).toBe(true)
     expect(isPastExpiry(line({ expiry: '2027-01-01' }), '2026-10-30')).toBe(false)
     expect(isPastExpiry(line({}), '2026-10-30')).toBe(false)
   })
 
-  it('groups lines by product but keeps one batch per line', () => {
+  it('groups lines by product but keeps every line to receive on its own', () => {
     const resolve = (l) => products.find(p => p.id === l.productId) || null
     const groups = groupLinesByProduct([
       line({ productId: 'p1', name: 'Amoxil 500mg', qty: '10', cost: '800', batch: 'A1', expiry: '2027-01-01' }),
@@ -54,11 +62,12 @@ describe('purchase line items', () => {
     expect(groups).toHaveLength(2)
     const amox = groups.find(g => g.existing?.id === 'p1')
     expect(amox).toMatchObject({ qty: 15, cost: 820 })
-    expect(amox.batches).toEqual([
+    expect(amox.lines.map(({ qty, batch, expiry }) => ({ qty, batch, expiry }))).toEqual([
       { batch: 'A1', expiry: '2027-01-01', qty: 10 },
       { batch: 'A2', expiry: '2027-06-01', qty: 5 },
     ])
     const syrup = groups.find(g => !g.existing)
-    expect(syrup).toMatchObject({ name: 'New Syrup', qty: 5, sell: 700, batches: [] })
+    expect(syrup).toMatchObject({ name: 'New Syrup', qty: 5, sell: 700 })
+    expect(syrup.lines.map(l => [l.qty, l.batch])).toEqual([[3, null], [2, null]])
   })
 })

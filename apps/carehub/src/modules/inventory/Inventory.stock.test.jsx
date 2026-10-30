@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 const calls = []
 let dbStock = {}
 let incrementImpl = null
+const journal = new Map()
 let mergeImpl = null
 
 vi.mock('../../services/supabase', () => ({ sbFetch: vi.fn(), cacheData: vi.fn(), getCached: vi.fn(() => null) }))
@@ -17,13 +18,17 @@ vi.mock('./repositories', () => ({
     getAll: async () => [],
     update: async (...a) => { calls.push(['update', ...a]); return { ...AMOXIL, ...a[2], id: a[0] } },
     create: async (...a) => { calls.push(['create', ...a]); return [{ id: 'new' }] },
-    incrementStock: async (...a) => {
-      calls.push(['incrementStock', ...a])
+    // Behaves like receive_stock: a key already journalled replays its
+    // result instead of adding again.
+    receiveStock: async (...a) => {
+      calls.push(['receiveStock', ...a])
+      const [, id, qty, opts] = a
+      if (journal.has(opts.idempotencyKey)) return { ...journal.get(opts.idempotencyKey), replayed: true }
       if (incrementImpl) return incrementImpl(...a)
-      const [id, , qty] = a
-      if (!(id in dbStock)) return null
       dbStock[id] += qty
-      return dbStock[id]
+      const result = { stock: dbStock[id], replayed: false }
+      journal.set(opts.idempotencyKey, result)
+      return result
     },
     delete: async () => null,
     mergeDuplicates: async (...a) => {
@@ -45,6 +50,7 @@ beforeEach(() => {
   calls.length = 0
   dbStock = { p1: 30 } // 20 sold at the till since the page loaded its list (50)
   incrementImpl = null
+  journal.clear()
   mergeImpl = null
   global.IS_REACT_ACT_ENVIRONMENT = true
   host = document.createElement('div')
@@ -87,7 +93,10 @@ describe('Inventory — stock is never written back from the stale page list', (
     await click(button('+ Add Stock'))
     await flush()
 
-    expect(calls.filter(c => c[0] === 'incrementStock')).toEqual([['incrementStock', 'p1', 'B1', 10]])
+    const receipts = calls.filter(c => c[0] === 'receiveStock')
+    expect(receipts.map(c => [c[1], c[2], c[3]])).toEqual([['B1', 'p1', 10]])
+    expect(receipts[0][4]).toMatchObject({ movementType: 'adjustment', sourceType: 'inventory_restock', reason: 'Restock from Inventory', batchNumber: null, expiryDate: null })
+    expect(receipts[0][4].idempotencyKey).toMatch(/^restock:p1:/)
     expect(stockWrites()).toHaveLength(0)
     // 30 left after the sales, +10 — not the page's 50 + 10 = 60.
     expect(dbStock.p1).toBe(40)
@@ -103,9 +112,9 @@ describe('Inventory — stock is never written back from the stale page list', (
     await type(host.querySelector('#restock-units'), '10')
     await click(button('+ Add Stock'))
     await click(button('Saving...'))
-    await act(async () => { release(40) })
+    await act(async () => { release({ stock: 40 }) })
     await flush()
-    expect(calls.filter(c => c[0] === 'incrementStock')).toHaveLength(1)
+    expect(calls.filter(c => c[0] === 'receiveStock')).toHaveLength(1)
   })
 
   it('rejects a decimal quantity instead of truncating it', async () => {
@@ -114,7 +123,7 @@ describe('Inventory — stock is never written back from the stale page list', (
     await type(host.querySelector('#restock-units'), '2.5')
     await click(button('+ Add Stock'))
     await flush()
-    expect(calls.filter(c => c[0] === 'incrementStock')).toHaveLength(0)
+    expect(calls.filter(c => c[0] === 'receiveStock')).toHaveLength(0)
     expect(host.textContent).toContain('whole number')
   })
 
@@ -127,7 +136,50 @@ describe('Inventory — stock is never written back from the stale page list', (
     await flush()
     expect(dialog()).not.toBeNull()
     expect(host.querySelector('#restock-units').value).toBe('10')
-    expect(host.textContent).toContain('Check the current stock')
+    expect(host.textContent).toContain('it will not be added twice')
+  })
+
+  it('a retry after a lost reply replays the first restock instead of adding twice', async () => {
+    // The first press lands in the database but the reply never arrives.
+    incrementImpl = async (biz, id, qty, opts) => {
+      dbStock[id] += qty
+      journal.set(opts.idempotencyKey, { stock: dbStock[id], replayed: false })
+      throw new TypeError('Failed to fetch')
+    }
+    await render()
+    await click(button('+ Stock'))
+    await type(host.querySelector('#restock-units'), '10')
+    await click(button('+ Add Stock'))
+    await flush()
+    expect(dialog()).not.toBeNull()
+
+    incrementImpl = null
+    await click(button('+ Add Stock'))
+    await flush()
+    const keys = calls.filter(c => c[0] === 'receiveStock').map(c => c[4].idempotencyKey)
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+    expect(dbStock.p1).toBe(40) // 30 + 10 once, not 50
+    expect(dialog()).toBeNull()
+  })
+
+  it('a product tracked by batch is restocked into a named batch with its expiry', async () => {
+    const INSULIN = { ...AMOXIL, id: 'p9', name: 'Insulin Pen', stock: 4, tracking_mode: 'batch_expiry' }
+    dbStock.p9 = 4
+    await render(OWNER, [INSULIN])
+    await click(button('+ Stock'))
+    await type(host.querySelector('#restock-units'), '6')
+    await click(button('+ Add Stock'))
+    await flush()
+    expect(calls.filter(c => c[0] === 'receiveStock')).toHaveLength(0)
+    expect(host.textContent).toContain('Enter its batch number')
+
+    await type(host.querySelector('#restock-batch'), 'INS-0412')
+    await type(host.querySelector('#restock-expiry'), '2027-03-31')
+    await click(button('+ Add Stock'))
+    await flush()
+    expect(calls.find(c => c[0] === 'receiveStock')[4]).toMatchObject({ batchNumber: 'INS-0412', expiryDate: '2027-03-31' })
+    expect(dbStock.p9).toBe(10)
   })
 
   it('hides + Stock from roles without stock permission', async () => {
@@ -166,7 +218,9 @@ describe('Inventory — stock is never written back from the stale page list', (
     await click(button('Update Existing Product'))
     await flush()
 
-    expect(calls.filter(c => c[0] === 'incrementStock')).toEqual([['incrementStock', 'p1', 'B1', 12]])
+    const added = calls.filter(c => c[0] === 'receiveStock')
+    expect(added.map(c => [c[1], c[2], c[3], c[4].movementType, c[4].sourceType])).toEqual([['B1', 'p1', 12, 'adjustment', 'inventory_add_existing']])
+    expect(added[0][4].idempotencyKey).toMatch(/^add-existing:p1:/)
     const update = calls.find(c => c[0] === 'update')
     expect('stock' in update[3]).toBe(false)
     expect('price' in update[3]).toBe(false)
@@ -195,7 +249,7 @@ describe('Inventory — stock is never written back from the stale page list', (
         ['mergeDuplicates', 'B1', 'p1', ['p2']],
         ['mergeDuplicates', 'B1', 'p3', ['p4']],
       ])
-      expect(calls.filter(c => c[0] === 'update' || c[0] === 'incrementStock')).toHaveLength(0)
+      expect(calls.filter(c => c[0] === 'update' || c[0] === 'receiveStock')).toHaveLength(0)
       expect(host.textContent).toContain('Merged 2 duplicate group(s). Removed 2 duplicate item(s)')
     })
 

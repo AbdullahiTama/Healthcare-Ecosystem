@@ -17,8 +17,9 @@
 -- 636 have stock < 0 (oversold before the floor existed); no tracked product
 -- disagrees with its batches.
 --
--- Known gap: increment_product_stock (C12, used by Purchases and Inventory's
--- + Stock) predates this ledger and bypasses it. It writes products.stock
+-- Gap at capture (closed 2026-10-30 by carehub_20261223_receive_stock):
+-- increment_product_stock (C12, used by Purchases and Inventory's + Stock)
+-- predates this ledger and bypasses it. It writes products.stock
 -- directly, so restocks leave no stock_movements row, and on a batch-tracked
 -- product it would make stock disagree with its batches. Moving those callers
 -- to apply_stock_change(..., 'purchase_receipt' | 'adjustment', ...) is the

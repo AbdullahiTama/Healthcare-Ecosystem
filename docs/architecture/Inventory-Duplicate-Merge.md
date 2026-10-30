@@ -10,10 +10,10 @@ Inventory's product list is loaded once and goes stale as POS sells. Several pat
 | Path | What it did | Now |
 |---|---|---|
 | Edit product | Always sent the form's stock, so changing only a price reset stock to the page load figure | Stock is sent only when the user changed it (a deliberate count correction) |
-| "Update Existing Product" (Add Product with a name that exists) | Wrote `existing.stock + incoming.stock`, and changed prices for any role | Adds the units with `increment_product_stock`; prices change only with `canEditPrice` |
+| "Update Existing Product" (Add Product with a name that exists) | Wrote `existing.stock + incoming.stock`, and changed prices for any role | Adds the units through the stock ledger (`receive_stock`, keyed to the warning); prices change only with `canEditPrice` |
 | Clean up duplicates | Wrote the keeper's stock as the sum of the group's stale counts, then bulk deleted the rest | `merge_duplicate_products`, below |
 
-**+ Stock** already incremented atomically on main. It now also: is shown only with `canEditStock` (as Add Product and the Edit form's stock field already were); is disabled while saving, because each press is a real increment and a double tap added twice; rejects decimals instead of truncating 2.5 to 2; stays open with the typed value when the save fails; reports the database's new stock level. Its "Note" field was never stored anywhere and was replaced by a pointer to Purchases.
+**+ Stock** goes through the stock ledger (`receive_stock`, an `adjustment` keyed to the dialog, so pressing Add Stock again after a lost reply replays instead of adding twice; a product tracked by batch asks for its batch and expiry). It also: is shown only with `canEditStock` (as Add Product and the Edit form's stock field already were); is disabled while saving, because each press is a real increment and a double tap added twice; rejects decimals instead of truncating 2.5 to 2; stays open with the typed value when the save fails; reports the database's new stock level. Its "Note" field was never stored anywhere and was replaced by a pointer to Purchases.
 
 The bulk delete in the duplicate cleanup was worse than the stale total. `ON DELETE CASCADE` silently removed the duplicate's product reviews, shop listing and stock count history, and a duplicate with stock batches, LPO lines or shop order lines (foreign keys without cascade) made the delete fail after the keeper's summed stock had already been written: stock counted twice and the duplicates left in place.
 

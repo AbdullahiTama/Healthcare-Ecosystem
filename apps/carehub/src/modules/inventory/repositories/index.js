@@ -30,6 +30,23 @@ export function translateMergeError(error) {
   return friendly
 }
 
+const RECEIVE_REFUSALS = {
+  BATCH_REQUIRED: 'This product is tracked by batch. Enter its batch number.',
+  EXPIRY_REQUIRED: 'This product is tracked by batch and expiry. Enter the expiry date.',
+  PRODUCT_NOT_FOUND: 'This product no longer exists in your inventory.',
+  RECEIVE_INVALID: 'Enter a whole number of units above 0.',
+}
+
+// Same contract as translateMergeError: only the function's own refusal codes
+// become sentences (with `.code` kept); anything else is rethrown untouched.
+export function translateReceiveError(error) {
+  const code = Object.keys(RECEIVE_REFUSALS).find((c) => (error?.message || '').includes(c))
+  if (!code) return error
+  const friendly = new Error(RECEIVE_REFUSALS[code])
+  friendly.code = code
+  return friendly
+}
+
 export function createProductRepository(request = sbFetch) {
   return {
     // PostgREST clamps every response to db-max-rows (1000 on this project —
@@ -106,28 +123,48 @@ export function createProductRepository(request = sbFetch) {
     // the cleanup now merges through mergeDuplicates() and deleteBulk had no
     // callers left. Removed rather than kept as a trap.
 
-    // Atomic replenishment via the increment_product_stock RPC (C5/C12,
-    // 20260804_sale_stock_movement.sql). Purchases used to read stock, add the
-    // quantity in JavaScript and write an absolute value back — against the
-    // sale_stock_movement trigger that is a lost update, so recording a
-    // purchase while a till sold the same product silently restored the sold
-    // units. The RPC does `stock = stock + qty` inside the database instead.
+    // Adds received units through receive_stock (carehub_20261223), which
+    // writes them through the stock ledger (apply_stock_change) in one
+    // transaction: the product is locked, a tracked product must name a batch
+    // (and expiry), the batch is created when given, and a stock_movements row
+    // records who added what, from where. Returns { stock, batch_id,
+    // movement_id, replayed, skipped }.
     //
-    // The RPC is SECURITY INVOKER, so products' RLS still scopes it; passing
-    // businessId keeps the filter explicit on this side too.
-    async incrementStock(productId, businessId, qty) {
-      if (!qty || qty <= 0) return null
-      const result = await request('rpc/increment_product_stock', {
-        method: 'POST',
-        body: JSON.stringify({
-          p_product_id: productId,
-          p_business_id: businessId,
-          p_qty: qty,
-        }),
-      })
-      // PostgREST returns the scalar the function returns — the new stock
-      // level, or null when no row matched (wrong tenant, deleted product).
-      return Array.isArray(result) ? result[0] : result
+    // `idempotencyKey` is required and must identify the user's intent, not
+    // the request: the same key replayed (a retry after a network failure, a
+    // second tap) returns the first result and adds nothing. This replaces
+    // increment_product_stock, which wrote products.stock directly and left
+    // no ledger row.
+    //
+    // SECURITY INVOKER: products/stock RLS is the tenant boundary, the same
+    // authority the old RPC had.
+    async receiveStock(businessId, productId, qty, {
+      movementType, idempotencyKey, sourceType = null, sourceId = null, sourceLineId = null,
+      reason = null, batchNumber = null, expiryDate = null, dateReceived = null, supplier = null,
+    }) {
+      try {
+        const result = await request('rpc/receive_stock', {
+          method: 'POST',
+          body: JSON.stringify({
+            p_business_id: businessId,
+            p_product_id: productId,
+            p_qty: qty,
+            p_movement_type: movementType,
+            p_idempotency_key: idempotencyKey,
+            p_source_type: sourceType,
+            p_source_id: sourceId,
+            p_source_line_id: sourceLineId,
+            p_reason: reason,
+            p_batch_number: batchNumber || null,
+            p_expiry_date: expiryDate || null,
+            p_date_received: dateReceived || null,
+            p_supplier: supplier || null,
+          }),
+        })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateReceiveError(e)
+      }
     },
 
     // Merges duplicates into one keeper via merge_duplicate_products

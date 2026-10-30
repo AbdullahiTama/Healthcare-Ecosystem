@@ -4,9 +4,6 @@ import { purchaseRepository } from './repositories'
 // Product writes go through the inventory seam: replenishment must be atomic
 // now that sales decrement stock server-side (C5/C12).
 import { productRepository } from '../inventory/repositories'
-// Batch/expiry capture goes through the stock seam: stock_batches is a stock
-// aggregate table, so purchases must not assemble its rows itself.
-import { stockRepository } from '../stock/repositories'
 // Recording a purchase composes three aggregates: the purchase record (above),
 // inventory replenishment, and the debt raised by any shortfall. Each is owned
 // by its own module's repository rather than re-derived here.
@@ -240,7 +237,8 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
   // the save (lineItems.itemProblems): it used to be dropped silently with a
   // "success" toast. Fully blank lines are ignored.
   const startedItems = form.items.filter(i => !isBlankItem(i))
-  const problemLines = form.items.map((it, idx) => ({ idx, problems: itemProblems(it) })).filter(x => Object.keys(x.problems).length > 0)
+  const linkedProduct = (it) => (it.productId ? inventory.find(p => p.id === it.productId) : null) || null
+  const problemLines = form.items.map((it, idx) => ({ idx, problems: itemProblems(it, linkedProduct(it)) })).filter(x => Object.keys(x.problems).length > 0)
   const computedTotal = startedItems.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.cost) || 0), 0)
   const today = todayDate()
 
@@ -299,77 +297,73 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
       })
       const purchaseId = (purchase[0] || {}).id || ''
 
-      // INVENTORY SYNC: every purchased item is added to Inventory instantly.
-      // Existing products get stock added (and the new unit cost recorded);
-      // new products are created with stock and a default sell price. Lines
-      // for the same product are grouped so stock is incremented once and no
-      // duplicate catalog entry is created against the stale snapshot, while
-      // each line still records its own batch and expiry (two batches of one
-      // medicine keep two expiry dates).
+      // INVENTORY SYNC, through the stock ledger. Lines are grouped by product
+      // so a new product is created once (against the stale snapshot two lines
+      // would otherwise make two catalogue entries) and the cost and price are
+      // written once. Then every line is received on its own through
+      // receive_stock: one ledger movement per line (who, before, after, this
+      // purchase), its batch created in the same transaction, and a key of
+      // purchase + line so a retried request can never add the stock twice.
       let created = 0
       let updated = 0
-      let batchFailures = 0
       const syncFailed = []
       const changedRows = []
+      const keyBase = purchaseId || ('unsaved-' + Date.now().toString(36))
       for (const group of groupLinesByProduct(startedItems, resolveExisting)) {
-        const { existing, name, qty, cost, sell, cat, batches } = group
+        const { existing, name, cost, sell, cat, lines } = group
+        let row = null
         try {
-          let productId = null
           if (existing) {
-            // Stock is incremented in the database, not read-modify-written
-            // here — a till selling this product concurrently must not have its
-            // decrement clobbered. cost_price is a plain overwrite, so it has
-            // no such race and stays a normal scoped update. A changed selling
-            // price is an explicit repricing intent, honoured only for roles
-            // allowed to edit prices (the same rule Inventory enforces).
+            // cost_price is a plain overwrite, with no race to lose. A changed
+            // selling price is an explicit repricing intent, honoured only for
+            // roles allowed to edit prices (the same rule Inventory enforces).
             const updates = { cost_price: cost }
             if (canReprice && sell && sell !== Number(existing.price)) updates.price = sell
-            const newStock = await productRepository.incrementStock(existing.id, brand.id, qty)
-            const saved = await productRepository.update(existing.id, brand.id, updates)
-            changedRows.push({ ...(saved || { id: existing.id, ...updates }), ...(newStock != null ? { stock: newStock } : {}) })
-            productId = existing.id
+            row = (await productRepository.update(existing.id, brand.id, updates)) || { id: existing.id, ...updates }
             updated++
           } else {
+            // Created empty, then received like any other line, so the units
+            // are journalled as this purchase rather than as opening stock.
             const createdRow = await productRepository.create(brand.id, {
               name,
               category: cat,
               price: sell || Math.ceil(cost * NEW_PRODUCT_MARKUP),
               cost_price: cost,
-              stock: qty,
+              stock: 0,
               reorder_level: 5,
               list_on_carefind: true,
             })
-            const row = Array.isArray(createdRow) ? createdRow[0] : createdRow
-            productId = row?.id || null
-            if (row?.id) changedRows.push(row)
+            row = Array.isArray(createdRow) ? createdRow[0] : createdRow
+            if (!row?.id) throw new Error('the product could not be created')
             created++
-          }
-          // BATCH/EXPIRY: one stock batch per line that supplied either.
-          // Non-fatal — a batch insert must never fail the purchase itself.
-          if (productId) {
-            for (const b of batches) {
-              try {
-                await stockRepository.createBatch(brand.id, {
-                  location_id: null,
-                  product_id: productId,
-                  product_name: name,
-                  batch_number: b.batch,
-                  quantity: b.qty,
-                  expiry_date: b.expiry,
-                  date_received: supplyDate,
-                  supplier_source: supplier || null,
-                  status: 'available',
-                })
-              } catch (e) {
-                batchFailures++
-                console.error('Batch creation failed for:', name, e.message)
-              }
-            }
           }
         } catch (e) {
           syncFailed.push(name)
           console.error('Inventory sync failed for:', name, e.message)
+          continue
         }
+        let stock = null
+        for (const line of lines) {
+          try {
+            const result = await productRepository.receiveStock(brand.id, row.id, line.qty, {
+              movementType: 'purchase_receipt',
+              idempotencyKey: 'purchase:' + keyBase + ':' + line.id,
+              sourceType: 'purchase',
+              sourceId: purchaseId || null,
+              sourceLineId: line.id,
+              reason: 'Purchase from ' + supplier,
+              batchNumber: line.batch,
+              expiryDate: line.expiry,
+              dateReceived: supplyDate,
+              supplier,
+            })
+            if (result?.stock != null) stock = result.stock
+          } catch (e) {
+            syncFailed.push(name + (e.code ? ' (' + e.message + ')' : ''))
+            console.error('Stock receipt failed for:', name, e.message)
+          }
+        }
+        changedRows.push({ ...row, ...(stock != null ? { stock } : {}) })
       }
       // One update to the shared catalog with the rows the database returned.
       if (changedRows.length > 0 && setProducts) setProducts(prev => upsertProducts(prev, changedRows))
@@ -395,9 +389,8 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
         if (created > 0 && !startedItems.some(i => !i.productId && Number(i.sell) > 0)) parts.push('new items priced at a ' + Math.round((NEW_PRODUCT_MARKUP - 1) * 100) + '% markup: adjust in Inventory anytime')
       }
       if (syncFailed.length > 0) parts.push('Not added to Inventory: ' + syncFailed.join(', ') + '. Add their stock from Inventory')
-      if (batchFailures > 0) parts.push(batchFailures + ' batch record(s) could not be saved')
       if (balance > 0) parts.push('Debt of ' + fmt(balance) + ' added to Debts automatically')
-      showToast(parts.join(' · '), { type: syncFailed.length > 0 || batchFailures > 0 ? 'warning' : 'success', duration: syncFailed.length > 0 ? 10000 : 5000 })
+      showToast(parts.join(' · '), { type: syncFailed.length > 0 ? 'warning' : 'success', duration: syncFailed.length > 0 ? 10000 : 5000 })
       setShowErrors(false)
       clearDraft()
       load()
@@ -597,13 +590,14 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
             <div role='list' aria-labelledby='purchase-items-label' style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {form.items.map((item, i) => {
                 const product = item.productId ? inventory.find(p => p.id === item.productId) : null
-                const problems = showErrors ? itemProblems(item) : {}
+                const problems = showErrors ? itemProblems(item, product) : {}
                 const hasProblems = Object.keys(problems).length > 0
                 const qtyNum = Number(item.qty)
                 const qtyValid = Number.isInteger(qtyNum) && qtyNum > 0
                 const sub = (Number(item.qty) || 0) * (Number(item.cost) || 0)
                 const priceLocked = !!product && !canReprice
                 const isService = (product?.category || product?.cat) === 'Services'
+                const tracking = product?.tracking_mode || 'none'
                 const sameAs = !isBlankItem(item) && String(item.name).trim()
                   ? form.items.findIndex((o, j) => j < i && (item.productId ? o.productId === item.productId : (!o.productId && normalize(o.name) === normalize(item.name))))
                   : -1
@@ -636,6 +630,7 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
                         <span style={{ fontWeight: '700', color: tealDeep }}>In inventory</span>
                         <span>· {product.category || product.cat || 'Uncategorised'}</span>
                         {product.generic_name && <span>· {product.generic_name}</span>}
+                        {tracking !== 'none' && <span>· tracked by batch{tracking === 'batch_expiry' ? ' and expiry' : ''}</span>}
                         {!isService && (
                           <span>· Stock <strong style={{ color: navy }}>{product.stock || 0}</strong>{qtyValid && <> → <strong style={{ color: success }}>{(product.stock || 0) + qtyNum}</strong> after saving</>}</span>
                         )}
@@ -666,13 +661,13 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
                           type='number' inputMode='decimal' min='0' placeholder={product ? '0' : 'Auto +50%'} readOnly={priceLocked}
                           aria-describedby={priceLocked ? fid('sell') + '-locked' : undefined} style={lineInput(false, priceLocked)} />
                       </LineField>
-                      <LineField id={fid('batch')} label='Batch no.'>
+                      <LineField id={fid('batch')} label={tracking !== 'none' ? 'Batch no. *' : 'Batch no.'} error={problems.batch}>
                         <input id={fid('batch')} ref={reg('batch')} value={item.batch} onChange={e => setItem(item.id, 'batch', e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'batch')}
-                          placeholder='Optional' style={lineInput(false)} />
+                          placeholder={tracking !== 'none' ? 'Required' : 'Optional'} aria-invalid={!!problems.batch} aria-describedby={described('batch')} style={lineInput(problems.batch)} />
                       </LineField>
-                      <LineField id={fid('expiry')} label='Expiry date'>
+                      <LineField id={fid('expiry')} label={tracking === 'batch_expiry' ? 'Expiry date *' : 'Expiry date'} error={problems.expiry}>
                         <input id={fid('expiry')} ref={reg('expiry')} value={item.expiry} onChange={e => setItem(item.id, 'expiry', e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'expiry')}
-                          type='date' style={lineInput(false)} />
+                          type='date' aria-invalid={!!problems.expiry} aria-describedby={described('expiry')} style={lineInput(problems.expiry)} />
                       </LineField>
                     </div>
 

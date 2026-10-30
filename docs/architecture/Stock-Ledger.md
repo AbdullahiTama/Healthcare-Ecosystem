@@ -14,6 +14,24 @@ Production's `supabase_migrations.schema_migrations` records `carehub_20261140_i
 
 At capture: all 11,351 products have `tracking_mode = 'none'`; 636 have negative stock from before the floor; no tracked product disagrees with its batches.
 
-## Known bypass (follow up)
+## Who writes to it (2026-10-30)
 
-`increment_product_stock` (C12) predates the ledger and writes `products.stock` directly. Purchases and Inventory's + Stock and "Update Existing Product" use it, so those additions leave no `stock_movements` row, and on a batch tracked product they would make stock disagree with its batches. Harmless while nothing is tracked, but the ledger is incomplete. The fix is to move those callers to `apply_stock_change` with `purchase_receipt` or `adjustment`. `merge_duplicate_products` already uses the ledger.
+At capture the ledger held 3,343 rows, every one an `opening` movement written by the product-creation trigger. Nothing else journalled.
+
+| Writer | Path | Ledger? |
+|---|---|---|
+| Purchases | `receive_stock` (`purchase_receipt`, one movement per line, key `purchase:<purchase id>:<line id>`, batch created in the same transaction) | Yes, since `carehub_20261223_receive_stock` |
+| Inventory + Stock | `receive_stock` (`adjustment`, key fixed per restock dialog, batch and expiry required for tracked products) | Yes, same migration |
+| Inventory "Update Existing Product" | `receive_stock` (`adjustment`, key fixed per warning) | Yes, same migration |
+| Clean up duplicates | `merge_duplicate_products` (two `correction` movements per duplicate) | Yes, `carehub_20261220` |
+| New product with stock | `journal_opening_stock` trigger (`opening`) | Yes |
+| POS sales, sale edits and deletes | `apply_sale_stock_movement`, `sale_apply_stock_delta` | **No**: write `products.stock` directly |
+| Shop orders and cancellations | `create_shop_order`, `cleanup_pending_shop_orders`, `shop_restore_inventory_on_cancel` | **No** |
+| Stock counts | `save_stock_validation_session` | **No** |
+| Branch transfers | `send_stock_transfer` / `receive_stock_transfer` | **No** (checked by source; verify before relying on it) |
+
+Each movement records the locked row's real before and after quantities, so rows stay correct individually; but because sales do not journal yet, consecutive rows for a product do not chain (one row's `qty_after` is not the next row's `qty_before`). Moving the sale trigger onto `apply_stock_change` is the next and largest step; it must keep the trigger's "never lose a sale" rule.
+
+`receive_stock` replays an already journalled idempotency key (backed by `stock_movements_idem_uniq`), so a retry after a lost reply or a second tap never adds twice. It is `SECURITY INVOKER`: the boundary is RLS, which on products and stock is "own business, or a platform admin". Platform admins can therefore receive stock into any business, exactly as they could already PATCH `products.stock` (verified live: a non-admin owner of another business is refused; a platform admin is not).
+
+`increment_product_stock` is marked deprecated in production and no longer called by the client. It stays only until the client with this change is deployed everywhere; then drop it.
