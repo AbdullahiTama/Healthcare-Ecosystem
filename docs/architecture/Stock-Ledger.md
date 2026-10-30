@@ -29,11 +29,33 @@ At first capture the ledger held 3,343 rows, every one an `opening` movement wri
 | Sale edits and deletes (Owner, Financial Reports) | `edit_sale` / `delete_sale` → `sale_apply_stock_delta` (`sale_reversal` for units given back, `sale` for extra units) | Yes, same migration |
 | Shop orders (CareFind) | `create_shop_order` → `shop_take_stock` (`sale`, source `shop_order`, one movement per order line, key `shop_order:<order>:<line>`) | Yes, since `carehub_20261225_shop_order_stock_ledger` |
 | Shop order cancel, expiry, cleanup, approved return | `cancel_shop_order`, `expire_unpaid_shop_orders`, `cleanup_pending_shop_orders`, `process_shop_return` → `shop_restore_inventory_on_cancel` (`sale_reversal`, or `return_restock` after an approved return; at most once per line) | Yes, same migration |
-| Stock counts | `save_stock_validation_session` | **No** |
+| Stock counts (Stock Management ▸ Stock Validation) | `save_stock_validation_session` (`adjustment`, source `stock_count`, one movement per adjusted line, key `stock_count:<session>:<line>`; the count itself is idempotent on the screen's worksheet key) | Yes, since `carehub_20261226_stock_count_ledger` |
 | Branch transfers | `send_stock_transfer` / `receive_stock_transfer` / `cancel_stock_transfer` | **No** (checked by source; verify before relying on it) |
 | Batch adjust and move | `adjust_stock_batch`, `transfer_stock_batch` (callable by signed-in users, `SECURITY INVOKER`) | **No** |
 
-Each movement records the locked row's real before and after quantities, so rows stay correct individually. Consecutive rows for a product chain (one row's `qty_after` is the next row's `qty_before`) only while every writer journals; stock counts, branch transfers and the batch adjust / move functions still do not, so a product touched by one of them has a gap at that point. Those are the remaining steps.
+Each movement records the locked row's real before and after quantities, so rows stay correct individually. Consecutive rows for a product chain (one row's `qty_after` is the next row's `qty_before`) only while every writer journals; branch transfers and the batch adjust / move functions still do not, so a product touched by one of them has a gap at that point. Those are the remaining steps.
+
+## Stock counts on the ledger (2026-10-30)
+
+`carehub_20261226_stock_count_ledger` (applied live as version 20261030143915) with the Stock Validation screen change. Tests: `scripts/db-tests/stockCount.pglite.mjs` (23 checks, starting from the live pre-ledger function in `docs/architecture/stock-count-pre-ledger-snapshot.sql`, md5 checked) and the `stock-management` vitest suites.
+
+What was wrong: the function set `products.stock` to a `new_stock` worked out in the browser from the stock on screen, with no ledger row. A sale made while the count was open was overwritten (screen 10, a sale to 9, "Remove 3" saved 7, not 6), and the screen showed a negative stock as current but worked out "New Stock" from 0.
+
+What it does now:
+
+- Each line's adjustment (Add / Remove N, as typed) is applied to the stock as it is when the count is saved, through `apply_stock_change` (`adjustment`, source `stock_count`). Sales made meanwhile are kept. The history line records the real before and after; when the stock had moved since the screen loaded, the ledger reason says so (`screen showed 10, stock was 9`).
+- The screen shows the real stock, negative included, and "New Stock" is the honest preview (no longer capped at 10,000; the per line quantity still is). Only a removal can be blocked for going below zero; a negative stock can be brought back up.
+- A count is refused as a whole, with a sentence naming the product, when a removal is more than is in stock now (`INSUFFICIENT_STOCK`), the product is batch-tracked (`BATCH_REQUIRED`: counts have no batch field; none is tracked live), or the product is gone (`PRODUCT_NOT_FOUND`). The screen shows that sentence.
+- Saving is idempotent on a key the screen keeps per worksheet (`p_request_key`, unique per business): a retry after a lost reply or a second tap returns the first session instead of adjusting twice; any change to the worksheet makes it a new count. Screens without the key (older deploys) still work.
+- `anon` can no longer execute it. It stays `SECURITY INVOKER`: products, sessions and lines are reached through their RLS, as before. The ledger row records the real signed-in user; the session's `user_id` / `user_name` are still the screen's display values.
+
+Between this migration and the screen deploy, an older screen that clamped a negative stock to 0 will see its adjustment applied to the real (negative) stock, so its preview can be off for those products only.
+
+Still open, by design of this change: `stock_validation_sessions` and `stock_validation_items` remain writable directly by members of the business (and grant table privileges to `anon`, refused only by RLS), so the count history can be edited; the ledger rows, which are append only, are now the record to trust. Closing that means making the function `SECURITY DEFINER` with an explicit membership check and revoking direct writes.
+
+Verified live: a rolled-back probe as a business's signed-in owner (a sale during the count kept: 9, Remove 3 gave 6; the same key again returned the same session with no second change; a removal of 5 with 2 in stock refused with the sentence; another business's product refused; a six argument call still saved). After applying, the body matches the repository, the old six argument signature is gone, `anon` cannot execute it, and the security advisor findings are unchanged (202).
+
+Rollback: `DROP FUNCTION public.save_stock_validation_session(uuid, uuid, text, integer, integer, jsonb, text)`, then run the snapshot.
 
 ## Shop orders on the ledger (2026-10-30)
 

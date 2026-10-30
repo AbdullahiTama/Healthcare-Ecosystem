@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { Search, Plus, Minus, Package } from 'lucide-react'
-import { stockValidationRepository } from './repositories'
+import { stockValidationRepository, isCountRefusal } from './repositories'
+import { intentKey } from '../../lib/intentKey'
 import { useAuth } from '../../providers/AuthProvider'
 import { SessionUnavailableError } from '../../lib/sessionFetch'
 import { theme } from '../../styles/theme'
@@ -25,12 +26,23 @@ export function parseAdjustmentQty(val) {
   return Math.max(0, Math.min(n, 10000))
 }
 
+// The stock as shown (negative included) and what the adjustment makes of it.
+// The server applies the adjustment to the stock as it is when the count is
+// saved, so a sale made meanwhile is kept; this is the preview of that.
+export function previewStock(item) {
+  const prev = parseInt(item.currentStock, 10) || 0
+  const qty = parseAdjustmentQty(item.adjustmentQty)
+  return { prev, qty, next: item.direction === '-' ? prev - qty : prev + qty }
+}
+
+// Only a removal can take stock below zero; adding to a negative stock is allowed.
+export function removesTooMuch(item) {
+  return item.direction === '-' && previewStock(item).next < 0
+}
+
 export function buildValidationItems(worksheet) {
   return worksheet.map(w => {
-    const qty = parseAdjustmentQty(w.adjustmentQty)
-    const prev = Math.max(0, parseInt(w.currentStock, 10) || 0)
-    const rawNewStock = w.direction === '+' ? prev + qty : prev - qty
-    const newStock = Math.min(rawNewStock, 10000)
+    const { prev, qty, next: newStock } = previewStock(w)
     return {
       product_id: w.product.id,
       product_name: w.product.name,
@@ -55,6 +67,9 @@ export default function StockValidation({ brand, products, loadProducts }) {
   const [saving, setSaving] = useState(false)
   const [inlineError, setInlineError] = useState('')
   const rowRefs = useRef({})
+  // One key per worksheet as saved: retrying the same worksheet is recognised by
+  // the server; any change to the worksheet makes it a new count.
+  const requestKey = useRef(null)
 
   const categories = useMemo(() => {
     const cats = new Set(products.map(p => p.cat || p.category))
@@ -90,6 +105,7 @@ export default function StockValidation({ brand, products, loadProducts }) {
       }
       return
     }
+    requestKey.current = null
     setWorksheet([...worksheet, {
       product,
       currentStock: product.stock,
@@ -113,11 +129,13 @@ export default function StockValidation({ brand, products, loadProducts }) {
       showToast('All products in this category are already on the worksheet', { type: 'info' })
       return
     }
+    requestKey.current = null
     setWorksheet([...worksheet, ...newItems])
     showToast(`Added ${newItems.length} product(s)`, { type: 'success' })
   }
 
   function updateWorksheetItem(index, updates) {
+    requestKey.current = null
     setWorksheet(worksheet.map((item, i) => i === index ? { ...item, ...updates } : item))
     if (inlineError) setInlineError('')
   }
@@ -136,15 +154,14 @@ export default function StockValidation({ brand, products, loadProducts }) {
       return
     }
 
-    const rawItems = buildValidationItems(worksheet)
-    const negative = rawItems.find(it => it.new_stock < 0)
-    if (negative) {
+    if (worksheet.some(removesTooMuch)) {
       setInlineError('Cannot go below 0')
       showToast('Stock cannot go below zero. Check the adjustment quantities.', { type: 'error' })
       return
     }
     setInlineError('')
-    const items = rawItems.filter(it => it.adjustment_qty !== 0)
+    const items = buildValidationItems(worksheet).filter(it => it.adjustment_qty !== 0)
+    if (!requestKey.current) requestKey.current = intentKey('stock-count:' + brand.id)
 
     // No session check here: the save goes through sbFetch, which renews a token the server refuses and retries
     // once, and never sends a signed-in user's request as anon (lib/sessionFetch.js). This used to check and refresh
@@ -159,8 +176,10 @@ export default function StockValidation({ brand, products, loadProducts }) {
           products_adjusted: worksheet.filter(w => parseAdjustmentQty(w.adjustmentQty) > 0).length,
         },
         items,
-        auth.staff?.id || null
+        auth.staff?.id || null,
+        requestKey.current
       )
+      requestKey.current = null
       showToast('Validation saved successfully', { type: 'success' })
       setWorksheet([])
       setShowSummary(false)
@@ -168,10 +187,11 @@ export default function StockValidation({ brand, products, loadProducts }) {
       if (typeof loadProducts === 'function') loadProducts()
     } catch (error) {
       const msg = error?.message || String(error)
-      const code = String(error?.code || '')
-      const isCheckViolation = msg.includes('23514') || code === '23514'
-      if (isCheckViolation) {
-        showToast('Quantity cannot be negative, so the adjustment was blocked.', { type: 'error' })
+      if (isCountRefusal(error)) {
+        // The server's own sentence, naming the product ("Panadol has 2 in stock now, so 5 cannot be removed. ...").
+        console.warn('[StockValidation] count refused:', error.code, msg)
+        setInlineError(msg)
+        showToast(msg, { type: 'error' })
       } else if (error instanceof SessionUnavailableError) {
         // The session could not be used (ended, or CareHub unreachable): nothing was saved, say why.
         showToast(error.message, { type: 'error' })
@@ -235,10 +255,8 @@ export default function StockValidation({ brand, products, loadProducts }) {
             {worksheet.map((item, index) => {
               const hasChange = parseAdjustmentQty(item.adjustmentQty) > 0
               const bg = !hasChange ? 'white' : item.direction === '+' ? theme.successBg : theme.dangerBg
-              const qtyParsed = parseAdjustmentQty(item.adjustmentQty)
-              const rawComputedNewStock = item.direction === '+' ? Math.max(0, parseInt(item.currentStock,10)||0) + qtyParsed : Math.max(0, parseInt(item.currentStock,10)||0) - qtyParsed
-              const computedNewStock = Math.min(rawComputedNewStock, 10000)
-              const isNegative = computedNewStock < 0
+              const { qty: qtyParsed, next: computedNewStock } = previewStock(item)
+              const isNegative = removesTooMuch(item)
               const errorId = `stock-validation-error-${index}`
               const showInlineError = isNegative || (inlineError && hasChange)
               return (
@@ -291,7 +309,7 @@ export default function StockValidation({ brand, products, loadProducts }) {
                   <div style={{ display: 'flex', gap: '20px', marginBottom: '12px', fontSize: '13px', flexWrap: 'wrap' }}>
                     <div>Unit Price: <strong>{fmt(item.product.price)}</strong></div>
                     <div>Subtotal: <strong>{fmt(qtyParsed * item.product.price)}</strong></div>
-                    <div aria-live="polite">New Stock: <strong style={{ color: isNegative ? theme.danger : theme.navy }}>{computedNewStock}</strong></div>
+                    <div aria-live="polite">New Stock: <strong style={{ color: computedNewStock < 0 ? theme.danger : theme.navy }}>{computedNewStock}</strong></div>
                   </div>
                   <select value={item.reason} onChange={e => updateWorksheetItem(index, { reason: e.target.value })}
                     aria-label={`Reason for ${item.product.name}`}
