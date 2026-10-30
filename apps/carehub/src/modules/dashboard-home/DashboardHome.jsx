@@ -14,6 +14,7 @@ import { theme } from '../../styles/theme'
 import { Card, Avatar, Empty, Loading, StatCard } from '../../components/ui'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useRefreshOnResume } from '../../providers/RefreshProvider'
 
 const { tealDeep, tealMist, navy, gray500, gray400, border, danger, dangerBg, warning, warningBg, success, bg } = theme
 
@@ -67,6 +68,19 @@ export default function DashboardHome({ brand, products, role, perms }) {
       setLoading(false)
     }
   }, [brand?.id])
+
+  // Coming back to an idle counter: refetch in place. No loading screen, the
+  // figures already shown stay until the new ones arrive, and a failure is
+  // reported by the refresh indicator rather than blanking a card. Stock
+  // alerts come from `products`, which the dashboard shell refreshes.
+  useRefreshOnResume(async () => {
+    if (!brand?.id) return
+    await Promise.all([
+      saleRepository.getToday(brand.id).then(s => setTodaySales(s || [])),
+      saleRepository.getAll(brand.id).then(s => setAllSales(s || [])),
+      canSeeAppts ? appointmentRepository.getAll(brand.id).then(a => setAppts(a || [])) : null,
+    ])
+  })
 
   const todayTotal = todaySales.reduce((s, x) => s + (x.total || 0), 0)
   const heldSales = allSales.filter(s => s.is_on_hold)

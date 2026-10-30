@@ -5,6 +5,8 @@ import Sidebar from '../../components/layout/Sidebar'
 import TopBar from '../../components/layout/TopBar'
 import PlanExpiryBanner from '../../components/layout/PlanExpiryBanner'
 import ClockSkewBanner from '../../components/layout/ClockSkewBanner'
+import RefreshIndicator from '../../components/layout/RefreshIndicator'
+import RefreshProvider, { useRefreshOnResume } from '../../providers/RefreshProvider'
 import { Toast, useToast } from '../../components/ui'
 import { getProducts, cacheData, getCached } from '../../services/supabase'
 // Cross-aggregate read: the permission flags a staff member's role grants are
@@ -62,7 +64,17 @@ const PAGE_TITLES = {
 
 const shortReason = (msg) => String(msg || '').replace(/^Supabase error \(\d{3}\):\s*/, '')
 
+// Every screen below can bring itself up to date when staff come back to an
+// idle counter (useRefreshOnResume), so the provider wraps the whole shell.
 export default function BusinessDashboard() {
+  return (
+    <RefreshProvider>
+      <DashboardShell />
+    </RefreshProvider>
+  )
+}
+
+function DashboardShell() {
   const { auth, logout } = useAuth()
   const brand = auth?.brand
   const staffUser = auth?.staff
@@ -109,15 +121,20 @@ export default function BusinessDashboard() {
   useEffect(() => {
     if (!brand?.id) return
     loadProducts()
-    if (navigator.onLine) {
-      saleRepository.syncQueued(brand.id).then(r => {
-        if (r.synced > 0) showToast(r.synced + ' offline sale(s) synced!')
-        if (r.rejected.length > 0) showToast(r.rejected.length + ' queued sale(s) were blocked by the server: ' + shortReason(r.rejected[0].error), { type: 'warning' })
-      }).catch(() => {})
-    }
+    if (navigator.onLine) syncOfflineSales().catch(() => {})
   }, [brand?.id])
 
-  async function loadProducts() {
+  // Products (stock, prices) are shared by POS and the dashboard home, and
+  // sales parked while the connection was down should go up as soon as it is
+  // back, so both belong to the shell's own catch-up.
+  useRefreshOnResume(async () => {
+    if (!brand?.id) return
+    await Promise.all([loadProducts({ throwOnError: true }), syncOfflineSales()])
+  })
+
+  // throwOnError (the resume refresh): keep the products already on screen
+  // and report the failure, rather than swapping in the older cached list.
+  async function loadProducts({ throwOnError = false } = {}) {
     try {
       const p = await getProducts(brand.id)
       if (p && p.length > 0) {
@@ -128,9 +145,16 @@ export default function BusinessDashboard() {
         if (cached) setProducts(cached)
       }
     } catch (e) {
+      if (throwOnError) throw e
       const cached = getCached('products_' + brand.id)
       if (cached) setProducts(cached)
     }
+  }
+
+  async function syncOfflineSales() {
+    const r = await saleRepository.syncQueued(brand.id)
+    if (r.synced > 0) showToast(r.synced + ' offline sale(s) synced!')
+    if (r.rejected.length > 0) showToast(r.rejected.length + ' queued sale(s) were blocked by the server: ' + shortReason(r.rejected[0].error), { type: 'warning' })
   }
 
   const handleSync = async () => {
@@ -175,6 +199,7 @@ export default function BusinessDashboard() {
             No internet — Offline mode. Sales will sync when connected.
           </div>
         )}
+        <RefreshIndicator />
         <ClockSkewBanner />
         <PlanExpiryBanner brand={brand} />
         <div style={{ flex: 1, overflowY: 'auto', background: theme.bg }}>

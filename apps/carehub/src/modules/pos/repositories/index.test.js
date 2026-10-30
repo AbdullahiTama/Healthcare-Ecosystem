@@ -304,6 +304,35 @@ describe('saleRepository', () => {
     expect(written.map((r) => r.txn_no)).toEqual(['TXN-ok'])
   })
 
+  // Sync also runs on resume and on reconnect, so it can overlap the mount
+  // sync or the Sync button. `sales` has no unique key on txn_no: a second
+  // concurrent run would record every queued sale twice.
+  it('syncQueued joins a run in progress instead of posting the queue twice', async () => {
+    const offline = createMemoryOfflineQueue([{ txn_no: 'TXN-1', total: 100 }, { txn_no: 'TXN-2', total: 200 }])
+    const written = []
+    const repo = createSaleRepository({
+      request: async (path, options) => { await new Promise((r) => setTimeout(r, 5)); written.push(JSON.parse(options.body).txn_no); return [] },
+      offline,
+      isOnline: () => true,
+    })
+    const [a, b] = await Promise.all([repo.syncQueued(A), repo.syncQueued(A)])
+    expect(written).toEqual(['TXN-1', 'TXN-2'])
+    expect(a).toBe(b)
+    expect(offline.all()).toHaveLength(0)
+  })
+
+  it('syncQueued keeps a sale queued while the sync was running', async () => {
+    const offline = createMemoryOfflineQueue([{ txn_no: 'TXN-old', total: 100 }])
+    const repo = createSaleRepository({
+      request: async () => { offline.push({ txn_no: 'TXN-new', total: 50 }); return [] },
+      offline,
+      isOnline: () => true,
+    })
+    const result = await repo.syncQueued(A)
+    expect(result.synced).toBe(1)
+    expect(offline.all().map((s) => s.txn_no)).toEqual(['TXN-new'])
+  })
+
   it('syncQueued leaves the queue intact when every sale fails', async () => {
     const offline = createMemoryOfflineQueue([{ txn_no: 'TXN-1' }, { txn_no: 'TXN-2' }])
     const repo = createSaleRepository({

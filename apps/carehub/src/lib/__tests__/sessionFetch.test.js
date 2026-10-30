@@ -160,6 +160,22 @@ describe('fetchWithSession', () => {
   })
 })
 
+describe('renewSession', () => {
+  it('forces a refresh even while the device clock calls the token valid', async () => {
+    const auth = fakeAuth()
+    const { renewSession } = createSessionFetch({ auth, fetchImpl: vi.fn() })
+    await expect(renewSession()).resolves.toBe('new')
+    expect(auth.refreshSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('does nothing when nobody is signed in', async () => {
+    const auth = fakeAuth({ token: null })
+    const { renewSession } = createSessionFetch({ auth, fetchImpl: vi.fn() })
+    await expect(renewSession()).resolves.toBeNull()
+    expect(auth.refreshSession).not.toHaveBeenCalled()
+  })
+})
+
 function jwt(payload) {
   const enc = (o) => btoa(JSON.stringify(o)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_')
   return enc({ alg: 'HS256' }) + '.' + enc(payload) + '.sig'

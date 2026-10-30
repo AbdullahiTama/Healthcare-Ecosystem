@@ -111,7 +111,17 @@ export function createSessionFetch({ auth, fetchImpl }) {
     return send(await renewAccessToken(token))
   }
 
-  return { getAccessToken, renewAccessToken, fetchWithSession }
+  // Forces a refresh of the signed-in session, whatever the device clock says
+  // about the current token. Used when the counter comes back from idle
+  // (lib/resume.js), so the first tap afterwards is not the one waiting on a
+  // renewal — and a session revoked meanwhile is found now, not mid-sale.
+  // Resolves to null when nobody is signed in.
+  async function renewSession() {
+    const token = await getAccessToken()
+    return token ? renewAccessToken(token) : null
+  }
+
+  return { getAccessToken, renewAccessToken, renewSession, fetchWithSession }
 }
 
 // Local clock minus server clock, in ms, read from the token's iat (the
@@ -135,7 +145,7 @@ function jwtIssuedAt(token) {
 }
 
 // Late-bound, so tests that stub global.fetch are honoured.
-export const { getAccessToken, fetchWithSession } = createSessionFetch({
+export const { getAccessToken, renewSession, fetchWithSession } = createSessionFetch({
   auth: authClient.auth,
   fetchImpl: (...args) => fetch(...args),
 })

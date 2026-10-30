@@ -20,6 +20,7 @@ import { buildReceiptHtml } from './receiptPrint'
 import { theme } from '../../styles/theme'
 import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, Loading } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useRefreshOnResume } from '../../providers/RefreshProvider'
 
 const { tealDeep, tealMist, bg, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, warning, warningBg, success } = theme
 
@@ -129,16 +130,34 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     }
   }, [brand?.id])
 
-  async function loadSalesData() {
-    setLoadingSales(true)
+  // Coming back to an idle counter: catch up on what colleagues did meanwhile
+  // (sales, held and credit sales, new clients, receipt settings) without a
+  // spinner over the lists. The cart, payment fields and any resumed held
+  // sale are deliberately untouched — the cashier may be mid-sale.
+  useRefreshOnResume(async () => {
+    if (!brand?.id) return
+    await Promise.all([
+      settingsRepository.get(brand.id).then(s => setSettings(s)),
+      getClients(brand.id).then(c => setClients(c || [])),
+      loadSalesData({ quiet: true }),
+    ])
+  })
+
+  // quiet (the resume refresh): no spinner, keep the lists on screen, and
+  // throw on failure so the refresh indicator can say they are out of date.
+  async function loadSalesData({ quiet = false } = {}) {
+    if (!quiet) setLoadingSales(true)
     try {
       const [today, all] = await Promise.all([saleRepository.getToday(brand.id), saleRepository.getAll(brand.id)])
       setTodaySales(today || [])
       setAllSales(all || [])
       setHeldSales((all || []).filter(s => s.is_on_hold))
       setCreditSales((all || []).filter(s => s.is_credit && s.balance > 0))
-    } catch (e) {}
-    setLoadingSales(false)
+    } catch (e) {
+      if (quiet) throw e
+    } finally {
+      if (!quiet) setLoadingSales(false)
+    }
   }
 
   // Cart operations
