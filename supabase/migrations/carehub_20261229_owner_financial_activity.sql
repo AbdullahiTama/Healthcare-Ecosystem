@@ -6,9 +6,14 @@
 --   carehub_20261210_pos_accounting.sql (pos_actor), purchases, purchase_payments,
 --   expenses, debts.
 --
--- Status: PENDING, NOT APPLIED. Tested on PGlite
--- (scripts/db-tests/ownerFinancialActivity.pglite.mjs). Move to
--- supabase/migrations/ once applied.
+-- Status: APPLIED to the live carehub project on 2026-10-31 as version
+-- 20261031160504, after a rolled-back production probe
+-- (scripts/db-tests/live-rollback-owner-financial-activity.sql). After applying,
+-- the three function bodies match this file (md5 of prosrc), the six triggers
+-- are present, the trigger functions are not executable by anon or
+-- authenticated, existing rows are intact and unstamped, and the security
+-- advisor shows no new finding from this migration. Tested on PGlite
+-- (scripts/db-tests/ownerFinancialActivity.pglite.mjs).
 --
 -- 1. Who recorded it. `purchases` and `debts` recorded no person at all;
 --    `expenses.staff_name` is free text typed on the form. Each table gains

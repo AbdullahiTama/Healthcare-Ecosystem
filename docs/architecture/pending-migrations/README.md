@@ -17,12 +17,6 @@ The other three drafts of this work were applied on 2026-10-24 (see "Already app
 |---|---|---|---|
 | - | `carehub_20261026_orders_read_scope.sql` | Narrows who reads orders (creator, approver, watchers, field managers, owner). | **Held**: warehouse staff would lose sight of orders they process. Owner decides (a) give them "Manage field team", (b) add a warehouse path, or (c) keep reading as is. |
 
-## Pending (owner financial activity, `docs/architecture/Owner-Financial-Activity.md`)
-
-| Draft | Records / fixes | Status |
-|---|---|---|
-| `carehub_20261229_owner_financial_activity.sql` | Stamps who recorded each purchase, expense and debt (`recorded_by*`, from the login, unforgeable); `staff_activity()` gains purchases, supplier payments, credit sales and hand-entered debts (same signature). Tested: `scripts/db-tests/ownerFinancialActivity.pglite.mjs` (24 checks). | **Awaiting approval** to run the rolled-back production probe and apply. The app works before it (the feed then shows expenses, refunds, repayments, credit-free sales and corrections only). |
-
 ## Already applied (files in `supabase/migrations/`)
 
 | Applied as | Version | Fixes |
@@ -40,6 +34,7 @@ The other three drafts of this work were applied on 2026-10-24 (see "Already app
 | `carehub_20261026_orders_authorisation` | 20261024110224 | Orders approval, pipeline, frozen approved content, order lines and unforgeable history enforced in the database; no signed-in deletes |
 | `carehub_20261212_branches_without_email` | 20261026222721 | Branches have no sign-in email (owner's option A); a non-admin cannot put one on a branch; ownership follows the parent chain (`caller_owns_business`) in `orders_caller_is_owner` and `can_access_adr_report_row`; row policy "owner manages own branches" (added after pre-flight found the own-email policy would refuse every branch) |
 | `carehub_20261210_branch_plan_follows_parent` | 20261026223407 | A main business's plan and expiry are copied to its branches on every change (renewals used to stop at the business that paid); backfill was a no-op (no branches yet) |
+| `carehub_20261229_owner_financial_activity` | 20261031160504 | Who recorded each purchase, expense and debt is stamped from the login (unforgeable, kept on update); `staff_activity()` gains purchases, supplier payments, credit sales and hand-entered debts. Rolled-back probe first (`scripts/db-tests/live-rollback-owner-financial-activity.sql`); bodies match the file; no new advisor finding |
 
 The three 2026-10-23 migrations were verified by catalog read-back (one overload of `log_field_activity`, SECURITY
 INVOKER, ACL without `anon`; bucket private; exactly two policies, authenticated only) and by rolled-back runs as real

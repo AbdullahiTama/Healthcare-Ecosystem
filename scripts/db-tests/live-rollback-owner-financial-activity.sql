@@ -2,6 +2,10 @@
 -- Run BEFORE applying (via the MCP execute_sql tool or the SQL editor). It creates its own fixtures
 -- (rollback.invalid emails), applies the migration, checks it as real roles, then ends in a deliberate
 -- RAISE EXCEPTION so EVERYTHING (DDL and fixtures) rolls back. The error message IS the report.
+-- Run on 2026-10-31 before applying: every check passed. (The first run expected a direct purchase
+-- update to succeed; live refuses it since carehub_20261229_purchase_editing_and_analytics, so that
+-- check now expects the refusal, and the update checks moved to debts and expenses, which were run
+-- live separately and passed.)
 DO $live$
 DECLARE
   A uuid; B uuid; cashA uuid; mgrA uuid; cashB uuid; p1 uuid; e1 uuid; d1 uuid;
@@ -38,7 +42,7 @@ BEGIN
     $f$;
   $h$;
 
-  -- The migration, exactly as in the file.
+  -- The migration's SQL, as in supabase/migrations/carehub_20261229_owner_financial_activity.sql.
   EXECUTE $mig$
 -- Owner financial activity: who recorded each purchase, expense and debt, and
 -- those records in the Owner's activity feed.
@@ -301,10 +305,12 @@ $mig$;
   SELECT recorded_by::text || '|' || coalesce(recorded_by_staff_id::text, '') || '|' || coalesce(recorded_by_name, '') INTO r FROM public.purchases WHERE id = p1;
   rep := rep || pg_temp.chk('purchase stamped with the cashier, forged values ignored', r = u_cashA::text || '|' || cashA::text || '|RB Cashier', r);
 
-  -- 2. The stamp survives an update that tries to change it
+  -- 2. A direct update of a purchase is refused on live (carehub_20261229_purchase_editing_and_analytics:
+  --    purchases change only through edit_purchase), and the stamp is untouched either way.
   r := pg_temp.run_as(u_mgrA, e_mgrA, format($q$update public.purchases set recorded_by = %L, recorded_by_name = 'Rewritten', notes = 'checked' where id = %L returning notes$q$, forged, p1));
-  SELECT recorded_by::text || '|' || coalesce(recorded_by_name, '') || '|' || coalesce(notes, '') INTO r FROM public.purchases WHERE id = p1;
-  rep := rep || pg_temp.chk('stamp kept on update, the update itself applies', r = u_cashA::text || '|RB Cashier|checked', r);
+  rep := rep || pg_temp.chk('direct purchase update refused (Edit purchase only)', r LIKE 'ERR:42501%', r);
+  SELECT recorded_by::text || '|' || coalesce(recorded_by_name, '') INTO r FROM public.purchases WHERE id = p1;
+  rep := rep || pg_temp.chk('purchase stamp untouched', r = u_cashA::text || '|RB Cashier', r);
 
   -- 3. Expense by a staff member linked by email only; typed name kept
   r := pg_temp.run_as(u_mgrA, e_mgrA, format($q$insert into public.expenses (id,business_id,category,description,amount,date,staff_name) values (gen_random_uuid(),%L,'Transport','RB fuel',2500,'2026-10-31','Typed On Form') returning id::text$q$, A));
@@ -320,6 +326,14 @@ $mig$;
   SELECT coalesce(recorded_by::text, '') || '|' || coalesce(recorded_by_staff_id::text, 'none') || '|' || coalesce(recorded_by_name, '') INTO r FROM public.debts WHERE id = d1;
   rep := rep || pg_temp.chk('owner debt stamped with owner login and name', r = u_ownA::text || '|none|RB Owner A', r);
 
+  -- 4b. Where a direct update is allowed (debts, expenses) it applies and the stamp is kept
+  r := pg_temp.run_as(u_mgrA, e_mgrA, format($q$update public.debts set description = 'Rent, November', recorded_by = %L, recorded_by_name = 'Rewritten', recorded_by_staff_id = %L where id = %L returning description$q$, forged, forged, d1));
+  SELECT recorded_by::text || '|' || coalesce(recorded_by_staff_id::text, 'none') || '|' || coalesce(recorded_by_name, '') || '|' || description INTO r FROM public.debts WHERE id = d1;
+  rep := rep || pg_temp.chk('debt: stamp kept, the edit applied', r = u_ownA::text || '|none|RB Owner A|Rent, November', r);
+  r := pg_temp.run_as(u_ownA, e_ownA, format($q$update public.expenses set description = 'RB fuel (receipt seen)', recorded_by_name = 'Rewritten' where id = %L returning description$q$, e1));
+  SELECT coalesce(recorded_by_staff_id::text, 'none') || '|' || coalesce(recorded_by_name, '') || '|' || description INTO r FROM public.expenses WHERE id = e1;
+  rep := rep || pg_temp.chk('expense: stamp kept, the edit applied', r = mgrA::text || '|RB Manager|RB fuel (receipt seen)', r);
+
   -- 5. Another business cannot record into this one
   r := pg_temp.run_as(u_cashB, e_cashB, format($q$insert into public.purchases (business_id,supplier_name,total_cost) values (%L,'X',1) returning id::text$q$, A));
   rep := rep || pg_temp.chk('another business is refused', r ~ '^ERR', r);
@@ -328,7 +342,7 @@ $mig$;
   r := pg_temp.run_as(u_ownA, e_ownA, format($q$select string_agg(kind || '|' || actor_name || '|' || coalesce(ref,'') || '|' || summary, ' ;; ' order by kind) from public.staff_activity(%L, now() - interval '1 day', now() + interval '1 day', 100)$q$, A));
   rep := rep || pg_temp.chk('feed: purchase with who, unpaid and due', r LIKE '%purchase|RB Cashier|' || p1::text || '|RB Supplier · RB Drug · ₦30,000 unpaid · due 2026-11-15%', r);
   rep := rep || pg_temp.chk('feed: expense with id and stamped person', r LIKE '%expense|RB Manager|' || e1::text || '|Transport · RB fuel%', r);
-  rep := rep || pg_temp.chk('feed: hand-entered debt by the owner', r LIKE '%debt|RB Owner A|' || d1::text || '|We owe · RB Landlord · Rent · due 2026-11-01%', r);
+  rep := rep || pg_temp.chk('feed: hand-entered debt by the owner', r LIKE '%debt|RB Owner A|' || d1::text || '|We owe · RB Landlord · Rent, November · due 2026-11-01%', r);
   r := pg_temp.run_as(u_mgrA, e_mgrA, format($q$select count(*)::text from public.staff_activity(%L, now() - interval '1 day', now(), 10)$q$, A));
   rep := rep || pg_temp.chk('feed refused to a manager', r LIKE 'ERR:42501%', r);
   r := pg_temp.run_as(u_cashA, e_cashA, format($q$select count(*)::text from public.staff_activity(%L, now() - interval '1 day', now(), 10)$q$, A));

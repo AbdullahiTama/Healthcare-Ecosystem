@@ -1,8 +1,8 @@
 # Owner's business activity (dashboard)
 
-Status: app code on branch `ccr-eb43ff04-sr0rcy`. The migration
-`docs/architecture/pending-migrations/carehub_20261229_owner_financial_activity.sql`
-is **pending, not applied**.
+Status: app code on branch `ccr-eb43ff04-sr0rcy` (not yet deployed). The
+migration `supabase/migrations/carehub_20261229_owner_financial_activity.sql`
+is **applied live** (2026-10-31, version 20261031160504).
 
 ## What the Owner sees
 
@@ -63,7 +63,7 @@ Staff ▸ Activity.
   Purchases (`purchase`, `view`), Expenses (`expense`), Debts (`debt`) and
   Staff (`tab=activity`) use it.
 
-## The migration (pending)
+## The migration (applied 2026-10-31)
 
 1. **Who recorded it.** Before this migration, `purchases` and `debts`
    recorded no person at all, and `expenses.staff_name` is whatever was typed
@@ -95,17 +95,44 @@ The follow-up tiles do not depend on the migration.
 "Owner or unlinked" (purchases, debts), or is matched by typed name
 (expenses). Nothing is guessed.
 
-### Rollout
+### How it was applied
 
-1. Rolled-back probe on production: as a cashier, insert a purchase that
-   names another person, and confirm the stamp; as the Owner, read the feed;
-   as a manager, be refused. Then roll back.
-2. Apply. Verify that the `staff_activity` body matches the file, the trigger
-   functions have no client EXECUTE, existing rows are intact and the security
-   advisor shows no new findings.
-3. Move the file to `supabase/migrations/` and update this page.
+1. Rolled-back probe on production
+   (`scripts/db-tests/live-rollback-owner-financial-activity.sql`, throwaway
+   `rollback.invalid` fixtures, everything undone). Every check passed:
+   - a purchase recorded by a cashier is stamped with that cashier, whatever
+     the screen sends;
+   - an expense entered by staff linked by email is stamped, and its typed
+     name is kept;
+   - the Owner's debt is stamped with the Owner's name;
+   - editing a debt or an expense applies the edit and keeps the stamp, and
+     a forged name is ignored;
+   - another business is refused;
+   - the Owner's feed shows the purchase, the expense and the debt, with who
+     recorded each and a link;
+   - a manager and a cashier are refused the feed;
+   - the trigger functions are not callable by app users;
+   - existing rows are untouched.
+2. Applied as version 20261031160504.
+3. Verified after applying:
+   - the three function bodies match the file (md5 of `prosrc`);
+   - the six triggers are present;
+   - anon and authenticated cannot execute the trigger functions;
+   - `staff_activity` is still SECURITY DEFINER, callable by authenticated
+     only;
+   - row counts are unchanged (13 purchases, 27 expenses, 31 debts) and no
+     existing row is stamped.
+4. Security advisor: 203 findings before, 205 after. The two extra findings
+   (and one changed signature) belong to `edit_purchase`,
+   `get_purchase_for_edit` and `get_purchases_page`. They come from
+   `carehub_20261229_purchase_editing_and_analytics`, applied by another
+   session ten minutes earlier. None comes from this migration.
 
-The app can deploy before or after; it degrades as described above.
+**Interaction with purchase editing.** Since that other migration, live
+refuses direct updates to a purchase; purchases change only through
+`edit_purchase`. Its updates keep the original "recorded by" stamp (the
+BEFORE UPDATE trigger). A purchase edit is not yet listed in the Owner's feed;
+see "Not built".
 
 ## Security
 
@@ -144,6 +171,11 @@ The app can deploy before or after; it degrades as described above.
 5. As a manager or cashier: no Business activity section on the dashboard.
 
 ## Not built (by choice)
+
+- Purchase edits (`edit_purchase`) in the Owner's feed. They arrived in a
+  separate migration during this work. Listing them, with the reason and who
+  made the edit, is the natural next addition, and needs one more change to
+  `staff_activity()`.
 
 - Push or bell notifications for these events. The dashboard section is where
   the Owner was asked to be told; a bell entry would duplicate each row.

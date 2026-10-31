@@ -15,7 +15,7 @@ role, kind of activity and text. Click a person card to narrow the feed to them.
 | Kind | Source | Person comes from |
 |---|---|---|
 | Sale, Credit sale, Held sale | `sales` (deleted sales are not sales; a sale on credit is "Credit sale") | `cashier_staff_id` |
-| Purchase | `purchases` | `recorded_by*` stamp (carehub_20261229, pending) |
+| Purchase | `purchases` | `recorded_by*` stamp (carehub_20261229_owner_financial_activity, applied 2026-10-31) |
 | Supplier payment | `purchase_payments` kind `payment` | `recorded_by` (auth user) |
 | Debt recorded | `debts` entered by hand (not those opened by a credit sale or a purchase) | `recorded_by*` stamp |
 | Refund, Repayment | `sale_payments` | `staff_id` |
