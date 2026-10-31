@@ -187,6 +187,16 @@ export function createSaleRepository({
         `sales?business_id=eq.${businessId}&created_at=gte.${start.toISOString()}&created_at=lt.${end.toISOString()}&${COMPLETED}&order=created_at.desc,id.asc&select=*`)
     },
 
+    // Completed sales whose receipt number contains `fragment`, newest first, at
+    // most `limit`: the "look up this receipt in all dates" search of Sales &
+    // Accounts. Only letters, digits and dashes are sent, so the fragment can
+    // never change the shape of the query.
+    async searchReceipts(businessId, fragment, limit = 20) {
+      const clean = String(fragment || '').replace(/[^A-Za-z0-9-]/g, '')
+      if (clean.length < 3) return []
+      return request(`sales?business_id=eq.${businessId}&txn_no=ilike.*${encodeURIComponent(clean)}*&${COMPLETED}&order=created_at.desc,id.asc&limit=${limit}&select=*`)
+    },
+
     // Single sale by id, tenant-scoped so a receipt link can never resolve to
     // another business's sale. Powers the /receipt/:id lookup page (the target
     // of the printed QR code). The QR encodes the human-facing txn_no, not the

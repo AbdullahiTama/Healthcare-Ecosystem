@@ -66,6 +66,42 @@ All arithmetic lives in `apps/carehub/src/modules/pos/salesReport.js` (tested in
   "Deleted sales reversed"; net received and cash in hand count them.
 - **No cost or profit figure** appears on the page or in either export.
 
+## Search and searchable filters
+
+- **Search box** (below the period buttons). It finds transactions by
+  customer, receipt or invoice number, product, amount (total, paid, balance,
+  discount or refunded, typed with or without ₦ and commas), cashier, payment
+  method, status (Paid, Part-paid, Unpaid, Credit, Refunded), note or date.
+  - Every word must match, so "ada 1500" finds Ada's ₦1,500 sale.
+  - It searches the Payments tab too: a payment matches through its sale or by
+    its own method, receiver, kind or amount.
+  - It is the same search as Financial Reports
+    (`modules/pos/transactionSearch.js`), so a receipt found on one screen is
+    found on the other.
+  - The list is indexed once per load (`createSearchIndex`), and the query is
+    deferred (`useDeferredValue`), so typing stays smooth on long lists.
+- **The search narrows the lists only.** The totals, the shift card and the
+  Print/PDF/Excel exports keep covering the whole period and filters, and the
+  hint under the box says so ("3 of 340 sales match · …"). An accounting
+  export never silently drops rows because of a search.
+- **A receipt from another period.** When nothing in the period matches and
+  the query looks like a receipt number (three or more digits, one word), a
+  button looks it up by number in all dates
+  (`saleRepository.searchReceipts`: completed sales only, at most 20, newest
+  first). Only letters, digits and dashes reach the query. A cashier's
+  look-up stays pinned to their own sales. A result opens in full like any
+  other row.
+- **Searchable filters.** Customer, Product, Cashier and Shift use
+  `components/ui/SearchSelect.jsx`, a combobox you can type into instead of
+  scrolling:
+  - every word must match;
+  - ↑ ↓ to move, Enter to pick, Escape to close;
+  - "All …" or × clears the filter;
+  - at most 50 rows are drawn, with "N more — keep typing" for long
+    catalogues.
+
+  Payment method and status stay plain lists (they are short).
+
 ## Data (migration 1)
 
 - `sales.cashier_user_id / cashier_staff_id / staff_name / shift_id`: stamped

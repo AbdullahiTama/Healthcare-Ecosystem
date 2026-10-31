@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { searchSales, matchesQuery } from './transactionSearch'
+import { searchSales, matchesQuery, createSearchIndex, paymentMatches, looksLikeReceipt } from './transactionSearch'
 
 const sale = (o) => ({ id: o.txn_no, total: 0, amount_paid: 0, balance: 0, discount: 0, payment_method: 'Cash', is_on_hold: false, created_at: '2026-10-27T09:30:00', items: JSON.stringify([]), ...o })
 const sales = [
@@ -9,7 +9,7 @@ const sales = [
 ]
 const ids = (q) => searchSales(sales, q).map((s) => s.txn_no)
 
-describe('Financial Reports transaction search', () => {
+describe('transaction search (Sales & Accounts and Financial Reports)', () => {
   it('returns everything for an empty or blank query', () => {
     expect(ids('')).toHaveLength(3)
     expect(ids('   ')).toHaveLength(3)
@@ -47,5 +47,44 @@ describe('Financial Reports transaction search', () => {
   })
   it('does not treat a short number as a match for unrelated text', () => {
     expect(matchesQuery(sales[0], '99999')).toBe(false)
+  })
+})
+
+describe('search index', () => {
+  it('finds the same sales as a one-off search, without re-reading items each time', () => {
+    const index = createSearchIndex(sales)
+    for (const q of ['ada', '25000', 'paracetamol', 'walk', 'ada 1500', '']) {
+      expect(index.search(q).map((s) => s.txn_no)).toEqual(ids(q))
+    }
+  })
+  it('checks one sale by id, for rows that point at a sale', () => {
+    const index = createSearchIndex(sales)
+    expect(index.matchesId('TXN-1002', 'bola')).toBe(true)
+    expect(index.matchesId('TXN-1001', 'bola')).toBe(false)
+    expect(index.matchesId('missing', 'bola')).toBe(false)
+    expect(index.matchesId('missing', '')).toBe(true)
+  })
+})
+
+describe('payments search', () => {
+  const index = createSearchIndex(sales)
+  const pay = { sale_id: 'TXN-1002', kind: 'collection', method: 'Transfer', amount: 5000, staff_name: 'Rep Two', note: '' }
+  it('matches through its sale', () => { expect(paymentMatches(pay, index, 'bola')).toBe(true) })
+  it('matches on its own method, receiver, kind and amount', () => {
+    expect(paymentMatches({ ...pay, sale_id: 'x' }, index, 'transfer')).toBe(true)
+    expect(paymentMatches({ ...pay, sale_id: 'x' }, index, 'rep two')).toBe(true)
+    expect(paymentMatches({ ...pay, sale_id: 'x' }, index, 'repayment')).toBe(true)
+    expect(paymentMatches({ ...pay, sale_id: 'x' }, index, '₦5,000')).toBe(true)
+    expect(paymentMatches({ ...pay, sale_id: 'x' }, index, 'ada')).toBe(false)
+  })
+})
+
+describe('receipt look-up across all dates', () => {
+  it('is offered for a receipt-like query only', () => {
+    expect(looksLikeReceipt('TXN-104154')).toBe(true)
+    expect(looksLikeReceipt('104154')).toBe(true)
+    expect(looksLikeReceipt('12')).toBe(false)
+    expect(looksLikeReceipt('ada')).toBe(false)
+    expect(looksLikeReceipt('ada 1500')).toBe(false)
   })
 })

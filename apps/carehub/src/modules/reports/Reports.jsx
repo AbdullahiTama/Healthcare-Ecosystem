@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Download, CheckCircle, AlertTriangle, Search, X, ChevronRight } from 'lucide-react'
 // Reports owns no table of its own — it is a read-only projection over three
@@ -13,7 +13,7 @@ import { purchaseRepository } from '../purchases/repositories'
 import { adrReportRepository } from '../adr/repositories'
 import { inPeriod, periodRange } from './periodFilter'
 import { businessDateOf } from '../../lib/businessDay'
-import { searchSales } from './transactionSearch'
+import { createSearchIndex } from '../pos/transactionSearch'
 import { isCompletedSale, saleNet, saleRefunded, paymentStatus } from '../pos/salesReport'
 import SaleDetailModal from '../pos/SaleDetailModal'
 import { useInvalidateSalesReport } from '../pos/useSalesReportData'
@@ -77,14 +77,17 @@ export default function Reports({ brand, role, perms, embedded = false }) {
   const inRange = (item, dateOf) => inPeriod(item, { period, month: customMonth, dateOf })
 
   // Held, resumed and deleted rows are not sales.
-  const fSales = sales.filter(s => inRange(s)).filter(isCompletedSale)
+  const fSales = useMemo(() => sales.filter(s => inRange(s)).filter(isCompletedSale), [reportQuery.data, period, customMonth])
   // Expenses belong to the date the user recorded (same rule as the Expenses page and the database).
   const fExpenses = expenses.filter(x => inRange(x, expenseDate))
   const fPurchases = purchases.filter(p => inRange(p))
   const fAdrReports = adrReports.filter(r => inRange(r))
   // The search narrows the transaction list (and its CSV rows) within the chosen
   // period; the summary cards above always describe the whole period.
-  const searched = searchSales(fSales, query)
+  // Indexed once per period; the deferred query keeps typing smooth on long lists.
+  const searchIndex = useMemo(() => createSearchIndex(fSales), [fSales])
+  const deferredQuery = useDeferredValue(query)
+  const searched = useMemo(() => searchIndex.search(deferredQuery), [searchIndex, deferredQuery])
   const openSale = openSaleId ? fSales.find(s => s.id === openSaleId) : null
 
   // Revenue is net of refunds, so a refund or an Owner edit shows here at once.

@@ -1,12 +1,12 @@
 import { BUSINESS_TZ } from '../../lib/businessDay'
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Printer, FileSpreadsheet, SlidersHorizontal, Receipt, Wallet, Banknote, Repeat, CreditCard,
-  RotateCcw, Scale, Clock, AlertTriangle, Tag, Hash, HandCoins, Info,
+  RotateCcw, Scale, Clock, AlertTriangle, Tag, Hash, HandCoins, Info, Search, X,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { Card, Pill, Empty, ErrorState, Loading, Sel, Inp, StatCard, Toast, useToast } from '../../components/ui'
+import { Card, Pill, Empty, ErrorState, Loading, Sel, SearchSelect, Inp, StatCard, Toast, useToast } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useSettings } from '../../hooks/queries'
 import { fmt, todayDate } from '../../lib/utils'
@@ -20,6 +20,8 @@ import { exportSalesReportXlsx, printSalesReport } from './salesReportExport'
 import { usePlanGate } from '../../hooks/usePlanGate'
 import { useAuthUserId, useSalesReportData, useInvalidateSalesReport } from './useSalesReportData'
 import SaleDetailModal from './SaleDetailModal'
+import { createSearchIndex, paymentMatches, looksLikeReceipt } from './transactionSearch'
+import { saleRepository } from './repositories'
 import ShiftControl from './ShiftControl'
 
 const { navy, gray400, gray500, gray600, gray100, border, bg, tealDeep, tealMist, danger, success, warning, warningBg } = theme
@@ -63,6 +65,12 @@ export default function SalesReport({ brand, role, perms, staffName }) {
   const [limit, setLimit] = useState(PAGE)
   const [openSaleId, setOpenSaleId] = useState(null)
   const [exporting, setExporting] = useState(false)
+  // Search: narrows the lists only (totals and exports keep covering the whole
+  // period and filters). Deferred so typing stays smooth on a long list.
+  const [query, setQuery] = useState('')
+  const deferredQuery = useDeferredValue(query)
+  // Receipts found outside the period ("look up in all dates").
+  const [lookup, setLookup] = useState({ status: 'idle', query: '', sales: [] })
 
   // Recomputed at business midnight, so "Today" on a page left open overnight moves on.
   const businessToday = useBusinessToday()
@@ -84,8 +92,41 @@ export default function SalesReport({ brand, role, perms, staffName }) {
       sales, payments, shiftsById, rows, options,
       summary,
       paymentRows: [...payments].sort((a, b) => (parseDbTime(b.received_at)?.getTime() || 0) - (parseDbTime(a.received_at)?.getTime() || 0)),
+      // Every sale a row may point at: the period's sales and older sales paid in it.
+      searchIndex: createSearchIndex(Object.values(data.salesById)),
     }
   }, [data, effective, seeAll, userId])
+
+  const searching = deferredQuery.trim().length > 0
+  const shown = useMemo(() => {
+    if (!view) return null
+    if (!searching) return { rows: view.rows, paymentRows: view.paymentRows }
+    return {
+      rows: view.rows.filter((r) => view.searchIndex.matchesId(r.saleId, deferredQuery)),
+      paymentRows: view.paymentRows.filter((p) => paymentMatches(p, view.searchIndex, deferredQuery)),
+    }
+  }, [view, searching, deferredQuery])
+
+  function changeQuery(v) {
+    setQuery(v)
+    setLimit(PAGE)
+    setLookup({ status: 'idle', query: '', sales: [] })
+  }
+
+  // A receipt that is not in the chosen period: find it by number in all dates.
+  // A cashier's report stays pinned to their own sales here too.
+  async function lookUpReceipt() {
+    const q = query.trim()
+    setLookup({ status: 'loading', query: q, sales: [] })
+    try {
+      const found = (await saleRepository.searchReceipts(brand.id, q)) || []
+      setLookup({ status: 'done', query: q, sales: seeAll ? found : found.filter((s) => cashierKey(s) === userId) })
+    } catch (e) {
+      console.error('[sales report] receipt look-up failed:', e?.message)
+      setLookup({ status: 'error', query: q, sales: [] })
+    }
+  }
+  const lookupById = useMemo(() => Object.fromEntries(lookup.sales.map((s) => [s.id, s])), [lookup.sales])
 
   const setFilter = (k, v) => { setFilters((f) => ({ ...f, [k]: v })); setLimit(PAGE) }
   const activeFilterCount = Object.entries(filters).filter(([k, v]) => v && (seeAll || k !== 'cashier')).length
@@ -200,15 +241,31 @@ export default function SalesReport({ brand, role, perms, staffName }) {
             <Inp label='To' type='date' value={to} onChange={setTo} style={{ minWidth: 150 }} />
           </div>
         )}
+        <div role='search' style={{ position: 'relative', marginTop: 12, maxWidth: isMobile ? 'none' : 560 }}>
+          <Search size={15} color={gray400} aria-hidden='true' style={{ position: 'absolute', left: 12, top: 13 }} />
+          <input type='search' value={query} onChange={(e) => changeQuery(e.target.value)} disabled={!view}
+            aria-label='Search sales and receipts' aria-describedby='sales-search-hint'
+            placeholder='Search receipt no., customer, product, amount, cashier…'
+            style={{ width: '100%', boxSizing: 'border-box', minHeight: 42, padding: '10px 38px 10px 34px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 13, outline: 'none', color: navy, background: 'white' }} />
+          {query && (
+            <button type='button' onClick={() => changeQuery('')} aria-label='Clear search'
+              style={{ position: 'absolute', right: 6, top: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 6, display: 'flex', color: gray400 }}><X size={15} /></button>
+          )}
+          <div id='sales-search-hint' style={{ fontSize: 11.5, color: gray500, marginTop: 5 }}>
+            {searching && shown
+              ? `${shown.rows.length} of ${view.rows.length} sales match · the totals and exports still cover the whole period and filters`
+              : 'Words can be combined, e.g. “ada 1500”. Amounts work with or without ₦ and commas.'}
+          </div>
+        </div>
         {showFilters && view && (
           <Card style={{ marginTop: 10, padding: 14 }}>
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-              <Sel label='Customer' value={filters.customer} onChange={(v) => setFilter('customer', v)} options={view.options.customers} placeholder='All customers' />
-              <Sel label='Product' value={filters.product} onChange={(v) => setFilter('product', v)} options={view.options.products} placeholder='All products' />
+              <SearchSelect label='Customer' value={filters.customer} onChange={(v) => setFilter('customer', v)} options={view.options.customers} placeholder='All customers' />
+              <SearchSelect label='Product' value={filters.product} onChange={(v) => setFilter('product', v)} options={view.options.products} placeholder='All products' />
               <Sel label='Payment method' value={filters.method} onChange={(v) => setFilter('method', v)} options={SALE_METHODS} placeholder='All methods' />
               <Sel label='Payment status' value={filters.status} onChange={(v) => setFilter('status', v)} options={STATUSES.map((s) => ({ value: s, label: s === 'Refund' ? 'Has a refund' : s }))} placeholder='Any status' />
-              {seeAll && <Sel label='Cashier' value={filters.cashier} onChange={(v) => setFilter('cashier', v)} options={[...view.options.cashiers, { value: 'none', label: 'Not recorded' }]} placeholder='All staff' />}
-              {data?.shiftsAvailable && <Sel label='Shift' value={filters.shift} onChange={(v) => setFilter('shift', v)} options={[...view.options.shifts, { value: 'none', label: 'No shift' }]} placeholder='All shifts' />}
+              {seeAll && <SearchSelect label='Cashier' value={filters.cashier} onChange={(v) => setFilter('cashier', v)} options={[...view.options.cashiers, { value: 'none', label: 'Not recorded' }]} placeholder='All staff' />}
+              {data?.shiftsAvailable && <SearchSelect label='Shift' value={filters.shift} onChange={(v) => setFilter('shift', v)} options={[...view.options.shifts, { value: 'none', label: 'No shift' }]} placeholder='All shifts' />}
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11.5, color: gray500, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -281,7 +338,7 @@ export default function SalesReport({ brand, role, perms, staffName }) {
 
             {/* Sales / Payments */}
             <div role='tablist' aria-label='Report lists' style={{ display: 'flex', gap: 24, borderBottom: `1px solid ${border}` }}>
-              {[['sales', 'Sales', view.rows.length], ['payments', 'Payments', view.paymentRows.length]].map(([v, label, count]) => {
+              {[['sales', 'Sales', shown.rows.length], ['payments', 'Payments', shown.paymentRows.length]].map(([v, label, count]) => {
                 const on = tab === v
                 if (v === 'payments' && !data.ledgerAvailable) return null
                 return (
@@ -294,30 +351,68 @@ export default function SalesReport({ brand, role, perms, staffName }) {
             </div>
 
             {tab === 'sales' || !data.ledgerAvailable ? (
-              view.rows.length === 0 ? (
-                <Empty icon={<Receipt size={40} strokeWidth={1.5} />}
-                  message={data.sales.length === 0 ? (period === 'custom' ? 'No sales in this date range.' : `No sales ${periodLabel.toLowerCase()}.`) : 'No sales match these filters.'}
-                  cause={data.sales.length === 0 ? 'none' : 'filtered'} />
+              shown.rows.length === 0 ? (
+                searching ? (
+                  <SearchMiss query={deferredQuery} periodLabel={periodLabel} lookup={lookup} canLookUp={looksLikeReceipt(query)}
+                    onLookUp={lookUpReceipt} isMobile={isMobile} onOpen={setOpenSaleId} shiftsById={view.shiftsById} btn={btn} />
+                ) : (
+                  <Empty icon={<Receipt size={40} strokeWidth={1.5} />}
+                    message={data.sales.length === 0 ? (period === 'custom' ? 'No sales in this date range.' : `No sales ${periodLabel.toLowerCase()}.`) : 'No sales match these filters.'}
+                    cause={data.sales.length === 0 ? 'none' : 'filtered'} />
+                )
               ) : (
-                <SalesList rows={view.rows.slice(0, limit)} isMobile={isMobile} onOpen={setOpenSaleId} />
+                <SalesList rows={shown.rows.slice(0, limit)} isMobile={isMobile} onOpen={setOpenSaleId} />
               )
-            ) : view.paymentRows.length === 0 ? (
-              <Empty icon={<Wallet size={40} strokeWidth={1.5} />} message='No money was received or refunded in this period with these filters.' cause={data.payments.length ? 'filtered' : 'none'} />
+            ) : shown.paymentRows.length === 0 ? (
+              <Empty icon={<Wallet size={40} strokeWidth={1.5} />}
+                message={searching ? `No payments match “${deferredQuery.trim()}”.` : 'No money was received or refunded in this period with these filters.'}
+                cause={data.payments.length ? 'filtered' : 'none'} />
             ) : (
-              <PaymentsList rows={view.paymentRows.slice(0, limit)} salesById={data.salesById} isMobile={isMobile} onOpen={setOpenSaleId} />
+              <PaymentsList rows={shown.paymentRows.slice(0, limit)} salesById={data.salesById} isMobile={isMobile} onOpen={setOpenSaleId} />
             )}
 
-            {(tab === 'sales' ? view.rows.length : view.paymentRows.length) > limit && (
+            {(tab === 'sales' ? shown.rows.length : shown.paymentRows.length) > limit && (
               <button onClick={() => setLimit((l) => l + PAGE)} style={{ ...btn, alignSelf: 'center' }}>Show more</button>
             )}
           </div>
         </>
       )}
 
-      <SaleDetailModal show={!!openSaleId} sale={openSaleId ? data?.salesById[openSaleId] : null} onClose={() => setOpenSaleId(null)}
+      <SaleDetailModal show={!!openSaleId} sale={openSaleId ? (data?.salesById[openSaleId] || lookupById[openSaleId] || null) : null} onClose={() => setOpenSaleId(null)}
         shiftsById={view?.shiftsById} brand={brand} settings={settings} ledgerAvailable={!!data?.ledgerAvailable}
         showToast={showToast} onChanged={invalidate} />
       <Toast msg={toastMsg} type={toastType} />
+    </div>
+  )
+}
+
+// Nothing in the period matches the search. A receipt-like query can be looked
+// up by number in all dates (a customer back with last month's receipt).
+function SearchMiss({ query, periodLabel, lookup, canLookUp, onLookUp, isMobile, onOpen, shiftsById, btn }) {
+  const q = query.trim()
+  const done = lookup.status === 'done' && lookup.query === q
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <Empty icon={<Search size={40} strokeWidth={1.5} />} cause='filtered'
+        message={`No sales match “${q}” ${periodLabel ? 'in ' + periodLabel.toLowerCase() : 'in this period'}${canLookUp ? '.' : '. Try fewer words, or another period.'}`} />
+      {canLookUp && !done && (
+        <button type='button' onClick={onLookUp} disabled={lookup.status === 'loading'} aria-busy={lookup.status === 'loading'} style={{ ...btn, alignSelf: 'center' }}>
+          <Search size={14} /> {lookup.status === 'loading' ? 'Looking up…' : `Look up receipt “${q}” in all dates`}
+        </button>
+      )}
+      {lookup.status === 'error' && lookup.query === q && (
+        <div role='alert' style={{ textAlign: 'center', fontSize: 12.5, color: danger }}>The look-up failed. Check the connection and try again.</div>
+      )}
+      {done && (lookup.sales.length === 0 ? (
+        <div role='status' style={{ textAlign: 'center', fontSize: 12.5, color: gray500 }}>No receipt containing “{q}” on any date.</div>
+      ) : (
+        <div>
+          <div role='status' style={{ fontSize: 12.5, fontWeight: 800, color: navy, marginBottom: 8 }}>
+            Found on other dates ({lookup.sales.length}{lookup.sales.length >= 20 ? ', newest 20' : ''})
+          </div>
+          <SalesList rows={toReportRows(lookup.sales, { shiftsById })} isMobile={isMobile} onOpen={onOpen} />
+        </div>
+      ))}
     </div>
   )
 }
