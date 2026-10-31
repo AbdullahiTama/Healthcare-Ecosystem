@@ -1,14 +1,19 @@
 // @vitest-environment node
-// carehub_20261222_branch_stock_transfers on PGlite, with the live shapes of businesses, staff, products,
-// master_products, branch_products, stock_movements, staff_notifications and stock_transfers, the live
-// current_business_ids(), is_business_manager() and stock floor, and business_root() from carehub_20261215.
+// carehub_20261222_branch_stock_transfers, then carehub_20261228_branch_transfers_ledger (stock through
+// apply_stock_change), on PGlite, with the live shapes of businesses, staff, products, master_products,
+// branch_products, stock_batches, stock_movements, staff_notifications and stock_transfers, the live
+// current_business_ids(), is_business_manager(), the live stock ledger (docs/architecture/stock-ledger-live-snapshot.sql)
+// and business_root() from carehub_20261215.
 import { describe, it, expect, beforeAll, vi } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 vi.setConfig({ testTimeout: 60000, hookTimeout: 120000 })
-const MIGRATION = readFileSync(fileURLToPath(new URL('../../../../../supabase/migrations/carehub_20261222_branch_stock_transfers.sql', import.meta.url)), 'utf8')
+const repoFile = (rel) => readFileSync(fileURLToPath(new URL('../../../../../' + rel, import.meta.url)), 'utf8')
+const MIGRATION = repoFile('supabase/migrations/carehub_20261222_branch_stock_transfers.sql')
+const LEDGER = repoFile('supabase/migrations/carehub_20261228_branch_transfers_ledger.sql')
+const LEDGER_LIVE = repoFile('docs/architecture/stock-ledger-live-snapshot.sql')
 
 const MAIN = 'a0000000-0000-4000-8000-000000000001'
 const IKEJA = 'a0000000-0000-4000-8000-000000000002'
@@ -44,7 +49,10 @@ beforeAll(async () => {
       generic_name text, barcode text, rx_status text default 'pharmacy_only', default_cost numeric default 0, reorder_level integer default 5, archived_at timestamptz);
     create table products (id uuid primary key default gen_random_uuid(), business_id uuid references businesses(id), name text not null, generic_name text, category text,
       price numeric default 0, cost_price numeric default 0, stock integer default 0, reorder_level integer default 5, barcode text, sale_type text, list_on_carefind boolean default true,
-      emoji text, master_product_id uuid references master_products(id), rx_status text, price_source text default 'master');
+      emoji text, master_product_id uuid references master_products(id), rx_status text, price_source text default 'master',
+      tracking_mode text not null default 'none');
+    create table stock_batches (id uuid primary key default gen_random_uuid(), business_id uuid, product_id uuid, product_name text not null default '',
+      batch_number text, quantity integer not null default 0, expiry_date date, status text not null default 'available', created_at timestamptz default now());
     create table branch_products (id uuid primary key default gen_random_uuid(), branch_id uuid not null, master_product_id uuid not null, active boolean default true not null,
       override_price integer, unique (branch_id, master_product_id));
     create table stock_movements (id uuid primary key default gen_random_uuid(), business_id uuid, batch_id uuid, from_location_id uuid, to_location_id uuid, movement_type text,
@@ -106,8 +114,13 @@ beforeAll(async () => {
       ('${IKEJA}', 'Amoxil 500', 1200, 900, 40, '${M.amox}'), ('${IKEJA}', 'Paracetamol', 300, 200, 10, '${M.para}'),
       ('${YABA}', 'Amoxil 500', 1250, 900, 2, '${M.amox}'), ('${IKEJA}', 'Vitamin C', 500, 300, 6, '${M.vitc}');
   `)
+  await db.exec(LEDGER_LIVE)
   await db.exec(MIGRATION)
+  await db.exec(LEDGER)
 })
+
+const moves = (transferId) => db.query(`select m.*, p.business_id as product_business from stock_movements m join products p on p.id = m.product_id
+  where m.source_id = $1 order by m.created_at, m.source_type, m.quantity`, [transferId]).then((r) => r.rows)
 
 describe('send', () => {
   it('a branch manager sends stock: it leaves the branch at once, is in transit, recorded on both lines and the ledger', async () => {
@@ -119,8 +132,12 @@ describe('send', () => {
     expect(await stock(IKEJA, M.vitc)).toBe(2)
     const t = await one(`select * from stock_transfers where transfer_no = $1`, [r[0].r.transfer_no])
     expect(t).toMatchObject({ status: 'in_transit', from_branch_id: IKEJA, to_branch_id: YABA, business_id: MAIN, sent_by_name: 'Bola Manager', notes: 'Weekly top-up' })
-    const mv = await one(`select quantity, qty_before, qty_after, source_type, movement_type from stock_movements where source_id = $1 and product_id = (select id from products where business_id = $2 and master_product_id = $3)`, [t.id, IKEJA, M.amox])
-    expect(mv).toEqual({ quantity: 15, qty_before: 40, qty_after: 25, source_type: 'branch_transfer_out', movement_type: 'transfer' })
+    const mv = await one(`select quantity, qty_before, qty_after, source_type, movement_type, source_line_id, idempotency_key, moved_by from stock_movements
+      where source_id = $1 and product_id = (select id from products where business_id = $2 and master_product_id = $3)`, [t.id, IKEJA, M.amox])
+    const line = await one(`select id from stock_transfer_lines where transfer_id = $1 and master_product_id = $2`, [t.id, M.amox])
+    // A decrease is negative in the ledger, as for a sale (before carehub_20261228 this was +15).
+    expect(mv).toEqual({ quantity: -15, qty_before: 40, qty_after: 25, source_type: 'branch_transfer_out', movement_type: 'transfer',
+      source_line_id: line.id, idempotency_key: `transfer:${t.id}:${line.id}:out`, moved_by: 'bola@allen.com' })
     const note = await one(`select title, body from staff_notifications where business_id = $1 and kind = 'stock_transfer_sent'`, [YABA])
     expect(note.body).toContain('2 items sent from Ikeja')
   })
@@ -191,19 +208,69 @@ describe('cancel', () => {
   })
 })
 
+describe('stock ledger (carehub_20261228)', () => {
+  it('each product\'s movements chain: one row\'s after is the next row\'s before, and they sum to the stock', async () => {
+    const rows = (await db.query(`select product_id, quantity, qty_before, qty_after from stock_movements order by created_at, id`)).rows
+    const byProduct = {}
+    for (const r of rows) (byProduct[r.product_id] ||= []).push(r)
+    for (const [productId, list] of Object.entries(byProduct)) {
+      for (let i = 1; i < list.length; i++) expect(list[i].qty_before).toBe(list[i - 1].qty_after)
+      const last = list[list.length - 1]
+      expect((await one('select stock from products where id = $1', [productId])).stock).toBe(last.qty_after)
+      for (const r of list) expect(r.qty_after - r.qty_before).toBe(r.quantity)
+    }
+  })
+
+  it('a received transfer moved exactly what was sent out of one branch and what arrived into the other', async () => {
+    const t = await one(`select id from stock_transfers where status = 'received'`)
+    const m = await moves(t.id)
+    const out = m.filter((r) => r.source_type === 'branch_transfer_out'), inn = m.filter((r) => r.source_type === 'branch_transfer_in')
+    expect(out.every((r) => r.product_business === IKEJA && r.quantity < 0)).toBe(true)
+    expect(inn.every((r) => r.product_business === YABA && r.quantity > 0)).toBe(true)
+    expect(out.reduce((a, r) => a - r.quantity, 0)).toBe(19)   // 15 + 4 sent
+    expect(inn.reduce((a, r) => a + r.quantity, 0)).toBe(17)   // 13 + 4 arrived, 2 short
+  })
+
+  it('a batch-tracked product is refused instead of moving without its batches', async () => {
+    await db.query(`update products set tracking_mode = 'batch_only' where business_id = $1 and master_product_id = $2`, [IKEJA, M.para])
+    await expect(as('bola@allen.com', (q) => q('select send_stock_transfer($1, $2, $3::jsonb)', [IKEJA, YABA, lines([{ master_product_id: M.para, qty: 1 }])])))
+      .rejects.toThrow(/Paracetamol is tracked by batch, so it cannot be sent between locations yet/)
+    expect(await stock(IKEJA, M.para)).toBe(10)
+    await db.query(`update products set tracking_mode = 'none' where business_id = $1 and master_product_id = $2`, [IKEJA, M.para])
+
+    const r = await as('bola@allen.com', (q) => q('select send_stock_transfer($1, $2, $3::jsonb) r', [IKEJA, YABA, lines([{ master_product_id: M.amox, qty: 1 }])]))
+    await db.query(`update products set tracking_mode = 'batch_only' where business_id = $1 and master_product_id = $2`, [YABA, M.amox])
+    await expect(as('ada@allen.com', (q) => q('select receive_stock_transfer($1)', [r[0].r.id]))).rejects.toThrow(/tracked by batch here/)
+    expect(await stock(YABA, M.amox)).toBe(15)
+    expect((await one('select status from stock_transfers where id = $1', [r[0].r.id])).status).toBe('in_transit')
+    await db.query(`update products set tracking_mode = 'none' where business_id = $1 and master_product_id = $2`, [YABA, M.amox])
+    await as('bola@allen.com', (q) => q('select cancel_stock_transfer($1)', [r[0].r.id]))
+    expect(await stock(IKEJA, M.amox)).toBe(25)
+  })
+
+  it('every transfer movement was written by apply_stock_change (each has its key)', async () => {
+    const n = await one(`select count(*)::int total, count(*) filter (where idempotency_key like 'transfer:%')::int keyed from stock_movements where source_type like 'branch_transfer%'`)
+    expect(n.total).toBeGreaterThan(0)
+    expect(n.keyed).toBe(n.total)
+  })
+})
+
 describe('visibility', () => {
   it('both branches and the owner see a transfer; another business does not', async () => {
     const n = (email) => as(email, (q) => q('select count(*)::int n from stock_transfers')).then((r) => r[0].n)
-    expect(await n('ada@allen.com')).toBe(2)
-    expect(await n('tunde@allen.com')).toBe(2)
-    expect(await n('owner@allen.com')).toBe(2)
+    expect(await n('ada@allen.com')).toBe(3)
+    expect(await n('tunde@allen.com')).toBe(3)
+    expect(await n('owner@allen.com')).toBe(3)
     expect(await n('other@x.com')).toBe(0)
     const ln = await as('ada@allen.com', (q) => q('select count(*)::int n from stock_transfer_lines'))
-    expect(ln[0].n).toBe(3)
+    expect(ln[0].n).toBe(4)
   })
 
-  it('re-running the migration is safe', async () => {
+  it('re-running the migrations is safe', async () => {
     await db.exec(MIGRATION)
-    expect((await one(`select count(*)::int n from stock_transfers`)).n).toBe(2)
+    await db.exec(LEDGER)
+    expect((await one(`select count(*)::int n from stock_transfers`)).n).toBe(3)
+    // re-running carehub_20261222 restores its own bodies, so carehub_20261228 must always be re-run after it
+    expect((await one(`select prosrc ~ 'apply_stock_change' x from pg_proc where proname = 'send_stock_transfer'`)).x).toBe(true)
   })
 })
