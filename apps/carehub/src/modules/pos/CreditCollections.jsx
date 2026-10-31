@@ -1,3 +1,4 @@
+import { businessDateOf } from '../../lib/businessDay'
 import { useMemo, useState } from 'react'
 import { Search, CreditCard, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { Card, Empty, ErrorState, Loading } from '../../components/ui'
@@ -107,7 +108,7 @@ function CreditSaleCard({ sale, brandId, onRecord }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 800, fontSize: 15, color: navy }}>{name}</div>
-          <div style={{ fontSize: 12, color: gray500, marginTop: 2 }}>{sale.txn_no} · {(sale.created_at || '').slice(0, 10)} · Total {fmt(sale.total)}</div>
+          <div style={{ fontSize: 12, color: gray500, marginTop: 2 }}>{sale.txn_no} · {businessDateOf(sale.created_at)} · Total {fmt(sale.total)}</div>
           <div style={{ fontSize: 12, color: success, marginTop: 2 }}>Paid {fmt(sale.amount_paid || 0)}</div>
         </div>
         <div style={{ textAlign: 'right' }}>

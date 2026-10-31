@@ -7,6 +7,7 @@
 // a print-ready HTML document; the browser's "Save as PDF" makes the file.
 
 import { neutraliseFormula, downloadBlob, printAsPdf } from '../business-directory/services/exportService'
+import { BUSINESS_TZ } from '../../lib/businessDay'
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const MONEY_FMT = '#,##0.00'
@@ -43,8 +44,11 @@ export function summaryLines(summary) {
   lines.push(
     ['  of which credit repayments', summary.collections],
     ['Refunds', summary.refunds.total],
+  )
+  if (summary.reversals?.total) lines.push(['Deleted sales reversed', summary.reversals.total])
+  lines.push(
     ['Net received', summary.netReceived],
-    ['Cash in hand (cash received less cash refunds)', summary.cashInHand],
+    ['Cash in hand (cash received less cash paid back)', summary.cashInHand],
     ['Credit given', summary.credit.amount],
     ['Credit sales', summary.credit.count, 'count'],
     ['Outstanding balance', summary.outstanding],
@@ -52,7 +56,7 @@ export function summaryLines(summary) {
   return lines
 }
 
-const timeText = (d) => (d instanceof Date && !Number.isNaN(d.getTime()) ? d.toLocaleString('en-NG') : '')
+const timeText = (d) => (d instanceof Date && !Number.isNaN(d.getTime()) ? d.toLocaleString('en-NG', { timeZone: BUSINESS_TZ }) : '')
 
 export async function buildSalesReportXlsx({ rows, summary, meta }) {
   const ExcelJS = (await import('exceljs')).default

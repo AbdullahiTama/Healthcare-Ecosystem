@@ -18,6 +18,8 @@ vi.mock('./useSalesReportData', () => ({
 vi.mock('../../hooks/queries', () => ({ useSettings: () => ({ data: {} }) }))
 vi.mock('./ShiftControl', () => ({ default: () => null }))
 vi.mock('../audit/repositories', () => ({ auditRepository: { recordExport: vi.fn() } }))
+const receipts = vi.hoisted(() => ({ search: vi.fn() }))
+vi.mock('./repositories', () => ({ saleRepository: { searchReceipts: receipts.search, history: vi.fn(async () => []) }, paymentRepository: { getForSale: vi.fn(async () => []) } }))
 
 import SalesReport from './SalesReport.jsx'
 
@@ -48,6 +50,25 @@ async function render(props = {}) {
   return host
 }
 afterEach(async () => { if (mounted) await mounted.unmount(); mounted = null; state.userId = 'u1'; state.mobile = false })
+
+const setInput = async (el, value) => {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, value)
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+const comboboxFor = (host, label) => {
+  const l = [...host.querySelectorAll('label')].find((x) => x.textContent === label)
+  return l ? document.getElementById(l.htmlFor) : null
+}
+async function pickFromCombobox(host, label, typed, optionText) {
+  const box = comboboxFor(host, label)
+  await act(async () => { box.focus() })
+  await setInput(box, typed)
+  const option = [...host.querySelectorAll('[role="option"]')].find((o) => o.textContent === optionText)
+  await act(async () => { option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
+}
+const searchBox = (host) => host.querySelector('input[aria-label="Search sales and receipts"]')
 
 const keyFigure = (host, label) => {
   const box = [...host.querySelectorAll('[aria-label="Key figures"] > div')].find((d) => d.firstChild.textContent === label)
@@ -88,11 +109,8 @@ describe('SalesReport page', () => {
     state.query = loaded()
     const host = await render()
     await act(async () => { [...host.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('Filters')).click() })
-    const cashier = host.querySelector('select#cashier')
-    await act(async () => {
-      cashier.value = 'u2'
-      cashier.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+    // The cashier filter is searchable: type part of the name, pick it.
+    await pickFromCombobox(host, 'Cashier', 'two', 'Rep Two')
     expect(keyFigure(host, 'Total sales')).toBe('₦3,000')
     expect(keyFigure(host, 'Outstanding')).toBe('₦0')
     expect(host.textContent).not.toContain('TXN-1')
@@ -106,7 +124,7 @@ describe('SalesReport page', () => {
     expect(host.textContent).toContain('your transactions')
     expect(host.textContent).not.toContain('TXN-1')
     await act(async () => { [...host.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('Filters')).click() })
-    expect(host.querySelector('select#cashier')).toBeNull()
+    expect(comboboxFor(host, 'Cashier')).toBeNull()
     expect([...host.querySelectorAll('button')].some((b) => b.textContent.includes('Excel'))).toBe(false)
   })
 
@@ -145,5 +163,88 @@ describe('SalesReport page', () => {
     state.query = loaded()
     const host = await render()
     expect(host.querySelector('[aria-label="Key figures"]').parentElement.style.position).toBe('sticky')
+  })
+})
+
+describe('SalesReport search', () => {
+  it('narrows the list by customer, product, amount or receipt, and keeps the totals for the whole period', async () => {
+    state.query = loaded()
+    const host = await render()
+    await setInput(searchBox(host), 'bola')
+    expect(host.textContent).toContain('TXN-1')
+    expect(host.textContent).not.toContain('TXN-2')
+    expect(host.textContent).toContain('1 of 2 sales match')
+    // Totals still describe the whole period and filters.
+    expect(keyFigure(host, 'Total sales')).toBe('₦103,000')
+    await setInput(searchBox(host), '₦3,000')
+    expect(host.textContent).toContain('TXN-2')
+    expect(host.textContent).not.toContain('TXN-1')
+    await setInput(searchBox(host), 'amoxil 100000')
+    expect(host.textContent).toContain('TXN-1')
+    expect(host.textContent).not.toContain('TXN-2')
+  })
+
+  it('searches the payments list too', async () => {
+    state.query = loaded()
+    const host = await render()
+    await act(async () => { [...host.querySelectorAll('[role="tab"]')].find((t) => t.textContent.startsWith('Payments')).click() })
+    await setInput(searchBox(host), 'transfer')
+    const tab = [...host.querySelectorAll('[role="tab"]')].find((t) => t.textContent.startsWith('Payments'))
+    expect(tab.textContent).toContain('1')
+    expect(host.textContent).toContain('TXN-1')
+    expect(host.textContent).not.toContain('TXN-2')
+  })
+
+  it('looks a receipt up in all dates when it is not in the period, and opens it', async () => {
+    state.query = loaded()
+    receipts.search.mockResolvedValue([sale({ id: 'old', txn_no: 'TXN-104154', client_name: 'Chidi', total: 4500, amount_paid: 4500, created_at: '2026-09-02T10:00:00', cashier_user_id: 'u1' })])
+    const host = await render()
+    await setInput(searchBox(host), '104154')
+    expect(host.textContent).toContain('No sales match “104154”')
+    const lookUp = [...host.querySelectorAll('button')].find((b) => b.textContent.includes('Look up receipt “104154” in all dates'))
+    await act(async () => { lookUp.click() })
+    await act(async () => {})
+    expect(receipts.search).toHaveBeenCalledWith('b', '104154')
+    expect(host.textContent).toContain('Found on other dates (1)')
+    expect(host.textContent).toContain('Chidi')
+    await act(async () => { [...host.querySelectorAll('button')].find((b) => b.textContent.includes('TXN-104154')).click() })
+    expect(document.querySelector('[role="dialog"]').textContent).toContain('TXN-104154')
+  })
+
+  it("keeps a cashier's look-up to their own sales", async () => {
+    state.query = loaded()
+    state.userId = 'u2'
+    receipts.search.mockResolvedValue([sale({ id: 'old', txn_no: 'TXN-104154', client_name: 'Chidi', total: 4500, amount_paid: 4500, cashier_user_id: 'u1' })])
+    const host = await render({ role: 'Cashier', perms: { canViewReports: false } })
+    await setInput(searchBox(host), '104154')
+    await act(async () => { [...host.querySelectorAll('button')].find((b) => b.textContent.includes('Look up receipt')).click() })
+    await act(async () => {})
+    expect(host.textContent).toContain('No receipt containing “104154” on any date.')
+    expect(host.textContent).not.toContain('Chidi')
+  })
+
+  it('a product filter can be searched instead of scrolled, and cleared with "All products"', async () => {
+    state.query = loaded({
+      sales: [
+        SALES[0],
+        { ...SALES[1], items: [{ id: 'p2', name: 'Paracetamol 500mg', qty: 2, price: 1500 }] },
+      ],
+      salesById: { s1: SALES[0], s2: { ...SALES[1], items: [{ id: 'p2', name: 'Paracetamol 500mg', qty: 2, price: 1500 }] } },
+    })
+    const host = await render()
+    await act(async () => { [...host.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('Filters')).click() })
+    const box = comboboxFor(host, 'Product')
+    await act(async () => { box.focus() })
+    await setInput(box, 'para')
+    const options = [...host.querySelectorAll('[role="option"]')].map((o) => o.textContent)
+    expect(options).toEqual(['Paracetamol 500mg'])
+    await act(async () => { host.querySelector('[role="option"]').dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
+    expect(keyFigure(host, 'Total sales')).toBe('₦3,000')
+    expect(box.value).toBe('Paracetamol 500mg')
+    // Still focused after picking: a click reopens the list.
+    await act(async () => { box.click() })
+    const all = [...host.querySelectorAll('[role="option"]')].find((o) => o.textContent === 'All products')
+    await act(async () => { all.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
+    expect(keyFigure(host, 'Total sales')).toBe('₦103,000')
   })
 })

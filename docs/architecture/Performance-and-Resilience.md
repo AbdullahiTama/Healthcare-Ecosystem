@@ -59,3 +59,56 @@ Every step is idempotent, so being stopped half way, or running in two places (t
 
 * `carefind_20261016_reconciliation_scale` and `carefind_20261017_engine_timeouts_and_hot_paths` are independent of the app deploy and safe to apply first (the old Node code calls the same function names; `run_db_reconciliation` keeps working with no arguments).
 * The Node changes (retry, scheduler, deadlines, `financeJobs`, `vercel.json` `maxDuration`) ship with the next CareFind deploy.
+
+## 9. POS product search on large catalogues (2026-10-31)
+
+**Report.** Pharmacy staff said the POS search box froze when correcting or
+deleting text, especially the last few letters of a product name, and some
+key presses needed repeating.
+
+**Cause (measured).** The busiest pharmacy has 3,159 products, 1,880 of them
+in stock. Every key press filtered the whole catalogue, re-sorted it with
+`localeCompare`, and drew a card for every match. Typing a full name leaves a
+few matches; deleting back to one or two letters matches almost everything,
+so a single key press drew about 1,880 cards. The browser does nothing else
+until that render is done, so the next presses queued behind it.
+
+Timing in Chromium (scripted, median of 5 runs). One render widens the grid
+from 1 card to N, which is the "deleted a letter" case:
+
+| Cards drawn | This machine | 4× CPU throttle (mid-range tablet) |
+|---|---|---|
+| 1,880 (before) | 229 ms | 877 ms (worst 1,086 ms) |
+| 60 (after) | 6 ms | 26 ms (worst 47 ms) |
+
+Filtering and sorting alone were small: about 0.6 ms per key press before and
+0.35 ms after, on a synthetic 3,159-product catalogue. The cost was drawing
+the cards.
+
+**Fix.**
+- `modules/pos/productSearch.js` (pure, tested) prepares each product's
+  searchable text once per catalogue change and keeps the catalogue
+  pre-sorted by name. A key press only filters. Barcodes are found through a
+  map, and categories are computed once.
+- The search box updates at once. The grid follows the deferred value
+  (`useDeferredValue`), so React keeps the box responsive and drops
+  superseded renders of the grid. The grid dims slightly while it catches
+  up.
+- The grid draws at most `GRID_PAGE` (60) cards, with "Showing 60 of N
+  products. Type more of the name to narrow the list." and a "Show 60 more"
+  button. A new search starts again from the first page.
+- Product cards are memoised (`ProductCard`), and `add` is stable, so a key
+  press redraws only the cards that change.
+- Search matches every typed word in any order ("amox 500" finds
+  "Amoxicillin 500mg"). A single word matches what it matched before. Words
+  never match across name, generic name and barcode.
+
+**Tests.** `productSearch.test.js` covers matching, filters, order, barcode
+lookup and a 3,200-product catalogue. `POS.search.test.jsx` (2,001 products)
+checks that the box follows every key while deleting, that the grid never
+exceeds one page, "Show more", reset on a new search, and adding from the
+paged grid. The existing barcode, credit, hold and location tests are
+unchanged and pass.
+
+**Not measured:** timings on a real counter device. The 4× throttle stands in
+for one.

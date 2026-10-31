@@ -1,3 +1,4 @@
+import { sumTotalSales } from '../pos/salesReport'
 import { useState, useEffect } from 'react'
 import { Lock, BarChart2, Building2, DollarSign, Package, AlertTriangle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -59,7 +60,7 @@ export default function Locations({ brand, role }) {
             productRepository.getStockSummary(loc.id),
           ])
           return [loc.id, {
-            todayRevenue: (today || []).reduce((s, x) => s + (x.total || 0), 0),
+            todayRevenue: sumTotalSales(today),
             todayCount: (today || []).length,
             productCount: summary.productCount,
             lowStock: summary.lowStock,

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import ExcelJS from 'exceljs'
-import { buildSalesReportXlsx, buildSalesReportHtml } from './salesReportExport'
+import { buildSalesReportXlsx, buildSalesReportHtml, summaryLines } from './salesReportExport'
 
 const summary = {
   totalSales: 105000, discounts: 200, transactions: 3, outstanding: 30000, credit: { count: 1, amount: 30000 },
@@ -70,5 +70,14 @@ describe('buildSalesReportHtml', () => {
   it('carries no cost or profit wording in what is printed', () => {
     const printed = html.replace(/<style>[\s\S]*?<\/style>/, '')
     expect(printed).not.toMatch(/\b(cost|profit|margin)\b/i)
+  })
+})
+
+describe('summaryLines', () => {
+  it("lists an owner's deleted-sale reversals apart from refunds, only when there are any", () => {
+    expect(summaryLines(summary).map((l) => l[0])).not.toContain('Deleted sales reversed')
+    const withReversal = { ...summary, reversals: { total: 1200, Cash: 1200, Transfer: 0, POS: 0, Unspecified: 0 } }
+    const labels = summaryLines(withReversal).map((l) => l[0])
+    expect(labels.indexOf('Deleted sales reversed')).toBe(labels.indexOf('Refunds') + 1)
   })
 })

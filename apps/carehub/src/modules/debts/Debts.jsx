@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react'
 import { debtTotals, matchesParty } from './debtTotals'
 import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck } from 'lucide-react'
 import { debtRepository } from './repositories'
+import { useQueryParamAction } from '../../hooks/useQueryParamAction'
 import { settleDebt } from './settleDebt'
 import { paymentErrorMessage } from '../../lib/dbErrors'
 // Cross-aggregate read: the client list belongs to the clients module, which
 // exposes it through its own repository. `getClients` is still the shared
 // services/supabase read used by POS too — repoint it when that call is
 // consolidated; it is unrelated to this module's own aggregate.
-import { useClients, useSettings } from '../../hooks/queries'
+import { useClients, useSettings, useInvalidateSales } from '../../hooks/queries'
 import ClientsLoadNote from '../clients/components/ClientsLoadNote'
 // A debt raised by a credit sale is settled against that sale, through the
 // sales aggregate's own collection function, so the two never disagree.
@@ -35,6 +36,8 @@ export default function Debts({ brand, role, perms, staffName }) {
   // Shared, cached client list (React Query): one download for every page that
   // picks a client, instead of each page fetching all clients and hiding failures.
   const clientsQuery = useClients(brand?.id)
+  // A repayment moves the sale's balance and today's money received.
+  const invalidateSales = useInvalidateSales(brand?.id)
   const clients = clientsQuery.data || []
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -56,6 +59,8 @@ export default function Debts({ brand, role, perms, staffName }) {
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => { load() }, [brand?.id])
+  // Opened from the Owner's activity feed: ?debt=<id> shows that debt once the list is in.
+  useQueryParamAction('debt', (id) => { const d = debts.find((x) => String(x.id) === id); if (d) setDetail(d) }, !loading && !loadError)
 
   // Picking a saved client links the debt to their customer record so it
   // shows up on their history.
@@ -120,7 +125,7 @@ export default function Debts({ brand, role, perms, staffName }) {
       if (sale && owed > 0) {
         try {
           await paymentRepository.recordCollection(sale.id, owed, payMethod)
-          setPayTarget(null); load(); showToast('Marked as paid! ' + fmt(owed) + ' recorded against ' + debt.source_ref + '.', { type: 'success' })
+          setPayTarget(null); load(); invalidateSales(); showToast('Marked as paid! ' + fmt(owed) + ' recorded against ' + debt.source_ref + '.', { type: 'success' })
           return
         } catch (e) {
           if (!isMissingObject(e)) { showToast(paymentErrorMessage(e), { type: 'error' }); return }
@@ -136,7 +141,7 @@ export default function Debts({ brand, role, perms, staffName }) {
   async function markDebtPaid(debt) {
     try {
       const { via } = await settleDebt(debt, brand.id, { staffName })
-      load()
+      load(); invalidateSales()
       showToast(via === 'purchase' ? 'Marked as paid. The purchase is settled too.' : 'Marked as paid!', { type: 'success' })
     } catch (e) {
       console.error('[debts] mark paid failed:', e)

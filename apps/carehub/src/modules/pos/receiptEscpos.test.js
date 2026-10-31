@@ -75,8 +75,9 @@ describe('buildReceiptEscpos', () => {
     expect(out).toContain('Thanks!')
   })
 
+  // The date is a database time (UTC, no zone); the receipt shows it in Lagos time.
   it('uses the receipt date instead of the print time', () => {
-    expect(joined(base)).toContain('14 Aug 2026, 10:30')
+    expect(joined(base)).toContain('14 Aug 2026, 11:30')
   })
 
   it('keeps every line inside the column budget for each roll width', () => {
