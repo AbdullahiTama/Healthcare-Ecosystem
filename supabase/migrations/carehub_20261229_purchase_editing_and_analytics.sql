@@ -3,9 +3,10 @@
 -- 2026-10-31. Docs: docs/architecture/Purchases-Editing-and-Analytics.md
 -- Tests: scripts/db-tests/purchaseEditing.pglite.mjs (real Postgres, live
 -- ledger snapshot).
--- STATUS: drafted, NOT applied. Apply as a tracked migration, then deploy the
--- app (the app degrades to "available once the database update is applied"
--- until then).
+-- APPLIED to the live carehub project 2026-10-31 as version 20261031155522,
+-- after a rolled-back probe on live data
+-- (scripts/db-tests/purchase-editing-live-rollback-probe.sql) passed. The live
+-- bodies of edit_purchase and purchase_items_normalized match this file (md5).
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- Written against the LIVE schema read on 2026-10-31:

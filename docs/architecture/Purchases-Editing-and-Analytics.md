@@ -1,7 +1,7 @@
 # Purchases: editing, central history and analytics, supplier picker, barcodes
 
-2026-10-31. Migration: `supabase/migrations/carehub_20261229_purchase_editing_and_analytics.sql`
-(**drafted, NOT applied**). Builds on `Purchases-Bulk-Stock-Entry.md` and `Stock-Ledger.md`.
+2026-10-31. Migration: `supabase/migrations/carehub_20261229_purchase_editing_and_analytics.sql`,
+**applied live 2026-10-31 as version 20261031155522** (see "Applied" below). Builds on `Purchases-Bulk-Stock-Entry.md` and `Stock-Ledger.md`.
 
 ## Why
 
@@ -136,6 +136,32 @@ This week, This month, Last month, Last 30 days, This year). An incomplete perio
   every edit is in `audit_log` with before and after.
 - The role editor fix means a role's "Manage field team" switch now actually saves. Owners should check
   roles they saved before, which lost that permission.
+
+## Applied (2026-10-31)
+
+1. **Rolled-back probe on live data** (`scripts/db-tests/purchase-editing-live-rollback-probe.sql`): the
+   migration plus edits as the real business owner on two real purchases, ending in a deliberate error so
+   nothing persisted (confirmed afterwards: stock, debt, ledger and audit log unchanged). Results:
+   - Backfill: all 57 ledger-era lines paired with their receipts. Of 12 pre-ledger lines, 10 linked to a
+     product and 2 locked. No purchase left un-normalised.
+   - Guard: direct UPDATE and DELETE refused; `can_edit_purchases` not callable by clients.
+   - Erythromycin 5 → 6: stock 5 → 6, one ledger row, total 3,000 → 3,600, debt 3,600.
+   - A stale edit was refused. 6 → 5 with ₦1,000 paid: stock back to 5, balance 2,000, `partial`, one
+     correction payment row, debt 1,000 paid / 2,000 owed. Repeating the same edit was `unchanged`.
+   - Biopentin X100 (all 3 units sold) 3 → 2: refused with "The lowest quantity you can set is 3."
+   - Analytics totals equal the purchase records (8 purchases, ₦1,079,840 spent); 70 history lines.
+   - Two audit rows. Product stock equals the sum of its ledger rows.
+2. **Applied** with `apply_migration` from this file unchanged. Verified: no `anon` EXECUTE anywhere; one
+   `get_purchases_page`; guard present; all 7 itemised purchases normalised; purchase money totals and stock
+   unchanged; `edit_purchase` and `purchase_items_normalized` bodies match the file (md5).
+3. **Security advisor:** 203 → 205 findings. New: `edit_purchase` and `get_purchase_for_edit` are definers
+   callable by `authenticated` (by design: they check membership and permission themselves, as
+   `edit_sale` / `merge_duplicate_products` do); `get_purchases_page` is listed under its new signature. No
+   new `anon` findings.
+
+**Next:** deploy the app. Until then, the deployed app records purchases and payments as before; its
+direct-PATCH "mark paid" fallback (only used when `record_purchase_payment` was missing) would now be
+refused, which never happens live.
 
 ## Rollout
 
