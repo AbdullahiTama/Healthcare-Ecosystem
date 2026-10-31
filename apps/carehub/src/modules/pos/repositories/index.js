@@ -1,6 +1,7 @@
 import { sbFetch, sbFetchWithCount } from '../../../services/supabase'
 import { isDuplicateError, isMissingObject } from '../../../lib/dbErrors'
 import { pagedQuery } from '../../../lib/pagedQuery'
+import { businessPeriod } from '../../../lib/businessDay'
 
 // Ids per `id=in.(...)` request: keeps the URL well under proxy limits.
 const ID_CHUNK = 100
@@ -177,13 +178,13 @@ export function createSaleRepository({
       return rows
     },
 
-    // Today's completed sales — held sales are excluded because they are not
-    // takings yet.
-    async getToday(businessId) {
-      const today = new Date().toISOString().split('T')[0]
-      return request(
-        `sales?business_id=eq.${businessId}&created_at=gte.${today}T00:00:00&${COMPLETED}&order=created_at.desc&select=*`
-      )
+    // Today's completed sales, on the business day (lib/businessDay.js) — the
+    // same window as Sales & Accounts' "Today". Held sales are excluded
+    // because they are not takings yet. Paged past the server's row cap.
+    async getToday(businessId, { now = new Date() } = {}) {
+      const { start, end } = businessPeriod('today', { now })
+      return pagedQuery(request,
+        `sales?business_id=eq.${businessId}&created_at=gte.${start.toISOString()}&created_at=lt.${end.toISOString()}&${COMPLETED}&order=created_at.desc,id.asc&select=*`)
     },
 
     // Single sale by id, tenant-scoped so a receipt link can never resolve to

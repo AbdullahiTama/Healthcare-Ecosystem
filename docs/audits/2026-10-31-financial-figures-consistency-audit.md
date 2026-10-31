@@ -1,6 +1,6 @@
 # Financial figures consistency audit (pharmacy report, 2026-10-31)
 
-Status: **investigation complete, fixes not yet implemented.**
+Status: **fixed (F1–F6 in the client); F7 and the server-side summary remain as follow-ups.** See "Resolution" at the end.
 
 ## The report
 
@@ -175,3 +175,55 @@ One rule per figure, computed in one place and used by every screen.
 - Component tests: the dashboard and Sales & Accounts render the same "Sales
   today" from the same fixture.
 - Invalidation tests: recording a sale refreshes the report query keys.
+
+## Resolution (2026-10-31)
+
+Decisions taken with the owner: the dashboard shows **gross** "Sales today",
+matching Sales & Accounts, with refunds beside it; days are cut in **one fixed
+zone, `Africa/Lagos`**.
+
+| Finding | Fix |
+|---|---|
+| F1 double count, old builds | `vite.config.js` stamps a build id into the bundle and publishes `/version.json`. `components/layout/BuildUpdateWatcher.jsx` checks it on start, every 5 minutes, when the tab is shown again and when the connection returns. An outdated device shows "CareHub has been updated · Reload now" and reloads at the next change of screen: never mid-screen, never while offline, never in a loop. The velocity digest now counts completed sales only. |
+| F2 "today" | `lib/businessDay.js` is the one definition of today, week (Monday to Sunday), month, year and custom range, in Lagos time, whatever the device's zone. Used by `saleRepository.getToday` (dashboard, Overview, Locations), Sales & Accounts, Financial Reports (`periodFilter.js`) and `todayDate()`. `hooks/useBusinessToday.js` moves "Today" on at midnight on a page left open. Every time on screen, on a receipt or in an export is shown in Lagos time. |
+| F3 refunds | The dashboard's "Sales today" is now computed by `salesReport.reportView`, on the same `useSalesReportData` query as Sales & Accounts' Today. It is gross, with "₦X refunded" beside it, and clicking it opens Sales & Accounts. Overview and Locations use the same `sumTotalSales`. Deleted-sale reversals (`Sale deleted: …` ledger rows) are reported as "Deleted sales reversed", not as refunds. |
+| F4 refresh | `invalidateSalesFigures` (hooks/queries.js) refreshes `sales`, `salesReport` and `reports` together after any sale, dispensing sale, repayment (POS or Debts), refund, edit or delete. The dashboard's today figures, and Sales & Accounts on Today, refetch every 60 s. |
+| F5 scope | "Owed to you" now says "all dates" and Financial Reports' "Credit outstanding" says "any date". The uncapped "cash collected" calculation in Financial Reports was never displayed and has been removed. |
+| F6 cashier view | A cashier-scoped Sales & Accounts report says it shows only that person's sales. |
+
+### Still open
+
+- F7: store money to the kobo (needs a reviewed migration).
+- A `sales_summary(business_id, from, to)` SQL function as the single figure
+  of record, once volumes call for server-side aggregation.
+- A per-business time zone setting, when CareHub serves businesses outside
+  Nigeria (`BUSINESS_TZ` is the one place to change).
+- A device clock that is wrong by hours still shifts what "now" is. The
+  existing `ClockSkewBanner` warns when the clock runs behind.
+
+### Verification
+
+- `npm test` in `apps/carehub`: 280 files, 2,990 tests passing. New tests:
+  `lib/businessDay.test.js` (Lagos boundaries at 00:00, 00:59 and 23:59;
+  the same window with the device set to New York, Tokyo or UTC),
+  `components/layout/__tests__/BuildUpdateWatcher.test.jsx`,
+  `hooks/__tests__/salesInvalidation.test.js`, consistency cases in
+  `salesReport.test.js` (Pharmacy A's converted-hold shape, gross vs refunds,
+  reversals), dashboard cases (the same figure as `reportView`, Lagos times,
+  scope label) and `getToday` on the Lagos day.
+- `npm run lint`: 0 errors. `npm run build`: emits `dist/version.json`, and
+  the bundle carries the same id.
+
+### Manual test plan after deploy
+
+1. On two devices, open the dashboard and Sales & Accounts (Today). Ring up a
+   sale on one. Within a minute both devices show the same "Sales today" /
+   "Total sales".
+2. Hold an invoice, complete it, and confirm "Sales today" goes up by the
+   invoice total once, not twice.
+3. Refund a sale as Owner. "Sales today" is unchanged, the card shows
+   "₦X refunded", and Sales & Accounts shows the same refund.
+4. Leave a dashboard open, deploy, then come back to it. The update banner
+   appears, and changing screen reloads onto the new build.
+5. Set a test laptop to another time zone. Today's figures match a correctly
+   set device.

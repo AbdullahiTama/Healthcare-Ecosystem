@@ -7,7 +7,6 @@ import { purchaseRepository } from '../modules/purchases/repositories'
 
 // ── Query Keys ───────────────────────────────────────────────────────────────
 export const keys = {
-  todaySales: (brandId) => ['sales', 'today', brandId],
   openSales: (brandId) => ['sales', 'open', brandId],
   recentSales: (brandId) => ['sales', 'recent', brandId],
   appointments: (brandId) => ['appointments', brandId],
@@ -25,15 +24,6 @@ export const keys = {
 }
 
 // ── Dashboard Queries ─────────────────────────────────────────────────────────
-
-export function useTodaySales(brandId) {
-  return useQuery({
-    queryKey: keys.todaySales(brandId),
-    queryFn: () => saleRepository.getToday(brandId),
-    enabled: !!brandId,
-    staleTime: 30_000,
-  })
-}
 
 // Held sales and credit sales with a balance owed — the sales that still need
 // action. Replaces an "all sales" download that grew with every sale and was
@@ -153,11 +143,7 @@ export function useCreateSale(brandId) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (saleData) => saleRepository.create(brandId, saleData),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.todaySales(brandId) })
-      qc.invalidateQueries({ queryKey: keys.openSales(brandId) })
-      qc.invalidateQueries({ queryKey: keys.recentSales(brandId) })
-    },
+    onSuccess: () => invalidateSalesFigures(qc),
   })
 }
 
@@ -165,20 +151,24 @@ export function useUpdateSale(brandId) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, data }) => saleRepository.update(id, brandId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.todaySales(brandId) })
-      qc.invalidateQueries({ queryKey: keys.openSales(brandId) })
-      qc.invalidateQueries({ queryKey: keys.recentSales(brandId) })
-    },
+    onSuccess: () => invalidateSalesFigures(qc),
   })
+}
+
+// Every query that shows a sales or money figure. A sale, payment, refund,
+// edit or deletion refreshes all of them together, so the dashboard, POS lists,
+// Sales & Accounts and Financial Reports never show a figure from before the
+// change next to one from after it.
+export function invalidateSalesFigures(qc) {
+  qc.invalidateQueries({ queryKey: ['sales'] })
+  qc.invalidateQueries({ queryKey: ['salesReport'] })
+  qc.invalidateQueries({ queryKey: ['reports'] })
 }
 
 export function useInvalidateSales(brandId) {
   const qc = useQueryClient()
   return () => {
-    qc.invalidateQueries({ queryKey: keys.todaySales(brandId) })
-    qc.invalidateQueries({ queryKey: keys.openSales(brandId) })
-    qc.invalidateQueries({ queryKey: keys.recentSales(brandId) })
+    invalidateSalesFigures(qc)
     // A sale changes its client's visits and total spent (kept by the database).
     qc.invalidateQueries({ queryKey: keys.clients(brandId) })
   }
@@ -214,9 +204,7 @@ export function useRecordSalePayment(brandId) {
           .map((s) => (s.id === saleId ? { ...s, amount_paid: result.amount_paid, balance: result.balance, is_credit: result.balance > 0 } : s))
           .filter((s) => s.is_on_hold || (s.is_credit && Number(s.balance) > 0))
       })
-      qc.invalidateQueries({ queryKey: keys.openSales(brandId) })
-      qc.invalidateQueries({ queryKey: keys.salePayments(saleId) })
-      qc.invalidateQueries({ queryKey: keys.todaySales(brandId) })
+      invalidateSalesFigures(qc)
     },
   })
 }

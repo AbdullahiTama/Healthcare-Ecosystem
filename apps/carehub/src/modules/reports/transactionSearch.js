@@ -8,6 +8,7 @@
 //   * numbers   total, subtotal, discount, paid, balance and refunded — typed
 //               with or without ₦ and thousands commas ("₦1,500", "1500", "1500.5")
 //   * dates     the sale date as YYYY-MM-DD
+import { businessDateOf } from '../../lib/businessDay'
 import { parseItems, paymentStatus, saleRefunded } from '../pos/salesReport'
 
 const norm = (v) => String(v ?? '').toLowerCase()
@@ -22,7 +23,7 @@ export function searchableText(s) {
     s.client_name || 'Walk-in', s.txn_no, s.payment_method, s.staff_name, s.notes,
     ...parseItems(s.items).map((it) => it.name),
     status, s.is_credit ? 'credit' : '', saleRefunded(s) > 0 ? 'refunded refund' : '',
-    String(s.created_at || '').slice(0, 10),
+    businessDateOf(s.created_at),
   ].map(norm).join(' | ')
 }
 

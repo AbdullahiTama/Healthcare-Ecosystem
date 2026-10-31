@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { invalidateSalesFigures } from '../../hooks/queries'
 import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { authClient } from '../../lib/authClient'
 import { saleRepository, paymentRepository, shiftRepository } from './repositories'
@@ -67,7 +68,11 @@ async function loadReport(businessId, fromIso, toIso) {
   }
 }
 
-export function useSalesReportData(businessId, range) {
+// The one read behind every sales figure for a period: Sales & Accounts and
+// the dashboard's "Sales today" share it (same key, same rows, same cache).
+// `refetchInterval` keeps a screen showing today in step with sales rung up on
+// other devices.
+export function useSalesReportData(businessId, range, { refetchInterval = false } = {}) {
   const fromIso = range ? range.start.toISOString() : null
   const toIso = range ? range.end.toISOString() : null
   return useQuery({
@@ -75,14 +80,12 @@ export function useSalesReportData(businessId, range) {
     queryFn: () => loadReport(businessId, fromIso, toIso),
     enabled: !!businessId && !!range,
     staleTime: 30_000,
+    refetchInterval,
   })
 }
 
+// After a correction, refund or deletion: every sales figure everywhere.
 export function useInvalidateSalesReport() {
   const qc = useQueryClient()
-  return () => {
-    qc.invalidateQueries({ queryKey: ['salesReport'] })
-    qc.invalidateQueries({ queryKey: ['sales'] })
-    qc.invalidateQueries({ queryKey: ['reports'] })
-  }
+  return () => invalidateSalesFigures(qc)
 }

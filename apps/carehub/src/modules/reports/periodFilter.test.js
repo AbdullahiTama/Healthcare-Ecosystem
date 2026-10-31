@@ -18,6 +18,7 @@ describe('inPeriod', () => {
     expect(rows.filter(r => inPeriod(r, opts)).map(r => r.id)).toEqual([2])
   })
   it('handles today, week, year and all', () => {
+    // now is Friday 23 Oct; this week is Mon 19 to Sun 25 Oct.
     expect(inPeriod(rows[0], { period: 'today', now })).toBe(false)
     expect(inPeriod(rows[0], { period: 'week', now })).toBe(true)
     expect(inPeriod(rows[1], { period: 'week', now })).toBe(false)
@@ -30,28 +31,36 @@ describe('inPeriod', () => {
 })
 
 describe('periodRange', () => {
+  // 15:30 UTC = 16:30 Lagos, Monday 26 Oct 2026. Bounds are Lagos midnights as UTC instants.
   const now = new Date('2026-10-26T15:30:00Z')
-  it('today is the UTC day', () => {
-    expect(periodRange({ period: 'today', now })).toEqual({ from: '2026-10-26T00:00:00', to: '2026-10-27T00:00:00' })
+  it('today is the Lagos business day', () => {
+    expect(periodRange({ period: 'today', now })).toEqual({ from: '2026-10-25T23:00:00.000Z', to: '2026-10-26T23:00:00.000Z' })
   })
   it('month is the chosen month, December rolls the year', () => {
-    expect(periodRange({ period: 'month', month: '2026-10', now })).toEqual({ from: '2026-10-01T00:00:00', to: '2026-11-01T00:00:00' })
-    expect(periodRange({ period: 'month', month: '2026-12', now })).toEqual({ from: '2026-12-01T00:00:00', to: '2027-01-01T00:00:00' })
+    expect(periodRange({ period: 'month', month: '2026-10', now })).toEqual({ from: '2026-09-30T23:00:00.000Z', to: '2026-10-31T23:00:00.000Z' })
+    expect(periodRange({ period: 'month', month: '2026-12', now })).toEqual({ from: '2026-11-30T23:00:00.000Z', to: '2026-12-31T23:00:00.000Z' })
   })
-  it('year is the current year; week is the last 7 days', () => {
-    expect(periodRange({ period: 'year', now })).toEqual({ from: '2026-01-01T00:00:00', to: '2027-01-01T00:00:00' })
-    expect(periodRange({ period: 'week', now })).toEqual({ from: '2026-10-19T15:30:00.000Z', to: null })
+  it('year is the current year; week runs Monday to Sunday, as in Sales & Accounts', () => {
+    expect(periodRange({ period: 'year', now })).toEqual({ from: '2025-12-31T23:00:00.000Z', to: '2026-12-31T23:00:00.000Z' })
+    expect(periodRange({ period: 'week', now })).toEqual({ from: '2026-10-25T23:00:00.000Z', to: '2026-11-01T23:00:00.000Z' })
   })
   it('all (or a bad month) has no bounds', () => {
     expect(periodRange({ period: 'all', now })).toEqual({ from: null, to: null })
     expect(periodRange({ period: 'month', month: 'oops', now })).toEqual({ from: null, to: null })
   })
-  it('every row inPeriod accepts falls inside the range', () => {
-    const rows = ['2026-10-01T00:00:00', '2026-10-31T23:59:59', '2026-11-01T00:00:00', '2026-09-30T23:59:59'].map((created_at) => ({ created_at }))
+  it('every row inPeriod accepts falls inside the range, at the Lagos midnight edges', () => {
+    // Zone-less database times are UTC: 23:00 on 30 Sep is 00:00 on 1 Oct in Lagos.
+    const rows = ['2026-09-30T22:59:59', '2026-09-30T23:00:00', '2026-10-31T22:59:59', '2026-10-31T23:00:00'].map((created_at) => ({ created_at }))
     const { from, to } = periodRange({ period: 'month', month: '2026-10', now })
+    const accepted = rows.map((r) => inPeriod(r, { period: 'month', month: '2026-10', now }))
+    expect(accepted).toEqual([false, true, true, false])
     for (const r of rows) {
-      const inRange = r.created_at >= from && r.created_at < to
-      expect(inRange).toBe(inPeriod(r, { period: 'month', month: '2026-10', now }))
+      const t = new Date(r.created_at + 'Z').toISOString()
+      expect(t >= from && t < to).toBe(inPeriod(r, { period: 'month', month: '2026-10', now }))
     }
+  })
+  it('a bare date (an expense date) is a business date as written', () => {
+    expect(inPeriod({ date: '2026-10-26' }, { period: 'today', now, dateOf: (e) => e.date })).toBe(true)
+    expect(inPeriod({ date: '2026-10-25' }, { period: 'today', now, dateOf: (e) => e.date })).toBe(false)
   })
 })

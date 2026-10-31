@@ -1,3 +1,4 @@
+import { businessDateTime } from '../../lib/businessDay'
 import { useState, useEffect, useRef, Component } from 'react'
 import { registerSwitchBlocker } from '../../lib/locationSwitch'
 import { useNavigate } from 'react-router-dom'
@@ -27,7 +28,7 @@ import SaleDetailModal from './SaleDetailModal'
 import { creditCustomerFor } from './customerPick'
 import { isDuplicateError } from '../../lib/dbErrors'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useTodaySales, useOpenSales, useRecentSales, useSettings, useClients, useCreateClient, useInvalidateSales } from '../../hooks/queries'
+import { useOpenSales, useRecentSales, useSettings, useClients, useCreateClient, useInvalidateSales } from '../../hooks/queries'
 
 const { tealDeep, tealMist, bg, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, warning, warningBg, success } = theme
 
@@ -138,13 +139,12 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const clientsQuery = useClients(brand?.id)
   const clients = clientsQuery.data || []
   const createClient = useCreateClient(brand?.id)
-  const { data: todaySales = [], isLoading: loadingToday } = useTodaySales(brand?.id)
   // Held and unpaid credit sales, and the latest completed sales for the
   // Recent tab — targeted reads instead of the whole sales history.
   const { data: openSales = [], isLoading: loadingOpen, isError: openError, refetch: refetchOpen } = useOpenSales(brand?.id)
   const recentQuery = useRecentSales(brand?.id, 50)
   const invalidateSales = useInvalidateSales(brand?.id)
-  const loadingSales = loadingToday || loadingOpen
+  const loadingSales = loadingOpen
 
   const heldSales = openSales.filter(s => s.is_on_hold)
   const creditSales = openSales.filter(s => s.is_credit && s.balance > 0)
@@ -750,7 +750,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
                 <div>
                   <div style={{ fontWeight: '800', fontSize: '15px' }}>{s.client_name || 'Walk-in'}</div>
                   <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{items.length} item(s) · {fmt(s.total)}</div>
-                  <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{s.created_at?.replace('T', ' ').slice(0, 16)}</div>
+                  <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{businessDateTime(s.created_at)}</div>
                   {s.notes && <div style={{ fontSize: '12px', color: gray600, marginTop: '4px', fontStyle: 'italic' }}>Note: {s.notes}</div>}
                   <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                     {items.map((it, i) => <span key={i} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: theme.radius.sm, background: tealMist, color: tealDeep, fontWeight: '600' }}>{it.name} ×{it.qty}</span>)}
@@ -793,7 +793,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
                   style={{ flex: '1 1 200px', minWidth: 0, textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: navy }}>
                   <div style={{ fontWeight: '700', fontSize: '14px', display: 'flex', alignItems: 'center', gap: 4 }}>{s.client_name || 'Walk-in'} <ChevronRight size={14} color={gray400} aria-hidden='true' /></div>
                   <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{s.txn_no} · {items.length} item(s) · {s.payment_method}</div>
-                  <div style={{ fontSize: '11px', color: theme.gray500, marginTop: '2px' }}>{s.created_at?.replace('T', ' ').slice(0, 16)}</div>
+                  <div style={{ fontSize: '11px', color: theme.gray500, marginTop: '2px' }}>{businessDateTime(s.created_at)}</div>
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ textAlign: 'right' }}>

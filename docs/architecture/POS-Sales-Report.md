@@ -34,14 +34,15 @@ All arithmetic lives in `apps/carehub/src/modules/pos/salesReport.js` (tested in
 |---|---|
 | Total sales | Σ `total` of completed sales created in the period |
 | Payments received | Σ ledger rows of kind `sale` + `collection` received in the period, split Cash / Transfer / POS |
-| Refunds | Σ ledger rows of kind `refund` in the period |
-| Net received | received − refunds |
-| Cash in hand | cash received − cash refunded |
+| Refunds | Σ ledger rows of kind `refund` in the period, except deleted-sale reversals |
+| Net received | received − refunds − deleted-sale reversals |
+| Cash in hand | cash received − cash refunded − cash reversed for deleted sales |
 | Credit given | per sale, `total` − what was paid at the till (ledger kind `sale`) |
 | Outstanding | Σ current `total − least(amount_paid, total)` of the period's sales |
 | Discounts | Σ `discount` |
 | Transactions | count of completed sales |
 | Expected cash (shift) | opening float + cash taken − cash refunded in that shift |
+| Deleted sales reversed | Σ ledger `refund` rows noted `Sale deleted: …` (shown only when non-zero) |
 
 - **Completed sale**: `NOT is_on_hold AND status IS NULL OR 'completed'`.
 - **Received excludes change**: the cash path stores the cash tendered in
@@ -49,9 +50,20 @@ All arithmetic lives in `apps/carehub/src/modules/pos/salesReport.js` (tested in
 - **A repayment counts on the day the money came in**, not on the sale's date.
 - **Cashier and shift filters**: sales figures follow who made the sale; money
   figures follow who received it.
-- **Days** are the device's local calendar. `sales.created_at` is
-  `timestamp without time zone` holding UTC, so zone-less values are read as
-  UTC (`parseDbTime`).
+- **Days** are business days in `Africa/Lagos` (`lib/businessDay.js`), not
+  the device's zone and not UTC, and the dashboard, Overview, Locations and
+  Financial Reports use the same days. Weeks run Monday to Sunday.
+  `sales.created_at` is `timestamp without time zone` holding UTC, so
+  zone-less values are read as UTC (`parseDbTime`), and every time on screen,
+  on receipts and in exports is shown in Lagos time.
+- **Total sales is gross.** Refunds are reported on their own, on the day the
+  money went back. The dashboard's "Sales today" is this report's "Total
+  sales" for Today: the same query (`useSalesReportData`) and the same
+  arithmetic (`reportView`). See
+  `docs/audits/2026-10-31-financial-figures-consistency-audit.md`.
+- **Deleted-sale reversals are not refunds.** `delete_sale()` reverses the
+  money with `refund` rows noted `Sale deleted: …`. They are reported as
+  "Deleted sales reversed"; net received and cash in hand count them.
 - **No cost or profit figure** appears on the page or in either export.
 
 ## Data (migration 1)

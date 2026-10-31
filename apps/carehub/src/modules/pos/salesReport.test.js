@@ -2,40 +2,49 @@ import { describe, it, expect } from 'vitest'
 import {
   periodRange, parseDbTime, isCompletedSale, parseItems, saleReceived, saleOutstanding,
   paymentStatus, filterSales, filterPayments, summarise, toReportRows, filterOptions, EMPTY_FILTERS, expectedCash,
+  sumTotalSales, reportView, isDeletionReversal,
 } from './salesReport'
 
-// A fixed local "now": Wednesday 2026-10-21 15:30 local time.
-const NOW = new Date(2026, 9, 21, 15, 30)
-const local = (y, m, d, h = 0) => new Date(y, m - 1, d, h)
+// Periods are business days in Lagos (UTC+1, no daylight saving), whatever
+// zone the device or the test runner is in (lib/businessDay.test.js covers the
+// boundaries). A fixed "now": Wednesday 2026-10-21 15:30 Lagos time.
+const lagos = (y, m, d, h = 0, min = 0) => new Date(Date.UTC(y, m - 1, d, h - 1, min))
+const NOW = lagos(2026, 10, 21, 15, 30)
 
 describe('periodRange', () => {
-  it('today runs from local midnight to the next local midnight', () => {
+  it('today runs from Lagos midnight to the next Lagos midnight', () => {
     const r = periodRange('today', { now: NOW })
-    expect(r.start).toEqual(local(2026, 10, 21))
-    expect(r.end).toEqual(local(2026, 10, 22))
+    expect(r.start).toEqual(lagos(2026, 10, 21))
+    expect(r.end).toEqual(lagos(2026, 10, 22))
   })
-  it('yesterday is the previous local day', () => {
+  it('yesterday is the previous Lagos day', () => {
     const r = periodRange('yesterday', { now: NOW })
-    expect(r.start).toEqual(local(2026, 10, 20))
-    expect(r.end).toEqual(local(2026, 10, 21))
+    expect(r.start).toEqual(lagos(2026, 10, 20))
+    expect(r.end).toEqual(lagos(2026, 10, 21))
   })
   it('this week starts on Monday', () => {
     const r = periodRange('week', { now: NOW })
-    expect(r.start).toEqual(local(2026, 10, 19))
-    expect(r.end).toEqual(local(2026, 10, 26))
+    expect(r.start).toEqual(lagos(2026, 10, 19))
+    expect(r.end).toEqual(lagos(2026, 10, 26))
   })
   it('this week on a Sunday still starts on the Monday before', () => {
-    const r = periodRange('week', { now: new Date(2026, 9, 25, 9) })
-    expect(r.start).toEqual(local(2026, 10, 19))
+    const r = periodRange('week', { now: lagos(2026, 10, 25, 9) })
+    expect(r.start).toEqual(lagos(2026, 10, 19))
   })
   it('this month and this year', () => {
-    expect(periodRange('month', { now: NOW })).toEqual({ start: local(2026, 10, 1), end: local(2026, 11, 1) })
-    expect(periodRange('year', { now: NOW })).toEqual({ start: local(2026, 1, 1), end: local(2027, 1, 1) })
+    expect(periodRange('month', { now: NOW })).toEqual({ start: lagos(2026, 10, 1), end: lagos(2026, 11, 1) })
+    expect(periodRange('year', { now: NOW })).toEqual({ start: lagos(2026, 1, 1), end: lagos(2027, 1, 1) })
   })
   it('custom is inclusive of both days', () => {
     const r = periodRange('custom', { from: '2026-10-01', to: '2026-10-03' })
-    expect(r.start).toEqual(local(2026, 10, 1))
-    expect(r.end).toEqual(local(2026, 10, 4))
+    expect(r.start).toEqual(lagos(2026, 10, 1))
+    expect(r.end).toEqual(lagos(2026, 10, 4))
+  })
+  it('a sale at 00:20 Lagos time is in that day, not the day before', () => {
+    // Stored as 23:20 UTC the previous day; the old UTC cut put it on the 18th.
+    const at = parseDbTime('2026-07-18T23:20:31')
+    const r = periodRange('today', { now: lagos(2026, 7, 19, 12) })
+    expect(at >= r.start && at < r.end).toBe(true)
   })
   it('custom with the dates reversed or missing is not a range', () => {
     expect(periodRange('custom', { from: '2026-10-05', to: '2026-10-03' })).toBeNull()
@@ -258,5 +267,59 @@ describe('expectedCash', () => {
   })
   it('a shift with no payments expects its float', () => {
     expect(expectedCash({ id: 'x', opening_float: 2500 }, [])).toBe(2500)
+  })
+})
+
+describe('one set of figures for every screen (financial consistency audit)', () => {
+  // The shape of Pharmacy A's day after holding and completing invoices: every
+  // completed hold leaves its held row behind as 'converted', with the same total.
+  const at = '2026-10-30T10:00:00'
+  const data = {
+    sales: [
+      { id: 'a', total: 5000, amount_paid: 5000, payment_method: 'Cash', created_at: at, is_on_hold: false, status: null },
+      { id: 'b', total: 3000, amount_paid: 3000, payment_method: 'Transfer', created_at: at, is_on_hold: false, status: null, resumed_from: 'conv' },
+      { id: 'conv', total: 3000, amount_paid: 0, payment_method: 'Transfer', created_at: at, is_on_hold: false, status: 'converted' },
+      { id: 'res', total: 900, payment_method: 'Cash', created_at: at, is_on_hold: false, status: 'resumed' },
+      { id: 'del', total: 1200, amount_paid: 1200, payment_method: 'Cash', created_at: at, is_on_hold: false, status: 'deleted' },
+      { id: 'held', total: 700, payment_method: 'Cash', created_at: at, is_on_hold: true, status: null },
+    ],
+    payments: [
+      { id: 'p1', sale_id: 'a', kind: 'sale', method: 'Cash', amount: 5000 },
+      { id: 'p2', sale_id: 'b', kind: 'sale', method: 'Transfer', amount: 3000 },
+      { id: 'p3', sale_id: 'del', kind: 'sale', method: 'Cash', amount: 1200 },
+      { id: 'p4', sale_id: 'del', kind: 'refund', method: 'Cash', amount: 1200, note: 'Sale deleted: rung up twice' },
+      { id: 'p5', sale_id: 'a', kind: 'refund', method: 'Cash', amount: 500, note: 'Expired item returned' },
+    ],
+    ledgerAvailable: true,
+  }
+  data.salesById = Object.fromEntries(data.sales.map((s) => [s.id, s]))
+
+  it('counts held, converted, resumed and deleted rows nowhere', () => {
+    const { sales, summary } = reportView(data)
+    expect(sales.map((s) => s.id)).toEqual(['a', 'b'])
+    expect(summary.totalSales).toBe(8000)
+    expect(summary.transactions).toBe(2)
+  })
+
+  it('total sales is gross; refunds are reported beside it', () => {
+    expect(sumTotalSales([{ total: 1000, refunded_amount: 1000 }, { total: '250.5' }])).toBe(1250.5)
+    expect(reportView(data).summary.refunds.total).toBe(500)
+  })
+
+  it("an owner's deletion is a reversal, not a refund, and net received counts both", () => {
+    expect(isDeletionReversal(data.payments[3])).toBe(true)
+    expect(isDeletionReversal(data.payments[4])).toBe(false)
+    const { summary } = reportView(data)
+    expect(summary.reversals.total).toBe(1200)
+    expect(summary.received.total).toBe(9200)
+    expect(summary.netReceived).toBe(7500)
+    expect(summary.cashInHand).toBe(4500)
+  })
+
+  it('reportView applies the same filters as the report screen', () => {
+    const f = { ...EMPTY_FILTERS, method: 'Transfer' }
+    const { sales, summary } = reportView(data, f)
+    expect(sales.map((s) => s.id)).toEqual(['b'])
+    expect(summary).toEqual(summarise({ sales: filterSales(data.sales, f), payments: filterPayments(data.payments, data.salesById, f) }))
   })
 })

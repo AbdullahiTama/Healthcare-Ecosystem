@@ -6,7 +6,7 @@ import { Chips, Pills, YesNo, SectionCard, ProductSearchPicker } from './formPar
 import { consultationRepository } from './repositories'
 import { clientRepository } from '../clients/repositories'
 import { useQueryClient } from '@tanstack/react-query'
-import { useClients, keys } from '../../hooks/queries'
+import { useClients, keys, invalidateSalesFigures } from '../../hooks/queries'
 import ClientsLoadNote from '../clients/components/ClientsLoadNote'
 import { saleRepository } from '../pos/repositories'
 import { genId } from '../../lib/utils'
@@ -172,6 +172,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
           is_on_hold: false,
         }, { queueOffline: false })
         saleId = result?.sale?.id || null
+        invalidateSalesFigures(queryClient)
       }
 
       const source = chargeItems.length ? 'dispensed' : 'recommended'

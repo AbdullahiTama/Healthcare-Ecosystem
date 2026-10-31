@@ -1,6 +1,9 @@
-import { saleNet } from '../pos/salesReport'
+import { periodRange, reportView, isCompletedSale } from '../pos/salesReport'
+import { useSalesReportData } from '../pos/useSalesReportData'
+import { useBusinessToday } from '../../hooks/useBusinessToday'
+import { businessTime, businessDate, parseDbTime, BUSINESS_TZ } from '../../lib/businessDay'
 import { useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   BarChart2, Pause, CreditCard, AlertTriangle, Package, Pill, Calendar,
   Plus, FileText, Receipt, CheckCircle, ArrowRight, ShoppingCart,
@@ -19,9 +22,13 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { canSeeAllActivity, isManagerRole } from '../../lib/permissions'
 import FieldTeamToday from './FieldTeamToday.jsx'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useTodaySales, useOpenSales, useAppointments, useSettings, useInvalidateSales } from '../../hooks/queries'
+import { useOpenSales, useAppointments, useSettings, useInvalidateSales } from '../../hooks/queries'
 
 const { tealDeep, tealMist, navy, gray500, gray400, border, success, bg } = theme
+
+// Today's figures refresh on their own, so a dashboard left open at the counter
+// keeps up with sales rung up on other devices.
+const LIVE_REFRESH_MS = 60_000
 
 export default function DashboardHome({ brand, products, catalog, role, perms, staffId = null, customRoles }) {
   // Shared product catalog state (inventory/hooks/useProductCatalog.js). Stock
@@ -42,7 +49,16 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
     canSeeAllActivity({ isOwner: role === 'Owner', role, perms })
   const canSeeAppts = !perms?.nav || perms.nav.includes('appointments')
 
-  const { data: todaySales = [], isLoading: loadingToday, isError: errToday, refetch: refetchToday } = useTodaySales(brand?.id)
+  // "Sales today" is the Sales & Accounts report for Today: the same query, the
+  // same rows and the same arithmetic (salesReport.reportView), so the two
+  // screens cannot disagree. Gross sales; refunds are shown beside it.
+  const businessToday = useBusinessToday()
+  const todayRange = useMemo(() => periodRange('today'), [businessToday])
+  const { data: todayData, isLoading: loadingToday, isError: errToday, refetch: refetchToday } =
+    useSalesReportData(brand?.id, todayRange, { refetchInterval: LIVE_REFRESH_MS })
+  const todayView = useMemo(() => (todayData ? reportView(todayData) : null), [todayData])
+  const todaySales = useMemo(() => [...(todayView?.sales || [])]
+    .sort((a, b) => (parseDbTime(b.created_at)?.getTime() || 0) - (parseDbTime(a.created_at)?.getTime() || 0)), [todayView])
   // A recent sale opened in full (items, payments, receipt).
   const [detailSale, setDetailSale] = useState(null)
   const { data: settings } = useSettings(brand?.id)
@@ -61,7 +77,8 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
     canSeeAppts && errAppts && refetchAppts,
   ].filter(Boolean)
 
-  const todayTotal = todaySales.reduce((s, x) => s + saleNet(x), 0)
+  const todayTotal = todayView?.summary.totalSales || 0
+  const todayRefunds = todayView?.summary.refunds.total || 0
   const heldSales = openSales.filter(s => s.is_on_hold)
   const creditSales = openSales.filter(s => s.is_credit && s.balance > 0)
   const creditTotal = creditSales.reduce((s, x) => s + (x.balance || 0), 0)
@@ -71,7 +88,7 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
   const outCount = outStock.length
   const stockAlertCount = lowCount + outCount
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = businessToday
   const upcomingAppts = appts
     .filter(a => (a.date || '') >= todayStr && a.status !== 'cancelled' && a.status !== 'completed')
     .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')))
@@ -94,7 +111,7 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
 
   useEffect(() => {
     if (role !== 'Owner' || !brand?.id || loading || !catalogFresh) return
-    const dayKey = new Date().toISOString().split('T')[0]
+    const dayKey = businessDate()
     const keyFor = (kind) => 'carehub_notified_' + kind + '_' + brand.id
     const sentToday = (kind) => { try { return localStorage.getItem(keyFor(kind)) === dayKey } catch (e) { return false } }
     const markSent = (kind) => { try { localStorage.setItem(keyFor(kind), dayKey) } catch (e) {} }
@@ -134,7 +151,7 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
         // sales, not the whole history.
         const recentSales = sentToday('sales_velocity')
           ? []
-          : await saleRepository.getSince(brand.id, new Date(Date.now() - 30 * 86400000).toISOString())
+          : (await saleRepository.getSince(brand.id, new Date(Date.now() - 30 * 86400000).toISOString()) || []).filter(isCompletedSale)
         if (recentSales.length > 0 && !sentToday('sales_velocity')) {
           const v = classifySalesVelocity(products, recentSales, { days: 30 })
           const parts = []
@@ -159,7 +176,7 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
   const attentionCount = outCount + lowCount + creditSales.length + (showApptItem ? 1 : 0)
   const worklistEmpty = attentionCount === 0 && !catalogLoading
 
-  const today = new Date().toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long' })
+  const today = new Date().toLocaleDateString('en-NG', { timeZone: BUSINESS_TZ, weekday: 'long', day: 'numeric', month: 'long' })
   const branchLabel = brand?.city ? `${brand.city} branch` : (brand?.name || businessName(bType))
   // Shared badge skin for the worklist row actions (Restock / Reorder / …).
   const badgeBtn = { padding: '7px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: 700, fontSize: 12, cursor: 'pointer', flexShrink: 0 }
@@ -201,9 +218,9 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
         {/* KPI row — minColumn 160 pins today's minmax(160px,1fr) floor so the
             wrap sequence stays 4/4/3/2 at 1280/1024/768/375 (human decision B). */}
         <MetricGrid label="Key metrics" minColumn={160}>
-          <StatCard icon={<BarChart2 />} label='Sales today' value={fmt(todayTotal)} sub={`${todaySales.length} transaction${todaySales.length === 1 ? '' : 's'}`} onClick={() => navigate('/dashboard/pos')} />
+          <StatCard icon={<BarChart2 />} label='Sales today' value={fmt(todayTotal)} sub={`${todaySales.length} transaction${todaySales.length === 1 ? '' : 's'}${todayRefunds > 0 ? ` · ${fmt(todayRefunds)} refunded` : ''}`} onClick={() => navigate('/dashboard/pos/report')} />
           <StatCard icon={<Pause />} label='Held sales' value={heldSales.length} sub={heldSales.length > 0 ? 'waiting at counter' : 'none on hold'} onClick={() => navigate('/dashboard/pos')} />
-          <StatCard icon={<CreditCard />} label='Owed to you' value={fmt(creditTotal)} sub={`${creditSales.length} credit sale${creditSales.length === 1 ? '' : 's'} open`} tone={creditSales.length > 0 ? 'warning' : 'default'} onClick={() => navigate('/dashboard/debts')} />
+          <StatCard icon={<CreditCard />} label='Owed to you' value={fmt(creditTotal)} sub={`${creditSales.length} open credit sale${creditSales.length === 1 ? '' : 's'} · all dates`} tone={creditSales.length > 0 ? 'warning' : 'default'} onClick={() => navigate('/dashboard/debts')} />
           {catalogLoading ? (
             <StatCard icon={<AlertTriangle />} label='Stock alerts' value='…' sub={catalog?.loadedCount > 0 ? `Loading products… ${catalog.loadedCount.toLocaleString()}` : 'Loading products…'} onClick={() => navigate('/dashboard/inventory')} />
           ) : (
@@ -308,7 +325,7 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
                   id: s.id,
                   icon: <Avatar name={s.client_name || 'Walk-in'} size={30} />,
                   title: s.client_name || 'Walk-in',
-                  meta: `${s.payment_method} · ${(s.created_at || '').slice(11, 16)}`,
+                  meta: `${s.payment_method} · ${businessTime(s.created_at)}`,
                   value: fmt(s.total),
                   onClick: () => setDetailSale(s),
                 }))}

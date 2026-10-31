@@ -14,6 +14,8 @@
 //     person who took the money for money figures.
 //   * No cost or profit figure is produced here, by design.
 
+import { businessPeriod, parseDbTime, BUSINESS_TZ } from '../../lib/businessDay'
+
 export const METHODS = ['Cash', 'Transfer', 'POS']
 export const SALE_METHODS = ['Cash', 'Transfer', 'POS', 'Split', 'Credit']
 export const STATUSES = ['Paid', 'Part-paid', 'Unpaid', 'Refund']
@@ -33,48 +35,13 @@ const emptyByMethod = () => ({ total: 0, Cash: 0, Transfer: 0, POS: 0, Unspecifi
 
 // ── Time ──────────────────────────────────────────────────────────────────────
 
-// `sales.created_at` is `timestamp without time zone` holding UTC, so PostgREST
-// returns it with no zone; `new Date()` would read that as LOCAL time and shift
-// every sale by the device's offset. A zone-less value is read as UTC.
-export function parseDbTime(v) {
-  if (!v) return null
-  const s = String(v)
-  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(s)
-  const d = new Date(hasZone ? s : s + 'Z')
-  return Number.isNaN(d.getTime()) ? null : d
-}
-
-const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
-const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
-const parseLocalDate = (s) => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''))
-  if (!m) return null
-  const d = new Date(+m[1], +m[2] - 1, +m[3])
-  return d.getMonth() === +m[2] - 1 ? d : null
-}
-
-// The device's local calendar (the till is in the shop), as [start, end).
+// Days are business days (lib/businessDay.js): the same "today" as the
+// dashboard and Financial Reports, whatever zone or date the device is set to.
 // Weeks start on Monday. Custom ranges are inclusive of both days; a reversed
 // or unreadable custom range returns null rather than a silently swapped one.
+export { parseDbTime }
 export function periodRange(period, { now = new Date(), from, to } = {}) {
-  const today = startOfDay(now)
-  switch (period) {
-    case 'today': return { start: today, end: addDays(today, 1) }
-    case 'yesterday': return { start: addDays(today, -1), end: today }
-    case 'week': {
-      const start = addDays(today, -((today.getDay() + 6) % 7))
-      return { start, end: addDays(start, 7) }
-    }
-    case 'month': return { start: new Date(today.getFullYear(), today.getMonth(), 1), end: new Date(today.getFullYear(), today.getMonth() + 1, 1) }
-    case 'year': return { start: new Date(today.getFullYear(), 0, 1), end: new Date(today.getFullYear() + 1, 0, 1) }
-    case 'custom': {
-      const a = parseLocalDate(from)
-      const b = parseLocalDate(to)
-      if (!a || !b || a > b) return null
-      return { start: a, end: addDays(b, 1) }
-    }
-    default: return null
-  }
+  return businessPeriod(period, { now, from, to })
 }
 
 // ── Reading a sale ────────────────────────────────────────────────────────────
@@ -185,12 +152,25 @@ export function filterPayments(payments, salesById, f = EMPTY_FILTERS) {
 
 // ── The summary ───────────────────────────────────────────────────────────────
 
+// Total sales: the gross value of completed sales, before refunds (refunds are
+// reported on their own, on the day the money went back). The one rule every
+// "Sales today" / "Total sales" figure uses: dashboard, Overview, Locations
+// and Sales & Accounts.
+export const sumTotalSales = (sales) => money((sales || []).reduce((n, s) => n + num(s.total), 0))
+
+// When the Owner deletes a sale, delete_sale() appends 'refund' rows noted
+// "Sale deleted: …" to reverse the money (carehub_20261216). They are not
+// money handed back to a customer, so they are reported as reversals, not
+// refunds; net received counts both.
+export const isDeletionReversal = (p) => p.kind === 'refund' && /^Sale deleted:/.test(String(p.note || ''))
+
 // `payments` are the ledger rows already filtered for the view; `ledgerAvailable`
 // false means the ledger table is not deployed yet, so money figures are
 // estimated from the sales themselves and flagged `estimated`.
 export function summarise({ sales = [], payments = [], ledgerAvailable = true }) {
   const received = emptyByMethod()
   const refunds = emptyByMethod()
+  const reversals = emptyByMethod()
   let collections = 0
   const tillPaid = {}
 
@@ -198,6 +178,7 @@ export function summarise({ sales = [], payments = [], ledgerAvailable = true })
     for (const p of payments) {
       const amt = num(p.amount)
       const m = p.method in received ? p.method : 'Unspecified'
+      if (isDeletionReversal(p)) { reversals[m] += amt; reversals.total += amt; continue }
       if (p.kind === 'refund') { refunds[m] += amt; refunds.total += amt; continue }
       received[m] += amt; received.total += amt
       if (p.kind === 'collection') collections += amt
@@ -213,12 +194,10 @@ export function summarise({ sales = [], payments = [], ledgerAvailable = true })
     }
   }
 
-  let totalSales = 0
   let discounts = 0
   let outstanding = 0
   const credit = { count: 0, amount: 0 }
   for (const s of sales) {
-    totalSales += num(s.total)
     discounts += num(s.discount)
     outstanding += saleOutstanding(s)
     const unpaidAtTill = num(s.total) - (tillPaid[s.id] || 0)
@@ -227,7 +206,7 @@ export function summarise({ sales = [], payments = [], ledgerAvailable = true })
 
   const round = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, money(v)]))
   return {
-    totalSales: money(totalSales),
+    totalSales: sumTotalSales(sales),
     discounts: money(discounts),
     transactions: sales.length,
     outstanding: money(outstanding),
@@ -235,10 +214,21 @@ export function summarise({ sales = [], payments = [], ledgerAvailable = true })
     received: round(received),
     collections: money(collections),
     refunds: round(refunds),
-    netReceived: money(received.total - refunds.total),
-    cashInHand: money(received.Cash - refunds.Cash),
+    reversals: round(reversals),
+    netReceived: money(received.total - refunds.total - reversals.total),
+    cashInHand: money(received.Cash - refunds.Cash - reversals.Cash),
     estimated: !ledgerAvailable,
   }
+}
+
+// The filtered sales, payments and summary for one view of the report data
+// (useSalesReportData). Sales & Accounts and the dashboard both call this, so
+// "Sales today" on the dashboard is the same number, from the same rows and
+// the same arithmetic, as "Total sales" for Today in Sales & Accounts.
+export function reportView(data, filters = EMPTY_FILTERS) {
+  const sales = filterSales(data?.sales, filters)
+  const payments = filterPayments(data?.payments, data?.salesById || {}, filters)
+  return { sales, payments, summary: summarise({ sales, payments, ledgerAvailable: data?.ledgerAvailable !== false }) }
 }
 
 // Cash that should be in the drawer for one shift: opening float + cash taken
@@ -255,7 +245,7 @@ export function expectedCash(shift, payments = []) {
 
 // ── Rows for the table and the exports ────────────────────────────────────────
 
-const timeFmt = (d) => (d ? d.toLocaleString('en-NG', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '')
+const timeFmt = (d) => (d ? d.toLocaleString('en-NG', { timeZone: BUSINESS_TZ, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '')
 
 export function shiftLabel(shift) {
   if (!shift) return 'No shift'

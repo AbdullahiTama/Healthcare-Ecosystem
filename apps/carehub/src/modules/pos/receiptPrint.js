@@ -12,6 +12,7 @@ import { esc } from '../../lib/escape.js'
 import { fmt, nowStr } from '../../lib/utils.js'
 import QRCode from 'qrcode'
 import { parseDbTime } from './salesReport.js'
+import { BUSINESS_TZ } from '../../lib/businessDay.js'
 
 // A stored `sales` row → the receipt shape buildReceiptHtml/buildReceiptEscpos
 // read. Used to reprint a past sale (POS Recent tab, Sales & Accounts report).
@@ -61,8 +62,9 @@ export const computeTax = (total, taxRate) => {
 
 // Formatted for the same en-NG medium date + short time shape nowStr() uses,
 // so a sale's created_at reprints identically to a freshly-printed receipt.
+// created_at has no zone and holds UTC (parseDbTime); it is shown in business time.
 export const fmtReceiptDate = (d) => d
-  ? new Date(d).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })
+  ? (parseDbTime(d)?.toLocaleString('en-NG', { timeZone: BUSINESS_TZ, dateStyle: 'medium', timeStyle: 'short' }) || nowStr())
   : nowStr()
 
 // Paper width configuration. 58mm rolls keep ~48mm usable; 80mm rolls ~72mm.

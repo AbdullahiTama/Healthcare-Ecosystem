@@ -12,6 +12,7 @@ import { expenseDate, sumExpenses, sumByCategory } from '../expenses/expenseRule
 import { purchaseRepository } from '../purchases/repositories'
 import { adrReportRepository } from '../adr/repositories'
 import { inPeriod, periodRange } from './periodFilter'
+import { businessDateOf } from '../../lib/businessDay'
 import { searchSales } from './transactionSearch'
 import { isCompletedSale, saleNet, saleRefunded, paymentStatus } from '../pos/salesReport'
 import SaleDetailModal from '../pos/SaleDetailModal'
@@ -27,6 +28,8 @@ const { tealDeep, navy, gray600, gray500, gray400, gray100, gray50, border, dang
 
 const PAGE = 50
 const STATUS_PILL = { Paid: 'green', 'Part-paid': 'amber', Unpaid: 'red' }
+// Same periods and words as Sales & Accounts; weeks run Monday to Sunday.
+const REPORT_PERIODS = [['today', 'Today'], ['week', 'This week'], ['month', 'Month'], ['year', 'This year'], ['all', 'All time']]
 
 export default function Reports({ brand, role, perms, embedded = false }) {
   const [period, setPeriod] = useState('month')
@@ -91,7 +94,6 @@ export default function Reports({ brand, role, perms, embedded = false }) {
   const totalPurchases = fPurchases.reduce((s, x) => s + (x.total_cost || 0), 0)
   const netProfit = totalRevenue - totalExpenses - totalPurchases
   const creditBalance = openSales.filter(s => s.is_credit && (s.balance || 0) > 0).reduce((s, x) => s + (x.balance || 0), 0)
-  const cashCollected = fSales.filter(s => s.is_credit && s.amount_paid > 0).reduce((s, x) => s + (x.amount_paid || 0), 0)
 
   const byMethod = {}
   fSales.forEach(s => { byMethod[s.payment_method] = (byMethod[s.payment_method] || 0) + saleNet(s) })
@@ -99,7 +101,7 @@ export default function Reports({ brand, role, perms, embedded = false }) {
   const byExpCat = sumByCategory(fExpenses)
 
   const dailySales = {}
-  fSales.forEach(s => { const d = s.created_at?.split('T')[0] || ''; dailySales[d] = (dailySales[d] || 0) + saleNet(s) })
+  fSales.forEach(s => { const d = businessDateOf(s.created_at); dailySales[d] = (dailySales[d] || 0) + saleNet(s) })
   const dailyDates = Object.keys(dailySales).sort().slice(-14)
   const maxDaily = Math.max(...Object.values(dailySales), 1)
 
@@ -119,11 +121,11 @@ export default function Reports({ brand, role, perms, embedded = false }) {
       [],
       ['SALES DETAIL'],
       ['Date', 'Transaction No', 'Client', 'Total', 'Refunded', 'Net', 'Payment Method', 'Credit?'],
-      ...searched.map(s => [s.created_at?.split('T')[0] || '', s.txn_no || '', s.client_name || 'Walk-in', s.total || 0, saleRefunded(s), saleNet(s), s.payment_method || '', s.is_credit ? 'Yes' : 'No']),
+      ...searched.map(s => [businessDateOf(s.created_at), s.txn_no || '', s.client_name || 'Walk-in', s.total || 0, saleRefunded(s), saleNet(s), s.payment_method || '', s.is_credit ? 'Yes' : 'No']),
       [],
       ['EXPENSES DETAIL'],
       ['Date', 'Category', 'Description', 'Amount', 'Staff'],
-      ...fExpenses.map(e => [e.date || e.created_at?.split('T')[0] || '', e.category || '', e.description || '', e.amount || 0, e.staff_name || '']),
+      ...fExpenses.map(e => [businessDateOf(e.date || e.created_at), e.category || '', e.description || '', e.amount || 0, e.staff_name || '']),
       [],
       ['PURCHASES DETAIL'],
       ['Date', 'Supplier', 'Product', 'Total Cost', 'Paid', 'Balance', 'Status'],
@@ -161,10 +163,10 @@ export default function Reports({ brand, role, perms, embedded = false }) {
       )}
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
-        {['today', 'week', 'month', 'year', 'all'].map(p => { const on = period === p; return (
-          <button key={p} onClick={() => setPeriod(p)}
-            style={{ padding: '8px 14px', borderRadius: theme.radius.full, border: `1px solid ${on ? tealDeep : border}`, cursor: 'pointer', fontSize: '12px', fontWeight: '700', background: on ? tealDeep : 'white', color: on ? 'white' : gray600, textTransform: 'capitalize' }}>
-            {p === 'all' ? 'All time' : p}
+        {REPORT_PERIODS.map(([p, label]) => { const on = period === p; return (
+          <button key={p} onClick={() => setPeriod(p)} aria-pressed={on}
+            style={{ padding: '8px 14px', borderRadius: theme.radius.full, border: `1px solid ${on ? tealDeep : border}`, cursor: 'pointer', fontSize: '12px', fontWeight: '700', background: on ? tealDeep : 'white', color: on ? 'white' : gray600 }}>
+            {label}
           </button>
         )})}
         {period === 'month' && (
@@ -212,7 +214,7 @@ export default function Reports({ brand, role, perms, embedded = false }) {
             <Card style={{ padding: '20px', borderLeft: `4px solid ${warning}` }}>
               <div style={{ fontSize: '12px', color: gray500, fontWeight: '600', marginBottom: '4px' }}>Credit outstanding</div>
               <div style={{ fontSize: '28px', fontWeight: '900', color: warning }}>{fmt(creditBalance)}</div>
-              <div style={{ fontSize: '12px', color: gray400, marginTop: '4px' }}>Unpaid credit sales</div>
+              <div style={{ fontSize: '12px', color: gray400, marginTop: '4px' }}>All open credit sales, any date</div>
             </Card>
             <Card style={{ padding: '20px', borderLeft: `4px solid ${warning}` }}>
               <div style={{ fontSize: '12px', color: gray500, fontWeight: '600', marginBottom: '4px' }}>Total ADR Reports</div>
@@ -291,7 +293,7 @@ export default function Reports({ brand, role, perms, embedded = false }) {
                   style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 20px', border: 'none', borderBottom: `1px solid ${gray100}`, background: 'white', cursor: 'pointer', textAlign: 'left' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{s.client_name || 'Walk-in'}</div>
-                    <div style={{ fontSize: '11px', color: gray400 }}>{s.txn_no} · {s.created_at?.split('T')[0]} · {s.payment_method}</div>
+                    <div style={{ fontSize: '11px', color: gray400 }}>{s.txn_no} · {businessDateOf(s.created_at)} · {s.payment_method}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                     <div style={{ textAlign: 'right' }}>

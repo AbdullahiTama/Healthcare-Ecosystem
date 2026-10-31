@@ -1,3 +1,4 @@
+import { BUSINESS_TZ } from '../../lib/businessDay'
 import { useEffect, useState } from 'react'
 import { Pencil, Printer, RotateCcw, Trash2, Wallet, Plus, Minus, History } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -11,7 +12,7 @@ import { saleToReceipt, buildReceiptHtml, buildReceiptQrDataUrl } from './receip
 const { navy, gray400, gray500, gray600, gray100, border, bg, danger, success, warning, tealDeep, tealMist } = theme
 
 const cleanServerError = (e) => String(e?.message || e).replace(/^Supabase error \(\d{3}\):\s*/, '')
-const when = (v) => parseDbTime(v)?.toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }) || ''
+const when = (v) => parseDbTime(v)?.toLocaleString('en-NG', { timeZone: BUSINESS_TZ, dateStyle: 'medium', timeStyle: 'short' }) || ''
 const STATUS_PILL = { Paid: 'green', 'Part-paid': 'amber', Unpaid: 'red' }
 const KIND_LABEL = { sale: 'Paid at the till', collection: 'Repayment', refund: 'Refund' }
 

@@ -1,3 +1,4 @@
+import { businessDateOf } from '../../lib/businessDay'
 import { useState, useEffect, useRef } from 'react'
 import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus, ChevronDown } from 'lucide-react'
 import { expenseRepository } from './repositories'
@@ -302,7 +303,7 @@ export default function Expenses({ brand, role, perms }) {
                     <td style={{ padding: '12px 16px' }}><Pill label={e.category} type='teal' /></td>
                     <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>{e.description || 'Not set'}</td>
                     <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '900', color: danger }}>{fmt(e.amount)}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '12px', color: gray400 }}>{e.date || e.created_at?.split('T')[0]}</td>
+                    <td style={{ padding: '12px 16px', fontSize: '12px', color: gray400 }}>{businessDateOf(e.date || e.created_at)}</td>
                     <td style={{ padding: '12px 16px', fontSize: '13px', color: gray500 }}>{e.staff_name || 'Not set'}</td>
                     <td style={{ padding: '12px 16px' }}>
                       {perms?.canDelete && <RedBtn onClick={() => askDelete(e)} style={{ padding: '4px 9px', fontSize: '11px' }}>Delete</RedBtn>}

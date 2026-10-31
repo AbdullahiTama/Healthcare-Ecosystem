@@ -1,3 +1,4 @@
+import { BUSINESS_TZ } from '../../lib/businessDay'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -11,9 +12,10 @@ import { useSettings } from '../../hooks/queries'
 import { fmt, todayDate } from '../../lib/utils'
 import { auditRepository } from '../audit/repositories'
 import {
-  PERIODS, SALE_METHODS, STATUSES, EMPTY_FILTERS, periodRange, filterSales, filterPayments, summarise,
+  PERIODS, SALE_METHODS, STATUSES, EMPTY_FILTERS, periodRange, reportView, isDeletionReversal,
   toReportRows, filterOptions, parseDbTime, cashierKey, expectedCash,
 } from './salesReport'
+import { useBusinessToday } from '../../hooks/useBusinessToday'
 import { exportSalesReportXlsx, printSalesReport } from './salesReportExport'
 import { usePlanGate } from '../../hooks/usePlanGate'
 import { useAuthUserId, useSalesReportData, useInvalidateSalesReport } from './useSalesReportData'
@@ -23,9 +25,11 @@ import ShiftControl from './ShiftControl'
 const { navy, gray400, gray500, gray600, gray100, border, bg, tealDeep, tealMist, danger, success, warning, warningBg } = theme
 
 const PAGE = 100
+const LIVE_REFRESH_MS = 60_000
 const STATUS_PILL = { Paid: 'green', 'Part-paid': 'amber', Unpaid: 'red' }
 const KIND_LABEL = { sale: 'At the till', collection: 'Repayment', refund: 'Refund' }
-const shortTime = (d) => (d ? d.toLocaleString('en-NG', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '')
+const kindLabel = (p) => (isDeletionReversal(p) ? 'Sale deleted (reversed)' : KIND_LABEL[p.kind])
+const shortTime = (d) => (d ? d.toLocaleString('en-NG', { timeZone: BUSINESS_TZ, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '')
 
 // The till's Sales & Accounts report (route /dashboard/pos/report). A cashier
 // reconciles what was sold against the money that came in, by period, and an
@@ -60,22 +64,25 @@ export default function SalesReport({ brand, role, perms, staffName }) {
   const [openSaleId, setOpenSaleId] = useState(null)
   const [exporting, setExporting] = useState(false)
 
-  const range = useMemo(() => periodRange(period, { from, to }), [period, from, to])
-  const { data, isLoading, isError, error, refetch, isFetching } = useSalesReportData(brand?.id, range)
+  // Recomputed at business midnight, so "Today" on a page left open overnight moves on.
+  const businessToday = useBusinessToday()
+  const range = useMemo(() => periodRange(period, { from, to }), [period, from, to, businessToday])
+  // Today's figures keep in step with the other tills and the dashboard.
+  const { data, isLoading, isError, error, refetch, isFetching } = useSalesReportData(brand?.id, range,
+    { refetchInterval: period === 'today' ? LIVE_REFRESH_MS : false })
 
   // A cashier's view is pinned to their own transactions.
   const effective = useMemo(() => (seeAll ? filters : { ...filters, cashier: userId || 'none' }), [seeAll, filters, userId])
 
   const view = useMemo(() => {
     if (!data) return null
-    const sales = filterSales(data.sales, effective)
-    const payments = filterPayments(data.payments, data.salesById, effective)
+    const { sales, payments, summary } = reportView(data, effective)
     const shiftsById = Object.fromEntries(data.shifts.map((s) => [s.id, s]))
     const rows = toReportRows(sales, { shiftsById }).sort((a, b) => (b.date?.getTime() || 0) - (a.date?.getTime() || 0))
     const options = filterOptions(data.sales.filter((s) => !seeAll ? cashierKey(s) === userId : true), data.payments, data.shifts)
     return {
       sales, payments, shiftsById, rows, options,
-      summary: summarise({ sales, payments, ledgerAvailable: data.ledgerAvailable }),
+      summary,
       paymentRows: [...payments].sort((a, b) => (parseDbTime(b.received_at)?.getTime() || 0) - (parseDbTime(a.received_at)?.getTime() || 0)),
     }
   }, [data, effective, seeAll, userId])
@@ -226,6 +233,12 @@ export default function SalesReport({ brand, role, perms, staffName }) {
           </div>
 
           <div style={{ padding: `14px ${gutter}px ${gutter}px`, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {!seeAll && (
+              <div role='status' style={{ display: 'flex', gap: 8, padding: 12, borderRadius: theme.radius.md, background: tealMist, color: navy, fontSize: 12.5, lineHeight: 1.5 }}>
+                <Info size={16} style={{ flexShrink: 0, color: tealDeep }} aria-hidden='true' />
+                <span>Showing only the sales and payments you handled. The dashboard and the owner&apos;s report show the whole business, so their totals are larger.</span>
+              </div>
+            )}
             {!data.ledgerAvailable && (
               <div role='status' style={{ display: 'flex', gap: 8, padding: 12, borderRadius: theme.radius.md, background: warningBg, color: warning, fontSize: 12.5, lineHeight: 1.5 }}>
                 <AlertTriangle size={16} style={{ flexShrink: 0 }} aria-hidden='true' />
@@ -242,8 +255,9 @@ export default function SalesReport({ brand, role, perms, staffName }) {
               <StatCard icon={<CreditCard />} label='POS' value={fmt(view.summary.received.POS)} />
               {view.summary.received.Unspecified > 0 && <StatCard icon={<Hash />} label='Method not recorded' value={fmt(view.summary.received.Unspecified)} sub='older credit deposits' />}
               <StatCard icon={<RotateCcw />} label='Refunds' value={fmt(view.summary.refunds.total)} tone={view.summary.refunds.total > 0 ? 'warning' : undefined} />
-              <StatCard icon={<Scale />} label='Net received' value={fmt(view.summary.netReceived)} sub='received less refunds' />
-              <StatCard icon={<HandCoins />} label='Cash in hand' value={fmt(view.summary.cashInHand)} sub='cash received less cash refunds' />
+              {view.summary.reversals.total > 0 && <StatCard icon={<RotateCcw />} label='Deleted sales reversed' value={fmt(view.summary.reversals.total)} sub='money taken off for sales the owner deleted' />}
+              <StatCard icon={<Scale />} label='Net received' value={fmt(view.summary.netReceived)} sub={view.summary.reversals.total > 0 ? 'received less refunds and reversals' : 'received less refunds'} />
+              <StatCard icon={<HandCoins />} label='Cash in hand' value={fmt(view.summary.cashInHand)} sub='cash received less cash paid back' />
               <StatCard icon={<Clock />} label='Credit given' value={fmt(view.summary.credit.amount)} sub={`${view.summary.credit.count} credit sale${view.summary.credit.count === 1 ? '' : 's'}`} />
               <StatCard icon={<AlertTriangle />} label='Outstanding' value={fmt(view.summary.outstanding)} tone={view.summary.outstanding > 0 ? 'danger' : undefined} sub='still owed on these sales' />
               <StatCard icon={<Tag />} label='Discounts' value={fmt(view.summary.discounts)} />
@@ -405,7 +419,7 @@ function PaymentsList({ rows, salesById, isMobile, onOpen }) {
           <Card key={p.id} style={{ padding: 0 }}>
             <button onClick={() => salesById[p.sale_id] && onOpen(p.sale_id)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 12, cursor: 'pointer' }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: navy }}>{KIND_LABEL[p.kind]} · {p.method === 'Unspecified' ? 'Not recorded' : p.method}</div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: navy }}>{kindLabel(p)} · {p.method === 'Unspecified' ? 'Not recorded' : p.method}</div>
                 <div style={{ fontSize: 11.5, color: gray500, marginTop: 2 }}>{salesById[p.sale_id]?.txn_no || 'Sale'} · {shortTime(parseDbTime(p.received_at))} · {p.staff_name || 'Not recorded'}</div>
               </div>
               {amount(p)}
@@ -429,7 +443,7 @@ function PaymentsList({ rows, salesById, isMobile, onOpen }) {
                 <td style={{ ...td, whiteSpace: 'nowrap', color: gray600 }}>{shortTime(parseDbTime(p.received_at))}</td>
                 <td style={td}>{s ? <button onClick={() => onOpen(p.sale_id)} style={linkBtn}>{s.txn_no}</button> : <span style={{ color: gray400 }}>Not available</span>}</td>
                 <td style={td}>{s?.client_name || 'Walk-in'}</td>
-                <td style={td}>{KIND_LABEL[p.kind]}{p.kind === 'refund' && p.note ? <div style={{ fontSize: 11.5, color: gray500 }}>{p.note}</div> : null}</td>
+                <td style={td}>{kindLabel(p)}{p.kind === 'refund' && p.note ? <div style={{ fontSize: 11.5, color: gray500 }}>{p.note}</div> : null}</td>
                 <td style={td}>{p.method === 'Unspecified' ? 'Not recorded' : p.method}</td>
                 <td style={td}>{p.staff_name || 'Not recorded'}</td>
                 <td style={num}>{amount(p)}</td>
