@@ -21,6 +21,7 @@ At first capture the ledger held 3,343 rows, every one an `opening` movement wri
 | Writer | Path | Ledger? |
 |---|---|---|
 | Purchases | `receive_stock` (`purchase_receipt`, one movement per line, key `purchase:<purchase id>:<line id>`, batch created in the same transaction) | Yes, since `carehub_20261223_receive_stock` |
+| Purchase edits (Purchases ▸ Edit) | `edit_purchase` → `apply_stock_change` (`correction`, or `purchase_receipt` for a received line; source `purchase_edit`, one movement per changed line, key `purchase_edit:<purchase>:<edit no>:<line>:<kind>:<product>`); never takes back units already sold. See `Purchases-Editing-and-Analytics.md` | Drafted in `carehub_20261229_purchase_editing_and_analytics`, **not applied** |
 | Inventory + Stock | `receive_stock` (`adjustment`, key fixed per restock dialog, batch and expiry required for tracked products) | Yes, same migration |
 | Inventory "Update Existing Product" | `receive_stock` (`adjustment`, key fixed per warning) | Yes, same migration |
 | Clean up duplicates | `merge_duplicate_products` (two `correction` movements per duplicate) | Yes, `carehub_20261220` |
