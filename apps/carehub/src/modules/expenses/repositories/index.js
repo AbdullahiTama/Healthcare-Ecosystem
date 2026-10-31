@@ -28,6 +28,12 @@ export function createExpenseRepository(request = sbFetch) {
       }
     },
 
+    // One expense, tenant-scoped, for opening it from the Owner's activity feed.
+    async getById(businessId, expenseId) {
+      const rows = await request(`expenses?id=eq.${expenseId}&business_id=eq.${businessId}&select=*`)
+      return (Array.isArray(rows) ? rows[0] : rows) || null
+    },
+
     // Paginated expense list — use for table display
     async getPage(businessId, { month = null, offset = 0, limit = 50 } = {}) {
       const params = [`p_business_id=${businessId}`, `p_offset=${offset}`, `p_limit=${limit}`]

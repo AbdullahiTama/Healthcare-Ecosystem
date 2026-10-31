@@ -4,12 +4,13 @@ import { Activity, AlertTriangle, ShieldAlert } from 'lucide-react'
 import { staffActivityRepository, ACTIVITY_LIMIT } from './repositories'
 import { PERIODS, periodRange, filterActivity, summarisePeople, filterChoices, kindLabel, SENSITIVE, personKey } from './staffActivity'
 import { fmt, todayDate } from '../../lib/utils'
+import { BUSINESS_TZ, parseDbTime } from '../../lib/businessDay'
 import { theme } from '../../styles/theme'
 import { Card, Pill, Empty, ErrorState, Loading, Sel, Inp, Avatar } from '../../components/ui'
 
 const { navy, gray400, gray500, gray600, gray100, border, tealDeep, danger, warning, warningBg } = theme
 const PAGE = 100
-const when = (v) => (v ? new Date(v).toLocaleString('en-NG', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '')
+const when = (v) => parseDbTime(v)?.toLocaleString('en-NG', { timeZone: BUSINESS_TZ, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) || ''
 
 // The Owner's view of what each staff member did: sales, refunds, stock
 // changes, expenses, attendance, field visits and shifts, newest first, with a

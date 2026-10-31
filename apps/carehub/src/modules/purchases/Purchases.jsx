@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Truck, CreditCard, Hourglass, Search, Plus, X, ChevronDown, History, AlertTriangle, CheckCircle, Package } from 'lucide-react'
 import { purchaseRepository } from './repositories'
+import { useQueryParamAction } from '../../hooks/useQueryParamAction'
 // Product writes go through the inventory seam: replenishment must be atomic
 // now that sales decrement stock server-side (C5/C12).
 import { productRepository } from '../inventory/repositories'
@@ -67,6 +68,15 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
   const [paying, setPaying] = useState(null)
   // The purchase opened as a supplier invoice (PurchaseDetailModal).
   const [viewing, setViewing] = useState(null)
+  // Opened from the Owner's activity feed: ?purchase=<id> shows that invoice,
+  // ?view=suppliers the supplier balances.
+  useQueryParamAction('purchase', async (id) => {
+    try {
+      const p = await purchaseRepository.getById(id, brand.id)
+      if (p) setViewing(p)
+    } catch (e) { console.error('[purchases] could not open purchase', id, e?.message) }
+  }, !!brand?.id)
+  useQueryParamAction('view', (v) => { if (v === 'suppliers') setView('suppliers') })
   const inventory = products
   // Matching a purchase against a half-loaded catalog would create duplicates.
   const inventoryStatus = catalog?.status || 'ready'

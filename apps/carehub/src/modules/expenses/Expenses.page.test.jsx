@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -11,6 +12,7 @@ vi.mock('./repositories', () => ({
     getCategories: vi.fn(),
     create: vi.fn(),
     delete: vi.fn(),
+    getById: vi.fn(),
   },
 }))
 
@@ -125,5 +127,25 @@ describe('Expenses page', () => {
     await act(async () => { save.click(); save.click() })
     expect(repo.create).toHaveBeenCalledTimes(1)
     await act(async () => { release({ id: 'x' }) })
+  })
+})
+
+describe('opened from the Owner\'s business activity', () => {
+  it('?expense=<id> shows that expense in full, with who recorded it', async () => {
+    repo.getById.mockResolvedValue({ id: 'e-9', category: 'Transport', description: 'Fuel for delivery', amount: 2500, date: '2026-10-30',
+      staff_name: 'Typed On Form', recorded_by_name: 'Rep Two', created_at: '2026-10-30T09:15:00' })
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+    await act(async () => {
+      root.render(<MemoryRouter initialEntries={['/dashboard/expenses?expense=e-9']}><Expenses brand={brand} role='Owner' perms={{}} /></MemoryRouter>)
+    })
+    await act(async () => {})
+    expect(repo.getById).toHaveBeenCalledWith('biz-A', 'e-9')
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog.textContent).toContain('Fuel for delivery')
+    expect(dialog.textContent).toContain('Rep Two')
+    expect(dialog.textContent).toContain('Typed On Form')
+    expect(dialog.textContent).toContain('2026-10-30 10:15')
   })
 })

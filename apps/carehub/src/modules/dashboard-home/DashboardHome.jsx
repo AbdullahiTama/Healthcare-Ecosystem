@@ -21,6 +21,7 @@ import SaleDetailModal from '../pos/SaleDetailModal'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { canSeeAllActivity, isManagerRole } from '../../lib/permissions'
 import FieldTeamToday from './FieldTeamToday.jsx'
+import OwnerActivity from './OwnerActivity.jsx'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useOpenSales, useAppointments, useSettings, useInvalidateSales } from '../../hooks/queries'
 
@@ -64,6 +65,18 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
   const { data: settings } = useSettings(brand?.id)
   const invalidateSales = useInvalidateSales(brand?.id)
   const { msg: toastMsg, type: toastType, show: showToast } = useToast()
+  // A sale opened from the Owner's business activity (credit sale, refund,
+  // repayment or correction), by its receipt number.
+  async function openSaleByTxn(txn) {
+    try {
+      const sale = await saleRepository.getById(brand.id, txn)
+      if (sale) setDetailSale(sale)
+      else showToast('That sale is no longer on record.', { type: 'warning' })
+    } catch (e) {
+      console.error('[dashboard] could not open sale', txn, e?.message)
+      showToast('Could not open that sale. Please try again.', { type: 'error' })
+    }
+  }
   // Held and unpaid credit sales only — not the whole sales history.
   const { data: openSales = [], isLoading: loadingAll, isError: errAll, refetch: refetchAll } = useOpenSales(brand?.id)
   const { data: appts = [], isLoading: loadingAppts, isError: errAppts, refetch: refetchAppts } = useAppointments(brand?.id, canSeeAppts)
@@ -349,6 +362,11 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
         {/* Hospital patient flow — no template equivalent (the reference
             mockups are pharmacy/retail), kept as its own block so hospital
             accounts don't lose real, load-bearing navigation. */}
+        {/* The Owner's business activity: money records staff entered, and what
+            still needs paying or chasing. Owner only (the feed is the Owner's in
+            the database too). */}
+        {role === 'Owner' && <OwnerActivity brand={brand} onOpenSale={openSaleByTxn} />}
+
         {showFieldTeam && <FieldTeamToday brand={brand} role={role} staffId={staffId} customRoles={customRoles} />}
 
         {isHospital && (

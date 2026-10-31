@@ -3,8 +3,11 @@
 // (staffActivity.test.js). The feed itself comes from the database function
 // staff_activity(); nothing here talks to the network.
 
+import { businessPeriod } from '../../lib/businessDay'
+
 export const KINDS = {
-  sale: 'Sale', held: 'Held sale', refund: 'Refund', repayment: 'Repayment',
+  sale: 'Sale', credit_sale: 'Credit sale', held: 'Held sale', refund: 'Refund', repayment: 'Repayment',
+  purchase: 'Purchase', supplier_payment: 'Supplier payment', debt: 'Debt recorded',
   sale_edited: 'Sale edited', sale_deleted: 'Sale deleted', expense: 'Expense',
   stock: 'Stock change', checkin: 'Attendance', field_visit: 'Field visit',
   shift_open: 'Shift opened', shift_close: 'Shift closed',
@@ -16,32 +19,14 @@ export const SENSITIVE = new Set(['refund', 'sale_edited', 'sale_deleted', 'stoc
 
 export const PERIODS = [['today', 'Today'], ['week', 'This week'], ['month', 'This month'], ['custom', 'Custom']]
 
-const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
-const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
-const parseLocalDate = (s) => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''))
-  if (!m) return null
-  const d = new Date(+m[1], +m[2] - 1, +m[3])
-  return d.getMonth() === +m[2] - 1 ? d : null
-}
-
-// [start, end) on the device's calendar. Weeks start on Monday. Custom is
-// inclusive of both days, limited to the 366 days the database accepts; a
-// reversed, unreadable or too long range returns null.
+// [start, end) on the business day (lib/businessDay.js), the same days as the
+// dashboard and the reports. Weeks start on Monday. Custom is inclusive of
+// both days, limited to the 366 days the database accepts; a reversed,
+// unreadable or too long range returns null.
 export function periodRange(period, { now = new Date(), from, to } = {}) {
-  const today = startOfDay(now)
-  switch (period) {
-    case 'today': return { start: today, end: addDays(today, 1) }
-    case 'week': { const start = addDays(today, -((today.getDay() + 6) % 7)); return { start, end: addDays(start, 7) } }
-    case 'month': return { start: new Date(today.getFullYear(), today.getMonth(), 1), end: new Date(today.getFullYear(), today.getMonth() + 1, 1) }
-    case 'custom': {
-      const a = parseLocalDate(from); const b = parseLocalDate(to)
-      if (!a || !b || a > b) return null
-      const end = addDays(b, 1)
-      return (end - a) / 864e5 > 366 ? null : { start: a, end }
-    }
-    default: return null
-  }
+  const r = businessPeriod(period, { now, from, to })
+  if (!r) return null
+  return (r.end - r.start) / 864e5 > 366 ? null : r
 }
 
 // Stable identity of the person behind a row: the staff id, else the recorded
@@ -71,7 +56,7 @@ export function summarisePeople(rows) {
     const p = by.get(k)
     p.counts[r.kind] = (p.counts[r.kind] || 0) + 1
     p.total++
-    if (r.kind === 'sale') p.salesValue += num(r.amount)
+    if (r.kind === 'sale' || r.kind === 'credit_sale') p.salesValue += num(r.amount)
     if (r.kind === 'refund') p.refundValue += num(r.amount)
     if (!p.last || new Date(r.occurred_at) > new Date(p.last)) p.last = r.occurred_at
   }

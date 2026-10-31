@@ -17,6 +17,12 @@ The other three drafts of this work were applied on 2026-10-24 (see "Already app
 |---|---|---|---|
 | - | `carehub_20261026_orders_read_scope.sql` | Narrows who reads orders (creator, approver, watchers, field managers, owner). | **Held**: warehouse staff would lose sight of orders they process. Owner decides (a) give them "Manage field team", (b) add a warehouse path, or (c) keep reading as is. |
 
+## Pending (owner financial activity, `docs/architecture/Owner-Financial-Activity.md`)
+
+| Draft | Records / fixes | Status |
+|---|---|---|
+| `carehub_20261229_owner_financial_activity.sql` | Stamps who recorded each purchase, expense and debt (`recorded_by*`, from the login, unforgeable); `staff_activity()` gains purchases, supplier payments, credit sales and hand-entered debts (same signature). Tested: `scripts/db-tests/ownerFinancialActivity.pglite.mjs` (24 checks). | **Awaiting approval** to run the rolled-back production probe and apply. The app works before it (the feed then shows expenses, refunds, repayments, credit-free sales and corrections only). |
+
 ## Already applied (files in `supabase/migrations/`)
 
 | Applied as | Version | Fixes |

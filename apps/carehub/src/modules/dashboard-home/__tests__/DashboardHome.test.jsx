@@ -18,11 +18,14 @@ vi.mock('../../../hooks/queries', () => ({
 }))
 // "Sales today" reads the Sales & Accounts report data for Today.
 vi.mock('../../pos/useSalesReportData', () => ({ useSalesReportData: vi.fn() }))
+vi.mock('../OwnerActivity.jsx', () => ({
+  default: function MockOwnerActivity({ onOpenSale }) { return <button data-testid="owner-activity" onClick={() => onOpenSale('TXN-77')}>owner activity</button> },
+}))
 vi.mock('../FieldTeamToday.jsx', () => ({
   default: function MockFieldTeamToday({ role, staffId }) { return <div data-testid="field-team-today" data-role={role} data-staff={staffId || ''} /> },
 }))
 vi.mock('../../pos/repositories', () => ({
-  saleRepository: { getSince: vi.fn(async () => []) },
+  saleRepository: { getSince: vi.fn(async () => []), getById: vi.fn(async () => null) },
   paymentRepository: { getForSale: vi.fn(async () => []) },
 }))
 vi.mock('../../notifications/repositories', () => ({
@@ -301,6 +304,23 @@ describe('DashboardHome', () => {
   it('says that "Owed to you" covers all open credit, not just today', async () => {
     m = await mountHome({ all: query({ data: [{ id: 'c1', is_credit: true, balance: 1200, client_name: 'Tunde', txn_no: 'TXN1' }] }) })
     expect(m.host.textContent).toContain('1 open credit sale · all dates')
+  })
+
+  it("shows the Owner's business activity to the Owner only, and opens a sale from it", async () => {
+    const { saleRepository } = await import('../../pos/repositories')
+    saleRepository.getById.mockResolvedValue({ id: 's1', txn_no: 'TXN-77', client_name: 'Mama Ngozi', payment_method: 'Credit', total: 2400, amount_paid: 400, balance: 2000,
+      created_at: '2026-10-27T09:30:00', items: JSON.stringify([{ name: 'Amoxil 500mg', qty: 2, price: 1200 }]) })
+    m = await mountHome({ role: 'Owner' })
+    const panel = m.host.querySelector('[data-testid="owner-activity"]')
+    expect(panel).toBeTruthy()
+    await act(async () => { panel.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(saleRepository.getById).toHaveBeenCalledWith(BRAND.id, 'TXN-77')
+    expect(document.querySelector('[role="dialog"]').textContent).toContain('Receipt TXN-77')
+    await m.unmount()
+
+    m = await mountHome({ role: 'Cashier', perms: { nav: ['dashboard', 'pos'] } })
+    expect(m.host.querySelector('[data-testid="owner-activity"]')).toBeNull()
   })
 
   it('renders the hospital patient-flow block only for hospital accounts', async () => {

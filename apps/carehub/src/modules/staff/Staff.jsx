@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useQueryParamAction } from '../../hooks/useQueryParamAction'
 import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus, Sparkles } from 'lucide-react'
 import { staffRepository } from './repositories'
 import StaffActivity from './StaffActivity'
@@ -578,6 +579,8 @@ function StaffTeam({ brand, role, perms }) {
 export default function Staff(props) {
   const [tab, setTab] = useState('team')
   const isOwner = props.role === 'Owner'
+  // "See all" from the dashboard's business activity lands on the Activity tab.
+  useQueryParamAction('tab', (t) => { if (t === 'activity' && isOwner) setTab('activity') })
   const tabs = isOwner ? [['team', 'Team'], ['activity', 'Activity']] : []
   return (
     <div>

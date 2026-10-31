@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { debtTotals, matchesParty } from './debtTotals'
 import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck } from 'lucide-react'
 import { debtRepository } from './repositories'
+import { useQueryParamAction } from '../../hooks/useQueryParamAction'
 import { settleDebt } from './settleDebt'
 import { paymentErrorMessage } from '../../lib/dbErrors'
 // Cross-aggregate read: the client list belongs to the clients module, which
@@ -58,6 +59,8 @@ export default function Debts({ brand, role, perms, staffName }) {
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => { load() }, [brand?.id])
+  // Opened from the Owner's activity feed: ?debt=<id> shows that debt once the list is in.
+  useQueryParamAction('debt', (id) => { const d = debts.find((x) => String(x.id) === id); if (d) setDetail(d) }, !loading && !loadError)
 
   // Picking a saved client links the debt to their customer record so it
   // shows up on their history.

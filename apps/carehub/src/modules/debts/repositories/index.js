@@ -23,6 +23,12 @@ export function createDebtRepository(request = sbFetch) {
       return pagedQuery(request, `debts?business_id=eq.${businessId}&order=created_at.desc,id.asc&select=*`)
     },
 
+    // Debts still open (not paid, something left to pay), for the Owner's
+    // follow-ups: only what needs chasing, not the whole history.
+    async getOpen(businessId) {
+      return pagedQuery(request, `debts?business_id=eq.${businessId}&status=neq.paid&balance=gt.0&order=created_at.desc,id.asc&select=*`)
+    },
+
     async create(businessId, debt) {
       return request('debts', {
         method: 'POST',

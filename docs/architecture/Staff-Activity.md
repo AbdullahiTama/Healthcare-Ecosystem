@@ -14,10 +14,13 @@ role, kind of activity and text. Click a person card to narrow the feed to them.
 ## What counts as an activity
 | Kind | Source | Person comes from |
 |---|---|---|
-| Sale, Held sale | `sales` (deleted sales are not sales) | `cashier_staff_id` |
+| Sale, Credit sale, Held sale | `sales` (deleted sales are not sales; a sale on credit is "Credit sale") | `cashier_staff_id` |
+| Purchase | `purchases` | `recorded_by*` stamp (carehub_20261229, pending) |
+| Supplier payment | `purchase_payments` kind `payment` | `recorded_by` (auth user) |
+| Debt recorded | `debts` entered by hand (not those opened by a credit sale or a purchase) | `recorded_by*` stamp |
 | Refund, Repayment | `sale_payments` | `staff_id` |
 | Sale edited, Sale deleted | `audit_log` (Owner corrections) | auth user ▸ `staff.auth_user_id`; the Owner has no staff row |
-| Expense | `expenses` | recorded name matched to `staff.full_name` |
+| Expense | `expenses` | the `recorded_by*` stamp when present (carehub_20261229), else the typed name matched to `staff.full_name` |
 | Stock change | `stock_movements` with a known actor (automatic `sale` movements omitted) | `actor_id`, else `moved_by` (text: an id or a typed name) |
 | Attendance | `staff_checkins` | `staff_id` |
 | Field visit | `field_activities` | `staff_id` |
@@ -52,3 +55,10 @@ Manual as Owner: Staff ▸ Activity ▸ pick *This week*; make a sale as a cashi
 hold one, record an expense, check in; refresh: each appears under the right
 person and role. As Manager/cashier: no Activity tab; calling the function
 returns *Only the Owner can view staff activity*.
+
+## Business activity on the dashboard
+The Owner's dashboard shows the money records from this feed (purchases,
+supplier payments, expenses, credit, debts, refunds, corrections, a till that
+did not balance) for the last seven days, each opening its record. See
+`Owner-Financial-Activity.md`. Periods here now use the business day
+(`lib/businessDay.js`, Lagos time).

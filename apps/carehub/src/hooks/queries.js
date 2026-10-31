@@ -157,12 +157,13 @@ export function useUpdateSale(brandId) {
 
 // Every query that shows a sales or money figure. A sale, payment, refund,
 // edit or deletion refreshes all of them together, so the dashboard, POS lists,
-// Sales & Accounts and Financial Reports never show a figure from before the
-// change next to one from after it.
+// Sales & Accounts, Financial Reports and the Owner's business activity never
+// show a figure from before the change next to one from after it.
 export function invalidateSalesFigures(qc) {
   qc.invalidateQueries({ queryKey: ['sales'] })
   qc.invalidateQueries({ queryKey: ['salesReport'] })
   qc.invalidateQueries({ queryKey: ['reports'] })
+  qc.invalidateQueries({ queryKey: ['ownerActivity'] })
 }
 
 export function useInvalidateSales(brandId) {

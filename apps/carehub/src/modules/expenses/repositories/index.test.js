@@ -17,6 +17,12 @@ function seeded() {
 }
 
 describe('expenseRepository', () => {
+  it('getById is tenant-scoped', async () => {
+    const { repo } = seeded()
+    expect((await repo.getById(A, '2')).label).toBe('Power')
+    expect(await repo.getById(A, '9')).toBeNull()
+  })
+
   it('getAll returns only the calling tenant', async () => {
     const { repo } = seeded()
     const rows = await repo.getAll(A)

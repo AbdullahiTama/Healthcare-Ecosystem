@@ -42,19 +42,32 @@ describe('staff activity helpers', () => {
     expect(c.kinds.map((k) => k.label)).toContain('Sale edited')
     expect(c.people).toHaveLength(3)
   })
-  it('computes local-calendar periods with Monday weeks', () => {
-    const now = new Date(2026, 9, 28, 15) // Wed 28 Oct 2026
-    expect(periodRange('today', { now }).start).toEqual(new Date(2026, 9, 28))
+  // Lagos is UTC+1: a Lagos midnight is 23:00 UTC the day before.
+  const lagos = (y, m, d, h = 0) => new Date(Date.UTC(y, m - 1, d, h - 1))
+  it('computes business-day (Lagos) periods with Monday weeks', () => {
+    const now = lagos(2026, 10, 28, 15) // Wed 28 Oct 2026
+    expect(periodRange('today', { now }).start).toEqual(lagos(2026, 10, 28))
     const w = periodRange('week', { now })
-    expect(w.start).toEqual(new Date(2026, 9, 26)); expect(w.end).toEqual(new Date(2026, 10, 2))
-    expect(periodRange('month', { now }).end).toEqual(new Date(2026, 10, 1))
+    expect(w.start).toEqual(lagos(2026, 10, 26)); expect(w.end).toEqual(lagos(2026, 11, 2))
+    expect(periodRange('month', { now }).end).toEqual(lagos(2026, 11, 1))
   })
   it('custom range is inclusive, and rejects reversed, unreadable or over-366-day ranges', () => {
-    expect(periodRange('custom', { from: '2026-10-01', to: '2026-10-03' }).end).toEqual(new Date(2026, 9, 4))
+    expect(periodRange('custom', { from: '2026-10-01', to: '2026-10-03' }).end).toEqual(lagos(2026, 10, 4))
     expect(periodRange('custom', { from: '2026-10-03', to: '2026-10-01' })).toBeNull()
     expect(periodRange('custom', { from: 'x', to: '2026-10-01' })).toBeNull()
     expect(periodRange('custom', { from: '2025-01-01', to: '2026-10-01' })).toBeNull()
     expect(periodRange('nope')).toBeNull()
+  })
+  it('names the money records the owner feed now carries, and counts credit sales as sales', () => {
+    expect(kindLabel('purchase')).toBe('Purchase')
+    expect(kindLabel('supplier_payment')).toBe('Supplier payment')
+    expect(kindLabel('credit_sale')).toBe('Credit sale')
+    expect(kindLabel('debt')).toBe('Debt recorded')
+    const [p] = summarisePeople([
+      { kind: 'sale', amount: 100, staff_id: 's1', actor_name: 'A', occurred_at: '2026-10-28T10:00:00Z' },
+      { kind: 'credit_sale', amount: 300, staff_id: 's1', actor_name: 'A', occurred_at: '2026-10-28T11:00:00Z' },
+    ])
+    expect(p.salesValue).toBe(400)
   })
   it('the repository calls the owner-only database function with the bounds and cap', async () => {
     const calls = []

@@ -1,7 +1,8 @@
-import { businessDateOf } from '../../lib/businessDay'
+import { businessDateOf, businessDateTime } from '../../lib/businessDay'
 import { useState, useEffect, useRef } from 'react'
 import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus, ChevronDown } from 'lucide-react'
 import { expenseRepository } from './repositories'
+import { useQueryParamAction } from '../../hooks/useQueryParamAction'
 import { validateExpense, newExpenseId } from './expenseRules'
 import { fmt, todayDate, currentMonth } from '../../lib/utils'
 import { EXPENSE_CATS } from '../../config/constants'
@@ -52,6 +53,15 @@ export default function Expenses({ brand, role, perms }) {
   const saveInFlight = useRef(false)
   const loadSeq = useRef(0)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  // One expense opened in full: from the Owner's activity feed (?expense=<id>).
+  const [viewing, setViewing] = useState(null)
+  useQueryParamAction('expense', async (id) => {
+    try {
+      const e = await expenseRepository.getById(brand.id, id)
+      if (e) setViewing(e)
+      else showToast('That expense is no longer on record.', { type: 'warning' })
+    } catch (err) { console.error('[expenses] could not open expense', id, err?.message) }
+  }, !!brand?.id)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isOwner = role === 'Owner'
@@ -377,6 +387,28 @@ export default function Expenses({ brand, role, perms }) {
             </div>
           )}
         </div>
+      </Modal>
+
+      <Modal show={!!viewing} onClose={() => setViewing(null)} title='Expense'
+        footer={<GhostBtn onClick={() => setViewing(null)} style={{ flex: 1, padding: '12px' }}>Close</GhostBtn>}>
+        {viewing && (
+          <dl style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '10px 16px', margin: 0, fontSize: '13px' }}>
+            {[
+              ['Amount', <strong key='a' style={{ color: danger, fontSize: '16px' }}>{fmt(viewing.amount)}</strong>],
+              ['Category', viewing.category || 'Not set'],
+              ['Description', viewing.description || 'Not set'],
+              ['Date', businessDateOf(viewing.date || viewing.created_at) || 'Not set'],
+              ['Staff (as entered)', viewing.staff_name || 'Not set'],
+              ['Recorded by', viewing.recorded_by_name || 'Not recorded'],
+              ['Recorded at', businessDateTime(viewing.created_at) || 'Not recorded'],
+            ].map(([k, v]) => (
+              <div key={k} style={{ display: 'contents' }}>
+                <dt style={{ color: gray400, fontWeight: '700' }}>{k}</dt>
+                <dd style={{ margin: 0, color: navy }}>{v}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </Modal>
 
       <ConfirmDialog show={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete}
