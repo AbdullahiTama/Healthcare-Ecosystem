@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { saleRepository, paymentRepository } from '../modules/pos/repositories'
 import { appointmentRepository } from '../modules/appointments/repositories'
 import { clientRepository } from '../modules/clients/repositories'
@@ -19,6 +19,12 @@ export const keys = {
   supplierPurchases: (brandId, supplierKey) => ['purchases', 'supplier', brandId, supplierKey],
   purchasePayments: (brandId, scope) => ['purchases', 'payments', brandId, scope],
   purchase: (brandId, purchaseId) => ['purchases', 'one', brandId, purchaseId],
+  purchaseForEdit: (brandId, purchaseId) => ['purchases', 'edit', brandId, purchaseId],
+  purchaseEditHistory: (brandId, purchaseId) => ['purchases', 'edits', brandId, purchaseId],
+  purchaseSummary: (brandId, filters) => ['purchases', 'summary', brandId, filters],
+  purchaseSupplierStats: (brandId, filters) => ['purchases', 'supplierStats', brandId, filters],
+  purchaseProductStats: (brandId, filters, opts) => ['purchases', 'productStats', brandId, filters, opts],
+  purchaseHistory: (brandId, filters, opts) => ['purchases', 'history', brandId, filters, opts],
   clientSales: (clientId, brandId) => ['clients', 'sales', clientId, brandId],
   clientConsults: (clientId, brandId) => ['clients', 'consults', clientId, brandId],
   clientHistory: (clientId, brandId, tab) => ['clients', 'history', clientId, brandId, tab],
@@ -276,5 +282,87 @@ export function useRecordPurchasePayment(brandId) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['purchases'] })
     },
+  })
+}
+
+// ── Purchase editing (carehub_20261229) ───────────────────────────────────────
+
+// The lines as the edit screen needs them (what each added to stock, the
+// lowest quantity it can go to, locked lines). Always fresh: stock moves.
+export function usePurchaseForEdit(brandId, purchaseId) {
+  return useQuery({
+    queryKey: keys.purchaseForEdit(brandId, purchaseId),
+    queryFn: () => purchaseRepository.getForEdit(purchaseId),
+    enabled: !!brandId && !!purchaseId,
+    staleTime: 0,
+    gcTime: 0,
+  })
+}
+
+export function usePurchaseEditHistory(brandId, purchaseId, enabled = true) {
+  return useQuery({
+    queryKey: keys.purchaseEditHistory(brandId, purchaseId),
+    queryFn: () => purchaseRepository.getEditHistory(purchaseId, brandId),
+    enabled: !!brandId && !!purchaseId && enabled,
+    staleTime: 30_000,
+  })
+}
+
+// Saves an edit. Every purchase figure (list, suppliers, payments, analytics)
+// and the money screens that read purchases or their debts are refreshed.
+export function useEditPurchase(brandId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ purchaseId, ...edit }) => purchaseRepository.edit(purchaseId, edit),
+    onSuccess: () => {
+      for (const prefix of ['purchases', 'debts', 'reports']) qc.invalidateQueries({ queryKey: [prefix] })
+    },
+  })
+}
+
+// ── Purchase history and analytics (carehub_20261229) ─────────────────────────
+// `filters`: { from, to, search, supplierKey, productKey, productId }. Each is
+// part of the key, so a change of period or filter is a new (cached) query.
+
+export function usePurchaseSummary(brandId, filters, enabled = true) {
+  return useQuery({
+    queryKey: keys.purchaseSummary(brandId, filters),
+    queryFn: () => purchaseRepository.getSummary(brandId, filters),
+    enabled: !!brandId && enabled,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  })
+}
+
+export function usePurchaseSupplierStats(brandId, filters, enabled = true) {
+  return useQuery({
+    queryKey: keys.purchaseSupplierStats(brandId, filters),
+    queryFn: () => purchaseRepository.getSupplierStats(brandId, filters),
+    enabled: !!brandId && enabled,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  })
+}
+
+export function usePurchaseProductStats(brandId, filters, opts = {}, enabled = true) {
+  return useQuery({
+    queryKey: keys.purchaseProductStats(brandId, filters, opts),
+    queryFn: () => purchaseRepository.getProductStats(brandId, filters, opts),
+    enabled: !!brandId && enabled,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  })
+}
+
+// Every purchase line for the filters, newest first, a page at a time
+// ("Load more" fetches the next page).
+export function usePurchaseHistory(brandId, filters, { pageSize = 50 } = {}, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: keys.purchaseHistory(brandId, filters, { pageSize }),
+    queryFn: ({ pageParam }) => purchaseRepository.getHistory(brandId, filters, { offset: pageParam, limit: pageSize }),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) => ((last || []).length === pageSize ? pages.length * pageSize : undefined),
+    enabled: !!brandId && enabled,
+    staleTime: 30_000,
   })
 }

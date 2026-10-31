@@ -67,6 +67,25 @@ export function paymentErrorMessage(error) {
   return "We couldn't record the payment. Check your connection and try again."
 }
 
+// ── Refusals that name a record ───────────────────────────────────────────────
+// edit_purchase refuses with sentences that name the line and product
+// ('Line 2 (ORS sachet): only 3 in stock now, …'), so the payment rule above
+// (no brackets or quotes) would hide them. This accepts a 400/403/404 sentence
+// of up to 400 characters unless it looks like raw database output, and falls
+// back to `fallback` for anything else (network, server), so an outage is never
+// shown as a validation problem.
+const RAW_DATABASE_TEXT = /violates|syntax error|relation "|column "|function |PGRST|duplicate key|invalid input|[{}]|^[A-Z_]{6,}:/i
+export function refusalMessage(error, fallback) {
+  const raw = String(error?.message || '')
+  if (raw.startsWith('Session expired')) return raw
+  const m = raw.match(/^Supabase error \((400|403|404)\): (.+)$/s)
+  const sentence = m ? m[2].trim() : ''
+  if (sentence && sentence.length <= 400 && !sentence.includes('\n') && !RAW_DATABASE_TEXT.test(sentence)) {
+    return /[.!?]$/.test(sentence) ? sentence : sentence + '.'
+  }
+  return fallback
+}
+
 // ── Not deployed yet ──────────────────────────────────────────────────────────
 // A table or function the app expects but the database does not have yet: its
 // migration is not applied. Callers degrade (an "available once the update is

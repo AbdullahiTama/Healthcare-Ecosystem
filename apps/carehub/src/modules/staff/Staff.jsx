@@ -83,16 +83,22 @@ function StaffTeam({ brand, role, perms }) {
     // The key stays `canManageDirectory`: the database (can_manage_directory / caller_sees_all_activity) reads it from
     // the role JSON. Since the Business Directory became platform-admin only, all it grants is managing the field team.
     ['canManageDirectory', 'Manage field team', 'Opens the Field team section: everyone\'s field reports, team check-ins, order approvals and places to confirm. Owners and manager roles can always do this.'],
+    // Read by the database (can_edit_purchases): this switch is what authorises an edit.
+    ['canEditPurchases', 'Edit purchases', 'Can correct a recorded purchase: supplier, items, quantities, prices, dates and amount paid. Stock, debts and reports follow. The Owner can always do this.'],
     ['canViewFinance', 'View finance', 'Can see expenses, debts and financial figures.'],
     ['canMakeSales', 'Make sales', 'Can record sales at the POS / counter.'],
     ['canViewSettings', 'View settings', 'Can open Settings and change business configuration.'],
   ]
 
+  // Every switch is read, applied and saved from FLAG_META, so a switch on the
+  // screen can never be left out of the saved role (canManageDirectory was).
+  const flagsFrom = (perms) => Object.fromEntries(FLAG_META.map(([key]) => [key, !!perms?.[key]]))
+
   function openRoleEditor(roleRow) {
     if (roleRow) {
       const p = roleRow.permissions || {}
       setEditingRole(roleRow)
-      setRoleForm({ name: roleRow.name, label: p.label || '', nav: Array.isArray(p.nav) ? p.nav : [], flags: { canEditPrice: !!p.canEditPrice, canEditStock: !!p.canEditStock, canDelete: !!p.canDelete, canViewReports: !!p.canViewReports, canExportReports: !!p.canExportReports, canManageStaff: !!p.canManageStaff, canViewFinance: !!p.canViewFinance, canMakeSales: !!p.canMakeSales, canViewSettings: !!p.canViewSettings } })
+      setRoleForm({ name: roleRow.name, label: p.label || '', nav: Array.isArray(p.nav) ? p.nav : [], flags: flagsFrom(p) })
     } else {
       setEditingRole(null)
       setRoleForm({ name: '', label: '', nav: ['dashboard'], flags: { canViewReports: false, canMakeSales: false } })
@@ -107,17 +113,7 @@ function StaffTeam({ brand, role, perms }) {
       name: template.name,
       label: template.name,
       nav: perms.nav.filter(k => typeModuleIds.includes(k)),
-      flags: {
-        canEditPrice: !!perms.canEditPrice,
-        canEditStock: !!perms.canEditStock,
-        canDelete: !!perms.canDelete,
-        canViewReports: !!perms.canViewReports,
-        canExportReports: !!perms.canExportReports,
-        canManageStaff: !!perms.canManageStaff,
-        canViewFinance: !!perms.canViewFinance,
-        canMakeSales: !!perms.canMakeSales,
-        canViewSettings: !!perms.canViewSettings,
-      },
+      flags: flagsFrom(perms),
     })
     setShowTemplatePicker(false)
     showToast(`Applied "${template.name}" template. Review and save to create the role.`, { type: 'success' })
@@ -141,15 +137,7 @@ function StaffTeam({ brand, role, perms }) {
       permissions: {
         nav: nav.length > 0 ? nav : ['dashboard'],
         label: roleForm.label.trim() || roleForm.name.trim(),
-        canEditPrice: !!roleForm.flags.canEditPrice,
-        canEditStock: !!roleForm.flags.canEditStock,
-        canDelete: !!roleForm.flags.canDelete,
-        canViewReports: !!roleForm.flags.canViewReports,
-        canExportReports: !!roleForm.flags.canExportReports,
-        canManageStaff: !!roleForm.flags.canManageStaff,
-        canViewFinance: !!roleForm.flags.canViewFinance,
-        canMakeSales: !!roleForm.flags.canMakeSales,
-        canViewSettings: !!roleForm.flags.canViewSettings,
+        ...flagsFrom(roleForm.flags),
       },
     }
     try {

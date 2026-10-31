@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Truck, CreditCard, Hourglass, Search, Plus, X, ChevronDown, History, AlertTriangle, CheckCircle, Package } from 'lucide-react'
+import { Truck, CreditCard, Hourglass, Search, ChevronDown, History, CheckCircle, Pencil } from 'lucide-react'
 import { purchaseRepository } from './repositories'
 // Product writes go through the inventory seam: replenishment must be atomic
 // now that sales decrement stock server-side (C5/C12).
@@ -10,21 +10,27 @@ import { productRepository } from '../inventory/repositories'
 import { debtRepository } from '../debts/repositories'
 import { fmt, fmtDate, todayDate } from '../../lib/utils'
 import { purchaseExpirySummary } from './expirySummary'
-import { findDuplicate, normalize } from '../../lib/productMatches'
-import { blankItem, isBlankItem, findProductForEntry, applyProduct, itemProblems, isPastExpiry, groupLinesByProduct } from './lineItems'
+import { findDuplicate } from '../../lib/productMatches'
+import { blankItem, isBlankItem, findProductByBarcode, groupLinesByProduct } from './lineItems'
 import { usePersistentDraft } from '../../hooks/usePersistentDraft'
 import { useAuth } from '../../providers/AuthProvider'
 import { upsertProducts } from '../inventory/productListState'
 import { PurchasePaymentModal, SupplierBalances, purchaseStatus } from './SupplierPayments'
 import PurchaseDetailModal from './PurchaseDetail'
+import EditPurchaseModal from './EditPurchase'
+import PurchaseHistory from './PurchaseHistory'
+import PurchaseForm, { formLineProblems, formTotal } from './PurchaseForm'
+import { useSupplierDirectory, useProductInsights } from './hooks'
 import { purchaseItemsFromForm } from './purchaseInvoice'
 import { usePlanGate } from '../../hooks/usePlanGate'
 import { restrictedMessage } from '../../lib/planStatus'
-import { PRODUCT_CATS } from '../../config/constants'
+import { isMissingObject } from '../../lib/dbErrors'
+import { periodBounds, ALL_TIME } from '../../lib/datePeriods'
+import PeriodFilter from '../../components/PeriodFilter'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
 
-const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, dangerBg, warning, warningBg, success, bg } = theme
+const { tealDeep, navy, gray600, gray500, gray400, gray100, gray50, border, danger, warning, warningBg, success } = theme
 
 // Margin applied to newly created products from a purchase so they are
 // immediately sellable (stock is also set). Existing products keep their
@@ -38,22 +44,6 @@ const blankForm = () => ({ supplier: '', supplyDate: todayDate(), dueDate: '', a
 const blankDraft = () => ({ open: false, form: blankForm() })
 const formHasContent = (form) => !!(String(form.supplier || '').trim() || form.amountPaid || form.dueDate || String(form.notes || '').trim() || form.items.some(i => !isBlankItem(i)))
 
-const lineInput = (invalid, readOnly) => ({
-  width: '100%', boxSizing: 'border-box', minHeight: 40, padding: '8px 10px', borderRadius: theme.radius.sm,
-  border: `1px solid ${invalid ? danger : border}`, fontSize: '13px', outline: 'none', color: navy,
-  background: readOnly ? gray50 : 'white', fontFamily: theme.fontFamily,
-})
-
-function LineField({ id, label, error, children }) {
-  return (
-    <div style={{ minWidth: 0 }}>
-      <label htmlFor={id} style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: gray500, marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</label>
-      {children}
-      {error && <div id={id + '-error'} style={{ fontSize: '11px', color: danger, marginTop: '3px' }}>{error}</div>}
-    </div>
-  )
-}
-
 // `products`/`setProducts`/`catalog` are the dashboard's shared catalog
 // (inventory/hooks/useProductCatalog.js). Purchased items are matched against
 // it, and the stock and products a purchase changes are written back into it,
@@ -61,8 +51,11 @@ function LineField({ id, label, error, children }) {
 export default function Purchases({ brand, role, perms, products = [], setProducts, catalog, staffName }) {
   const { auth } = useAuth() || {}
   const [purchases, setPurchases] = useState([])
-  // 'purchases' (the list) or 'suppliers' (totals and payment history per supplier).
+  // 'purchases' (the list), 'history' (every purchase line, with spending
+  // analytics) or 'suppliers' (totals and payment history per supplier).
   const [view, setView] = useState('purchases')
+  // The purchase whose Edit dialog is open.
+  const [editing, setEditing] = useState(null)
   // The purchase whose "Record payment" dialog is open.
   const [paying, setPaying] = useState(null)
   // The purchase opened as a supplier invoice (PurchaseDetailModal).
@@ -78,16 +71,23 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [search, setSearch] = useState('')
-  const [filterMonth, setFilterMonth] = useState('')
-  const [filterYear, setFilterYear] = useState('')
+  const [period, setPeriod] = useState(ALL_TIME)
+  const [supplierFilter, setSupplierFilter] = useState('')
+  // Set when the database predates the date / supplier filters and the list
+  // was loaded without them (carehub_20261229 not applied yet).
+  const [filtersUnavailable, setFiltersUnavailable] = useState(false)
   const [totals, setTotals] = useState({ purchase_count: 0, total_paid: 0, total_owed: 0 })
   const [saving, setSaving] = useState(false)
   const [showErrors, setShowErrors] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
-  const [focusTarget, setFocusTarget] = useState(null)
-  const fieldRefs = useRef({})
+  const formRef = useRef(null)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const plan = usePlanGate(showToast)
+  const directory = useSupplierDirectory(brand?.id)
+  // The Owner always; another role only when granted "Edit purchases". The
+  // database checks again (can_edit_purchases), so this only decides what is
+  // offered.
+  const canEditPurchases = role === 'Owner' || !!perms?.canEditPurchases
 
   // The Record Purchase form is kept on this device as it is typed, scoped per
   // business AND per staff member: on a shared till one person's half-entered
@@ -99,40 +99,14 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
   const form = draft.form
   const showAdd = draft.open
   const hasDraft = formHasContent(form)
+  // Earlier purchases of each product, fetched once while the form is open.
+  const insights = useProductInsights(brand?.id, showAdd)
   const canReprice = !!perms?.canEditPrice
 
   const setForm = (updater) => setDraft(d => ({ ...d, form: typeof updater === 'function' ? updater(d.form) : updater }))
-  const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
-  const setItem = (id, k, v) => setForm(p => ({ ...p, items: p.items.map(it => it.id === id ? { ...it, [k]: v } : it) }))
 
-  useEffect(() => { load() }, [brand?.id, filterMonth, filterYear, search])
-
-  // Lines typed (or restored from a draft) before the catalog arrived are
-  // linked once it does. Values the user already typed are kept, except a
-  // selling price they are not allowed to change, which reverts to the
-  // product's own rather than sitting in a read-only field the save ignores.
-  useEffect(() => {
-    if (inventoryStatus !== 'ready') return
-    setForm(p => {
-      let changed = false
-      const items = p.items.map(it => {
-        if (it.productId || !String(it.name).trim()) return it
-        const match = findProductForEntry(inventory, it.name)
-        if (!match) return it
-        changed = true
-        const linked = { ...it, productId: match.id, name: match.name }
-        if (!canReprice) linked.sell = Number(match.price) > 0 ? String(match.price) : ''
-        return linked
-      })
-      return changed ? { ...p, items } : p
-    })
-  }, [inventoryStatus, inventory, canReprice])
-
-  useEffect(() => {
-    if (!focusTarget) return
-    fieldRefs.current[focusTarget.id + ':' + focusTarget.field]?.focus()
-    setFocusTarget(null)
-  }, [focusTarget])
+  const { from: periodFrom, to: periodTo, label: periodLabel } = periodBounds(period)
+  useEffect(() => { load() }, [brand?.id, periodFrom, periodTo, supplierFilter, search])
 
   function openForm() { setDraft(d => ({ ...d, open: true })) }
 
@@ -150,62 +124,33 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
     showToast('Draft discarded.', { type: 'info' })
   }
 
-  function addItem() {
-    const item = blankItem()
-    setForm(p => ({ ...p, items: [...p.items, item] }))
-    setFocusTarget({ id: item.id, field: 'name' })
-  }
+  const filtersUnavailableRef = useRef(false)
+  const pageFilters = () => (filtersUnavailableRef.current ? { search } : { search, from: periodFrom, to: periodTo, supplierKey: supplierFilter })
 
-  function removeItem(id) {
-    setForm(p => {
-      const items = p.items.filter(it => it.id !== id)
-      return { ...p, items: items.length ? items : [blankItem()] }
-    })
-  }
-
-  // Typing, picking from the list or scanning a barcode into the product
-  // field. An exact match links the line to that product and fills in its
-  // details; anything else is a new product.
-  function changeName(item, value) {
-    const match = inventoryStatus === 'ready' ? findProductForEntry(inventory, value) : null
-    // A pick from the suggestions (or a paste or scan) changes the value by
-    // more than one character at once. Only then does focus jump to Quantity,
-    // never while someone is still typing a longer name.
-    const picked = Math.abs(value.length - item.name.length) > 1
-    setForm(p => ({
-      ...p,
-      items: p.items.map(it => {
-        if (it.id !== item.id) return it
-        if (!match) return { ...it, name: value, productId: null }
-        // Same product still: keep what was typed unless it was the barcode.
-        if (match.id === it.productId) return { ...it, name: normalize(value) === normalize(match.name) ? value : match.name }
-        return applyProduct(it, match)
-      }),
-    }))
-    if (match && picked) setFocusTarget({ id: item.id, field: 'qty' })
-  }
-
-  // Enter moves through the sheet like a spreadsheet: from the product field
-  // to its quantity, from any other field to the next line's product, adding
-  // a new line when this is the last one.
-  function onLineKeyDown(e, index, field) {
-    if (e.key !== 'Enter') return
-    e.preventDefault()
-    const item = form.items[index]
-    if (field === 'name') { setFocusTarget({ id: item.id, field: 'qty' }); return }
-    const next = form.items[index + 1]
-    if (next) setFocusTarget({ id: next.id, field: 'name' })
-    else addItem()
+  // The list for the period and supplier chosen. A database without the
+  // filters (migration not applied yet) answers "function not found": the list
+  // is then loaded unfiltered and the filters say why they do nothing.
+  async function fetchPage(offset) {
+    try {
+      return await purchaseRepository.getPage(brand.id, { ...pageFilters(), offset, limit: PAGE_SIZE })
+    } catch (e) {
+      if (!isMissingObject(e) || filtersUnavailableRef.current) throw e
+      console.warn('[purchases] date and supplier filters not deployed yet; listing without them')
+      filtersUnavailableRef.current = true
+      setFiltersUnavailable(true)
+      return purchaseRepository.getPage(brand.id, { search, offset, limit: PAGE_SIZE })
+    }
   }
 
   async function load() {
+    if (!brand?.id) return
     setLoading(true)
     setLoadError('')
     setPurchases([])
     setHasMore(true)
     try {
       const [page, totalData] = await Promise.all([
-        purchaseRepository.getPage(brand.id, { search, month: filterMonth, year: filterYear, offset: 0, limit: PAGE_SIZE }),
+        fetchPage(0),
         purchaseRepository.getTotals(brand.id),
       ])
       setPurchases(page || [])
@@ -223,7 +168,7 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
     if (loadingMore || !hasMore) return
     setLoadingMore(true)
     try {
-      const more = await purchaseRepository.getPage(brand.id, { search, month: filterMonth, year: filterYear, offset: purchases.length, limit: PAGE_SIZE })
+      const more = await fetchPage(purchases.length)
       setPurchases(p => [...p, ...(more || [])])
       setHasMore((more || []).length === PAGE_SIZE)
     } catch (e) {
@@ -237,10 +182,8 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
   // the save (lineItems.itemProblems): it used to be dropped silently with a
   // "success" toast. Fully blank lines are ignored.
   const startedItems = form.items.filter(i => !isBlankItem(i))
-  const linkedProduct = (it) => (it.productId ? inventory.find(p => p.id === it.productId) : null) || null
-  const problemLines = form.items.map((it, idx) => ({ idx, problems: itemProblems(it, linkedProduct(it)) })).filter(x => Object.keys(x.problems).length > 0)
-  const computedTotal = startedItems.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.cost) || 0), 0)
-  const today = todayDate()
+  const problemLines = formLineProblems(form, inventory)
+  const computedTotal = formTotal(form)
 
   const resolveExisting = (line) => (line.productId && inventory.find(p => p.id === line.productId)) || findDuplicate(inventory, line.name, '', null)
 
@@ -254,7 +197,7 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
       const nums = problemLines.map(x => x.idx + 1)
       showToast((nums.length === 1 ? 'Line ' : 'Lines ') + nums.join(', ') + (nums.length === 1 ? ' needs' : ' need') + ' attention: see the highlighted fields.', { type: 'warning' })
       const first = problemLines[0]
-      setFocusTarget({ id: form.items[first.idx].id, field: Object.keys(first.problems)[0] })
+      formRef.current?.focusLine(form.items[first.idx].id, Object.keys(first.problems)[0])
       return
     }
     // An expired (restricted) plan still records purchases that restock products already in stock, but cannot create
@@ -310,7 +253,11 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
       const changedRows = []
       const keyBase = purchaseId || ('unsaved-' + Date.now().toString(36))
       for (const group of groupLinesByProduct(startedItems, resolveExisting)) {
-        const { existing, name, cost, sell, cat, lines } = group
+        const { existing, name, cost, sell, cat, barcode, lines } = group
+        // A barcode entered on the line is saved onto a product that has none,
+        // unless another product already uses it (the form blocks that).
+        const owner = barcode ? findProductByBarcode(inventory, barcode) : null
+        const newBarcode = barcode && !owner ? barcode : null
         let row = null
         try {
           if (existing) {
@@ -319,6 +266,7 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
             // roles allowed to edit prices (the same rule Inventory enforces).
             const updates = { cost_price: cost }
             if (canReprice && sell && sell !== Number(existing.price)) updates.price = sell
+            if (newBarcode && !String(existing.barcode || '').trim()) updates.barcode = newBarcode
             row = (await productRepository.update(existing.id, brand.id, updates)) || { id: existing.id, ...updates }
             updated++
           } else {
@@ -332,6 +280,7 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
               stock: 0,
               reorder_level: 5,
               list_on_carefind: true,
+              ...(newBarcode ? { barcode: newBarcode } : {}),
             })
             row = Array.isArray(createdRow) ? createdRow[0] : createdRow
             if (!row?.id) throw new Error('the product could not be created')
@@ -401,21 +350,6 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
     setSaving(false)
   }
 
-  const years = [...new Set(purchases.map(p => p.created_at?.slice(0, 4)).filter(Boolean))].sort().reverse()
-
-  // Autocomplete suggestions for the product-name inputs: existing catalogue
-  // names, deduplicated, so a purchase line can pick the product it is
-  // replenishing rather than retyping it (and risking a near-miss duplicate).
-  // One suggestion per name, labelled with generic name and stock so the
-  // right product is easy to pick.
-  const suggestions = []
-  const seenNames = new Set()
-  for (const p of inventory || []) {
-    if (!p.name || seenNames.has(p.name)) continue
-    seenNames.add(p.name)
-    suggestions.push(p)
-  }
-
   const draftLines = startedItems.length
   const draftSummary = draftLines + ' item' + (draftLines === 1 ? '' : 's') + (String(form.supplier || '').trim() ? ' from ' + form.supplier.trim() : '')
 
@@ -444,7 +378,7 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
       </div>
 
       <div role='tablist' aria-label='Purchases views' style={{ display: 'flex', gap: 24, borderBottom: `1px solid ${border}`, marginBottom: 16 }}>
-        {[['purchases', 'Purchases'], ['suppliers', 'Suppliers & payments']].map(([v, label]) => {
+        {[['purchases', 'Purchases'], ['history', 'History & analytics'], ['suppliers', 'Suppliers & payments']].map(([v, label]) => {
           const on = view === v
           return (
             <button key={v} type='button' role='tab' aria-selected={on} onClick={() => setView(v)}
@@ -457,25 +391,38 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
 
       {view === 'suppliers' ? (
         <SupplierBalances brand={brand} staffName={staffName} showToast={showToast} onPaid={load} />
+      ) : view === 'history' ? (
+        <PurchaseHistory brand={brand} suppliers={directory.suppliers} onOpenPurchase={(id) => setViewing({ id })} />
       ) : (<>
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '180px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
-          <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search supplier or product...'
-            style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div style={{ flex: '1 1 220px', display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
+            <Search size={15} color={gray400} style={{ flexShrink: 0 }} aria-hidden='true' />
+            <input type='search' value={search} onChange={e => setSearch(e.target.value)} placeholder='Search supplier or product...' aria-label='Search purchases by supplier or product'
+              style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
+          </div>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: gray600 }}>
+            Supplier
+            <select value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)} disabled={filtersUnavailable}
+              style={{ padding: '9px 12px', minHeight: 40, borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', fontWeight: 400, outline: 'none', background: 'white', color: navy }}>
+              <option value=''>All suppliers</option>
+              {directory.suppliers.map(s => <option key={s.key} value={s.key}>{s.name}</option>)}
+            </select>
+          </label>
         </div>
-        <input type='month' value={filterMonth} onChange={e => { setFilterMonth(e.target.value); setFilterYear('') }}
-          style={{ padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
-        <select value={filterYear} onChange={e => { setFilterYear(e.target.value); setFilterMonth('') }}
-          style={{ padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', background: 'white', color: navy }}>
-          <option value=''>All years</option>
-          {years.map(y => <option key={y}>{y}</option>)}
-        </select>
-        {(filterMonth || filterYear) && <button onClick={() => { setFilterMonth(''); setFilterYear('') }} style={{ padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>Clear</button>}
+        <div style={{ flex: '2 1 320px', minWidth: 0 }}>
+          <PeriodFilter value={period} onChange={setPeriod} label='Supply date' />
+        </div>
       </div>
+      {filtersUnavailable && (
+        <div role='status' style={{ fontSize: 12, color: gray500, marginBottom: 12 }}>Filtering by date and supplier becomes available once the latest database update is applied. All purchases are listed.</div>
+      )}
 
       {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : purchases.length === 0 ? (
-        <Empty icon={<Truck size={40} />} message='No purchases recorded' action={hasDraft ? 'Resume draft' : '+ Record Purchase'} onAction={openForm} />
+        (search || supplierFilter || period.mode !== 'all') && !filtersUnavailable
+          ? <Empty icon={<Search size={40} />} cause='filtered' title='No purchases match' description={'Nothing for ' + periodLabel.toLowerCase().replace(/^all time$/, 'any date') + (supplierFilter ? ' from this supplier' : '') + (search ? ' matching "' + search + '"' : '') + '.'}
+              action='Clear filters' onAction={() => { setSearch(''); setSupplierFilter(''); setPeriod(ALL_TIME) }} />
+          : <Empty icon={<Truck size={40} />} message='No purchases recorded' action={hasDraft ? 'Resume draft' : '+ Record Purchase'} onAction={openForm} />
       ) : (
         <Card>
           <div style={{ overflowX: 'auto' }}>
@@ -498,7 +445,10 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
                         {p.supplier_name}
                       </button>
                     </td>
-                    <td style={{ padding: '12px 12px', fontSize: '13px', color: gray600, maxWidth: '260px' }}>{p.product_name || 'Not set'}</td>
+                    <td style={{ padding: '12px 12px', fontSize: '13px', color: gray600, maxWidth: '260px' }}>
+                      {p.product_name || 'Not set'}
+                      {Number(p.edit_count) > 0 && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 800, color: gray500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Edited</span>}
+                    </td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', color: navy }}>{p.quantity || 'Not set'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', color: navy }}>{p.cost_price ? fmt(p.cost_price) : 'Not set'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(p.total_cost || 0)}</td>
@@ -509,11 +459,19 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
                     <td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}>{fmtDate(p.expiry)}</td>
                     <td style={{ padding: '12px 12px' }}>{(() => { const st = purchaseStatus(p); return <Pill label={st.label} type={st.type} /> })()}</td>
                     <td style={{ padding: '12px 12px' }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                      {canEditPurchases && (
+                        <button type='button' onClick={(e) => { e.stopPropagation(); setEditing(p) }} aria-label={`Edit purchase from ${p.supplier_name}`}
+                          style={{ padding: '6px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: tealDeep, fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap', minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Pencil size={12} aria-hidden='true' /> Edit
+                        </button>
+                      )}
                       {(Number(p.balance) || 0) > 0 ? (
                         <button type='button' onClick={(e) => { e.stopPropagation(); setPaying(p) }} aria-label={`Record payment to ${p.supplier_name}`} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap', minHeight: 32 }}>Record payment</button>
                       ) : (
                         <button type='button' onClick={(e) => { e.stopPropagation(); setPaying(p) }} aria-label={`Payment history for ${p.supplier_name}`} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap', minHeight: 32 }}>History</button>
                       )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -533,7 +491,10 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
 
       </>)}
 
-      {viewing && !paying && <PurchaseDetailModal brand={brand} purchase={viewing} onClose={() => setViewing(null)} onPay={(p) => { setViewing(null); setPaying(p) }} />}
+      {viewing && !paying && !editing && <PurchaseDetailModal brand={brand} purchase={viewing} onClose={() => setViewing(null)} onPay={(p) => { setViewing(null); setPaying(p) }}
+        onEdit={canEditPurchases ? (p) => { setViewing(null); setEditing(p) } : undefined} />}
+      {editing && <EditPurchaseModal brand={brand} purchase={editing} inventory={inventory} inventoryStatus={inventoryStatus} catalog={catalog} setProducts={setProducts}
+        staffName={staffName} showToast={showToast} onClose={() => setEditing(null)} onSaved={load} />}
       {paying && <PurchasePaymentModal brand={brand} purchase={paying} staffName={staffName} showToast={showToast} onPaid={load} onClose={() => setPaying(null)} />}
 
       {/* A tap outside the sheet or Escape must never cost a long entry, so the
@@ -559,163 +520,9 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-            <Inp label='Supplier Name' id='purchase-supplier' value={form.supplier} onChange={v => f('supplier', v)} placeholder='e.g. MedSupply Ltd' required
-              error={showErrors && !String(form.supplier || '').trim() ? 'Enter the supplier name' : undefined} />
-            <Inp label='Supply Date' id='purchase-supply-date' value={form.supplyDate} onChange={v => f('supplyDate', v)} type='date' />
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
-              <span id='purchase-items-label' style={{ fontSize: '12px', fontWeight: '700', color: gray500 }}>ITEMS RECEIVED *</span>
-              <span style={{ fontSize: '11px', color: gray400 }}>{draftLines} item{draftLines === 1 ? '' : 's'}</span>
-            </div>
-
-            {inventoryStatus === 'loading' && (
-              <div role='status' style={{ fontSize: '12px', color: gray500, marginBottom: '8px' }}>Loading your products…</div>
-            )}
-            {inventoryStatus === 'error' && (
-              <div role='alert' style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', padding: '8px 12px', marginBottom: '8px', borderRadius: theme.radius.sm, background: dangerBg, border: `1px solid ${danger}`, fontSize: '12px', color: danger }}>
-                <AlertTriangle size={14} aria-hidden='true' />
-                <span style={{ flex: 1, minWidth: '160px' }}>Could not load your products, so existing items cannot be matched yet.</span>
-                {catalog?.reload && <button onClick={() => catalog.reload()} style={{ border: `1px solid ${danger}`, background: 'white', color: danger, borderRadius: theme.radius.sm, padding: '4px 10px', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>Retry</button>}
-              </div>
-            )}
-            {inventoryStatus === 'ready' && (
-              <div style={{ fontSize: '12px', color: gray500, marginBottom: '8px', lineHeight: 1.5 }}>
-                Pick a product from your inventory (or scan its barcode) and its details fill in. Enter the quantity and change only what is different, then press Enter for the next item.
-              </div>
-            )}
-
-            <div role='list' aria-labelledby='purchase-items-label' style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {form.items.map((item, i) => {
-                const product = item.productId ? inventory.find(p => p.id === item.productId) : null
-                const problems = showErrors ? itemProblems(item, product) : {}
-                const hasProblems = Object.keys(problems).length > 0
-                const qtyNum = Number(item.qty)
-                const qtyValid = Number.isInteger(qtyNum) && qtyNum > 0
-                const sub = (Number(item.qty) || 0) * (Number(item.cost) || 0)
-                const priceLocked = !!product && !canReprice
-                const isService = (product?.category || product?.cat) === 'Services'
-                const tracking = product?.tracking_mode || 'none'
-                const sameAs = !isBlankItem(item) && String(item.name).trim()
-                  ? form.items.findIndex((o, j) => j < i && (item.productId ? o.productId === item.productId : (!o.productId && normalize(o.name) === normalize(item.name))))
-                  : -1
-                const fid = (k) => 'pi-' + item.id + '-' + k
-                const reg = (k) => (el) => { fieldRefs.current[item.id + ':' + k] = el }
-                const described = (k) => problems[k] ? fid(k) + '-error' : undefined
-                return (
-                  <div key={item.id} role='listitem' aria-label={'Item ' + (i + 1) + (item.name ? ': ' + item.name : '')}
-                    style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${hasProblems ? danger : gray100}`, background: bg }}>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
-                      <div style={{ width: '24px', height: '40px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '800', color: gray400 }} aria-hidden='true'>{i + 1}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <LineField id={fid('name')} label='Product' error={problems.name}>
-                          <input id={fid('name')} ref={reg('name')} value={item.name} list='purchase-product-names' autoComplete='off'
-                            onChange={e => changeName(item, e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'name')}
-                            placeholder='Type, pick or scan e.g. Amoxicillin 500mg'
-                            aria-invalid={!!problems.name} aria-describedby={described('name')}
-                            style={lineInput(problems.name)} />
-                        </LineField>
-                      </div>
-                      <button onClick={() => removeItem(item.id)} aria-label={'Remove item ' + (i + 1) + (item.name ? ' (' + item.name + ')' : '')}
-                        style={{ width: '40px', height: '40px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: theme.radius.md, border: 'none', background: 'transparent', color: gray400, cursor: 'pointer' }}>
-                        <X size={16} />
-                      </button>
-                    </div>
-
-                    {product ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', margin: '8px 0 0 32px', fontSize: '12px', color: gray600 }}>
-                        <Package size={13} color={tealDeep} aria-hidden='true' />
-                        <span style={{ fontWeight: '700', color: tealDeep }}>In inventory</span>
-                        <span>· {product.category || product.cat || 'Uncategorised'}</span>
-                        {product.generic_name && <span>· {product.generic_name}</span>}
-                        {tracking !== 'none' && <span>· tracked by batch{tracking === 'batch_expiry' ? ' and expiry' : ''}</span>}
-                        {!isService && (
-                          <span>· Stock <strong style={{ color: navy }}>{product.stock || 0}</strong>{qtyValid && <> → <strong style={{ color: success }}>{(product.stock || 0) + qtyNum}</strong> after saving</>}</span>
-                        )}
-                      </div>
-                    ) : String(item.name).trim() ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', margin: '8px 0 0 32px', fontSize: '12px', color: gray600 }}>
-                        <span><strong style={{ fontWeight: '700', color: warning }}>New product</strong>, added to Inventory as</span>
-                        <select value={item.cat} onChange={e => setItem(item.id, 'cat', e.target.value)} aria-label={'Category for item ' + (i + 1)}
-                          style={{ padding: '4px 8px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', background: 'white', color: navy }}>
-                          {PRODUCT_CATS.map(c => <option key={c}>{c}</option>)}
-                        </select>
-                      </div>
-                    ) : null}
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '8px', marginTop: '10px', marginLeft: '32px' }}>
-                      <LineField id={fid('qty')} label='Quantity *' error={problems.qty}>
-                        <input id={fid('qty')} ref={reg('qty')} value={item.qty} onChange={e => setItem(item.id, 'qty', e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'qty')}
-                          type='number' inputMode='numeric' min='1' step='1' placeholder='0'
-                          aria-invalid={!!problems.qty} aria-describedby={described('qty')} style={lineInput(problems.qty)} />
-                      </LineField>
-                      <LineField id={fid('cost')} label='Unit cost (₦) *' error={problems.cost}>
-                        <input id={fid('cost')} ref={reg('cost')} value={item.cost} onChange={e => setItem(item.id, 'cost', e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'cost')}
-                          type='number' inputMode='decimal' min='0' placeholder='0'
-                          aria-invalid={!!problems.cost} aria-describedby={described('cost')} style={lineInput(problems.cost)} />
-                      </LineField>
-                      <LineField id={fid('sell')} label='Selling price (₦)'>
-                        <input id={fid('sell')} ref={reg('sell')} value={item.sell} onChange={e => setItem(item.id, 'sell', e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'sell')}
-                          type='number' inputMode='decimal' min='0' placeholder={product ? '0' : 'Auto +50%'} readOnly={priceLocked}
-                          aria-describedby={priceLocked ? fid('sell') + '-locked' : undefined} style={lineInput(false, priceLocked)} />
-                      </LineField>
-                      <LineField id={fid('batch')} label={tracking !== 'none' ? 'Batch no. *' : 'Batch no.'} error={problems.batch}>
-                        <input id={fid('batch')} ref={reg('batch')} value={item.batch} onChange={e => setItem(item.id, 'batch', e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'batch')}
-                          placeholder={tracking !== 'none' ? 'Required' : 'Optional'} aria-invalid={!!problems.batch} aria-describedby={described('batch')} style={lineInput(problems.batch)} />
-                      </LineField>
-                      <LineField id={fid('expiry')} label={tracking === 'batch_expiry' ? 'Expiry date *' : 'Expiry date'} error={problems.expiry}>
-                        <input id={fid('expiry')} ref={reg('expiry')} value={item.expiry} onChange={e => setItem(item.id, 'expiry', e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'expiry')}
-                          type='date' aria-invalid={!!problems.expiry} aria-describedby={described('expiry')} style={lineInput(problems.expiry)} />
-                      </LineField>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginTop: '8px', marginLeft: '32px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '11.5px' }}>
-                        {priceLocked && <span id={fid('sell') + '-locked'} style={{ color: gray500 }}>Selling price can only be changed by roles with price permission.</span>}
-                        {isPastExpiry(item, today) && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: warning, fontWeight: '700' }}><AlertTriangle size={12} aria-hidden='true' /> This expiry date has already passed: check the year.</span>}
-                        {sameAs >= 0 && <span style={{ color: gray500 }}>Same product as line {sameAs + 1}: stock is combined, each batch is kept separately.</span>}
-                      </div>
-                      <span style={{ fontSize: '12px', fontWeight: '700', color: sub > 0 ? tealDeep : gray400, marginLeft: 'auto' }}>{sub > 0 ? 'Subtotal: ' + fmt(sub) : 'Not set'}</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            <button onClick={addItem} style={{ width: '100%', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', minHeight: '44px', borderRadius: theme.radius.md, border: `1px dashed ${tealDeep}`, background: tealMist, color: tealDeep, fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
-              <Plus size={15} aria-hidden='true' /> Add another item
-            </button>
-          </div>
-
-          <datalist id='purchase-product-names'>
-            {suggestions.map(p => {
-              const isSvc = (p.category || p.cat) === 'Services'
-              const label = [p.generic_name, isSvc ? null : (p.stock || 0) + ' in stock'].filter(Boolean).join(' · ')
-              return <option key={p.id} value={p.name}>{label}</option>
-            })}
-          </datalist>
-
-          <div style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: bg, display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-            <span style={{ color: gray500 }}>Total Cost (auto)</span>
-            <span style={{ fontWeight: '900', color: navy }}>{fmt(computedTotal)}</span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-            <Inp label='Amount Paid (₦)' id='purchase-amount-paid' value={form.amountPaid} onChange={v => f('amountPaid', v)} type='number' placeholder='0' />
-            <Inp label='Payment Due Date' id='purchase-due-date' value={form.dueDate} onChange={v => f('dueDate', v)} type='date' />
-          </div>
-          {computedTotal > 0 && (
-            <div style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: bg, display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-              <span style={{ color: gray500 }}>Balance remaining</span>
-              <span style={{ fontWeight: '900', color: danger }}>{fmt(Math.max(0, computedTotal - (parseFloat(form.amountPaid) || 0)))}</span>
-            </div>
-          )}
-          <Textarea label='Notes' id='purchase-notes' value={form.notes} onChange={v => f('notes', v)} placeholder='Invoice number, delivery notes...' rows={2} />
-
-          <div style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealDeep}`, fontSize: '12px', color: tealDeep, lineHeight: '1.7' }}>
-            Saving adds every item to Inventory: existing products get the extra stock and the new unit cost; new products are created with your selling price (or a 50% markup if left blank). Batch and expiry details create a stock batch for expiry tracking.
-          </div>
+          <PurchaseForm ref={formRef} form={form} setForm={setForm} inventory={inventory} inventoryStatus={inventoryStatus} catalog={catalog}
+            canReprice={canReprice} showErrors={showErrors} brandId={brand?.id} insights={insights}
+            suppliers={directory.suppliers} suppliersStatus={directory.isLoading ? 'loading' : directory.isError ? 'error' : 'ready'} />
         </div>
       </Modal>
 

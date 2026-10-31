@@ -2,6 +2,22 @@ import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
 import { isMissingColumn } from '../../../lib/dbErrors'
 
+// The analytics filters every history/summary function takes, as RPC
+// arguments. `from`/`to` are inclusive 'YYYY-MM-DD' supply dates; a supplier is
+// its key (case and surrounding spaces ignored); a product is matched by id OR
+// name, so lines saved before products were recorded on them still count.
+function filterArgs(businessId, { from = null, to = null, search = '', supplierKey = '', productKey = '', productId = null } = {}) {
+  return {
+    p_business_id: businessId,
+    p_from: from || null,
+    p_to: to || null,
+    p_search: String(search || '').trim() || null,
+    p_supplier_key: String(supplierKey || '').trim() || null,
+    p_product_key: String(productKey || '').trim() || null,
+    p_product_id: productId || null,
+  }
+}
+
 // ── Purchase repository ───────────────────────────────────────────────────────
 // A deep module over the `purchases` table. The interface is small
 // (getAll/create/update/getPage/getTotals); the implementation owns the
@@ -28,13 +44,89 @@ export function createPurchaseRepository(request = sbFetch) {
       return pagedQuery(request, `${q}&order=created_at.desc,id.asc&select=*`)
     },
 
-    // Paginated purchase list — use for table display
-    async getPage(businessId, { search = '', month = '', year = '', offset = 0, limit = 50 } = {}) {
+    // Paginated purchase list — use for table display. `from`/`to` are an
+    // inclusive supply-date range and `supplierKey` one supplier
+    // (carehub_20261229); `month`/`year` are the older created-date filters.
+    async getPage(businessId, { search = '', month = '', year = '', from = '', to = '', supplierKey = '', offset = 0, limit = 50 } = {}) {
       const params = [`p_business_id=${businessId}`, `p_offset=${offset}`, `p_limit=${limit}`]
       if (search) params.push(`p_search=${encodeURIComponent(search)}`)
       if (month) params.push(`p_month=${month}`)
       if (year) params.push(`p_year=${year}`)
+      if (from) params.push(`p_from=${from}`)
+      if (to) params.push(`p_to=${to}`)
+      if (supplierKey) params.push(`p_supplier_key=${encodeURIComponent(supplierKey)}`)
       return request(`rpc/get_purchases_page?${params.join('&')}`)
+    },
+
+    // The purchase's lines as the edit screen needs them: each with its stable
+    // id, the product it stocked, what it added to stock, the lowest quantity
+    // it can be set to, and whether it is locked (get_purchase_for_edit).
+    async getForEdit(purchaseId) {
+      return request('rpc/get_purchase_for_edit', { method: 'POST', body: JSON.stringify({ p_purchase_id: purchaseId }) })
+    },
+
+    // Edits a purchase in one transaction (edit_purchase): the server checks
+    // the "Edit purchases" permission, recomputes every total, moves stock by
+    // the difference per line through the stock ledger, and keeps the debt,
+    // the payment history and the audit log in step. Returns
+    // { purchase, unchanged, products, stock_changes, created_products }.
+    // `amountPaid` is null unless the user changed it (the server then keeps
+    // the current figure, payments recorded meanwhile included).
+    // `expectedEditCount` / `expectedAmountPaid` are what the screen loaded: if
+    // either moved since, the server refuses instead of overwriting.
+    async edit(purchaseId, { supplier, supplyDate, dueDate = null, notes = '', items, amountPaid = null, reason, staffName = null, expectedEditCount = null, expectedAmountPaid = null }) {
+      return request('rpc/edit_purchase', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_purchase_id: purchaseId,
+          p_supplier_name: supplier,
+          p_supply_date: supplyDate,
+          p_due_date: dueDate || null,
+          p_notes: notes || '',
+          p_items: items,
+          p_amount_paid: amountPaid,
+          p_reason: reason,
+          p_staff_name: staffName || null,
+          p_expected_edit_count: expectedEditCount,
+          p_expected_amount_paid: expectedAmountPaid,
+        }),
+      })
+    },
+
+    // Who changed the purchase, when and why (audit_log, newest first).
+    async getEditHistory(purchaseId, businessId) {
+      return request(`audit_log?branch_id=eq.${businessId}&target_id=eq.${purchaseId}&action=eq.purchase.edited&order=created_at.desc&select=id,created_at,actor_type,metadata`)
+    },
+
+    // ── Purchase history and analytics (carehub_20261229) ────────────────────
+    // Every purchase line across products and suppliers, newest first.
+    async getHistory(businessId, filters = {}, { offset = 0, limit = 50 } = {}) {
+      return request('rpc/get_purchase_history', {
+        method: 'POST',
+        body: JSON.stringify({ ...filterArgs(businessId, filters), p_offset: offset, p_limit: limit }),
+      })
+    },
+
+    // One row of totals for the selection (spend, paid, outstanding, counts,
+    // first/last purchase, payments made in the period).
+    async getSummary(businessId, filters = {}) {
+      const rows = await request('rpc/get_purchase_summary', { method: 'POST', body: JSON.stringify(filterArgs(businessId, filters)) })
+      return (Array.isArray(rows) ? rows[0] : rows) || null
+    },
+
+    // Spending per supplier for the selection, biggest first.
+    async getSupplierStats(businessId, filters = {}) {
+      const { p_supplier_key: _ignored, ...args } = filterArgs(businessId, filters)
+      return request('rpc/get_purchase_supplier_stats', { method: 'POST', body: JSON.stringify(args) })
+    },
+
+    // Per product: times bought, units, spend, average/lowest/highest cost,
+    // last purchase and the price before it. `total_count` on each row.
+    async getProductStats(businessId, filters = {}, { sort = 'spend', offset = 0, limit = 50 } = {}) {
+      return request('rpc/get_purchase_product_stats', {
+        method: 'POST',
+        body: JSON.stringify({ ...filterArgs(businessId, filters), p_sort: sort, p_offset: offset, p_limit: limit }),
+      })
     },
 
     // Purchase totals — use for stat cards
@@ -100,15 +192,6 @@ export function createPurchaseRepository(request = sbFetch) {
       }
     },
 
-    // Previously an id-only PATCH in services/supabase.js, same class as the
-    // debts write — now scoped to the tenant.
-    async update(purchaseId, businessId, updates) {
-      return request(`purchases?id=eq.${purchaseId}&business_id=eq.${businessId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(updates),
-        prefer: 'return=minimal',
-      })
-    },
   }
 }
 

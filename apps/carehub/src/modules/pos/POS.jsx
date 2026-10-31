@@ -26,6 +26,7 @@ import CustomerPicker from './CustomerPicker'
 import SaleDetailModal from './SaleDetailModal'
 import { creditCustomerFor } from './customerPick'
 import { isDuplicateError } from '../../lib/dbErrors'
+import { startCameraScan } from '../../lib/barcodeScanner'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useTodaySales, useOpenSales, useRecentSales, useSettings, useClients, useCreateClient, useInvalidateSales } from '../../hooks/queries'
 
@@ -108,6 +109,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const [sortBy, setSortBy] = useState('name_asc')
   const [receipt, setReceipt] = useState(null)
   const [scanning, setScanning] = useState(false)
+  const stopScanRef = useRef(null)
   // Out-of-stock products are hidden from the sellable grid; the badge under
   // the category pills opens a bottom sheet listing them so staff can see what
   // is unavailable without clogging the counter (mobile-focused issue #5).
@@ -624,31 +626,19 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   function startScan() {
     if ('BarcodeDetector' in window) {
       setScanning(true)
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => {
-        const video = document.getElementById('pos-cam')
-        if (video) { video.srcObject = stream; video.play() }
-        const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e'] })
-        let found = false
-        const interval = setInterval(async () => {
-          if (found || !video) return
-          try {
-            const codes = await detector.detect(video)
-            if (codes.length > 0) {
-              found = true; clearInterval(interval)
-              stream.getTracks().forEach(t => t.stop())
-              setScanning(false)
-              const code = codes[0].rawValue
-              const match = findByBarcode(code) || products.find(p => (p.name || '').toLowerCase().includes(code.toLowerCase()))
-              if (match) {
-                if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
-                add(match); showToast('Added: ' + match.name, { type: 'success' })
-              }
-              else { setSearch(code) }
-            }
-          } catch (e) {}
-        }, 300)
-        setTimeout(() => { if (!found) { clearInterval(interval); stream.getTracks().forEach(t => t.stop()); setScanning(false) } }, 15000)
-      }).catch(() => { setScanning(false); showToast('Camera access denied. Check your browser permissions and try again.', { type: 'error' }) })
+      stopScanRef.current = startCameraScan({
+        getVideo: () => document.getElementById('pos-cam'),
+        onEnd: () => setScanning(false),
+        onError: () => showToast('Camera access denied. Check your browser permissions and try again.', { type: 'error' }),
+        onCode: (code) => {
+          const match = findByBarcode(code) || products.find(p => (p.name || '').toLowerCase().includes(code.toLowerCase()))
+          if (match) {
+            if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
+            add(match); showToast('Added: ' + match.name, { type: 'success' })
+          }
+          else { setSearch(code) }
+        },
+      })
     } else {
       const code = prompt('Enter barcode number:')
       if (code) {
@@ -922,7 +912,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         {scanning && (
           <div style={{ margin: isMobile ? '12px 16px 0' : '12px 20px 0', borderRadius: theme.radius.lg, overflow: 'hidden', border: `2px solid ${tealDeep}`, position: 'relative', background: 'black', flexShrink: 0 }}>
             <video id='pos-cam' style={{ width: '100%', maxHeight: 180, objectFit: 'cover', display: 'block' }} autoPlay playsInline muted />
-            <button onClick={() => { setScanning(false); const v = document.getElementById('pos-cam'); if (v?.srcObject) { v.srcObject.getTracks().forEach(t => t.stop()); v.srcObject = null } }}
+            <button onClick={() => { stopScanRef.current?.(); setScanning(false); const v = document.getElementById('pos-cam'); if (v?.srcObject) { v.srcObject.getTracks().forEach(t => t.stop()); v.srcObject = null } }}
               style={{ position: 'absolute', top: 8, right: 8, padding: '4px 10px', borderRadius: theme.radius.md, border: 'none', background: danger, color: 'white', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Stop</button>
           </div>
         )}

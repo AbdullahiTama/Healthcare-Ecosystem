@@ -71,3 +71,42 @@ describe('purchase line items', () => {
     expect(syrup.lines.map(l => [l.qty, l.batch])).toEqual([[3, null], [2, null]])
   })
 })
+
+describe('purchase line items: barcodes and edit limits', () => {
+  it('a barcode matches its product exactly after trimming, never partially', async () => {
+    const { findProductByBarcode, looksLikeBarcode } = await import('../lineItems')
+    expect(findProductByBarcode(products, ' 6151100001 ')?.id).toBe('p1')
+    expect(findProductByBarcode(products, '61511')).toBeNull()
+    expect(looksLikeBarcode('8903882000125')).toBe(true)
+    expect(looksLikeBarcode('B-12')).toBe(false)
+    expect(looksLikeBarcode('1234567')).toBe(false)
+  })
+
+  it('picking a product retrieves its barcode; a typed one is kept for a product without', () => {
+    expect(applyProduct(line({ barcode: '999' }), products[0]).barcode).toBe('6151100001')
+    expect(applyProduct(line({ barcode: '999' }), products[1]).barcode).toBe('999')
+  })
+
+  it('a barcode that belongs to another product is a problem; the product\'s own is not', () => {
+    const own = line({ productId: 'p1', name: 'Amoxil 500mg', qty: '1', cost: '5', barcode: '6151100001' })
+    expect(itemProblems(own, products[0], { barcodeOwner: products[0] }).barcode).toBeUndefined()
+    const other = line({ productId: 'p2', name: 'Panadol Extra', qty: '1', cost: '5', barcode: '6151100001' })
+    expect(itemProblems(other, products[1], { barcodeOwner: products[0] }).barcode).toBe('Belongs to Amoxil 500mg')
+  })
+
+  it('when editing, the quantity cannot go below what is still in stock, unless the line is locked', () => {
+    const l = line({ productId: 'p1', name: 'Amoxil 500mg', qty: '3', cost: '5' })
+    expect(itemProblems(l, products[0], { minQty: 4 }).qty).toBe('Lowest is 4: the rest is already sold')
+    expect(itemProblems(l, products[0], { minQty: 3 }).qty).toBeUndefined()
+    expect(itemProblems(l, null, { minQty: 4, locked: true }).qty).toBeUndefined()
+  })
+
+  it('a group keeps the first barcode entered for its product', () => {
+    const groups = groupLinesByProduct([
+      line({ name: 'New thing', qty: '1', cost: '2', barcode: '' }),
+      line({ name: 'new thing', qty: '2', cost: '2', barcode: '777' }),
+    ], () => null)
+    expect(groups).toHaveLength(1)
+    expect(groups[0].barcode).toBe('777')
+  })
+})
