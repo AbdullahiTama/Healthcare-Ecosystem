@@ -18,6 +18,11 @@ function seeded() {
 }
 
 describe('debtRepository', () => {
+  it('getOpen returns only this tenant\'s debts that still have something to pay', async () => {
+    const { repo } = seeded()
+    expect((await repo.getOpen(A)).map((r) => r.id).sort()).toEqual(['1', '3'])
+  })
+
   it('getAll returns only the calling tenant', async () => {
     const { repo } = seeded()
     const rows = await repo.getAll(A)

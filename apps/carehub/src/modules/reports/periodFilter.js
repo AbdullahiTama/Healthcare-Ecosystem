@@ -1,35 +1,35 @@
+import { businessDate, businessDateOf, businessPeriod } from '../../lib/businessDay'
+
+// Financial Reports periods, on the business day (lib/businessDay.js): the same
+// "today", Monday-to-Sunday "week", month and year as the dashboard and Sales &
+// Accounts, whatever zone or date the device is set to.
+
+// The [start, end) business dates of a period, or null for 'all' (or a bad month).
+function dateBounds({ period, month, now }) {
+  const r = businessPeriod(period, { now, month })
+  if (!r) return null
+  // `end` is the next period's first midnight, so its business date is the
+  // first date outside the period.
+  return { from: businessDate(r.start), to: businessDate(r.end) }
+}
+
 // Whether an item's date falls inside the selected report period.
 // Takes its options as one object so it can never be handed to Array.filter
 // directly: filter's (item, index, array) arguments would otherwise land in
-// the wrong parameters.
+// the wrong parameters. `dateOf` may return a time (placed in the business
+// zone) or a bare business date such as an expense date.
 export function inPeriod(item, { period, month, now = new Date(), dateOf = i => i.created_at || '' }) {
-  const d = dateOf(item) || ''
-  if (period === 'today') return d.startsWith(now.toISOString().split('T')[0])
-  if (period === 'week') return new Date(d) >= new Date(now - 7 * 864e5)
-  if (period === 'month') return d.startsWith(month)
-  if (period === 'year') return d.startsWith(String(now.getFullYear()))
-  return true
+  if (period === 'all') return true
+  const bounds = dateBounds({ period, month, now })
+  if (!bounds) return true
+  const d = businessDateOf(dateOf(item))
+  return !!d && d >= bounds.from && d < bounds.to
 }
 
-// The server-side window for a period, as ISO date-time strings: { from, to }
-// with `to` exclusive, or nulls for 'all'. Matches inPeriod (UTC dates) so a
+// The server-side window for a period, as ISO instants: { from, to } with `to`
+// exclusive, or nulls for 'all'. Covers exactly what inPeriod accepts, so a
 // screen can ask the database for just the period, then filter with inPeriod.
 export function periodRange({ period, month, now = new Date() }) {
-  const day = (d) => d.toISOString().split('T')[0]
-  if (period === 'today') {
-    const start = day(now)
-    const next = new Date(start + 'T00:00:00Z'); next.setUTCDate(next.getUTCDate() + 1)
-    return { from: start + 'T00:00:00', to: day(next) + 'T00:00:00' }
-  }
-  if (period === 'week') return { from: new Date(now - 7 * 864e5).toISOString(), to: null }
-  if (period === 'month' && /^\d{4}-\d{2}$/.test(month || '')) {
-    const [y, m] = month.split('-').map(Number)
-    const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
-    return { from: `${month}-01T00:00:00`, to: `${next}-01T00:00:00` }
-  }
-  if (period === 'year') {
-    const y = now.getFullYear()
-    return { from: `${y}-01-01T00:00:00`, to: `${y + 1}-01-01T00:00:00` }
-  }
-  return { from: null, to: null }
+  const r = period === 'all' ? null : businessPeriod(period, { now, month })
+  return r ? { from: r.start.toISOString(), to: r.end.toISOString() } : { from: null, to: null }
 }

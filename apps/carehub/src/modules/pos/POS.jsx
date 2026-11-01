@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef, Component } from 'react'
+import { businessDateTime } from '../../lib/businessDay'
+import { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue, memo, Component } from 'react'
+import { buildProductIndex, searchProducts, findByBarcode as findBarcodeIn, isService } from './productSearch'
 import { registerSwitchBlocker } from '../../lib/locationSwitch'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -28,7 +30,7 @@ import { creditCustomerFor } from './customerPick'
 import { isDuplicateError } from '../../lib/dbErrors'
 import { startCameraScan } from '../../lib/barcodeScanner'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useTodaySales, useOpenSales, useRecentSales, useSettings, useClients, useCreateClient, useInvalidateSales } from '../../hooks/queries'
+import { useOpenSales, useRecentSales, useSettings, useClients, useCreateClient, useInvalidateSales } from '../../hooks/queries'
 
 const { tealDeep, tealMist, bg, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, warning, warningBg, success } = theme
 
@@ -36,6 +38,8 @@ const { tealDeep, tealMist, bg, navy, gray600, gray500, gray400, gray100, border
 // goods. Replaces the per-product emoji so the counter grid reads as one clean
 // system (matches the dashboard template's icon-tile treatment).
 const productIcon = (p) => ((p.cat || p.category) === 'Services' ? Clipboard : Package)
+// Product cards drawn at a time; "Show more" draws the next page.
+export const GRID_PAGE = 60
 
 // Strips the transport prefix off a server error so the cashier sees the
 // actual reason ("Price override not allowed: ...") instead of the raw
@@ -80,6 +84,37 @@ class POSErrorBoundary extends Component {
 export default function POS(props) {
   return <POSErrorBoundary><POSInner {...props} /></POSErrorBoundary>
 }
+
+// One product on the POS grid. Memoised: typing in the search box redraws only
+// the cards whose product or cart quantity changed, not every card.
+const ProductCard = memo(function ProductCard({ p, qty, onAdd }) {
+  const service = isService(p)
+  const low = !service && p.stock > 0 && p.stock <= (p.reorder_level || 5)
+  const Icon = productIcon(p)
+  const badge = service ? { t: 'Service', bg: tealMist, fg: tealDeep }
+    : low ? { t: p.stock + ' left', bg: warningBg, fg: warning }
+    : { t: String(p.stock), bg: gray100, fg: gray500 }
+  return (
+    <div
+      style={{ background: 'white', border: `1px solid ${qty > 0 ? tealDeep : border}`, borderRadius: theme.radius.lg, padding: 12, display: 'flex', flexDirection: 'column', gap: 10, boxShadow: qty > 0 ? '0 2px 10px rgba(15,118,110,0.15)' : 'none' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <div style={{ width: 34, height: 34, borderRadius: theme.radius.full, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={17} /></div>
+          {qty > 0 && <div style={{ position: 'absolute', top: -7, right: -7, minWidth: 18, height: 18, padding: '0 4px', borderRadius: theme.radius.full, background: tealDeep, color: 'white', fontSize: 10, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>{qty}</div>}
+        </div>
+        <span style={{ padding: '2px 8px', borderRadius: theme.radius.full, background: badge.bg, color: badge.fg, fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>{badge.t}</span>
+      </div>
+      <div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: navy, lineHeight: 1.3, textTransform: 'uppercase' }}>{p.name}</div>
+        <div style={{ fontSize: 14, fontWeight: 900, color: navy, marginTop: 4 }}>{fmt(p.price)}</div>
+      </div>
+      <button type='button' onClick={() => onAdd(p)} aria-label={`Add ${p.name}${qty > 0 ? ` (${qty} in sale)` : ''}`}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '8px 0', borderRadius: theme.radius.sm, border: `1px solid ${qty > 0 ? tealDeep : border}`, background: qty > 0 ? tealMist : 'white', color: qty > 0 ? tealDeep : navy, fontWeight: 700, fontSize: 12, cursor: 'pointer', marginTop: 'auto' }}>
+        <Plus size={14} /> Add
+      </button>
+    </div>
+  )
+})
 
 function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   // Catalog load state from BusinessDashboard (inventory/hooks/useProductCatalog.js).
@@ -140,85 +175,36 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const clientsQuery = useClients(brand?.id)
   const clients = clientsQuery.data || []
   const createClient = useCreateClient(brand?.id)
-  const { data: todaySales = [], isLoading: loadingToday } = useTodaySales(brand?.id)
   // Held and unpaid credit sales, and the latest completed sales for the
   // Recent tab — targeted reads instead of the whole sales history.
   const { data: openSales = [], isLoading: loadingOpen, isError: openError, refetch: refetchOpen } = useOpenSales(brand?.id)
   const recentQuery = useRecentSales(brand?.id, 50)
   const invalidateSales = useInvalidateSales(brand?.id)
-  const loadingSales = loadingToday || loadingOpen
+  const loadingSales = loadingOpen
 
   const heldSales = openSales.filter(s => s.is_on_hold)
   const creditSales = openSales.filter(s => s.is_credit && s.balance > 0)
 
-  const cats = ['All', ...Array.from(new Set(products.map(p => p.cat)))]
-  // The search box accepts typed text AND barcode scans ("Search products or
-  // scan..."), so a barcode query must match here too — without it, a scanned
-  // code filtered every product away and read as "No products match your
-  // search." even though the product existed.
-  const searchText = search.trim().toLowerCase()
-  const visible = products.filter(p =>
-    (filter === 'All' || p.cat === filter) &&
-    ((p.name || '').toLowerCase().includes(searchText) ||
-      (p.generic_name || p.genericName || '').toLowerCase().includes(searchText) ||
-      (p.barcode || '').trim().toLowerCase().includes(searchText))
-  )
-  // Services are always sellable; stock goods only when stock > 0. Anything
-  // else is collected for the Out-of-Stock sheet instead of the grid.
-  const isService = p => (p.cat || p.category) === 'Services'
+  // Product search (productSearch.js). The catalogue is prepared once per
+  // change, not per key press. The search box itself updates at once; the
+  // grid follows the deferred value, so typing and deleting stay instant while
+  // a long list redraws in the background. The box accepts typed text AND
+  // barcode scans ("Search products or scan..."), so a barcode matches too.
+  const productIndex = useMemo(() => buildProductIndex(products), [products])
+  const cats = productIndex.categories
+  const deferredSearch = useDeferredValue(search)
+  const { sellable, outOfStock } = useMemo(
+    () => searchProducts(productIndex, { query: deferredSearch, category: filter, stockFilter, expiryFilter, sortBy }),
+    [productIndex, deferredSearch, filter, stockFilter, expiryFilter, sortBy])
+  const gridStale = search !== deferredSearch
+  // At most a page of cards is drawn: a short query matching most of the
+  // catalogue must not build thousands of cards on one key press.
+  const [gridLimit, setGridLimit] = useState(GRID_PAGE)
+  useEffect(() => { setGridLimit(GRID_PAGE) }, [deferredSearch, filter, stockFilter, expiryFilter, sortBy])
   // One barcode rule for every scan entry point (camera, hardware scanner,
   // fallback prompt): trim only — a stray space from a scanner or a saved
   // label must not break the lookup.
-  const findByBarcode = code => products.find(p => (p.barcode || '').trim() === String(code).trim())
-  const outOfStock = visible.filter(p => !isService(p) && p.stock <= 0)
-
-  // The stock/expiry/sort controls were rendered but never read, so choosing
-  // "Low stock" or "Price high-low" changed nothing. They are applied here.
-  // Services have neither stock nor an expiry date, so a stock or expiry
-  // filter excludes them rather than matching them by accident.
-  const daysUntil = (date) => {
-    if (!date) return null
-    const ms = new Date(date).getTime() - Date.now()
-    return Number.isNaN(ms) ? null : Math.floor(ms / 86400000)
-  }
-  const EXPIRING_SOON_DAYS = 60
-
-  const matchesStock = (p) => {
-    if (stockFilter === 'All' || !stockFilter) return true
-    if (isService(p)) return false
-    if (stockFilter === 'out') return p.stock <= 0
-    if (stockFilter === 'low') return p.stock > 0 && p.stock <= (p.reorder_level || 5)
-    return true
-  }
-
-  const matchesExpiry = (p) => {
-    if (expiryFilter === 'All' || !expiryFilter) return true
-    const days = daysUntil(p.expiry_date || p.expiryDate)
-    if (days === null) return false
-    if (expiryFilter === 'expired') return days < 0
-    if (expiryFilter === 'expiring') return days >= 0 && days <= EXPIRING_SOON_DAYS
-    return true
-  }
-
-  const sortProducts = (list) => {
-    const by = {
-      name_asc: (a, b) => (a.name || '').localeCompare(b.name || ''),
-      name_desc: (a, b) => (b.name || '').localeCompare(a.name || ''),
-      price_asc: (a, b) => (a.price || 0) - (b.price || 0),
-      price_desc: (a, b) => (b.price || 0) - (a.price || 0),
-    }[sortBy]
-    return by ? [...list].sort(by) : list
-  }
-
-  // "Out of stock" is a deliberate exception: the grid normally hides
-  // unsellable rows, but a cashier who explicitly asks for them expects to see
-  // them rather than an empty grid.
-  const sellable = sortProducts(
-    (stockFilter === 'out'
-      ? visible
-      : visible.filter(p => isService(p) || p.stock > 0)
-    ).filter(p => matchesStock(p) && matchesExpiry(p))
-  )
+  const findByBarcode = code => findBarcodeIn(productIndex, code)
 
   // The search box advertises Ctrl+K; nothing implemented it.
   const productSearchRef = useRef(null)
@@ -241,11 +227,14 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   }, [])
 
   // Cart operations
-  const add = p => {
-    const f = cart.find(c => c.id === p.id)
-    if (f) setCart(cart.map(c => c.id === p.id ? { ...c, qty: c.qty + 1 } : c))
-    else setCart([...cart, { ...p, qty: 1 }])
-  }
+  // Stable (functional update), so the memoised product cards are not redrawn
+  // on every key press.
+  const add = useCallback(p => {
+    setCart(cart => cart.some(c => c.id === p.id)
+      ? cart.map(c => c.id === p.id ? { ...c, qty: c.qty + 1 } : c)
+      : [...cart, { ...p, qty: 1 }])
+  }, [])
+  const qtyInCart = useMemo(() => Object.fromEntries(cart.map(c => [c.id, c.qty])), [cart])
   // Hardware scanners type the code into the focused field and press Enter.
   // When the whole query is a registered barcode, treat it as a scan and add
   // the product exactly like the camera path does; anything else stays a plain
@@ -740,7 +729,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
                 <div>
                   <div style={{ fontWeight: '800', fontSize: '15px' }}>{s.client_name || 'Walk-in'}</div>
                   <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{items.length} item(s) · {fmt(s.total)}</div>
-                  <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{s.created_at?.replace('T', ' ').slice(0, 16)}</div>
+                  <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{businessDateTime(s.created_at)}</div>
                   {s.notes && <div style={{ fontSize: '12px', color: gray600, marginTop: '4px', fontStyle: 'italic' }}>Note: {s.notes}</div>}
                   <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                     {items.map((it, i) => <span key={i} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: theme.radius.sm, background: tealMist, color: tealDeep, fontWeight: '600' }}>{it.name} ×{it.qty}</span>)}
@@ -783,7 +772,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
                   style={{ flex: '1 1 200px', minWidth: 0, textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: navy }}>
                   <div style={{ fontWeight: '700', fontSize: '14px', display: 'flex', alignItems: 'center', gap: 4 }}>{s.client_name || 'Walk-in'} <ChevronRight size={14} color={gray400} aria-hidden='true' /></div>
                   <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{s.txn_no} · {items.length} item(s) · {s.payment_method}</div>
-                  <div style={{ fontSize: '11px', color: theme.gray500, marginTop: '2px' }}>{s.created_at?.replace('T', ' ').slice(0, 16)}</div>
+                  <div style={{ fontSize: '11px', color: theme.gray500, marginTop: '2px' }}>{businessDateTime(s.created_at)}</div>
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ textAlign: 'right' }}>
@@ -920,7 +909,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         {catalog && <div style={{ padding: isMobile ? '12px 16px 0' : '12px 20px 0' }}><CatalogStatusBanner catalog={catalog} /></div>}
 
         {/* Product grid — only sellable items; out-of-stock live in the sheet */}
-        <div style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', padding: isMobile ? '14px 16px' : '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, alignContent: 'start' }}>
+        <div aria-busy={gridStale} style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', padding: isMobile ? '14px 16px' : '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, alignContent: 'start', opacity: gridStale ? 0.75 : 1, transition: 'opacity 120ms' }}>
           {catalogStatus === 'loading' ? (
             <>
               <div role="status" aria-live="polite" style={{ gridColumn: '1 / -1', fontSize: 13, fontWeight: 700, color: gray500 }}>{loadingLabel(catalog?.loadedCount || 0)}</div>
@@ -944,36 +933,20 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
             <div style={{ gridColumn: '1 / -1' }}>
               <Empty icon={<Search size={40} strokeWidth={1.5} />} message={outOfStock.length > 0 ? 'All matching products are out of stock.' : 'No products match your search.'} cause="filtered" />
             </div>
-          ) : sellable.map(p => {
-            const inCart = cart.find(c => c.id === p.id)
-            const qty = inCart?.qty || 0
-            const service = isService(p)
-            const low = !service && p.stock > 0 && p.stock <= (p.reorder_level || 5)
-            const Icon = productIcon(p)
-            const badge = service ? { t: 'Service', bg: tealMist, fg: tealDeep }
-              : low ? { t: p.stock + ' left', bg: warningBg, fg: warning }
-              : { t: String(p.stock), bg: gray100, fg: gray500 }
-            return (
-              <div key={p.id}
-                style={{ background: 'white', border: `1px solid ${qty > 0 ? tealDeep : border}`, borderRadius: theme.radius.lg, padding: 12, display: 'flex', flexDirection: 'column', gap: 10, boxShadow: qty > 0 ? '0 2px 10px rgba(15,118,110,0.15)' : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: theme.radius.full, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={17} /></div>
-                    {qty > 0 && <div style={{ position: 'absolute', top: -7, right: -7, minWidth: 18, height: 18, padding: '0 4px', borderRadius: theme.radius.full, background: tealDeep, color: 'white', fontSize: 10, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>{qty}</div>}
-                  </div>
-                  <span style={{ padding: '2px 8px', borderRadius: theme.radius.full, background: badge.bg, color: badge.fg, fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>{badge.t}</span>
+          ) : (
+            <>
+              {sellable.slice(0, gridLimit).map(p => <ProductCard key={p.id} p={p} qty={qtyInCart[p.id] || 0} onAdd={add} />)}
+              {sellable.length > gridLimit && (
+                <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap', padding: '6px 0 4px', fontSize: 12, color: gray500 }}>
+                  <span>Showing {gridLimit.toLocaleString()} of {sellable.length.toLocaleString()} products. Type more of the name to narrow the list.</span>
+                  <button type='button' onClick={() => setGridLimit(l => l + GRID_PAGE)}
+                    style={{ padding: '7px 14px', borderRadius: theme.radius.full, border: `1px solid ${border}`, background: 'white', color: tealDeep, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                    Show {Math.min(GRID_PAGE, sellable.length - gridLimit)} more
+                  </button>
                 </div>
-                <div>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: navy, lineHeight: 1.3, textTransform: 'uppercase' }}>{p.name}</div>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: navy, marginTop: 4 }}>{fmt(p.price)}</div>
-                </div>
-                <button onClick={() => add(p)}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '8px 0', borderRadius: theme.radius.sm, border: `1px solid ${qty > 0 ? tealDeep : border}`, background: qty > 0 ? tealMist : 'white', color: qty > 0 ? tealDeep : navy, fontWeight: 700, fontSize: 12, cursor: 'pointer', marginTop: 'auto' }}>
-                  <Plus size={14} /> Add
-                </button>
-              </div>
-            )
-          })}
+              )}
+            </>
+          )}
         </div>
       </div>
 

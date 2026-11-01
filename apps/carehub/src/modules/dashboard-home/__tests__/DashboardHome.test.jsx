@@ -11,17 +11,21 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 // shared primitives, plus the appointments permission gate.
 
 vi.mock('../../../hooks/queries', () => ({
-  useTodaySales: vi.fn(),
   useOpenSales: vi.fn(),
   useAppointments: vi.fn(),
   useSettings: vi.fn(() => ({ data: {} })),
   useInvalidateSales: vi.fn(() => vi.fn()),
 }))
+// "Sales today" reads the Sales & Accounts report data for Today.
+vi.mock('../../pos/useSalesReportData', () => ({ useSalesReportData: vi.fn() }))
+vi.mock('../OwnerActivity.jsx', () => ({
+  default: function MockOwnerActivity({ onOpenSale }) { return <button data-testid="owner-activity" onClick={() => onOpenSale('TXN-77')}>owner activity</button> },
+}))
 vi.mock('../FieldTeamToday.jsx', () => ({
   default: function MockFieldTeamToday({ role, staffId }) { return <div data-testid="field-team-today" data-role={role} data-staff={staffId || ''} /> },
 }))
 vi.mock('../../pos/repositories', () => ({
-  saleRepository: { getSince: vi.fn(async () => []) },
+  saleRepository: { getSince: vi.fn(async () => []), getById: vi.fn(async () => null) },
   paymentRepository: { getForSale: vi.fn(async () => []) },
 }))
 vi.mock('../../notifications/repositories', () => ({
@@ -29,7 +33,9 @@ vi.mock('../../notifications/repositories', () => ({
 }))
 
 import DashboardHome from '../DashboardHome'
-import { useTodaySales, useOpenSales, useAppointments } from '../../../hooks/queries'
+import { useOpenSales, useAppointments } from '../../../hooks/queries'
+import { useSalesReportData } from '../../pos/useSalesReportData'
+import { periodRange, reportView } from '../../pos/salesReport'
 import { fmt } from '../../../lib/utils'
 
 const BRAND = { id: 'biz-1', name: 'Pharma Hub', city: 'Lagos' }
@@ -37,6 +43,11 @@ const futureDate = () => new Date(Date.now() + 86400000).toISOString().split('T'
 
 function query({ data = [], isLoading = false, isError = false, refetch = vi.fn() } = {}) {
   return { data, isLoading, isError, refetch }
+}
+
+// The shape useSalesReportData returns, from a list of sale rows (and ledger rows).
+function reportData(sales, payments = []) {
+  return { sales, payments, salesById: Object.fromEntries(sales.map((s) => [s.id, s])), shifts: [], ledgerAvailable: true, shiftsAvailable: true }
 }
 
 // Renders the current route so navigation assertions are observable without
@@ -47,7 +58,8 @@ function LocationProbe() {
 }
 
 async function mountHome({ today, all, appts, products = [], perms = {}, role = 'Owner', brand = BRAND } = {}) {
-  useTodaySales.mockReturnValue(today ?? query())
+  const t = today ?? query()
+  useSalesReportData.mockReturnValue({ ...t, data: Array.isArray(t.data) ? reportData(t.data) : t.data })
   useOpenSales.mockReturnValue(all ?? query())
   useAppointments.mockReturnValue(appts ?? query())
 
@@ -247,6 +259,68 @@ describe('DashboardHome', () => {
 
     expect(m.host.textContent).toContain('Drug 3 is out of stock')
     expect(m.host.textContent).not.toContain('more out of stock')
+  })
+
+  it('Sales today is the Sales & Accounts total for today: completed sales only, gross, refunds beside it', async () => {
+    const at = new Date().toISOString().replace('Z', '')
+    const sales = [
+      { id: 'a', total: 5000, amount_paid: 5000, payment_method: 'Cash', created_at: at, is_on_hold: false, status: null },
+      { id: 'r', total: 1000, amount_paid: 1000, refunded_amount: 1000, payment_method: 'Cash', created_at: at, is_on_hold: false, status: null },
+      // A completed hold leaves its held row behind as 'converted' with the same total:
+      // counting it was the double count the pharmacy saw.
+      { id: 'conv', total: 5000, payment_method: 'Cash', created_at: at, is_on_hold: false, status: 'converted' },
+      { id: 'del', total: 2000, payment_method: 'Cash', created_at: at, is_on_hold: false, status: 'deleted' },
+      { id: 'held', total: 700, payment_method: 'Cash', created_at: at, is_on_hold: true, status: null },
+    ]
+    const payments = [{ id: 'p1', sale_id: 'r', kind: 'refund', method: 'Cash', amount: 1000, received_at: at + 'Z' }]
+    const data = reportData(sales, payments)
+    m = await mountHome({ today: { ...query(), data } })
+
+    const group = m.host.querySelector('[role="group"][aria-label="Key metrics"]')
+    // The innermost element holding both the label and its sub line is the card.
+    const card = [...group.querySelectorAll('*')].reverse().find((el) => el.textContent.startsWith('Sales today') && el.textContent.includes('transaction'))
+    expect(card.textContent).toContain(fmt(6000))
+    expect(card.textContent).toContain('2 transactions')
+    expect(card.textContent).toContain(fmt(1000) + ' refunded')
+    // The very figure Sales & Accounts computes from the same rows.
+    expect(reportView(data).summary.totalSales).toBe(6000)
+
+    // It reads the business day's Today, and refreshes on its own.
+    const [brandId, range, opts] = useSalesReportData.mock.calls.at(-1)
+    expect(brandId).toBe(BRAND.id)
+    expect(range).toEqual(periodRange('today'))
+    expect(opts.refetchInterval).toBeGreaterThan(0)
+
+    // The card opens Sales & Accounts, where the same number is broken down.
+    await act(async () => { click(card) })
+    expect(m.host.querySelector('[data-testid="loc"]').textContent).toBe('/dashboard/pos/report')
+  })
+
+  it('shows recent sale times in Lagos time, not the UTC the database stores', async () => {
+    m = await mountHome({ today: query({ data: [{ id: 's1', total: 5000, client_name: 'Amaka', payment_method: 'Cash', created_at: '2026-09-29T10:20:00' }] }) })
+    expect(m.host.textContent).toContain('Cash · 11:20')
+  })
+
+  it('says that "Owed to you" covers all open credit, not just today', async () => {
+    m = await mountHome({ all: query({ data: [{ id: 'c1', is_credit: true, balance: 1200, client_name: 'Tunde', txn_no: 'TXN1' }] }) })
+    expect(m.host.textContent).toContain('1 open credit sale · all dates')
+  })
+
+  it("shows the Owner's business activity to the Owner only, and opens a sale from it", async () => {
+    const { saleRepository } = await import('../../pos/repositories')
+    saleRepository.getById.mockResolvedValue({ id: 's1', txn_no: 'TXN-77', client_name: 'Mama Ngozi', payment_method: 'Credit', total: 2400, amount_paid: 400, balance: 2000,
+      created_at: '2026-10-27T09:30:00', items: JSON.stringify([{ name: 'Amoxil 500mg', qty: 2, price: 1200 }]) })
+    m = await mountHome({ role: 'Owner' })
+    const panel = m.host.querySelector('[data-testid="owner-activity"]')
+    expect(panel).toBeTruthy()
+    await act(async () => { panel.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(saleRepository.getById).toHaveBeenCalledWith(BRAND.id, 'TXN-77')
+    expect(document.querySelector('[role="dialog"]').textContent).toContain('Receipt TXN-77')
+    await m.unmount()
+
+    m = await mountHome({ role: 'Cashier', perms: { nav: ['dashboard', 'pos'] } })
+    expect(m.host.querySelector('[data-testid="owner-activity"]')).toBeNull()
   })
 
   it('renders the hospital patient-flow block only for hospital accounts', async () => {

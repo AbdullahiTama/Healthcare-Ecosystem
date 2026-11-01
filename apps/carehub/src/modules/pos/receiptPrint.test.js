@@ -107,9 +107,10 @@ describe('buildReceiptHtml', () => {
     expect(html).not.toContain('Transfer')
   })
 
+  // The date is a database time (UTC, no zone); the receipt shows it in Lagos time.
   it('uses the receipt date instead of the print time', () => {
     const html = buildReceiptHtml(base)
-    expect(html).toContain('14 Aug 2026, 10:30')
+    expect(html).toContain('14 Aug 2026, 11:30')
   })
 
   it('shows the logo when a logo_url is configured and omits it otherwise', () => {

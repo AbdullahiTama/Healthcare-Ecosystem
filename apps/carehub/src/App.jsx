@@ -7,6 +7,7 @@ import { keepReachableLocation } from './lib/locationSwitch'
 import { clearAllDraftBackups } from './modules/adr/draftBackup'
 import { purgeUnsentReports } from './modules/live-activity/outbox/purge'
 import AuthProvider from './providers/AuthProvider'
+import BuildUpdateWatcher from './components/layout/BuildUpdateWatcher'
 
 // Lazy-loaded pages for code splitting
 const SESSION_ENDED_KEY = 'carehub_session_ended'
@@ -204,6 +205,7 @@ let loggingOut = false
     <Sentry.ErrorBoundary>
     <AuthProvider value={{ auth, setAuth, login, logout, isAdmin, agent, loginAgent, logoutAgent, sessionNotice }}>
       <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+        <BuildUpdateWatcher />
         <Suspense fallback={<LoadingFallback />}>
           <Routes key={location.key}>
             <Route path='/' element={<Landing />} />

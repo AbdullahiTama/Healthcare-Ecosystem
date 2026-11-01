@@ -89,17 +89,51 @@ describe('saleRepository', () => {
   })
 
   it('getToday excludes held sales and other tenants', async () => {
-    const today = new Date().toISOString().split('T')[0]
+    const at = new Date().toISOString().replace('Z', '')
     const { repo } = build({
       seed: {
         sales: [
-          { id: 'done', business_id: A, is_on_hold: false, created_at: `${today}T09:00:00` },
-          { id: 'held', business_id: A, is_on_hold: true, created_at: `${today}T09:00:00` },
-          { id: 'other', business_id: B, is_on_hold: false, created_at: `${today}T09:00:00` },
+          { id: 'done', business_id: A, is_on_hold: false, created_at: at },
+          { id: 'held', business_id: A, is_on_hold: true, created_at: at },
+          { id: 'other', business_id: B, is_on_hold: false, created_at: at },
         ],
       },
     })
     expect((await repo.getToday(A)).map((r) => r.id)).toEqual(['done'])
+  })
+
+  it('searchReceipts finds completed sales by part of the receipt number, in this business only', async () => {
+    const { repo } = build({
+      seed: {
+        sales: [
+          { id: 'a', business_id: A, txn_no: 'TXN104154', is_on_hold: false, status: null, created_at: '2026-10-28T10:00:00' },
+          { id: 'b', business_id: A, txn_no: 'TXN104155', is_on_hold: false, status: 'converted', created_at: '2026-10-28T11:00:00' },
+          { id: 'c', business_id: A, txn_no: 'TXN999999', is_on_hold: false, status: null, created_at: '2026-10-28T12:00:00' },
+          { id: 'd', business_id: B, txn_no: 'TXN104154', is_on_hold: false, status: null, created_at: '2026-10-28T13:00:00' },
+        ],
+      },
+    })
+    expect((await repo.searchReceipts(A, '4154')).map((r) => r.id)).toEqual(['a'])
+    expect((await repo.searchReceipts(A, 'txn10415')).map((r) => r.id)).toEqual(['a'])
+    expect(await repo.searchReceipts(A, '41')).toEqual([])
+    // Anything but letters, digits and dashes is dropped before it reaches the query.
+    expect((await repo.searchReceipts(A, '4154*&business_id=eq.' + B)).map((r) => r.id)).toEqual([])
+  })
+
+  it('getToday is the Lagos business day, the same window as Sales & Accounts', async () => {
+    // Stored UTC, no zone. Lagos midnight on 31 Oct is 23:00 UTC on the 30th.
+    const { repo } = build({
+      seed: {
+        sales: [
+          { id: 'before', business_id: A, is_on_hold: false, created_at: '2026-10-30T22:59:00' },
+          { id: 'first-hour', business_id: A, is_on_hold: false, created_at: '2026-10-30T23:20:00' },
+          { id: 'evening', business_id: A, is_on_hold: false, created_at: '2026-10-31T20:00:00' },
+          { id: 'next-day', business_id: A, is_on_hold: false, created_at: '2026-10-31T23:00:01' },
+        ],
+      },
+    })
+    const now = new Date('2026-10-31T12:00:00Z')
+    expect((await repo.getToday(A, { now })).map((r) => r.id).sort()).toEqual(['evening', 'first-hour'])
   })
 
   // The printed QR encodes txn_no, and the lookup must stay tenant-scoped: the

@@ -7,6 +7,8 @@ export { Button, Card, Pill, Badge, StatusBadge, Avatar, Loading, Skeleton, Card
 // metric grid, section/chart cards, charts, activity list, filters and account
 // menu used by Business Dashboard and Admin Dashboard alike.
 export { DashboardShell, PageHeader, MetricGrid, SectionCard, ChartCard, Sparkline, BarList, ActivityList, SearchBar, FilterBar, QuickAction, UserMenu } from '@care-ecosystem/design-system/components/ui'
+// A filter choice you can type into (long product / customer / staff lists).
+export { default as SearchSelect } from './SearchSelect.jsx'
 
 // ── LOGO ─────────────────────────────────────────────────────────────────────
 // The one CareHub brand mark — connected nodes symbol representing

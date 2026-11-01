@@ -1,3 +1,4 @@
+import { BUSINESS_TZ } from '../../lib/businessDay'
 import { useEffect, useState } from 'react'
 import { Clock, LogIn } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -9,7 +10,7 @@ import { expectedCash, parseDbTime } from './salesReport'
 const { tealDeep, tealMist, navy, gray500, gray600, border, bg, danger, success } = theme
 
 const cleanServerError = (e) => String(e?.message || e).replace(/^Supabase error \(\d{3}\):\s*/, '')
-const timeOnly = (v) => parseDbTime(v)?.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' }) || ''
+const timeOnly = (v) => parseDbTime(v)?.toLocaleTimeString('en-NG', { timeZone: BUSINESS_TZ, hour: '2-digit', minute: '2-digit' }) || ''
 
 // Optional till shifts. Opening one is never required to sell: a sale made with
 // no open shift is reported under "No shift". The database stamps the shift on
