@@ -2,6 +2,8 @@
 
 2026-10-30. Client only, no database change.
 
+Follow-up (2026-10-31): editing, central history and analytics, the supplier picker and barcodes are in `Purchases-Editing-and-Analytics.md`; the form described here is now `PurchaseForm.jsx`, shared by Record and Edit.
+
 ## Why
 
 A pharmacy reported, after a morning of real use:

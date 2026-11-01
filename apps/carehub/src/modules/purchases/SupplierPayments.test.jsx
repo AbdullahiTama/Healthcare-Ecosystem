@@ -137,29 +137,17 @@ describe('Before the supplier-payments update is applied', () => {
     expect(text()).toContain('become available once the latest database update is applied')
   })
 
-  it('paying the full balance still works as before: the purchase and its debt are marked paid', async () => {
-    repo.recordPayment.mockRejectedValue(notDeployed('function public.record_purchase_payment'))
-    repo.update.mockResolvedValue(null)
-    debts.findOpenBySource.mockResolvedValue({ id: 'd1', amount: 10000 })
-    const onClose = vi.fn()
-    await mount(<PurchasePaymentModal brand={BRAND} purchase={purchase} staffName='Ada' showToast={toast} onPaid={onPaid} onClose={onClose} />)
-    await act(async () => button('Full balance').click())
-    await act(async () => document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
-    await flush(); await flush()
-    expect(repo.update).toHaveBeenCalledWith('p1', 'biz-1', { amount_paid: 10000, balance: 0, status: 'paid' })
-    expect(debts.findOpenBySource).toHaveBeenCalledWith('purchase', 'p1', 'biz-1')
-    expect(debts.update).toHaveBeenCalledWith('d1', 'biz-1', { amount_paid: 10000, balance: 0, status: 'paid' })
-    expect(toast).toHaveBeenCalledWith(expect.stringContaining('fully paid'), { type: 'success' })
-    expect(onClose).toHaveBeenCalled()
-  })
-
-  it('a part payment explains that it needs the update; nothing is changed', async () => {
+  it('a payment is only ever recorded through record_purchase_payment: a failure writes nothing directly and says so', async () => {
+    // Since carehub_20261229 a direct update of a purchase is refused, so there
+    // is no "mark it paid" fallback any more.
     repo.recordPayment.mockRejectedValue(notDeployed('function public.record_purchase_payment'))
     await mount(<PurchasePaymentModal brand={BRAND} purchase={purchase} staffName='Ada' showToast={toast} onPaid={onPaid} onClose={() => {}} />)
-    await act(async () => type(document.querySelector('#purchase-p1-amount'), '1000'))
+    await act(async () => button('Full balance').click())
     await act(async () => document.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
     await flush()
-    expect(document.querySelector('#purchase-p1-amount-error').textContent).toContain('Part payments to suppliers become available')
+    expect(document.querySelector('#purchase-p1-amount-error').textContent).toContain("couldn't record the payment")
     expect(repo.update).not.toHaveBeenCalled()
+    expect(debts.update).not.toHaveBeenCalled()
+    expect(onPaid).not.toHaveBeenCalled()
   })
 })

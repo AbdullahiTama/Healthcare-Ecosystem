@@ -45,26 +45,8 @@ describe('purchaseRepository', () => {
     expect(client.rows('purchases').find((r) => r.supplier_name === 'NoExpiryCo')).toMatchObject({ expiry: null, batch: null })
   })
 
-  it('update scopes by id and business', async () => {
-    const { repo, client } = seeded()
-    await repo.update('2', A, { amount_paid: 500, balance: 0, status: 'paid' })
-    expect(client.rows('purchases').find((r) => r.id === '2')).toMatchObject({ balance: 0, status: 'paid' })
-  })
-
-  it('update leaves sibling purchases in the same business untouched', async () => {
-    const { repo, client } = seeded()
-    await repo.update('2', A, { status: 'paid' })
-    expect(client.rows('purchases').find((r) => r.id === '1').amount_paid).toBe(800)
-  })
-
-  it('update never crosses the tenant boundary', async () => {
-    const { repo, client } = seeded()
-    await repo.update('9', A, { status: 'paid' })
-    expect(client.rows('purchases').find((r) => r.id === '9').status).toBe('pending')
-  })
-
   it('exports a default purchaseRepository instance', () => {
-    for (const m of ['getAll', 'create', 'update']) {
+    for (const m of ['getAll', 'create', 'edit', 'getForEdit', 'getHistory', 'getSummary', 'getSupplierStats', 'getProductStats']) {
       expect(typeof purchaseRepository[m]).toBe('function')
     }
   })
@@ -134,5 +116,57 @@ describe('purchaseRepository.create invoice lines', () => {
     const repo = createPurchaseRepository(async () => { calls++; throw new Error('Supabase error (400): new row violates row-level security policy') })
     await expect(repo.create('biz', { supplier_name: 'Emzor', items: lines })).rejects.toThrow(/row-level security/)
     expect(calls).toBe(1)
+  })
+})
+
+describe('purchaseRepository editing and analytics (carehub_20261229)', () => {
+  const capture = (reply = []) => {
+    const calls = []
+    const repo = createPurchaseRepository(async (path, opts) => { calls.push([path, opts?.body ? JSON.parse(opts.body) : null]); return reply })
+    return { calls, repo }
+  }
+
+  it('has no direct update: purchases change only through edit_purchase', () => {
+    expect(purchaseRepository.update).toBeUndefined()
+  })
+
+  it('edit sends every field to edit_purchase, empty optionals as null', async () => {
+    const { calls, repo } = capture({ unchanged: false })
+    await repo.edit('p-1', { supplier: 'Emzor', supplyDate: '2026-10-30', dueDate: '', notes: 'inv 9', items: [{ id: 'l1', name: 'Amoxil', qty: 2, cost: 5 }], amountPaid: 10, reason: 'typo', staffName: '', expectedEditCount: 2, expectedAmountPaid: 4 })
+    expect(calls).toEqual([['rpc/edit_purchase', {
+      p_purchase_id: 'p-1', p_supplier_name: 'Emzor', p_supply_date: '2026-10-30', p_due_date: null, p_notes: 'inv 9',
+      p_items: [{ id: 'l1', name: 'Amoxil', qty: 2, cost: 5 }], p_amount_paid: 10, p_reason: 'typo', p_staff_name: null,
+      p_expected_edit_count: 2, p_expected_amount_paid: 4,
+    }]])
+  })
+
+  it('getForEdit and getEditHistory read one purchase, the history scoped to the business', async () => {
+    const { calls, repo } = capture()
+    await repo.getForEdit('p-1')
+    await repo.getEditHistory('p-1', 'biz-A')
+    expect(calls[0]).toEqual(['rpc/get_purchase_for_edit', { p_purchase_id: 'p-1' }])
+    expect(calls[1][0]).toBe('audit_log?branch_id=eq.biz-A&target_id=eq.p-1&action=eq.purchase.edited&order=created_at.desc&select=id,created_at,actor_type,metadata')
+  })
+
+  it('getPage passes the supply-date range and supplier', async () => {
+    const { calls, repo } = capture()
+    await repo.getPage('biz-A', { from: '2026-10-01', to: '2026-10-31', supplierKey: 'emzor ltd', offset: 50, limit: 50 })
+    expect(calls[0][0]).toBe('rpc/get_purchases_page?p_business_id=biz-A&p_offset=50&p_limit=50&p_from=2026-10-01&p_to=2026-10-31&p_supplier_key=emzor%20ltd')
+  })
+
+  it('analytics calls share one filter shape; blanks become null', async () => {
+    const { calls, repo } = capture([{ purchase_count: 3 }])
+    const filters = { from: '2026-10-01', to: '', search: '  ', supplierKey: 'emzor ltd', productKey: 'amoxil', productId: 'prod-1' }
+    expect(await repo.getSummary('biz-A', filters)).toEqual({ purchase_count: 3 })
+    await repo.getHistory('biz-A', filters, { offset: 50, limit: 25 })
+    await repo.getSupplierStats('biz-A', filters)
+    await repo.getProductStats('biz-A', filters, { sort: 'units' })
+    const base = { p_business_id: 'biz-A', p_from: '2026-10-01', p_to: null, p_search: null, p_supplier_key: 'emzor ltd', p_product_key: 'amoxil', p_product_id: 'prod-1' }
+    expect(calls[0]).toEqual(['rpc/get_purchase_summary', base])
+    expect(calls[1]).toEqual(['rpc/get_purchase_history', { ...base, p_offset: 50, p_limit: 25 }])
+    // Spending per supplier is never narrowed to one supplier.
+    const { p_supplier_key: _s, ...noSupplier } = base
+    expect(calls[2]).toEqual(['rpc/get_purchase_supplier_stats', noSupplier])
+    expect(calls[3]).toEqual(['rpc/get_purchase_product_stats', { ...base, p_sort: 'units', p_offset: 0, p_limit: 50 }])
   })
 })

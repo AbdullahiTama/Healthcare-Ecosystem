@@ -2,17 +2,24 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 // Every write the screen makes, in order, so tests can assert what was sent.
 const calls = []
 let receiveImpl = null
+let supplierRows = []
+let productStatRows = []
+let pageRows = []
 
 vi.mock('../repositories', () => ({
   purchaseRepository: {
-    getPage: async () => [],
+    getPage: async () => pageRows,
     getTotals: async () => [{ purchase_count: 0, total_paid: 0, total_owed: 0 }],
     create: async (...a) => { calls.push(['purchase.create', ...a]); return [{ id: 'pur1' }] },
-    update: async () => null,
+    // The supplier picker and the "last bought" insight.
+    getSupplierStats: async () => supplierRows,
+    getSupplierBalances: async () => [],
+    getProductStats: async () => productStatRows,
   },
 }))
 vi.mock('../../inventory/repositories', () => ({
@@ -44,9 +51,14 @@ const DRAFT_KEY = 'carehub_draft_purchase_B1_owner'
 
 let host
 let root
+let qc
 beforeEach(() => {
   calls.length = 0
   receiveImpl = null
+  supplierRows = []
+  productStatRows = []
+  pageRows = []
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   localStorage.clear()
   global.IS_REACT_ACT_ENVIRONMENT = true
   host = document.createElement('div')
@@ -60,8 +72,8 @@ afterEach(async () => {
 
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 // The dashboard's shared catalog: `products` plus its load status.
-const render = async (perms = OWNER, { products = [AMOXIL], status = 'ready' } = {}) => {
-  await act(async () => { root.render(<Purchases brand={{ id: 'B1' }} role='Owner' perms={perms} products={products} setProducts={() => {}} catalog={{ status, reload: () => {} }} />) })
+const render = async (perms = OWNER, { products = [AMOXIL], status = 'ready', role = 'Owner' } = {}) => {
+  await act(async () => { root.render(<QueryClientProvider client={qc}><Purchases brand={{ id: 'B1' }} role={role} perms={perms} products={products} setProducts={() => {}} catalog={{ status, reload: () => {} }} /></QueryClientProvider>) })
   await flush()
 }
 const type = async (input, value) => {
@@ -273,5 +285,133 @@ describe('Purchases — bulk stock entry', () => {
     await click(button('Save Purchase'))
     await flush()
     expect(host.textContent).toContain('Not added to Inventory: Amoxil 500mg (This product is tracked by batch. Enter its batch number.)')
+  })
+})
+
+describe('Purchases — suppliers, barcodes and purchase insight', () => {
+  const MEDSUPPLY = { supplier_key: 'medsupply ltd', supplier_name: 'MedSupply Ltd', purchase_count: 4, total_spent: 52000, amount_paid: 40000, balance: 12000, last_date: '2026-10-30', last_total: 9000 }
+  const listbox = () => host.querySelector('#purchase-supplier-list')
+
+  it('lists existing suppliers while typing, picks one, and shows what was spent and is owed', async () => {
+    supplierRows = [MEDSUPPLY]
+    await render()
+    await openForm()
+    const input = host.querySelector('#purchase-supplier')
+    await act(async () => { input.focus() })
+    await type(input, 'med')
+    expect(listbox().hidden).toBe(false)
+    const option = [...listbox().querySelectorAll('[role="option"]')].find(o => o.textContent.includes('MedSupply Ltd'))
+    expect(option.textContent).toContain('owed')
+    await click(option)
+    expect(input.value).toBe('MedSupply Ltd')
+    expect(host.textContent).toContain('Existing supplier')
+    expect(host.textContent).toContain('₦52,000')
+    expect(host.textContent).toContain('₦12,000')
+  })
+
+  it('warns about a near-duplicate supplier and offers the existing one', async () => {
+    supplierRows = [MEDSUPPLY]
+    await render()
+    await openForm()
+    await type(host.querySelector('#purchase-supplier'), 'Medsupply Limited')
+    expect(host.textContent).toContain('looks like a supplier you already have')
+    await click(button('Use MedSupply Ltd'))
+    expect(host.querySelector('#purchase-supplier').value).toBe('MedSupply Ltd')
+  })
+
+  it('typing an existing product\'s barcode links the line; the barcode is shown read-only', async () => {
+    await render(OWNER, { products: [{ ...AMOXIL, barcode: '6151100001' }] })
+    await openForm()
+    await type(field(0, 'barcode'), '6151100001')
+    expect(field(0, 'name').value).toBe('Amoxil 500mg')
+    expect(field(0, 'cost').value).toBe('800')
+    expect(field(0, 'barcode').readOnly).toBe(true)
+    expect(document.activeElement).toBe(field(0, 'qty'))
+  })
+
+  it('a barcode entered for a product without one is saved on it, and new products get theirs', async () => {
+    await render()
+    await openForm()
+    await type(host.querySelector('#purchase-supplier'), 'MedSupply Ltd')
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    await type(field(0, 'qty'), '2')
+    await type(field(0, 'barcode'), '8901234567890')
+    await click(button('Add another item'))
+    await type(field(1, 'name'), 'Brand New Syrup')
+    await type(field(1, 'qty'), '3')
+    await type(field(1, 'cost'), '400')
+    await type(field(1, 'barcode'), '8909999999999')
+    await click(button('Save Purchase'))
+    await flush()
+    expect(calls.find(c => c[0] === 'product.update')[3]).toEqual({ cost_price: 800, barcode: '8901234567890' })
+    expect(calls.find(c => c[0] === 'product.create')[2]).toMatchObject({ name: 'Brand New Syrup', barcode: '8909999999999' })
+    // Each line keeps its id (the stock receipt key) and product for later edits.
+    const items = calls.find(c => c[0] === 'purchase.create')[2].items
+    const keys = calls.filter(c => c[0] === 'product.receiveStock').map(c => c[4].sourceLineId)
+    expect(items.map(i => i.id)).toEqual(keys)
+    expect(items[0]).toMatchObject({ product_id: 'p1', barcode: '8901234567890' })
+  })
+
+  it('a barcode that belongs to another product blocks the save and says whose it is', async () => {
+    await render(OWNER, { products: [AMOXIL, { id: 'p2', name: 'Panadol', price: 100, cost_price: 50, stock: 3, barcode: '777' }] })
+    await openForm()
+    await type(host.querySelector('#purchase-supplier'), 'MedSupply Ltd')
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    await type(field(0, 'qty'), '2')
+    // Typed into the barcode field of a line already linked to Amoxil.
+    await act(async () => {
+      const el = field(0, 'barcode')
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, '777')
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    // The barcode linked the line to Panadol (its product); picking Amoxil again
+    // keeps the typed barcode, which belongs to Panadol.
+    expect(field(0, 'name').value).toBe('Panadol')
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    await type(field(0, 'qty'), '2')
+    expect(field(0, 'barcode').value).toBe('777')
+    await click(button('Save Purchase'))
+    await flush()
+    expect(calls.filter(c => c[0] === 'purchase.create')).toHaveLength(0)
+    expect(field(0, 'barcode').getAttribute('aria-invalid')).toBe('true')
+    expect(host.textContent).toContain('Belongs to Panadol')
+  })
+
+  it('offers to move a barcode typed into the batch field', async () => {
+    await render()
+    await openForm()
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    await type(field(0, 'batch'), '8903882000125')
+    expect(host.textContent).toContain('The batch number looks like a barcode')
+    await click(button('Move it to Barcode'))
+    expect(field(0, 'batch').value).toBe('')
+    expect(field(0, 'barcode').value).toBe('8903882000125')
+  })
+
+  it('shows when a picked product was last bought, at what price, and the change from it', async () => {
+    productStatRows = [{ product_key: 'amoxil 500mg', product_id: 'p1', product_name: 'Amoxil 500mg', times_purchased: 3, units: 40, total_spent: 30000, avg_cost: 750,
+      last_date: '2026-10-01', last_supplier: 'MedSupply Ltd', last_qty: 10, last_cost: 800, previous_cost: 700, total_count: 1 }]
+    await render()
+    await openForm()
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    await flush()
+    expect(host.textContent).toContain('Last bought')
+    expect(host.textContent).toContain('from MedSupply Ltd')
+    expect(host.textContent).toContain('before that ₦700')
+    expect(host.textContent).toContain('bought 3 times')
+    await type(field(0, 'cost'), '880')
+    expect(host.textContent).toContain('+10% vs last price')
+  })
+
+  it('offers Edit to the Owner and to a role granted "Edit purchases", not to others', async () => {
+    pageRows = [{ id: 'pur9', supplier_name: 'MedSupply Ltd', product_name: 'Amoxil 500mg', quantity: 10, total_cost: 8000, amount_paid: 8000, balance: 0, supply_date: '2026-10-30' }]
+    await render()
+    expect(host.querySelector('[aria-label="Edit purchase from MedSupply Ltd"]')).not.toBeNull()
+    await act(async () => { root.unmount() }); root = createRoot(host)
+    await render(MANAGER, { role: 'Manager' })
+    expect(host.querySelector('[aria-label="Edit purchase from MedSupply Ltd"]')).toBeNull()
+    await act(async () => { root.unmount() }); root = createRoot(host)
+    await render({ ...MANAGER, canEditPurchases: true }, { role: 'Store Lead' })
+    expect(host.querySelector('[aria-label="Edit purchase from MedSupply Ltd"]')).not.toBeNull()
   })
 })

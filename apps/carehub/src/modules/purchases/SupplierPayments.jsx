@@ -1,13 +1,10 @@
 import { useMemo, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { Search, Truck, X } from 'lucide-react'
 import { Card, Modal, Empty, ErrorState, Loading, Pill } from '../../components/ui'
 import RecordPaymentForm from '../../components/payments/RecordPaymentForm'
 import PaymentHistory from '../../components/payments/PaymentHistory'
 import { useSupplierBalances, useSupplierPurchases, usePurchasePayments, useRecordPurchasePayment } from '../../hooks/queries'
 import { paymentErrorMessage, isMissingObject } from '../../lib/dbErrors'
-import { purchaseRepository } from './repositories'
-import { debtRepository } from '../debts/repositories'
 import PurchaseDetailModal from './PurchaseDetail'
 import { fmt } from '../../lib/utils'
 import { theme } from '../../styles/theme'
@@ -23,37 +20,16 @@ export function purchaseStatus(p) {
   return { label: 'Unpaid', type: 'amber' }
 }
 
-// Before the supplier-payments update (carehub_20261212) is applied, the
-// payment function does not exist. Paying the whole balance then works as it
-// always did (the purchase and its debt are marked paid); a part payment
-// needs the update.
-async function payInFullWithoutHistory(purchase, businessId) {
-  const total = Number(purchase.total_cost) || 0
-  await purchaseRepository.update(purchase.id, businessId, { amount_paid: total, balance: 0, status: 'paid' })
-  const debt = await debtRepository.findOpenBySource('purchase', purchase.id, businessId)
-  if (debt) await debtRepository.update(debt.id, businessId, { amount_paid: debt.amount, balance: 0, status: 'paid' })
-  return { balance: 0, amount_paid: total, status: 'paid' }
-}
-
 // The hook that records a supplier payment, with the toast and logging every
 // screen wants. Throws a user-facing message for the form to show.
 function useSupplierPayment(brand, staffName, showToast, onPaid) {
   const mutation = useRecordPurchasePayment(brand?.id)
-  const qc = useQueryClient()
   return async (purchase, { amount, method, paidOn, note }) => {
     try {
-      let r
-      try {
-        r = await mutation.mutateAsync({ purchaseId: purchase.id, amount, method, paidOn, note, staffName: staffName || null })
-      } catch (e) {
-        if (!isMissingObject(e)) throw e
-        if (amount + 0.005 < (Number(purchase.balance) || 0)) {
-          throw new Error('Part payments to suppliers become available once the latest database update is applied. You can still pay the full balance.')
-        }
-        console.warn('[purchases] supplier payments not deployed yet; marking the purchase paid in full')
-        r = await payInFullWithoutHistory(purchase, brand.id)
-        qc.invalidateQueries({ queryKey: ['purchases'] })
-      }
+      // record_purchase_payment is the only way a payment is recorded: since
+      // carehub_20261229 a direct update of a purchase is refused, so the old
+      // "mark paid in full" fallback for databases without it is gone.
+      const r = await mutation.mutateAsync({ purchaseId: purchase.id, amount, method, paidOn, note, staffName: staffName || null })
       showToast(r.balance > 0
         ? `${fmt(amount)} paid to ${purchase.supplier_name}. ${fmt(r.balance)} still owed on this purchase.`
         : `Purchase from ${purchase.supplier_name} is now fully paid.`, { type: 'success' })
@@ -62,7 +38,7 @@ function useSupplierPayment(brand, staffName, showToast, onPaid) {
       return r
     } catch (e) {
       console.error('[purchases] supplier payment failed:', e)
-      throw new Error(e?.message?.startsWith('Part payments to suppliers') ? e.message : paymentErrorMessage(e))
+      throw new Error(paymentErrorMessage(e))
     }
   }
 }
