@@ -1,8 +1,21 @@
 -- carehub_20270101_held_sale_edit_grants
 --
--- Status: NOT YET APPLIED. Tested on PGlite (apps/carefind/src/test/held-sales/heldSaleEditGrants.db.test.js) with the
--- live sales_guard_direct_update trigger and the live grants. Apply only with the owner's approval; when applied,
--- replace this line with "APPLIED TO PRODUCTION <date> (version ...)" and the probe result.
+-- Status: APPLIED TO PRODUCTION 2026-11-02 with the owner's approval (Supabase migration version 20261102135828). Its
+-- self-check passed. Tested first on PGlite (apps/carefind/src/test/held-sales/heldSaleEditGrants.db.test.js) with the
+-- live sales_guard_direct_update trigger and the live grants, which were re-read unchanged just before applying.
+-- Live behavioural probe afterwards, as the owner of a real business under RLS, inside a DO block that raised and
+-- rolled back (no probe rows or notes remained; the held sale used was unchanged, still held, total 500):
+--   1 re-hold an edited held sale (the updateHeld columns): ALLOWED, 1 row   (refused with 42501 before)
+--   2 release a held sale (is_on_hold = false):            refused, permission denied
+--   3 set status on a held sale:                           refused, permission denied
+--   4 set amount_paid on a held sale:                      refused, permission denied
+--   5 change a completed sale's total:                     refused, "A completed sale can only be changed by the Owner"
+--   6 change a completed sale's client_name:               refused, same message
+--   7 change a completed sale's amount_paid:               refused, permission denied
+--   8 charge the edited held sale (insert, resumed_from):  allowed; held row converted
+--   9 a non-Owner staff member re-holds an edited sale:    ALLOWED, 1 row
+--  10 that staff member changes a completed sale's total:  refused, "A completed sale can only be changed by the Owner"
+-- Security advisor afterwards: the same 8 finding groups as the 2026-11-02 baseline (CODE_AUDIT A4); none mentions sales.
 --
 -- PROBLEM (POS: "the system sometimes refuses to re-hold edited sales")
 -- ---------------------------------------------------------------------

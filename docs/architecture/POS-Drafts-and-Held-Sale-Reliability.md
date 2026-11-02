@@ -1,8 +1,10 @@
 # POS: unsaved sales, duplicate held sales, and re-holding an edited sale
 
-Status: built 2026-11-02 on `claude/keen-mayer-4kpxda`. App changes ship with the branch. The database part,
-`supabase/migrations/carehub_20270101_held_sale_edit_grants.sql`, is **not yet applied**: re-holding an edited sale
-keeps failing in production until it is.
+Status: built 2026-11-02 on `claude/keen-mayer-4kpxda`; app changes ship with the branch. The database part,
+`supabase/migrations/carehub_20270101_held_sale_edit_grants.sql`, was **applied to production on 2026-11-02** with the
+owner's approval (version `20261102135828`) and probed live (results in its header). Re-holding an edited sale works in
+production from that moment, with the app already deployed; the zero-row check and the other app fixes arrive when the
+branch is merged to `main`.
 
 Related: [Sales-Corrections.md](Sales-Corrections.md) (how held sales work), [Client-Totals-Debts-and-Held-Sales.md](Client-Totals-Debts-and-Held-Sales.md).
 
@@ -47,7 +49,7 @@ Related: [Sales-Corrections.md](Sales-Corrections.md) (how held sales work), [Cl
 
 ### Re-holding an edited sale
 
-- **Database** (`carehub_20270101_held_sale_edit_grants`, not yet applied): signed-in users get UPDATE on
+- **Database** (`carehub_20270101_held_sale_edit_grants`, applied 2026-11-02): signed-in users get UPDATE on
   `items, subtotal, discount, total, balance, client_id, client_name, notes`; UPDATE on `status` and `is_on_hold` is
   removed (no client uses it). Rollback is in the file header.
 - **App:** `updateHeld` asks for the updated row back. No row means the held sale was completed since it was opened:
@@ -78,7 +80,7 @@ Related: [Sales-Corrections.md](Sales-Corrections.md) (how held sales work), [Cl
 
 ## 4. Owner follow-ups (not done automatically)
 
-1. **Approve and apply** `carehub_20270101_held_sale_edit_grants`, then run the probe in its header.
+1. ~~Approve and apply the grant migration~~ — done 2026-11-02; live probe passed (see its header).
 2. **Duplicate held sales still open** (business `f7d9a912…`, 2026-11-02): `HLD994467` (₦13,600; its copy `HLD290011`
    was charged) and the pair `HLD883219` / `HLD662036` (₦100 each). Held sales cannot be deleted by design; complete or
    leave them, or ask platform staff for a one-off fix.
@@ -103,6 +105,9 @@ Related: [Sales-Corrections.md](Sales-Corrections.md) (how held sales work), [Cl
   loads; a failed save keeps everything.
 - Each new behaviour was mutation-checked: removing the hold guard, the stale-link check, the draft clearing, the
   duplicate recognition or the zero-row check fails its test.
-- **Manual (after applying the migration):** on a phone, add products, open system Wi-Fi settings, return: the cart is
+- **Live probe (done 2026-11-02, rolled back):** owner and non-Owner staff can save an edited held sale; nobody can
+  release a held sale, set its status or mark it paid; a completed sale's money and customer stay Owner-only; charging
+  the edited held sale converts it.
+- **Manual (after the branch is deployed):** on a phone, add products, open system Wi-Fi settings, return: the cart is
   there. Hold a sale tapping Hold twice: one held sale. Open it, add a product, Save changes: one held sale with the new
   total. Open it on two devices, charge it on one, Save changes on the other: told it was completed, cart kept.

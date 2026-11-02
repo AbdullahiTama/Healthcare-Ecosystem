@@ -101,8 +101,8 @@ the multi-branch overview. Deleted sales are not transactions in any of them.
   (2026-10-27), so editing held contents has been refused in production since.
   The reconciliation described here is
   `supabase/migrations/carehub_20270101_held_sale_edit_grants.sql` (grants the
-  held-content columns including `client_id`, drops `status`/`is_on_hold`);
-  not yet applied. See [POS-Drafts-and-Held-Sale-Reliability.md](POS-Drafts-and-Held-Sale-Reliability.md).
+  held-content columns including `client_id`, drops `status`/`is_on_hold`),
+  applied 2026-11-02 (version `20261102135828`). See [POS-Drafts-and-Held-Sale-Reliability.md](POS-Drafts-and-Held-Sale-Reliability.md).
 * Refund stays money-only: returned goods go back through Inventory.
 * Lines added in an edit have no batch attribution (product stock only).
 * Changing the customer name on an edit detaches the sale from the customer
