@@ -25,6 +25,9 @@ vi.mock('../consultation/repositories', () => ({ consultationRepository: { getLa
 
 import POS from './POS.jsx'
 
+// The sale in progress is kept in localStorage (posDraft.js); each test starts with an empty till.
+beforeEach(() => { localStorage.clear() })
+
 const BRAND = { id: 'biz-1', name: 'Pharm Tama', address: '1 Marina' }
 const PRODUCTS = [{ id: 'p1', name: 'Amoxicillin 500mg', category: 'Prescription Drugs', price: 1200, stock: 20 }]
 const HELD = { id: 'h1', txn_no: 'HLD-1', client_name: 'Ada Obi', is_on_hold: true, status: null, subtotal: 2400, total: 2400, discount: 0, notes: 'back in 30 min',

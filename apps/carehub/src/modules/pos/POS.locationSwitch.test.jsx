@@ -1,6 +1,6 @@
 // Products belong to one location, so a cart built at one location must never be checked out at another. While the
 // POS cart has items, a location switch has to ask first (the switch then remounts the page and the cart is cleared).
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 import { MemoryRouter } from 'react-router-dom'
@@ -18,6 +18,9 @@ vi.mock('../../hooks/queries', () => ({
 }))
 
 import POS from './POS.jsx'
+
+// The sale in progress is kept in localStorage (posDraft.js); each test starts with an empty till.
+beforeEach(() => { localStorage.clear() })
 import { switchBlockers } from '../../lib/locationSwitch.js'
 
 const PRODUCTS = [
@@ -53,12 +56,12 @@ describe('POS and location switching', () => {
     expect(switchBlockers()).toEqual([])
   })
 
-  it('a cart with items asks before a switch, naming how many items would be cleared', async () => {
+  it('a cart with items tells the cashier before a switch, naming how many items are kept for this location', async () => {
     await renderPOS()
     await addToCart('Amoxicillin 500mg')
     await addToCart('Vitamin C 1000mg')
     expect(host.querySelectorAll('button[aria-label="Remove item"]').length).toBe(2)
-    expect(switchBlockers()).toEqual(['Your POS cart has 2 items. Switching location clears it.'])
+    expect(switchBlockers()).toEqual(['Your POS cart has 2 items. It stays saved for this location and will be here when you switch back.'])
   })
 
   it('leaving the POS stops holding switches back', async () => {

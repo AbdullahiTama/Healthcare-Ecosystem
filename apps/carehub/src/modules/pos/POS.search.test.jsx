@@ -2,7 +2,7 @@
 // on every key press and the grid draws only a page of cards. Staff reported
 // the search freezing when deleting the last letters of a product name, when
 // almost the whole catalogue matched again and every card was drawn at once.
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 import { MemoryRouter } from 'react-router-dom'
@@ -19,6 +19,9 @@ vi.mock('../../hooks/queries', () => ({
 }))
 
 import POS, { GRID_PAGE } from './POS.jsx'
+
+// The sale in progress is kept in localStorage (posDraft.js); each test starts with an empty till.
+beforeEach(() => { localStorage.clear() })
 
 const CATALOGUE = Array.from({ length: 2000 }, (_, i) => ({
   id: 'p' + i, name: `Paracetamol ${String(i).padStart(4, '0')} tabs`, cat: 'OTC', category: 'OTC', price: 100 + i, stock: 10,
