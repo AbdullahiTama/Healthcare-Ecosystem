@@ -1,5 +1,6 @@
 import { ADR_FORM } from './formEngine'
 import { sourceBadge } from './pvWorkflow'
+import { csvCell as safeCsvCell } from '../../lib/carefindhubExports'
 import {
   ADR_MODULE_TYPES,
   ACTION_TAKEN_LABELS,
@@ -216,13 +217,19 @@ export function buildE2bXml({ report, products = [], reactions = [] }) {
 
 // ── NAFDAC PDF (print HTML) ───────────────────────────────────────────────────
 
-function row(name, value) {
-  if (value === undefined || value === null || value === '') return ''
-  const safe = String(value)
+// Every value typed by a reporter (including the public, unauthenticated form) is escaped before it reaches a print
+// document: openPrintView writes it into a window that shares the app's origin, so unescaped markup would run there.
+function escapeHtml(value) {
+  return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-  return `<tr><th>${name}</th><td>${safe}</td></tr>`
+    .replace(/"/g, '&quot;')
+}
+
+function row(name, value) {
+  if (value === undefined || value === null || value === '') return ''
+  return `<tr><th>${name}</th><td>${escapeHtml(value)}</td></tr>`
 }
 
 function fmtExportDate(value) {
@@ -279,7 +286,7 @@ export function caseBodyHtml({ report, products = [], meds = [], reactions = [],
 
   const medsHtml = meds.length === 0
     ? '<p>None recorded</p>'
-    : `<table>${meds.map(m => `<tr><th>${m.name}</th><td>${m.dose || ''}</td></tr>`).join('')}</table>`
+    : `<table>${meds.map(m => `<tr><th>${escapeHtml(m.name)}</th><td>${escapeHtml(m.dose || '')}</td></tr>`).join('')}</table>`
 
   const expectedHtml = reactionExpected === null
     ? ''
@@ -356,11 +363,8 @@ export function buildPdfHtml({ report, products = [], meds = [], reactions = [],
 // the PDF states exactly what was included and what was left out.
 export const BULK_PDF_CAP = 200
 
-function csvCell(value) {
-  if (value === undefined || value === null) return ''
-  const s = String(value)
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
+// Shared with the admin exports: quotes as needed and neutralises spreadsheet formulas in reporter-typed text.
+const csvCell = safeCsvCell
 
 function csvLine(cells) {
   return cells.map(csvCell).join(',')
@@ -444,9 +448,9 @@ export function buildBulkPdfHtml({ cases, filtersLabel = 'All', orgName = '', ca
   const shown = list.slice(0, Math.max(cap, 0))
   const truncated = list.length - shown.length
   const cover =
-    `<h1>ADR case export: ${orgName || 'CareHub'}</h1>` +
+    `<h1>ADR case export: ${escapeHtml(orgName || 'CareHub')}</h1>` +
     `<div class="meta">Generated ${generatedAt.toLocaleString('en-NG')} · ` +
-    `${shown.length} of ${list.length} cases selected · Filters: ${filtersLabel}</div>` +
+    `${shown.length} of ${list.length} cases selected · Filters: ${escapeHtml(filtersLabel)}</div>` +
     (list.length === 0
       ? `<div class="section"><p>No cases matched the selected filters. Nothing was exported.</p></div>`
       : '') +

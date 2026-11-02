@@ -136,8 +136,8 @@ export default function Moderation({ repository = createTrustRepository() }) {
         </div>
       )}
 
-      <ConfirmDialog show={!!confirmDelete} title="Permanently delete?" onClose={() => setConfirmDelete(null)} onConfirm={handleDelete} confirmLabel={busy ? 'Deleting...' : 'Delete'} variant="danger"
-        message={<div style={{ fontSize: 13 }}><div>This permanently deletes the post + its likes/comments and the report. <b>Quarantine</b> is reversible, but delete is not.</div><div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 12 }}>Audited to moderation_actions.</div></div>} />
+      <ConfirmDialog show={!!confirmDelete} title="Permanently delete?" onClose={() => setConfirmDelete(null)} onConfirm={handleDelete} confirmLabel={busy ? 'Deleting...' : 'Delete'}
+        consequence={<div style={{ fontSize: 13 }}><div>This permanently deletes the post + its likes/comments and the report. <b>Quarantine</b> is reversible, but delete is not.</div><div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 12 }}>Audited to moderation_actions.</div></div>} />
       <Toast msg={msg} type={type} />
     </div>
   )

@@ -117,7 +117,7 @@ export default function Invoices({ repository = createMoneyRepository() }) {
         </Card>
       )}
 
-      <ConfirmDialog show={!!confirmRefund} title={`Refund ${confirmRefund?.reference}?`} onClose={() => setConfirmRefund(null)} onConfirm={handleRefund} confirmLabel={busy ? 'Refunding...' : 'Refund (credit note)'} variant="danger" message={<div style={{ fontSize: 13 }}>Creates negative <code>credit_note</code> for {confirmRefund?.reference} . Append only, so it never mutates an invoice.</div>} />
+      <ConfirmDialog show={!!confirmRefund} title={`Refund ${confirmRefund?.reference}?`} onClose={() => setConfirmRefund(null)} onConfirm={handleRefund} confirmLabel={busy ? 'Refunding...' : 'Refund (credit note)'} consequence={<div style={{ fontSize: 13 }}>Creates negative <code>credit_note</code> for {confirmRefund?.reference} . Append only, so it never mutates an invoice.</div>} />
       <Toast msg={msg} type={type} />
     </div>
   )

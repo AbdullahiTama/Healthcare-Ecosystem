@@ -121,7 +121,7 @@ export default function PlanCatalog({ repository = createMoneyRepository() }) {
         </Card>
       )}
 
-      <ConfirmDialog show={!!confirmDelete} title={`Delete ${confirmDelete?.key}?`} onClose={() => setConfirmDelete(null)} onConfirm={handleDelete} confirmLabel={busy ? 'Deleting...' : 'Delete'} variant="danger" message={<div style={{ fontSize: 13 }}>Only if zero subscribers. Audited.</div>} />
+      <ConfirmDialog show={!!confirmDelete} title={`Delete ${confirmDelete?.key}?`} onClose={() => setConfirmDelete(null)} onConfirm={handleDelete} confirmLabel={busy ? 'Deleting...' : 'Delete'} consequence={<div style={{ fontSize: 13 }}>Only if zero subscribers. Audited.</div>} />
       <Toast msg={msg} type={type} />
     </div>
   )

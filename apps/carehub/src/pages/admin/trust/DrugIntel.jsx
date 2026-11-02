@@ -147,8 +147,8 @@ export default function DrugIntel({ repository = createTrustRepository() }) {
         </div>
       )}
 
-      <ConfirmDialog show={!!confirmQuarantine} title="Quarantine this review/post?" onClose={() => setConfirmQuarantine(null)} onConfirm={handleQuarantine} confirmLabel={busyId ? 'Quarantining...' : 'Quarantine'} variant="danger" message={<div style={{ fontSize: 13 }}>Hides from feed/search/index, keeps row + audit. Reversible via Moderation → Restore.</div>} />
-      <ConfirmDialog show={!!confirmAdr} title="Create ADR draft from review?" onClose={() => setConfirmAdr(null)} onConfirm={handleAdr} confirmLabel={busyId ? 'Creating...' : 'Create ADR draft'} message={<div style={{ fontSize: 13 }}>Creates draft <code>adr_reports</code> (community_pharmacy) with reaction from review text. Then triage in ADR module.</div>} />
+      <ConfirmDialog show={!!confirmQuarantine} title="Quarantine this review/post?" onClose={() => setConfirmQuarantine(null)} onConfirm={handleQuarantine} confirmLabel={busyId ? 'Quarantining...' : 'Quarantine'} consequence={<div style={{ fontSize: 13 }}>Hides from feed/search/index, keeps row + audit. Reversible via Moderation → Restore.</div>} />
+      <ConfirmDialog show={!!confirmAdr} title="Create ADR draft from review?" onClose={() => setConfirmAdr(null)} onConfirm={handleAdr} confirmLabel={busyId ? 'Creating...' : 'Create ADR draft'} danger={false} consequence={<div style={{ fontSize: 13 }}>Creates draft <code>adr_reports</code> (community_pharmacy) with reaction from review text. Then triage in ADR module.</div>} />
       <Toast msg={msg} type={type} />
     </div>
   )
