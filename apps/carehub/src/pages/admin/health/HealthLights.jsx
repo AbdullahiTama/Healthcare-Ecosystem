@@ -173,7 +173,7 @@ export default function HealthLights({ repository = createHealthRepository() }) 
         </Card>
       )}
 
-      <ConfirmDialog show={!!confirmDismiss} title="Dismiss incident?" onClose={() => setConfirmDismiss(null)} onConfirm={handleDismiss} confirmLabel={busy ? 'Dismissing...' : 'Dismiss'} variant="danger" message={<div style={{ fontSize: 13 }}>This removes the banner for all tenants. Audited.</div>} />
+      <ConfirmDialog show={!!confirmDismiss} title="Dismiss incident?" onClose={() => setConfirmDismiss(null)} onConfirm={handleDismiss} confirmLabel={busy ? 'Dismissing...' : 'Dismiss'} consequence={<div style={{ fontSize: 13 }}>This removes the banner for all tenants. Audited.</div>} />
       <Toast msg={msg} type={type} />
     </div>
   )

@@ -30,3 +30,42 @@ describe('carefindhubExports', () => {
     expect(csv).toContain('70.00')
   })
 })
+
+describe('safe CSV for admin exports', async () => {
+  const { csvCell, toCsv, recordToCsv, fileSlug } = await import('../carefindhubExports.js')
+
+  it('neutralises spreadsheet formulas in typed text', () => {
+    expect(csvCell('=HYPERLINK("http://x","click")')).toBe('"\'=HYPERLINK(""http://x"",""click"")"')
+    expect(csvCell('+2348012345678')).toBe('+2348012345678')
+    expect(csvCell('@SUM(A1)')).toBe("'@SUM(A1)")
+    expect(csvCell('-cmd')).toBe("'-cmd")
+    expect(csvCell('\tx')).toBe("'\tx")
+  })
+
+  it('keeps numbers numeric and empty values empty', () => {
+    expect(csvCell(-30)).toBe('-30')
+    expect(csvCell('-30.00')).toBe('-30.00')
+    expect(csvCell(null)).toBe('')
+    expect(csvCell(undefined)).toBe('')
+    expect(csvCell(0)).toBe('0')
+  })
+
+  it('quotes commas, quotes and line breaks', () => {
+    expect(csvCell('a\r\nb')).toBe('"a\r\nb"')
+    expect(csvCell('Lagos, Ikeja')).toBe('"Lagos, Ikeja"')
+  })
+
+  it('builds a CSV from keys or getters', () => {
+    const csv = toCsv([{ label: 'Name', key: 'name' }, { label: 'Area', get: (r) => r.areas.join('; ') }], [{ name: 'Ada', areas: ['Ikeja', 'Yaba'] }])
+    expect(csv).toBe('Name,Area\nAda,Ikeja; Yaba')
+  })
+
+  it('exports one record as field/value pairs', () => {
+    expect(recordToCsv([['Name', 'Ada'], ['Phone', '=1+1']])).toBe("Field,Value\nName,Ada\nPhone,'=1+1")
+  })
+
+  it('makes file-name-safe slugs', () => {
+    expect(fileSlug('Ada Pharmacy / Lekki!')).toBe('ada-pharmacy-lekki')
+    expect(fileSlug('')).toBe('record')
+  })
+})

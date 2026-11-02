@@ -122,7 +122,7 @@ export default function Claims({ repository = createTrustRepository() }) {
         </div>
       )}
 
-      <ConfirmDialog show={!!confirm} title={`${confirm?.kind === 'approve' ? 'Approve' : 'Reject'} ${confirm?.type} claim?`} onClose={() => setConfirm(null)} onConfirm={doAction} confirmLabel={busyId ? 'Saving...' : confirm?.kind === 'approve' ? 'Approve' : 'Reject'} variant={confirm?.kind === 'approve' ? 'default' : 'danger'} message={<div style={{ fontSize: 13 }}>This updates <code>{confirm?.type}_claims.status</code> and is audited to <code>moderation_actions</code>. {confirm?.kind === 'approve' && confirm?.type === 'business' ? 'Business will become visible on CareFind.' : ''}</div>} />
+      <ConfirmDialog show={!!confirm} title={`${confirm?.kind === 'approve' ? 'Approve' : 'Reject'} ${confirm?.type} claim?`} onClose={() => setConfirm(null)} onConfirm={doAction} confirmLabel={busyId ? 'Saving...' : confirm?.kind === 'approve' ? 'Approve' : 'Reject'} danger={confirm?.kind !== 'approve'} consequence={<div style={{ fontSize: 13 }}>This updates <code>{confirm?.type}_claims.status</code> and is audited to <code>moderation_actions</code>. {confirm?.kind === 'approve' && confirm?.type === 'business' ? 'Business will become visible on CareFind.' : ''}</div>} />
       <Toast msg={msg} type={type} />
     </div>
   )

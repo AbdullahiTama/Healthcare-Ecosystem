@@ -4,8 +4,10 @@ import { theme } from '../../styles/theme'
 
 // Sheet — Linear-style slide-over (AD-4, Quiet Chrome)
 // Desktop: 40% width (380–560) from right
-// Mobile (≤768px): bottom sheet 50% height with drag handle to dismiss
+// Mobile (≤768px): bottom sheet, up to 90% of the screen so a full record is readable, with drag handle to dismiss
 // Focus trap, Esc close, overlay click close, body scroll lock
+// Stacking: the sheet sits just below Modal/ConfirmDialog (z-index 999), so a confirmation opened from inside a sheet
+// appears on top of it, and keys pressed inside that dialog are left to the dialog.
 
 const SHEET_KEYFRAMES = `
 @keyframes ds-sheet-slide-in {
@@ -80,6 +82,8 @@ export function Sheet({ show, onClose, title, children, footer }) {
     }, focusDelay)
 
     function onKeyDown(e) {
+      // A dialog opened on top of the sheet owns its own keys (Esc closes only that dialog).
+      if (node && e.target instanceof Node && e.target !== document.body && !node.contains(e.target)) return
       if (e.key === 'Escape') { e.stopPropagation(); onCloseRef.current?.(); return }
       // keyboard equivalent for drag: Esc to close (handled above), no drag via keyboard needed
       if (e.key !== 'Tab') return
@@ -146,8 +150,8 @@ export function Sheet({ show, onClose, title, children, footer }) {
   const panelStyleMobile = isMobile ? {
     width: '100%',
     maxWidth: '100%',
-    height: '50vh',
-    maxHeight: '50vh',
+    height: 'auto',
+    maxHeight: '90vh',
     borderRadius: `${theme.radius.xl}px ${theme.radius.xl}px 0 0`,
     transform: dragging ? `translateY(${dragY}px)` : undefined,
     transition: dragging ? 'none' : (isReduced ? 'none' : 'transform 200ms cubic-bezier(0.16,1,0.3,1)'),
@@ -163,7 +167,7 @@ export function Sheet({ show, onClose, title, children, footer }) {
       onClick={() => onClose?.()}
       className="ds-sheet-overlay"
       style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
+        position: 'fixed', inset: 0, zIndex: 998,
         background: 'var(--overlay)',
         display: 'flex',
         alignItems: isMobile ? 'flex-end' : 'stretch',
@@ -208,7 +212,7 @@ export function Sheet({ show, onClose, title, children, footer }) {
         )}
 
         <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, background: 'var(--panel)' }}>
-          <div id="ds-sheet-title" style={{ fontWeight: 800, fontSize: 15, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div id="ds-sheet-title" style={{ fontWeight: 800, fontSize: 15, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflowWrap: 'anywhere' }}>
             {!isMobile && <span aria-hidden="true" style={{ width: 3, height: 16, borderRadius: 9999, background: 'var(--teal)', display: 'inline-block' }} />}
             {title}
           </div>
@@ -217,12 +221,12 @@ export function Sheet({ show, onClose, title, children, footer }) {
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px', scrollbarWidth: 'thin', scrollbarColor: 'var(--teal) transparent' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px' : '20px', scrollbarWidth: 'thin', scrollbarColor: 'var(--teal) transparent' }}>
           {children}
         </div>
 
         {footer && (
-          <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, flexShrink: 0, background: 'var(--panel)' }}>
+          <div style={{ padding: isMobile ? '12px 16px' : '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: 8, flexShrink: 0, background: 'var(--panel)' }}>
             {footer}
           </div>
         )}

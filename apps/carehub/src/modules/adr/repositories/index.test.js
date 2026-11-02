@@ -291,3 +291,33 @@ describe('adrReportRepository', () => {
     })
   })
 })
+describe('getPlatformReports (admin console)', () => {
+  function recording() {
+    const paths = []
+    return { paths, repo: createAdrReportRepository({ request: async (path) => { paths.push(path); return [] } }) }
+  }
+  it('lists every business by default, without drafts, newest first, list columns only', async () => {
+    const { paths, repo } = recording()
+    await repo.getPlatformReports()
+    expect(paths[0]).toMatch(/^adr_reports\?order=created_at\.desc&select=report_id,report_number,/)
+    expect(paths[0]).toContain('&status=neq.draft')
+    expect(paths[0]).not.toContain('business_id=eq.')
+    expect(paths[0]).not.toContain('patient_')
+    expect(paths[0]).toContain('&limit=500')
+  })
+  it('applies filters and keeps search from breaking the PostgREST or() syntax', async () => {
+    const { paths, repo } = recording()
+    await repo.getPlatformReports({ status: 'submitted', source: 'public', moduleType: 'hospital', search: 'ADR,(x)*', limit: 5000 })
+    expect(paths[0]).toContain('&status=eq.submitted')
+    expect(paths[0]).not.toContain('neq.draft')
+    expect(paths[0]).toContain('&report_source=eq.public')
+    expect(paths[0]).toContain('&module_type=eq.hospital')
+    expect(paths[0]).toContain('report_number.ilike.*ADR%20%20x*')
+    expect(paths[0]).toContain('&limit=1000')
+  })
+  it('can include drafts', async () => {
+    const { paths, repo } = recording()
+    await repo.getPlatformReports({ includeDrafts: true })
+    expect(paths[0]).not.toContain('status=')
+  })
+})

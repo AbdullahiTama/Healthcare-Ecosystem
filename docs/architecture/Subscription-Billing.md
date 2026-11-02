@@ -16,6 +16,10 @@ Settings → Billing (Owner only), below the Renew buttons:
 The receipt (A4, printable or save-as-PDF from the browser's print dialog) shows the receipt number, business billed,
 plan and period, payment method, CareHub reference, Paystack transaction id and amount.
 
+Platform administrators manage plans, free/complimentary access, extensions and suspensions from the admin console;
+see [Admin-Records-Subscriptions-and-Mobile.md](Admin-Records-Subscriptions-and-Mobile.md). Those changes never write
+`plan_payments`, so they never appear here as payments.
+
 ## Statuses of an attempt
 
 | `payment_intents.status` | Shown as | "Check payment" |

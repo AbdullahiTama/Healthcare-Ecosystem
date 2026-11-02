@@ -128,7 +128,7 @@ export default function Compliance({ repository = createComplianceRepository() }
         </Card>
       )}
 
-      <ConfirmDialog show={!!confirm} title={`${confirm?.next} request?`} onClose={() => setConfirm(null)} onConfirm={handleUpdate} confirmLabel={busy ? 'Saving...' : confirm?.next} variant={confirm?.next === 'rejected' ? 'danger' : 'default'} message={<div style={{ fontSize: 13 }}>Updates <code>compliance_requests.status</code> + audit. Delete requires completed → 2-approver hard delete via Businesses.</div>} />
+      <ConfirmDialog show={!!confirm} title={`${confirm?.next} request?`} onClose={() => setConfirm(null)} onConfirm={handleUpdate} confirmLabel={busy ? 'Saving...' : confirm?.next} danger={confirm?.next === 'rejected'} consequence={<div style={{ fontSize: 13 }}>Updates <code>compliance_requests.status</code> + audit. Delete requires completed → 2-approver hard delete via Businesses.</div>} />
       <Toast msg={msg} type={type} />
     </div>
   )

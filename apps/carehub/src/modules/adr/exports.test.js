@@ -293,3 +293,18 @@ describe('buildPdfHtml report source', () => {
   })
 })
 
+
+describe('print documents escape reporter-typed text', () => {
+  it('never emits markup from concomitant medications or the organisation name', () => {
+    const report = { report_id: 'r1', report_number: 'ADR-2026-000001', module_type: 'community_pharmacy', status: 'submitted', report_source: 'public' }
+    const meds = [{ name: '<img src=x onerror=alert(1)>', dose: '"><script>alert(2)</script>' }]
+    const html = buildPdfHtml({ report, meds })
+    expect(html).not.toContain('<img src=x')
+    expect(html).not.toContain('<script>alert(2)')
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;')
+    const bulk = buildBulkPdfHtml({ cases: [{ report, meds }], orgName: '<b>Org</b>', filtersLabel: '<i>x</i>' })
+    expect(bulk).not.toContain('<b>Org</b>')
+    expect(bulk).not.toContain('<i>x</i>')
+    expect(bulk).not.toContain('<img src=x')
+  })
+})

@@ -27,10 +27,38 @@ export function toBusinessExportRow(b) {
   }
 }
 
-function escapeCsvValue(v) {
-  const s = String(v ?? '')
-  if (s.includes('"') || s.includes(',') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"'
+// One CSV cell. Admin exports carry text typed by businesses and the public (names, addresses, application answers),
+// and a spreadsheet runs a cell that starts with = + - @ (or a tab/CR) as a formula. Such text is prefixed with an
+// apostrophe so it opens as plain text. Plain numbers ("-30.00") are left alone so figures stay numeric.
+export function csvCell(v) {
+  let s = v === null || v === undefined ? '' : String(v)
+  if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s)) s = "'" + s
+  if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"'
   return s
+}
+const escapeCsvValue = csvCell
+
+// CSV from rows and a column list: [{ label, key } | { label, get: (row) => value }].
+export function toCsv(columns, rows) {
+  const lines = [columns.map(c => csvCell(c.label)).join(',')]
+  for (const r of rows || []) {
+    lines.push(columns.map(c => csvCell(c.get ? c.get(r) : r?.[c.key])).join(','))
+  }
+  return lines.join('\n')
+}
+
+// A record's fields as a two-column CSV (Field, Value) — the "export this one record" file.
+export function recordToCsv(fields) {
+  return toCsv([{ label: 'Field', key: 'label' }, { label: 'Value', key: 'value' }], (fields || []).map(([label, value]) => ({ label, value })))
+}
+
+// File-name-safe date stamp and slug, shared by every admin export.
+export function exportStamp(now = new Date()) {
+  return now.toISOString().slice(0, 10)
+}
+export function fileSlug(s, fallback = 'record') {
+  const slug = String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)
+  return slug || fallback
 }
 
 export function toBusinessCsv(rows) {

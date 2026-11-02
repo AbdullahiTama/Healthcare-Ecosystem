@@ -82,7 +82,7 @@ export default function ErrorInbox({ repository = createHealthRepository() }) {
           ))}
         </div>
       )}
-      <ConfirmDialog show={!!confirm} title="Retry this job?" onClose={() => setConfirm(null)} onConfirm={handleRetry} confirmLabel={busy ? 'Retrying...' : 'Retry'} message={<div style={{ fontSize: 13 }}>Retrying is safe. Each retry is recorded in the audit log.</div>} />
+      <ConfirmDialog show={!!confirm} title="Retry this job?" onClose={() => setConfirm(null)} onConfirm={handleRetry} confirmLabel={busy ? 'Retrying...' : 'Retry'} danger={false} consequence={<div style={{ fontSize: 13 }}>Retrying is safe. Each retry is recorded in the audit log.</div>} />
       <Toast msg={msg} type={type} />
     </div>
   )
