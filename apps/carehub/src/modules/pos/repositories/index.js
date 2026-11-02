@@ -2,6 +2,28 @@ import { sbFetch, sbFetchWithCount } from '../../../services/supabase'
 import { isDuplicateError, isMissingObject } from '../../../lib/dbErrors'
 import { pagedQuery } from '../../../lib/pagedQuery'
 import { businessPeriod } from '../../../lib/businessDay'
+import { newUuid } from '../../../lib/uuid'
+
+// The held sale being saved is no longer on hold: it was charged (on this or
+// another till) since it was opened, so there is nothing left to save onto.
+// Thrown by updateHeld so the till can say so and keep the cart, instead of
+// reporting "updated" while the edits went nowhere.
+export class HeldSaleClosedError extends Error {
+  constructor() {
+    super('This held sale was already completed, so the changes could not be saved onto it.')
+    this.name = 'HeldSaleClosedError'
+  }
+}
+
+// "This exact row already exists": a sale replayed from the offline queue whose
+// first attempt had in fact landed (the connection dropped before the answer
+// came back). Matched on Postgres' duplicate-key wording only, NOT on HTTP 409
+// alone: PostgREST also answers 409 for a foreign-key violation (a sale naming
+// a customer that was since removed), and that sale has NOT been recorded — it
+// must stay queued and be reported, never dropped as if it had synced.
+function isAlreadyRecorded(e) {
+  return !!(e && typeof e.message === 'string' && /duplicate key value violates unique constraint/i.test(e.message))
+}
 
 // Ids per `id=in.(...)` request: keeps the URL well under proxy limits.
 const ID_CHUNK = 100
@@ -227,9 +249,15 @@ export function createSaleRepository({
     // key on the dispense_ref guard), the existing sale is returned as
     // `{ replayed: true }` instead of erroring, so a retry after an ambiguous
     // network drop can never double-dispense or double-decrement stock.
+    //
+    // Every sale is given its row id HERE, before the first attempt, and keeps
+    // it in the offline queue. A POST whose answer was lost (it committed, but
+    // the connection dropped first) is parked and replayed with the same id,
+    // and the database refuses the replay as a duplicate instead of recording
+    // the sale — or the held sale — a second time. See replayQueue.
     async create(businessId, sale, options = {}) {
       const queueOffline = options.queueOffline !== false
-      const row = { ...sale, business_id: businessId }
+      const row = { id: newUuid(), ...sale, business_id: businessId }
       if (!isOnline()) {
         if (!queueOffline) throw new Error(NO_QUEUE_OFFLINE_MSG)
         offline.push(row)
@@ -274,16 +302,24 @@ export function createSaleRepository({
     // Re-saves a HELD sale's contents (products, customer, note) in place. The
     // database refuses any attempt to change its hold status from here: a held
     // sale only ends by being completed (create with `resumed_from`).
+    //
+    // The updated row is asked back so "nothing matched" is visible: the filter
+    // keeps to rows still on hold, and a held sale charged since it was opened
+    // matches none. PostgREST answers that with an empty list, not an error, so
+    // without this check the till said "Held sale updated." while the edits
+    // were discarded. It now throws HeldSaleClosedError instead.
     async updateHeld(saleId, businessId, { items, subtotal, discount, total, clientId, clientName, notes }) {
-      return request(`sales?id=eq.${saleId}&business_id=eq.${businessId}&is_on_hold=eq.true`, {
+      const rows = await request(`sales?id=eq.${saleId}&business_id=eq.${businessId}&is_on_hold=eq.true&select=id`, {
         method: 'PATCH',
         body: JSON.stringify({
           items: JSON.stringify(items), subtotal, discount, total, balance: total,
           ...(clientId !== undefined ? { client_id: clientId } : {}),
           client_name: clientName, notes,
         }),
-        prefer: 'return=minimal',
+        prefer: 'return=representation',
       })
+      if (Array.isArray(rows) && rows.length === 0) throw new HeldSaleClosedError()
+      return Array.isArray(rows) ? rows[0] : rows
     },
 
     // ── Owner corrections (Financial Reports) ─────────────────────────────────
@@ -360,6 +396,15 @@ export function createSaleRepository({
         await request('sales', { method: 'POST', body: JSON.stringify({ ...data, business_id: data.business_id || businessId }) })
         syncedIds.add(queueKey(sale))
       } catch (e) {
+        // Its first attempt landed after all (create gave it its id before
+        // that attempt): already recorded, so it leaves the queue rather than
+        // being posted again. Only sales queued with an id can be told apart
+        // this way; an older entry without one keeps the previous behaviour.
+        if (sale.id && isAlreadyRecorded(e)) {
+          console.info('[pos] queued sale was already recorded; removing it from the queue', { txn_no: sale.txn_no })
+          syncedIds.add(queueKey(sale))
+          continue
+        }
         if (isServerRejection(e)) rejected.push({ txn_no: sale.txn_no, error: e.message })
       }
     }

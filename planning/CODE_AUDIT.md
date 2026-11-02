@@ -24,6 +24,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A7 | Low | Admin | Hard delete of a business is selectable again | Open: owner decision |
 | A8 | Low | Tooling | CodeRabbit reviews never run on PRs to `main` | Open |
 | A9 | Low | Debt | About 600 `no-unused-vars` warnings | Open, tracked in Linting.md |
+| A12 | High | POS (production defect) | Re-holding an edited held sale is refused (`permission denied for table sales`); duplicate held sales; carts lost when leaving the POS | **Grant applied live 2026-11-02**; app fixes on `claude/keen-mayer-4kpxda`, closes on merge |
 
 ## 2. Items
 
@@ -143,6 +144,31 @@ it is not wanted.
 About 600 `no-unused-vars` and 140 `no-empty` warnings remain across both apps (warnings, not CI failures). The
 burn-down plan and ratchet are in [docs/architecture/Linting.md](../docs/architecture/Linting.md) §3. The admin
 dashboard alone reports 28.
+
+### A12. POS held sales: re-hold refused, duplicates, lost carts (High) — grant live, app fix awaiting merge
+
+(A10 and A11 are taken on the open A3 branch `ccr-f80f15d6-yvi6ui`; its A11 records the same refusal as this item's
+first point and proposes the same grant.)
+
+**What (verified live 2026-11-02):**
+1. Re-holding an edited held sale fails every time: `updateHeld` PATCHes the held-content columns, but
+   `carehub_20261211_sales_write_hardening` left `authenticated` UPDATE on only `status, is_on_hold, notes`. Edge logs:
+   6 of 6 `PATCH /sales` answered 403. A held sale completed elsewhere also matched no row and the till reported success.
+2. Duplicate held sales: Hold had no in-flight guard; identical held sales were created 0.0–1.5 s apart (one ₦44,700
+   hold ~10 times; a new pair while this was written). Lost-response replays from the offline queue could also double.
+3. Carts lost when the POS unmounts (navigation remounts routes, BuildUpdateWatcher reloads after a deploy, phones
+   discard backgrounded tabs).
+
+**Fixed in code:** a persisted per-location, per-staff POS draft; a synchronous Hold guard; client-generated sale ids
+with duplicate-key recognition on replay; `updateHeld` detects a closed hold. Details, security implications and the
+test plan: [POS-Drafts-and-Held-Sale-Reliability.md](../docs/architecture/POS-Drafts-and-Held-Sale-Reliability.md).
+
+**Done:** `supabase/migrations/carehub_20270101_held_sale_edit_grants.sql` applied with the owner's approval
+(version `20261102135828`); the rolled-back live probe in its header passed (owner and staff can save an edited held
+sale; release, status and payment changes on a held sale and money/customer changes on a completed sale stay refused).
+
+**Close by:** merging the branch to `main` (the app half). Separately, owner review of the duplicate held sales still
+open and of duplicates that were each charged (listed in the note).
 
 ## 3. Open items recorded in other audits
 

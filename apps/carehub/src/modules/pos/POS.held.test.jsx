@@ -38,6 +38,9 @@ vi.mock('../consultation/repositories', () => ({ consultationRepository: { getLa
 
 import POS from './POS.jsx'
 
+// The sale in progress is kept in localStorage (posDraft.js); each test starts with an empty till.
+beforeEach(() => { localStorage.clear() })
+
 const BRAND = { id: 'biz-1', name: 'Pharm Tama' }
 const PRODUCTS = [
   { id: 'p1', name: 'Amoxicillin 500mg', category: 'Prescription Drugs', price: 1200, stock: 20 },
@@ -97,7 +100,8 @@ describe('Held sales', () => {
     await click(tab('Held'))
     await click(button('Open & edit'))
     await click(host.querySelector('button.pos-hold'))
-    await click(button('Hold sale'))
+    // editing a held sale, the modal saves the changes rather than holding a new one
+    await click(button('Save changes'))
     expect(h.updateHeld).toHaveBeenCalledTimes(1)
     expect(h.updateHeld.mock.calls[0][0]).toBe('h1')
     expect(h.updateHeld.mock.calls[0][2]).toMatchObject({ total: 2400, clientName: 'Ada Obi' })

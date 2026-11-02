@@ -24,6 +24,9 @@ vi.mock('../../hooks/queries', () => ({
 
 import POS from './POS.jsx'
 
+// The sale in progress is kept in localStorage (posDraft.js); each test starts with an empty till.
+beforeEach(() => { localStorage.clear() })
+
 const BRAND = { id: 'biz-1', name: 'Pharm Tama' }
 
 function WhereAmI() {

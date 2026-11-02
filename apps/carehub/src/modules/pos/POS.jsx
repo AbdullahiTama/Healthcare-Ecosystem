@@ -8,7 +8,10 @@ import {
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
   DollarSign, Repeat, Divide, Search, Package, PackageX, Clipboard, ReceiptText, ChevronRight,
 } from 'lucide-react'
-import { saleRepository } from './repositories'
+import { saleRepository, HeldSaleClosedError } from './repositories'
+import { usePersistentDraft } from '../../hooks/usePersistentDraft'
+import { useAuth } from '../../providers/AuthProvider'
+import { blankPosDraft, isPosDraftEmpty, normalizePosDraft, posDraftKey, heldSaleRef, customerRef } from './posDraft'
 // Credit sales raise and settle debts. That aggregate belongs to the debts
 // module, so its repository is used here rather than a second copy of the
 // query shape living in POS.
@@ -21,7 +24,7 @@ import { buildReceiptHtml, buildReceiptQrDataUrl, saleToReceipt, heldSaleToInvoi
 import { buildReceiptEscpos } from './receiptEscpos'
 import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscpos, requestPrinter } from './escposUsb'
 import { theme } from '../../styles/theme'
-import { Card, Modal, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, ErrorState, Loading, Skeleton } from '../../components/ui'
+import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, ErrorState, Loading, Skeleton } from '../../components/ui'
 import { CatalogStatusBanner, loadingLabel } from '../inventory/components/CatalogStatus'
 import CreditCollections from './CreditCollections'
 import CustomerPicker from './CustomerPicker'
@@ -120,23 +123,47 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   // Catalog load state from BusinessDashboard (inventory/hooks/useProductCatalog.js).
   const catalogStatus = catalog?.status || 'ready'
   const [view, setView] = useState('pos') // pos | held | recent | credit
-  const [cart, setCart] = useState([])
-  // Products belong to this location: while the cart has items, a location switch asks first (it clears the cart).
+  // The sale in progress — cart, customer, discount, payment inputs, hold note
+  // and the held sale open for editing — is one draft kept on this device
+  // (posDraft.js), so leaving the POS, a reload onto a new build or a phone
+  // discarding the backgrounded tab never loses it. Scoped per location and
+  // per staff member. It is cleared once the sale is charged or held.
+  const { auth } = useAuth() || {}
+  const draftKey = posDraftKey(brand?.id, auth?.staff?.id)
+  const [rawDraft, setDraft, { clear: clearDraft, restoredAt }] = usePersistentDraft(draftKey, blankPosDraft, { isEmpty: isPosDraftEmpty })
+  const draft = useMemo(() => normalizePosDraft(rawDraft), [rawDraft])
+  // One field of the draft; accepts a value or an updater, like a useState setter.
+  const setField = useCallback((name, next) => {
+    setDraft(d => {
+      const cur = normalizePosDraft(d)
+      return { ...cur, [name]: typeof next === 'function' ? next(cur[name]) : next }
+    })
+  }, [setDraft])
+  const { cart, client, method, cash, disc, discPct, splitAmounts, creditAmountPaid, creditMethod, holdNote, resumedSale } = draft
+  const setCart = useCallback(v => setField('cart', v), [setField])
+  const setClient = useCallback(v => setField('client', v), [setField])
+  const setMethod = useCallback(v => setField('method', v), [setField])
+  const setCash = useCallback(v => setField('cash', v), [setField])
+  const setDisc = useCallback(v => setField('disc', v), [setField])
+  const setDiscPct = useCallback(v => setField('discPct', v), [setField])
+  const setSplitAmounts = useCallback(v => setField('splitAmounts', v), [setField])
+  const setCreditAmountPaid = useCallback(v => setField('creditAmountPaid', v), [setField])
+  const setCreditMethod = useCallback(v => setField('creditMethod', v), [setField])
+  const setHoldNote = useCallback(v => setField('holdNote', v), [setField])
+  const setResumedSale = useCallback(v => setField('resumedSale', v ? heldSaleRef(v) : null), [setField])
+  // "Picked up where you left off": shown once for a restored sale, until the
+  // cashier dismisses it or the sale is finished.
+  const [restoreSeen, setRestoreSeen] = useState(false)
+  const showRestored = !!restoredAt && cart.length > 0 && !restoreSeen
+  // Products belong to this location. The cart is kept for this location when switching (each location has its own
+  // draft), but the cashier is still told it is there before the screen changes.
   useEffect(() => {
     const n = cart.length
     if (n === 0) return undefined
-    return registerSwitchBlocker(() => 'Your POS cart has ' + n + (n === 1 ? ' item' : ' items') + '. Switching location clears it.')
+    return registerSwitchBlocker(() => 'Your POS cart has ' + n + (n === 1 ? ' item' : ' items') + '. It stays saved for this location and will be here when you switch back.')
   }, [cart.length])
-  const [client, setClient] = useState('Walk-in')
-  // The customer record picked for this sale (CustomerPicker). A credit sale
-  // cannot be recorded without one.
-  const [pickedClient, setPickedClient] = useState(null)
   // The sale opened from the Recent list (SaleDetailModal).
   const [detailSale, setDetailSale] = useState(null)
-  const [method, setMethod] = useState('Cash')
-  const [cash, setCash] = useState('')
-  const [disc, setDisc] = useState('')
-  const [discPct, setDiscPct] = useState(false)
   const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
   const [stockFilter, setStockFilter] = useState('All')
@@ -149,23 +176,27 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   // the category pills opens a bottom sheet listing them so staff can see what
   // is unavailable without clogging the counter (mobile-focused issue #5).
   const [showOutOfStock, setShowOutOfStock] = useState(false)
-  // Split payment
-  const [splitAmounts, setSplitAmounts] = useState({ Cash: '', Transfer: '', POS: '' })
-  // Credit
-  const [creditAmountPaid, setCreditAmountPaid] = useState('')
-  // How a credit sale's deposit was paid. Without it the deposit could not be
-  // placed in the cash / transfer / POS totals of the Sales & Accounts report.
-  const [creditMethod, setCreditMethod] = useState('Cash')
-  // Hold note
-  const [holdNote, setHoldNote] = useState('')
+  // Split amounts, the credit deposit and how it was paid (creditMethod: without
+  // it the deposit could not be placed in the cash / transfer / POS totals of
+  // the Sales & Accounts report) and the hold note are all part of the draft.
   const [showHoldModal, setShowHoldModal] = useState(false)
-  // The held sale open in the current cart, if any. Its row stays ON HOLD (and
-  // listed under Held) while it is edited; it is never released, deleted or
-  // counted as a sale. Charging the cart sends `resumed_from`, and the
-  // database converts the held row in the same transaction as the new sale.
-  const [resumedSale, setResumedSale] = useState(null)
+  // `resumedSale` (in the draft): the held sale open in the current cart, if
+  // any. Its row stays ON HOLD (and listed under Held) while it is edited; it
+  // is never released, deleted or counted as a sale. Holding again saves onto
+  // it (updateHeld); charging the cart sends `resumed_from`, and the database
+  // converts the held row in the same transaction as the new sale.
+  // A held sale chosen while another sale is in the cart, waiting for the
+  // cashier to confirm the cart may be replaced.
+  const [pendingResume, setPendingResume] = useState(null)
   const [printing, setPrinting] = useState(false)
   const [charging, setCharging] = useState(false)
+  // Holding is guarded twice: `holding` drives the buttons, and the ref stops a
+  // second tap that arrives before React has re-rendered them as disabled.
+  // Without it, a double tap on "Hold sale" (or "Hold sale" then "Hold & print
+  // invoice") wrote the same held sale two or three times — live data showed
+  // identical held sales created 0–1.5 seconds apart.
+  const [holding, setHolding] = useState(false)
+  const holdingRef = useRef(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const { isMobile } = useBreakpoint()
   const navigate = useNavigate()
@@ -174,6 +205,11 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const { data: settings } = useSettings(brand?.id)
   const clientsQuery = useClients(brand?.id)
   const clients = clientsQuery.data || []
+  // The draft keeps only the picked customer's id and name; their full record
+  // (phone, for telling two namesakes apart) comes from the clients list.
+  const pickedClient = draft.pickedClient
+    ? (clients.find(c => String(c.id) === String(draft.pickedClient.id)) || draft.pickedClient)
+    : null
   const createClient = useCreateClient(brand?.id)
   // Held and unpaid credit sales, and the latest completed sales for the
   // Recent tab — targeted reads instead of the whole sales history.
@@ -184,6 +220,21 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
 
   const heldSales = openSales.filter(s => s.is_on_hold)
   const creditSales = openSales.filter(s => s.is_credit && s.balance > 0)
+
+  // A restored draft can point at a held sale that was charged since (on this
+  // or another till). Holding would then find nothing to save onto, and
+  // charging would be refused ("This held sale was already completed"). Once
+  // the held list has loaded and that sale is not in it, the cart is kept as a
+  // new sale and the cashier is told why.
+  const resumedId = resumedSale?.id
+  const heldLoaded = !loadingOpen && !openError
+  const resumedStillHeld = !resumedId || heldSales.some(s => String(s.id) === String(resumedId))
+  useEffect(() => {
+    if (!resumedId || !heldLoaded || resumedStillHeld) return
+    console.info('[pos] open held sale is no longer on hold; keeping the cart as a new sale', { id: resumedId })
+    setResumedSale(null)
+    showToast('That held sale was already completed. Your cart is kept as a new sale.', { type: 'info' })
+  }, [resumedId, heldLoaded, resumedStillHeld])
 
   // Product search (productSearch.js). The catalogue is prepared once per
   // change, not per key press. The search box itself updates at once; the
@@ -286,8 +337,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const creditCustomer = creditCustomerFor(pickedClient, client, clients)
 
   function pickCustomer(c) {
-    setPickedClient(c)
-    setClient(c ? c.full_name : 'Walk-in')
+    setDraft(d => ({ ...normalizePosDraft(d), pickedClient: customerRef(c), client: c ? c.full_name : 'Walk-in' }))
   }
 
   async function addCustomer(fields) {
@@ -396,7 +446,10 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
       const s = cart.find(c => c.id === p.id)
       return s && (p.cat || p.category) !== 'Services' ? { ...p, stock: Math.max(0, p.stock - s.qty) } : p
     }))
-    setResumedSale(null)
+    // Recorded: the draft goes at once, so a reload on the receipt screen can
+    // never bring back a cart that was already charged. (`cart` below is this
+    // call's own copy.)
+    clearDraft()
 
     // AUTO-CREATE DEBT if amount paid is less than total
     if (balance > 0 && brand?.id) {
@@ -461,7 +514,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     // but not in charge(). Both now agree, and both are display-only: the
     // authoritative decrement is the sale_stock_movement trigger.
     setProducts(prev => prev.map(p => { const s = cart.find(c => c.id === p.id); return s && (p.cat || p.category) !== 'Services' ? { ...p, stock: Math.max(0, p.stock - s.qty) } : p }))
-    setResumedSale(null)
+    clearDraft()
     // AUTO-CREATE DEBT: credit sale automatically appears in debts as "Owes Us"
     if (balance > 0 && brand?.id) {
       await debtRepository.recordUnderpayment({
@@ -484,20 +537,33 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   // window is opened first, inside the click, so the browser does not block it as a pop-up.
   async function holdSale(withInvoice = false) {
     if (!cart.length) return
+    if (holdingRef.current) return
+    holdingRef.current = true
+    setHolding(true)
+    try {
+      await holdCart(withInvoice)
+    } finally {
+      holdingRef.current = false
+      setHolding(false)
+    }
+  }
+
+  async function holdCart(withInvoice) {
     const txnNo = genId('HLD')
     const invoiceWindow = withInvoice ? openPrintWindow() : null
     if (withInvoice && !invoiceWindow) return
     const clientName = client || 'Walk-in'
     const clientId = resolveClientId(clientName)
+    const editing = resumedSale
     // A held sale is validated at insert like any other: if the server
     // rejects it (price guard), saveSale already toasted the reason — keep the
     // cart and the modal intact instead of clearing them.
     try {
-      if (resumedSale) {
+      if (editing) {
         // Editing a held sale: save the changes onto the same held row.
-        await saleRepository.updateHeld(resumedSale.id, brand.id, {
+        await saleRepository.updateHeld(editing.id, brand.id, {
           items: cart, subtotal: sub, discount: discAmt, total,
-          clientId, clientName, notes: holdNote || resumedSale.notes || '',
+          clientId, clientName, notes: holdNote || editing.notes || '',
         })
       } else await saveSale({
         txn_no: txnNo,
@@ -516,42 +582,71 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
       })
     } catch (e) {
       invoiceWindow?.close()
-      if (resumedSale) showToast('Could not save the changes to this held sale. Please try again.', { type: 'error' })
+      if (editing) reportHeldSaveFailure(e, editing)
       return
     }
     if (invoiceWindow) {
       printInvoice({
-        kind: 'invoice', id: resumedSale ? resumedSale.txn_no : txnNo, client: clientName, items: cart,
+        kind: 'invoice', id: editing ? editing.txn_no : txnNo, client: clientName, items: cart,
         subtotal: sub, disc: discAmt, total, amtPaid: 0, balance: total, date: new Date().toISOString(),
-        note: holdNote || resumedSale?.notes || '',
+        note: holdNote || editing?.notes || '',
       }, invoiceWindow)
     }
-    showToast(resumedSale ? 'Held sale updated.' : 'Sale held. Resume it from Held Sales.', { type: 'success' })
+    showToast(editing ? 'Held sale updated.' : 'Sale held. Resume it from Held Sales.', { type: 'success' })
     setShowHoldModal(false)
-    setResumedSale(null)
-    setDisc('')
-    setCart([])
-    setClient('Walk-in')
-    setHoldNote('')
+    clearDraft()
     invalidateSales()
+  }
+
+  // Saving an edited held sale failed. The cart (the draft) is always kept, so
+  // nothing typed is lost; the message says what to do next.
+  function reportHeldSaveFailure(e, editing) {
+    if (e instanceof HeldSaleClosedError) {
+      // Charged since it was opened: nothing to save onto. The cart becomes a
+      // new sale, so Hold now creates a new held sale (not a second copy of a
+      // live one) and Charge records it normally.
+      console.info('[pos] held sale closed before the edit was saved', { id: editing.id })
+      setResumedSale(null)
+      setShowHoldModal(false)
+      showToast('That held sale was already completed, so the changes were not saved onto it. Your cart is kept: hold or charge it as a new sale.', { type: 'warning' })
+      invalidateSales()
+      return
+    }
+    console.error('[pos] saving the held sale failed:', e)
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+    showToast(offline
+      ? 'You are offline, so the held sale was not updated. Your changes are kept on this device: hold again when you are back online.'
+      : 'Could not save the changes to this held sale. Your changes are kept: please try again.', { type: 'error' })
   }
 
   // Opening a held sale loads it into the cart for editing. The held row is
   // left exactly as it is: nothing is released, deleted or recorded as a sale
-  // until the cart is charged.
+  // until the cart is charged. A different sale already in the cart is never
+  // silently replaced: the cashier confirms first (and can hold it instead).
   function resumeHeld(sale) {
+    const sameSale = resumedSale && String(resumedSale.id) === String(sale.id)
+    if (cart.length > 0 && !sameSale) { setPendingResume(sale); return }
+    openHeld(sale)
+  }
+
+  function openHeld(sale) {
+    setPendingResume(null)
+    if (resumedSale && String(resumedSale.id) === String(sale.id)) { setView('pos'); return }
     let items = []
     try { items = JSON.parse(sale.items || '[]') } catch (e) {}
-    setCart(items)
-    setClient(sale.client_name || 'Walk-in')
-    setDisc(Number(sale.discount) > 0 ? String(sale.discount) : '')
-    setDiscPct(false)
-    setHoldNote(sale.notes || '')
-    setResumedSale(sale)
+    setDraft({
+      ...blankPosDraft(),
+      cart: items,
+      client: sale.client_name || 'Walk-in',
+      disc: Number(sale.discount) > 0 ? String(sale.discount) : '',
+      holdNote: sale.notes || '',
+      resumedSale: heldSaleRef(sale),
+    })
+    setRestoreSeen(true)
     setView('pos')
   }
 
-  function newSale() { setResumedSale(null); setReceipt(null); setCart([]); setClient('Walk-in'); setPickedClient(null); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid(''); setCreditMethod('Cash') }
+  function newSale() { setReceipt(null); clearDraft(); setRestoreSeen(false) }
 
   // Universal fallback path: render an HTML page and let the browser/OS
   // rasterize it via the system print dialog. Always works, but thermal
@@ -745,6 +840,10 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
           )
         })}
       </div>
+      <ConfirmDialog show={!!pendingResume} onClose={() => setPendingResume(null)} onConfirm={() => openHeld(pendingResume)}
+        title='Replace the current sale?'
+        consequence={'The current sale has ' + cart.length + (cart.length === 1 ? ' product' : ' products') + (resumedSale ? ' (unsaved changes to held sale ' + resumedSale.txn_no + ')' : '') + '. Opening this held sale clears it from the cart. To keep it, cancel and hold it first.'}
+        confirmLabel='Open held sale' danger={false} />
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )
@@ -972,6 +1071,13 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
           </div>
         </div>
 
+        {showRestored && (
+          <div role='status' style={{ padding: '8px 16px', background: tealMist, color: tealDeep, fontSize: 12, fontWeight: 600, lineHeight: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexShrink: 0 }}>
+            <span>Picked up where you left off: this sale was kept on this device{restoredAt ? ' (' + new Date(restoredAt).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }) + ')' : ''}.</span>
+            <button onClick={() => setRestoreSeen(true)} aria-label='Dismiss restored sale notice' style={{ background: 'none', border: 'none', color: tealDeep, fontWeight: 800, fontSize: 12, cursor: 'pointer', textDecoration: 'underline', flexShrink: 0 }}>OK</button>
+          </div>
+        )}
+
         {resumedSale && (
           <div role='status' style={{ padding: '8px 16px', background: warningBg, color: warning, fontSize: 12, fontWeight: 600, lineHeight: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexShrink: 0 }}>
             <span>Editing held sale {resumedSale.txn_no}. Add or remove products, then <strong>Hold</strong> to save it or charge to complete it. It is not a sale until charged.</span>
@@ -1118,10 +1224,10 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
       </div>
 
       {/* Hold modal */}
-      <Modal show={showHoldModal} onClose={() => setShowHoldModal(false)} title='Hold sale'
-        footer={<><GhostBtn onClick={() => setShowHoldModal(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
-          <GhostBtn onClick={() => holdSale(true)} style={{ flex: 1, padding: '12px' }}>Hold &amp; print invoice</GhostBtn>
-          <TealBtn onClick={() => holdSale()} style={{ flex: 1, padding: '12px' }}>Hold sale</TealBtn></>}>
+      <Modal show={showHoldModal} onClose={() => { if (!holding) setShowHoldModal(false) }} title={resumedSale ? 'Save held sale' : 'Hold sale'}
+        footer={<><GhostBtn onClick={() => setShowHoldModal(false)} disabled={holding} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+          <GhostBtn onClick={() => holdSale(true)} disabled={holding} aria-busy={holding || undefined} style={{ flex: 1, padding: '12px', opacity: holding ? 0.6 : 1 }}>Hold &amp; print invoice</GhostBtn>
+          <TealBtn onClick={() => holdSale()} disabled={holding} aria-busy={holding || undefined} style={{ flex: 1, padding: '12px', opacity: holding ? 0.6 : 1 }}>{holding ? 'Saving…' : resumedSale ? 'Save changes' : 'Hold sale'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={{ padding: '12px', borderRadius: theme.radius.md, background: bg, fontSize: '13px', color: gray600 }}>
             Cart total: <strong>{fmt(total)}</strong> · {cart.length} item(s) for <strong>{client || 'Walk-in'}</strong>

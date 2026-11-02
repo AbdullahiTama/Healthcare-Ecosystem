@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createSaleRepository, createMemoryOfflineQueue, isServerRejection } from './index.js'
+import { createSaleRepository, createMemoryOfflineQueue, isServerRejection, HeldSaleClosedError } from './index.js'
 import { createInMemoryClient } from '../../../test/inMemoryClient.js'
 
 const A = 'biz-A'
@@ -417,6 +417,72 @@ describe('saleRepository', () => {
     expect(written.map((r) => r.txn_no)).toEqual(['TXN-ok'])
   })
 
+  // Idempotency: every sale is given its id before the first attempt and keeps it in the queue.
+  it('create gives every sale a row id before the first attempt, and keeps it when the sale is queued', async () => {
+    const { repo, client } = build()
+    await repo.create(A, { txn_no: 'TXN-1', total: 500 })
+    expect(client.rows('sales')[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+
+    const offline = createMemoryOfflineQueue()
+    const failing = createSaleRepository({ request: async () => { throw new Error('network down') }, offline, isOnline: () => true })
+    await failing.create(A, { txn_no: 'TXN-2', total: 500 })
+    expect(offline.all()[0].id).toMatch(/^[0-9a-f-]{36}$/)
+
+    // a caller that already chose the id keeps it
+    await repo.create(A, { id: 'given-id', txn_no: 'TXN-3', total: 1 })
+    expect(client.rows('sales').some((s) => s.id === 'given-id')).toBe(true)
+  })
+
+  // The double-recording path: the first POST committed but its answer was lost, so the sale (or held sale) was
+  // queued; replaying it must not record it a second time.
+  it('syncQueued drops a queued sale whose first attempt had already landed, without posting it again', async () => {
+    const landed = { id: '11111111-1111-4111-8111-111111111111', txn_no: 'HLD-1', total: 300, is_on_hold: true, business_id: A }
+    const { client, offline } = build({ seed: { sales: [landed] }, queued: [{ ...landed, _offline_id: 'q1' }, { id: '22222222-2222-4222-8222-222222222222', txn_no: 'TXN-2', total: 50, _offline_id: 'q2' }] })
+    const posted = []
+    const repo2 = createSaleRepository({
+      request: async (path, opts) => {
+        const row = JSON.parse(opts.body)
+        posted.push(row.txn_no)
+        if (client.rows('sales').some((s) => s.id === row.id)) throw new Error('Supabase error (409): duplicate key value violates unique constraint "sales_pkey"')
+        return client(path, opts)
+      },
+      offline,
+      isOnline: () => true,
+    })
+    const result = await repo2.syncQueued(A)
+    expect(result).toEqual({ synced: 2, rejected: [] })
+    expect(offline.all()).toHaveLength(0)
+    expect(client.rows('sales').filter((s) => s.txn_no === 'HLD-1')).toHaveLength(1)
+    expect(posted).toEqual(['HLD-1', 'TXN-2'])
+  })
+
+  // PostgREST answers 409 for a foreign-key violation too; that sale was NOT recorded and must never be dropped.
+  it('syncQueued keeps a sale refused with a 409 that is not a duplicate (e.g. a removed customer)', async () => {
+    const offline = createMemoryOfflineQueue([{ id: '33333333-3333-4333-8333-333333333333', txn_no: 'TXN-fk', total: 10 }])
+    const repo = createSaleRepository({
+      request: async () => { throw new Error('Supabase error (409): insert or update on table "sales" violates foreign key constraint "sales_client_id_fkey"') },
+      offline,
+      isOnline: () => true,
+    })
+    const result = await repo.syncQueued(A)
+    expect(result.synced).toBe(0)
+    expect(result.rejected.map((r) => r.txn_no)).toEqual(['TXN-fk'])
+    expect(offline.all().map((s) => s.txn_no)).toEqual(['TXN-fk'])
+  })
+
+  // An entry queued by an older version has no id, so a duplicate cannot be recognised; it is treated as before.
+  it('syncQueued does not treat a duplicate refusal as landed for a legacy entry without an id', async () => {
+    const offline = createMemoryOfflineQueue([{ txn_no: 'TXN-old', total: 10 }])
+    const repo = createSaleRepository({
+      request: async () => { throw new Error('Supabase error (409): duplicate key value violates unique constraint "x"') },
+      offline,
+      isOnline: () => true,
+    })
+    const result = await repo.syncQueued(A)
+    expect(result.synced).toBe(0)
+    expect(offline.all()).toHaveLength(1)
+  })
+
   // Sync also runs on resume and on reconnect, so it can overlap the mount
   // sync or the Sync button. `sales` has no unique key on txn_no: a second
   // concurrent run would record every queued sale twice.
@@ -498,16 +564,38 @@ describe('saleRepository: held, deleted and resumed rows are not sales', () => {
 
   it('updateHeld patches only a row that is still on hold, keeping the app\'s encoded items', async () => {
     const calls = []
-    const repo = createSaleRepository({ request: async (path, opts) => { calls.push([path, opts]); return [] }, isOnline: () => true })
+    const repo = createSaleRepository({ request: async (path, opts) => { calls.push([path, opts]); return [{ id: 'h1' }] }, isOnline: () => true })
     await repo.updateHeld('h1', A, { items: [{ id: 'p', qty: 2 }], subtotal: 10, discount: 0, total: 10, clientName: 'Ada', notes: 'n' })
     const [path, opts] = calls[0]
-    expect(path).toBe(`sales?id=eq.h1&business_id=eq.${A}&is_on_hold=eq.true`)
+    expect(path).toBe(`sales?id=eq.h1&business_id=eq.${A}&is_on_hold=eq.true&select=id`)
+    // the row is asked back, so "nothing matched" can be told from "saved"
+    expect(opts.prefer).toBe('return=representation')
     expect(opts.method).toBe('PATCH')
     const body = JSON.parse(opts.body)
     expect(JSON.parse(body.items)).toEqual([{ id: 'p', qty: 2 }])
     expect(body).toMatchObject({ total: 10, balance: 10, client_name: 'Ada', notes: 'n' })
     expect(body).not.toHaveProperty('is_on_hold')
     expect(body).not.toHaveProperty('status')
+  })
+
+  // A held sale charged (here or on another till) since it was opened matches no row: PostgREST answers [] rather
+  // than an error, and the till used to report "Held sale updated." while the edits went nowhere.
+  it('updateHeld throws HeldSaleClosedError when the held sale is no longer on hold', async () => {
+    const { repo } = build({ seed: { sales: [{ id: 'h1', business_id: A, is_on_hold: false, status: 'converted' }] } })
+    await expect(repo.updateHeld('h1', A, { items: [], subtotal: 0, discount: 0, total: 0, clientName: 'Ada', notes: '' }))
+      .rejects.toBeInstanceOf(HeldSaleClosedError)
+  })
+
+  it('updateHeld saves onto a live held row and never onto another business\'s', async () => {
+    const { repo, client } = build({ seed: { sales: [
+      { id: 'h1', business_id: A, is_on_hold: true, total: 100 },
+      { id: 'h2', business_id: B, is_on_hold: true, total: 100 },
+    ] } })
+    await repo.updateHeld('h1', A, { items: [{ id: 'p', qty: 3 }], subtotal: 300, discount: 0, total: 300, clientName: 'Ada', notes: '' })
+    expect(client.rows('sales').find((s) => s.id === 'h1')).toMatchObject({ total: 300, balance: 300, is_on_hold: true })
+    await expect(repo.updateHeld('h2', A, { items: [], subtotal: 0, discount: 0, total: 0, clientName: 'x', notes: '' }))
+      .rejects.toBeInstanceOf(HeldSaleClosedError)
+    expect(client.rows('sales').find((s) => s.id === 'h2').total).toBe(100)
   })
 
   it('correct, remove and history call the owner-only database functions and the audit trail', async () => {
