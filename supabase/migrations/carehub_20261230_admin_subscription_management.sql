@@ -1,6 +1,19 @@
 -- carehub_20261230_admin_subscription_management
 --
--- Status: NOT YET APPLIED. Written against the live schema read on 2026-11-02:
+-- Status: APPLIED TO PRODUCTION 2026-11-02 (Supabase migration version 20261102082736). Verified live afterwards, inside
+-- a DO block that raised and rolled back (all 31 plans/expiries fingerprinted before and after: unchanged; 0 events,
+-- 2 audit rows, 1 payment before and after):
+--   anon: overview and manage refused (42501, no EXECUTE)
+--   business owner: overview, manage refused (42501); direct insert into subscription_events refused; sees 0 events
+--   platform admin: overview returns all 30 main businesses, each with a state and access type; a 2-character reason
+--     refused; suspend -> suspended (state grace: go-live floor until 2026-11-03 20:44 UTC), branch followed; extend while
+--     suspended refused; activate restored the previous expiry (within 5s); 30-day trial added exactly 30 days; plan
+--     change; history via the branch id returned the 4 changes; update of an event refused (also for the table owner);
+--     4 admin_audit_log rows; plan_payments unchanged
+--   Security advisor: the three admin RPCs appear only as the intended "authenticated may execute SECURITY DEFINER"
+--     warning (each refuses non-admins first); no search_path, RLS or anon findings for the new objects.
+--
+-- Written against the live schema read on 2026-11-02:
 --   * A business's plan lives on the businesses row (plan, plan_expires_at). plan_state(), plan_grace_ends_at() and
 --     plan_limit() (carehub_20261214_plan_enforcement) turn it into what the app enforces. 31 businesses, 30 main.
 --   * Payments are automated: Paystack and the wallet settle through renew_business_plan, the only writer of

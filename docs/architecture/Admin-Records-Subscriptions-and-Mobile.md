@@ -137,11 +137,27 @@ Every change needs a reason and a confirmation step.
 
 ## Deployment
 
-**The migration is not applied yet.** Apply `carehub_20261230_admin_subscription_management.sql` before or with the app.
+**Applied to production 2026-11-02** (Supabase migration `carehub_20261230_admin_subscription_management`, version
+20261102082736). Verified live in a rolled-back transaction (every business's plan and expiry fingerprinted before and
+after: unchanged):
 
-- App first: Subscriptions shows "Subscription management is not switched on yet" with the migration name; everything
-  else works.
-- Migration first: nothing changes for the current app (new objects only).
+| Check | Result |
+|---|---|
+| Anon calls the overview or a change | Refused (42501) |
+| Business owner calls them, or inserts an event directly | Refused (42501); sees no events |
+| Admin overview | All 30 main businesses, each with a state and access type |
+| Reason under 3 characters | Refused |
+| Suspend | Suspended, branch followed; shows grace until the go-live floor ends 2026-11-03 20:44 UTC |
+| Extend while suspended | Refused |
+| Activate | Previous expiry restored (within 5s) |
+| 30-day trial | Exactly 30 days added after the previous expiry; access type "trial" |
+| History through a branch id | The main business's 4 changes |
+| Editing an event (admin, and the table owner) | Refused: append-only |
+| Audit / payments | 4 `admin_audit_log` rows; `plan_payments` unchanged |
+| Security advisor | Only the intended "signed-in users may call these SECURITY DEFINER functions" warning for the 3 admin RPCs; nothing else for the new objects |
+
+The app and the migration are independent: with the app deployed before the migration, Subscriptions would show "not
+switched on yet" and everything else works.
 
 ## Test plan
 
@@ -154,8 +170,8 @@ Every change needs a reason and a confirmation step.
   `shared.test.jsx` (record display, reason-gated export, fail-closed), `applicationRecords.test.js`,
   `ApplicationsPanel.test.jsx`, `PayoutsPanel.test.jsx`, `businessRecord.test.js`, `AdrReportsAdmin.test.jsx`, ADR
   repository `getPlatformReports`, ADR export escaping, CSV formula safety, `AdminShell.responsive.test.jsx`.
-- Manual, after applying the migration:
-  1. On a phone, open the menu, go to Subscriptions, open a business and grant a 1-month trial with a reason. The expiry
+- Manual, in production:
+  1. After deploying the app, on a phone, open the menu, go to Subscriptions, open a business and grant a 1-month trial with a reason. The expiry
      moves, the history shows the grant with your email, and Health › Audit log shows `subscription.grant`.
   2. Suspend a test business; its owner sees restricted mode (after 2026-11-03 20:44 UTC). Activate it; the previous
      expiry (from today) returns.
