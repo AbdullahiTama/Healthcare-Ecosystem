@@ -17,6 +17,8 @@ export const BASE_COMMANDS = [
   { id: 'go-ledger', label: 'Go to Ledger', keywords: ['ledger','statement','finance'], section: 'Navigation', perm: 'Ledger', shortcut: 'G L', action: 'navigate', target: 'ledger' },
   { id: 'go-payouts', label: 'Go to Payouts', keywords: ['payouts','pay'], section: 'Navigation', perm: 'Payouts', shortcut: 'G O', action: 'navigate', target: 'payouts' },
   { id: 'go-coverage', label: 'Go to Coverage', keywords: ['coverage','territory','map'], section: 'Navigation', perm: 'Coverage', shortcut: 'G C', action: 'navigate', target: 'coverage' },
+  { id: 'go-subscriptions', label: 'Go to Subscriptions', keywords: ['subscriptions','plans','billing','trial','complimentary','extend','renewal'], section: 'Navigation', perm: 'Money', shortcut: '', action: 'navigate', target: 'subscriptions' },
+  { id: 'go-adr-reports', label: 'Go to ADR Reports', keywords: ['adr','adverse','drug reaction','pharmacovigilance','safety reports'], section: 'Navigation', perm: 'Compliance', shortcut: '', action: 'navigate', target: 'adr-reports' },
 
   // Actions — 12 (permission-gated where relevant)
   { id: 'action-search-businesses', label: 'Search businesses…', keywords: ['search','find','filter'], section: 'Actions', perm: 'Businesses', shortcut: '/', action: 'focusSearch' },

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
-  RefreshCw, Bell, Building2, Hourglass, CheckCircle, Users, Check, X, Pause, Play, Search, Download, Store, Shield, UserCog, FileText, Wallet, Landmark, MapPin, AlertTriangle, Trash2, Eye, ExternalLink, ArrowRight, Filter, LayoutDashboard, Command as CommandIcon, ChevronLeft, ChevronRight, Sparkles, TrendingUp, Menu, PanelLeftClose, PanelLeftOpen, ShieldAlert, Activity, ScrollText, Inbox
+  RefreshCw, Bell, Building2, Hourglass, CheckCircle, Users, Check, X, Pause, Play, Search, Download, Store, Shield, UserCog, FileText, Wallet, Landmark, MapPin, AlertTriangle, Trash2, Eye, ExternalLink, ArrowRight, Filter, LayoutDashboard, Command as CommandIcon, ChevronLeft, ChevronRight, Sparkles, TrendingUp, Menu, PanelLeftClose, PanelLeftOpen, ShieldAlert, Activity, ScrollText, Inbox, CalendarClock, ClipboardList
 } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
 import {
@@ -10,9 +10,9 @@ import {
   getAdminRoles, createAdminRole, updateAdminRole, deleteAdminRole,
   getAdminTeamMembers, createAdminTeamMember, updateAdminTeamMember, deleteAdminTeamMember,
   getAgentTiers, getAgentsDetailed, getAgentReferralsByAgent, getAgentEarningsByAgent, getAgentTransfers, transferAgentAccount, calculateAgentEarningsRpc,
-  getApplications, reviewApplication, createApplication,
+  getApplications, createApplication,
   getLedgerForEntity, getPayoutRequests, createPayoutRequest, updatePayoutRequest, markPayoutPaidAtomic,
-  getAgentApplications, reviewAgentApplication, getAgents, addAgentRow, updateAgentRow,
+  getAgentApplications, getAgents, addAgentRow, updateAgentRow,
   getUnverifiedOwnerBusinessIds, partitionByOwnerVerification, summarizeBulkApproval, collectBulkResults
 } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
@@ -21,10 +21,14 @@ import { businessLucideIcon, DARK, fmt, fmtDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Pill, Modal, Inp, Sel, GhostBtn, TealBtn, Avatar, Loading, useToast, Toast, Logo, Empty, ErrorState, ConfirmDialog } from '../../components/ui'
 import Sheet from '../../components/ui/Sheet'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Command } from 'cmdk'
 import commandScore from 'command-score'
 import { PLATFORM_PERMISSIONS, PLATFORM_NAV, normalizePlatformPermissions, navCatalogueFor, buildPlatformPermissions } from '../../lib/platformPermissions'
-import { toBusinessCsv, downloadCsv, buildStatementHtml, openPrintWindow } from '../../lib/carefindhubExports'
+import { downloadCsv, buildStatementHtml, openPrintWindow, toCsv, recordToCsv, exportStamp, fileSlug } from '../../lib/carefindhubExports'
+import RecordFields, { flattenSections } from './shared/RecordFields'
+import { useAuditedExport } from './shared/AuditedExport'
+import { businessSections, BUSINESS_FULL_EXPORT_COLUMNS } from './businesses/businessRecord'
 import { buildCommandList, scoreCommand } from './commandRegistry'
 import { adrReportRepository } from '../../modules/adr/repositories'
 import { parseReviewHash } from '../../modules/adr/reviewLink'
@@ -43,6 +47,11 @@ const RouteReviewQueue = lazy(() => import('../../modules/adr/RouteReviewQueue')
 // Platform-wide business directory (rows with no company). Gated by the 'Directory' permission here
 // and by is_platform_admin() in the database.
 const BusinessDirectory = lazy(() => import('../../modules/business-directory/BusinessDirectory'))
+// Records that open in full and export (ambassador/agent and store applications, payout requests, ADR reports).
+const ApplicationsPanel = lazy(() => import('./applications/ApplicationsPanel'))
+const PayoutsPanel = lazy(() => import('./payouts/PayoutsPanel'))
+// Platform-wide ADR reports, gated by 'Compliance' here and by can_access_adr_report_row in the database.
+const AdrReportsAdmin = lazy(() => import('./compliance/AdrReportsAdmin'))
 
 // Loading fallback for admin panels
 const PanelLoading = () => (
@@ -186,6 +195,46 @@ function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: stat
   const pendingBusinesses = safeBusinesses.filter(b => b.status === 'pending' && !b.deleted_at)
   const active = safeBusinesses.filter(b => b.status === 'active' && !b.deleted_at)
   const ecommerce = safeBusinesses.filter(b => b.ecommerce_enabled && !b.deleted_at)
+  // Hooks run on every render, before any early return below (rules of hooks).
+  useEffect(() => {
+    let alive = true
+    getAgentApplications().then(rows => { if (alive) setPendingAgents((rows || []).filter(r => r.status === 'submitted' || r.status === 'pending' || r.status === 'under_review')) }).catch(()=>{})
+    getApplications({ type: 'agent', status: 'pending' }).then(rows => { if (alive && rows?.length) setPendingAgents(prev => [...prev, ...rows]) }).catch(()=>{})
+    return () => { alive = false }
+  }, [businesses])
+
+  // 30d onboarding trend: count of businesses created per day last 30 days
+  useEffect(() => {
+    const days = 30
+    const buckets = Array(days).fill(0)
+    const now = Date.now()
+    const dayMs = 24*60*60*1000
+    for (const b of safeBusinesses) {
+      if (!b.created_at || b.deleted_at) continue
+      const t = new Date(b.created_at).getTime()
+      const diff = Math.floor((now - t)/dayMs)
+      if (diff >=0 && diff < days) buckets[days-1 - diff]++
+    }
+    setTrend(buckets)
+  }, [businesses]) // not safeBusinesses: that is a new [] on every render while loading
+
+  // 6 capped KPIs: hero Pending + 5 secondary each with delta + sparkline
+  const kpis = useMemo(() => {
+    // mock deltas for demo — in prod would compare to previous period
+    const sparkPending = trend.slice(-7)
+    const sparkActive = trend.map(v=> Math.max(0, v+ Math.floor(Math.random()*2))).slice(-7)
+    const safePayouts = Array.isArray(payouts) ? payouts : []
+    const safeTeam = Array.isArray(teamMembers) ? teamMembers : []
+    return [
+      { label: 'Pending approvals', value: pendingBusinesses.length, icon: <Hourglass />, hero: true, delta: pendingBusinesses.length > 0 ? `+${Math.min(pendingBusinesses.length,3)} today` : 'All clear', spark: sparkPending, tone: pendingBusinesses.length>0 ? 'warning' : undefined },
+      { label: 'Active businesses', value: active.length, icon: <CheckCircle />, delta: `${active.length} live`, spark: sparkActive, tone: undefined },
+      { label: 'Total businesses', value: safeBusinesses.filter(b=>!b.deleted_at).length, icon: <Building2 />, delta: `${safeBusinesses.length} onboarded`, spark: trend.slice(-7), tone: undefined },
+      { label: 'Online Store', value: ecommerce.length, icon: <Store />, delta: `${ecommerce.length} enabled`, spark: trend.slice(-7).map(v=> v?1:0), tone: undefined },
+      { label: 'Admin team', value: safeTeam.length, icon: <Users />, delta: `${safeTeam.length} members`, spark: [1,1,2,1,2,2,1], tone: undefined },
+      { label: 'Payouts pending', value: safePayouts.filter(p=>p.status==='pending'||p.status==='processing').length, icon: <Wallet />, delta: `${safePayouts.filter(p=>p.status==='paid').length} paid`, spark: safePayouts.slice(0,7).map(()=>1), tone: safePayouts.some(p=>p.status==='pending')?'warning':undefined },
+    ]
+  }, [pendingBusinesses.length, active.length, safeBusinesses, ecommerce.length, teamMembers.length, payouts, trend])
+
   // loading skeleton when businesses null (spec 5)
   if (statsLoading || businesses == null) {
     return (
@@ -221,45 +270,6 @@ function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: stat
       </div>
     )
   }
-
-  useEffect(() => {
-    let alive = true
-    getAgentApplications().then(rows => { if (alive) setPendingAgents((rows || []).filter(r => r.status === 'submitted' || r.status === 'pending' || r.status === 'under_review')) }).catch(()=>{})
-    getApplications({ type: 'agent', status: 'pending' }).then(rows => { if (alive && rows?.length) setPendingAgents(prev => [...prev, ...rows]) }).catch(()=>{})
-    return () => { alive = false }
-  }, [businesses])
-
-  // 30d onboarding trend: count of businesses created per day last 30 days
-  useEffect(() => {
-    const days = 30
-    const buckets = Array(days).fill(0)
-    const now = Date.now()
-    const dayMs = 24*60*60*1000
-    for (const b of safeBusinesses) {
-      if (!b.created_at || b.deleted_at) continue
-      const t = new Date(b.created_at).getTime()
-      const diff = Math.floor((now - t)/dayMs)
-      if (diff >=0 && diff < days) buckets[days-1 - diff]++
-    }
-    setTrend(buckets)
-  }, [safeBusinesses])
-
-  // 6 capped KPIs: hero Pending + 5 secondary each with delta + sparkline
-  const kpis = useMemo(() => {
-    // mock deltas for demo — in prod would compare to previous period
-    const sparkPending = trend.slice(-7)
-    const sparkActive = trend.map(v=> Math.max(0, v+ Math.floor(Math.random()*2))).slice(-7)
-    const safePayouts = Array.isArray(payouts) ? payouts : []
-    const safeTeam = Array.isArray(teamMembers) ? teamMembers : []
-    return [
-      { label: 'Pending approvals', value: pendingBusinesses.length, icon: <Hourglass />, hero: true, delta: pendingBusinesses.length > 0 ? `+${Math.min(pendingBusinesses.length,3)} today` : 'All clear', spark: sparkPending, tone: pendingBusinesses.length>0 ? 'warning' : undefined },
-      { label: 'Active businesses', value: active.length, icon: <CheckCircle />, delta: `${active.length} live`, spark: sparkActive, tone: undefined },
-      { label: 'Total businesses', value: safeBusinesses.filter(b=>!b.deleted_at).length, icon: <Building2 />, delta: `${safeBusinesses.length} onboarded`, spark: trend.slice(-7), tone: undefined },
-      { label: 'Online Store', value: ecommerce.length, icon: <Store />, delta: `${ecommerce.length} enabled`, spark: trend.slice(-7).map(v=> v?1:0), tone: undefined },
-      { label: 'Admin team', value: safeTeam.length, icon: <Users />, delta: `${safeTeam.length} members`, spark: [1,1,2,1,2,2,1], tone: undefined },
-      { label: 'Payouts pending', value: safePayouts.filter(p=>p.status==='pending'||p.status==='processing').length, icon: <Wallet />, delta: `${safePayouts.filter(p=>p.status==='paid').length} paid`, spark: safePayouts.slice(0,7).map(()=>1), tone: safePayouts.some(p=>p.status==='pending')?'warning':undefined },
-    ]
-  }, [pendingBusinesses.length, active.length, safeBusinesses, ecommerce.length, teamMembers.length, payouts, trend])
 
   const hero = kpis[0]
   const rest = kpis.slice(1)
@@ -351,6 +361,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
   const [rows, setRows] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [hasLoaded, setHasLoaded] = useState(false)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState(null)
   const [ecomProducts, setEcomProducts] = useState([])
@@ -361,6 +372,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [undo, setUndo] = useState(null) // { id, prevStatus, timeout }
   const { msg, show: showToast } = useToast()
+  const { requestExport, exportDialog } = useAuditedExport({ onExported: (s) => showToast(`Exported ${s.rowCount} ${s.rowCount === 1 ? 'business' : 'businesses'}.`, { type: 'info' }) })
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
@@ -381,6 +393,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
       setError(e.message)
     }
     setLoading(false)
+    setHasLoaded(true)
   }, [debounced, filterStatus, page])
 
   useEffect(() => { fetchRows() }, [fetchRows])
@@ -467,12 +480,27 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
     setBusy(false)
   }
 
-  const exportRows = (rowsToExport) => {
-    const csv = toBusinessCsv(rowsToExport)
-    const mode = filterStatus || 'all'
-    downloadCsv(`businesses_${mode}_${new Date().toISOString().slice(0,10)}.csv`, csv)
-    showToast(`Exported ${rowsToExport.length} rows (CSV).`, { type: 'info' })
+  // Every business matching the current search and status (not just this page), 100 per request.
+  const fetchAllMatching = async () => {
+    const out = []
+    for (let p = 1; p <= 50; p++) {
+      const { data, total: t } = await getBusinessesFilteredWithCount({ search: debounced, status: filterStatus, page: p, pageSize: 100 })
+      out.push(...(data || []))
+      if (!data || data.length < 100 || out.length >= (t ?? 0)) break
+    }
+    return out
   }
+  const exportMatching = () => requestExport({
+    exportType: 'admin.businesses.csv', label: 'businesses', rowCount: total, note: 'Every business matching the current search and status, with its full profile.',
+    run: async () => {
+      const all = await fetchAllMatching()
+      downloadCsv(`businesses_${filterStatus || 'all'}_${exportStamp()}.csv`, toCsv(BUSINESS_FULL_EXPORT_COLUMNS, all))
+    },
+  })
+  const exportOne = (b) => requestExport({
+    exportType: 'admin.business.csv', label: b.name || 'business', rowCount: 1,
+    run: () => downloadCsv(`business_${fileSlug(b.name)}_${exportStamp()}.csv`, recordToCsv(flattenSections(businessSections(b)))),
+  })
 
   const toggleSelect = (id) => {
     setSelectedIds(prev => {
@@ -530,11 +558,13 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
     setShowBulkConfirm(false)
   }
 
-  if (loading) return <Loading />
-  if (error) return <ErrorState message={error} onRetry={fetchRows} />
+  // Only the first load replaces the panel; later fetches (search, filter, page) keep the search box mounted and focused.
+  if (loading && !hasLoaded) return <Loading />
+  if (error && !hasLoaded) return <ErrorState message={error} onRetry={fetchRows} />
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {error && <div role="alert" style={{ fontSize: 12, color: 'var(--red)', display: 'flex', gap: 8, alignItems: 'center' }}><AlertTriangle size={14} aria-hidden="true" />{error} <button onClick={fetchRows} style={{ background: 'none', border: 'none', color: 'var(--teal)', fontWeight: 700, cursor: 'pointer' }}>Retry</button></div>}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
           <div style={{ position: 'relative', flex: '1 1 220px', maxWidth: 360 }}>
@@ -548,10 +578,10 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
             <option value="suspended">suspended</option>
             <option value="revoked">revoked</option>
           </select>
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{total} result(s) • page {page}/{totalPages}</span>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }} aria-live="polite">{loading ? 'Loading…' : `${total} result(s) • page ${page}/${totalPages}`}</span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <GhostBtn onClick={()=>exportRows(rows)}><Download size={13} style={{ marginRight: 6 }} />Export filtered</GhostBtn>
+          <GhostBtn onClick={exportMatching} disabled={total === 0}><Download size={13} style={{ marginRight: 6 }} aria-hidden="true" />Export</GhostBtn>
           {/* onRefresh reloads the unverified-owner set too: verification changes auth.users, which realtime never reports. */}
           <GhostBtn onClick={()=>{ fetchRows(); onRefresh?.() }}><RefreshCw size={13} style={{ marginRight: 6 }} />Refresh</GhostBtn>
         </div>
@@ -627,6 +657,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
                     {b.status==='pending' && <><button disabled={busy || isAwaitingVerification(b)} aria-describedby={isAwaitingVerification(b) ? `awaiting-verification-card-${b.id}` : undefined} onClick={()=>handleApprove(b)} title={isAwaitingVerification(b) ? 'The owner has not verified their email address yet' : undefined} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', background: 'var(--green)', color: 'white', fontWeight: 700, fontSize: 12, cursor: (busy || isAwaitingVerification(b)) ? 'not-allowed' : 'pointer', opacity: isAwaitingVerification(b) ? 0.5 : 1 }}>Approve</button><button disabled={busy} onClick={()=>handleRevoke(b)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Revoke</button></>}
                     {b.status==='active' && <><button disabled={busy} onClick={()=>handleSuspend(b)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', background: 'var(--amber-bg)', color: 'var(--amber)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Suspend (temp)</button><button disabled={busy} onClick={()=>handleRevoke(b)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', background: 'var(--hairline)', color: 'var(--muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Revoke</button></>}
                     {b.status==='suspended' && <button disabled={busy} onClick={()=>handleReactivate(b)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', background: 'var(--teal)', color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Reactivate</button>}
+                    {b.status==='revoked' && <button disabled={busy} onClick={()=>handleToPending(b)} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Move to pending</button>}
                   </div>
                 </Card>
               ))}
@@ -643,7 +674,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
               </div>
             </div>
           )}
-          <ConfirmDialog show={showBulkConfirm} title={`Approve ${selectedIds.size} selected?`} onClose={()=>setShowBulkConfirm(false)} onConfirm={bulkApprove} confirmLabel={busy ? 'Approving...' : `Confirm approve ${selectedIds.size}`} variant="default" message={
+          <ConfirmDialog show={showBulkConfirm} title={`Approve ${selectedIds.size} selected?`} onClose={()=>setShowBulkConfirm(false)} onConfirm={bulkApprove} confirmLabel={busy ? 'Approving...' : `Confirm approve ${selectedIds.size}`} danger={false} consequence={
             <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div>This will approve {selectedIds.size} pending businesses. Audited via business status history (agent_transfers/payout_requests pattern for financial trails).</div>
               {partitionByOwnerVerification(Array.from(selectedIds), unverifiedIds).skipped.length > 0 && <div style={{ color: 'var(--amber)', fontSize: 12, fontWeight: 700 }}>{partitionByOwnerVerification(Array.from(selectedIds), unverifiedIds).skipped.length} will be skipped: owner has not verified their email.</div>}
@@ -666,6 +697,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
           {selected.status==='active' && <><button disabled={busy} onClick={()=>handleSuspend(selected)} style={{ flex:1, padding:11, borderRadius:12, border:'none', background:'var(--amber-bg)', color:'var(--amber)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }}><Pause size={14} /> Suspend (temporary)</button><button disabled={busy} onClick={()=>handleRevoke(selected)} style={{ flex:1, padding:11, borderRadius:12, border:'none', background: 'var(--hairline)', color: 'var(--muted)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }} title="Revoke withdraws approval permanently. The business must reapply."><X size={14} /> Revoke (withdrawal)</button></>}
           {selected.status==='suspended' && <TealBtn disabled={busy} onClick={async()=>{ await handleReactivate(selected); }} style={{ flex:1, padding:11 }}><Play size={14} /> Reactivate</TealBtn>}
           {selected.status==='revoked' && <TealBtn disabled={busy} onClick={async()=>{ await handleToPending(selected); }} style={{ flex:1, padding:11 }}>Move to pending (reapply)</TealBtn>}
+          <GhostBtn onClick={()=>exportOne(selected)} style={{ padding:'11px 14px' }}><Download size={14} style={{ marginRight: 6 }} aria-hidden="true" />Export</GhostBtn>
           <button disabled={busy} onClick={()=>setShowDeleteConfirm(selected)} style={{ padding:'11px 14px', borderRadius:12, border:'1px solid var(--red)', background:'var(--panel)', color: 'var(--red)', fontWeight:700, cursor: busy?'not-allowed':'pointer' }}><Trash2 size={14} /> Delete</button>
         </div>
       )}>
@@ -690,10 +722,9 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
             <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 14, padding: '8px 10px', background: 'var(--hairline)', borderRadius: 8 }}>
               <b>Suspend</b> is temporary. Dashboard access is lost but the data is kept. <b>Revoke</b> is permanent. Approval is withdrawn and the business must reapply.
             </div>
-            <div style={{ display:'flex', flexDirection:'column', gap:0, marginBottom: 14 }}>
-              {[['Business Name', selected.name], ['Owner Name', selected.owner_name || selected.owner], ['Owner Email', selected.owner_email || selected.email], ['Category', selected.category || selected.business_type], ['State', selected.state || 'Not set'], ['Plan', selected.plan||'basic'], ['Status', selected.status], ['Date Onboarded', fmtDate(selected.created_at)], ['Phone', selected.phone||'Not set'], ['Address', selected.address||'Not set'], ['E-commerce', selected.ecommerce_enabled ? 'enabled' : 'disabled']].map(([l,v]) => (
-                <div key={l} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--hairline)', fontSize:13 }}><span style={{ color: 'var(--muted)', fontWeight:600 }}>{l}</span><span style={{ color: 'var(--fg)', textAlign:'right' }}>{v}</span></div>
-              ))}
+            <div style={{ marginBottom: 16 }}>
+              <RecordFields sections={businessSections(selected)} />
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>Change the plan, grant free access or extend it under Subscriptions.</div>
             </div>
             <div style={{ borderTop:'1px solid var(--hairline)', paddingTop: 12 }}>
               <div style={{ fontWeight:800, fontSize:13, marginBottom:8, display:'flex', alignItems:'center', gap:6, color: 'var(--fg)' }}><Store size={14} /> Online store products for this business</div>
@@ -712,7 +743,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
         )}
       </Sheet>
 
-      <ConfirmDialog show={!!showDeleteConfirm} title="Delete business?" onClose={()=>setShowDeleteConfirm(null)} onConfirm={handleDelete} confirmLabel={busy ? 'Deleting...' : deleteMode==='hard' ? 'Hard Delete' : 'Soft Delete (preserve ledger)'} variant="danger" message={
+      <ConfirmDialog show={!!showDeleteConfirm} title="Delete business?" onClose={()=>setShowDeleteConfirm(null)} onConfirm={handleDelete} confirmLabel={busy ? 'Deleting...' : deleteMode==='hard' ? 'Hard Delete' : 'Soft Delete (preserve ledger)'} consequence={
         <div style={{ display:'flex', flexDirection:'column', gap:10, fontSize:13 }}>
           <div><b>Soft delete</b> sets deleted_at and status=revoked, preserving ledger history. <b>Hard delete</b> removes the row (may break ledger references).</div>
           <div style={{ display:'flex', gap:8 }}>
@@ -723,6 +754,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
         </div>
       } />
 
+      {exportDialog}
       <Toast msg={msg} />
     </div>
   )
@@ -1020,78 +1052,6 @@ function TeamPlatformPanel() {
   )
 }
 
-// ── Applications unified (spec §6) ───────────────────────────────────────
-function ApplicationsUnifiedPanel() {
-  const { msg, type, show: showToast } = useToast()
-  const [apps, setApps] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all')
-  const [busy, setBusy] = useState(false)
-  const load = useCallback(async()=>{
-    setLoading(true)
-    const rows = await getApplications().catch(()=>[])
-    const [ecom, agentLegacy] = await Promise.all([
-      (async()=>{ try { const r = await import('../../services/supabase.js').then(m=>m.sbFetch ? m.sbFetch('ecommerce_applications?select=*&order=created_at.desc&limit=20') : []); return r } catch(e){ return [] } })(),
-      getAgentApplications().catch(()=>[])
-    ])
-    const merged = [...(rows||[])]
-    for (const e of (ecom||[])) merged.push({ id: 'ecom_'+e.id, type:'ecommerce', applicant_ref: e.business_id, applicant_name: e.business_name || e.name, applicant_email: e.email, status: e.status||'pending', submitted_at: e.created_at, details: e })
-    for (const a of (agentLegacy||[])) merged.push({ id: 'agent_'+a.id, type:'agent', applicant_ref: a.id, applicant_name: a.applicant_name, applicant_email: a.contact_email, status: a.status==='submitted'?'pending': a.status, submitted_at: a.submitted_at, details: a })
-    setApps(merged); setLoading(false)
-  },[])
-  useEffect(()=>{ load() },[load])
-  const safeApps = Array.isArray(apps) ? apps : []
-  const filtered = filter==='all' ? safeApps : safeApps.filter(a=>a.type===filter)
-  const handleReview = async (app, status) => {
-    setBusy(true)
-    try {
-      if (String(app.id).startsWith('ecom_') || String(app.id).startsWith('agent_')) {
-        if (app.type==='agent') await reviewAgentApplication(app.applicant_ref, { status: status==='approved'?'approved':'rejected', reviewed_at: new Date().toISOString() })
-        showToast(`Legacy ${app.type} ${status}`,{type:'success'})
-      } else {
-        await reviewApplication(app.id, { status, reviewed_at: new Date().toISOString(), review_notes: 'reviewed via unified panel' })
-        if (app.type==='ecommerce' && status==='approved') {
-          try { const bid = app.applicant_ref; if (bid) await updateBusiness(bid, { ecommerce_enabled: true }) } catch(e){}
-        }
-        if (app.type==='agent' && status==='approved') {
-          try { await addAgentRow({ name: app.applicant_name||'Agent', contact_email: app.applicant_email, status:'approved_pending_onboarding', city: app.details?.city||'', area: app.details?.area||'', referral_code: undefined }) } catch(e){}
-        }
-        showToast(`Application ${status}`,{type:'success'})
-      }
-      load()
-    } catch(e){ showToast(e.message,{type:'error'}) }
-    setBusy(false)
-  }
-  if (loading) return <Loading />
-  return (
-    <div>
-      <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
-        {['all','ecommerce','agent','team'].map(t=>(
-          <button key={t} onClick={()=>setFilter(t)} style={{ padding:'8px 16px', borderRadius: theme.radius.md, border:'none', cursor:'pointer', fontWeight:700, fontSize:13, background: filter===t ? 'var(--teal)' : 'var(--hairline)', color: filter===t?'white':'var(--muted)', textTransform:'capitalize' }}>{t}{t!=='all' ? ` (${safeApps.filter(a=>a.type===t).length})` : ''}</button>
-        ))}
-        <GhostBtn onClick={load}><RefreshCw size={13} style={{ marginRight:6 }} />Refresh</GhostBtn>
-      </div>
-      {filtered.length===0 ? <Empty icon={<FileText size={28} />} message={filter==='all' ? 'No applications' : `No ${filter} applications. Every application needs an explicit admin review, nothing is approved automatically.`} /> : (
-        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-          {filtered.map(a=>(
-            <Card key={a.id} style={{ padding:14, display:'flex', justifyContent:'space-between', gap:12, alignItems:'center', flexWrap:'wrap', background: 'var(--panel)', border: '1px solid var(--border)' }}>
-              <div>
-                <div style={{ fontWeight:800, fontSize:14, textTransform:'capitalize', color: 'var(--fg)' }}>{a.type} • {a.applicant_name || a.applicant_ref || 'Not set'}</div>
-                <div style={{ fontSize:12, color: 'var(--muted)' }}>{a.applicant_email || ''} • {fmtDate(a.submitted_at)}</div>
-              </div>
-              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                <Pill label={a.status} type={a.status==='approved'?'green': a.status==='rejected'?'red':'amber'} />
-                {a.status==='pending' && <><TealBtn disabled={busy} onClick={()=>handleReview(a,'approved')} style={{ padding:'7px 12px', fontSize:12 }}>Approve</TealBtn><button disabled={busy} onClick={()=>handleReview(a,'rejected')} style={{ padding:'7px 12px', borderRadius:8, border:'none', background: 'var(--red-bg)', color: 'var(--red)', fontWeight:700, fontSize:12, cursor: busy?'not-allowed':'pointer' }}>Reject</button></>}
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-      <Toast msg={msg} type={type} />
-    </div>
-  )
-}
-
 // ── Ledger (spec §7) ──────────────────────────────────────────────────────
 function LedgerUnifiedPanel() {
   const { msg, type, show: showToast } = useToast()
@@ -1154,7 +1114,7 @@ function LedgerUnifiedPanel() {
         </div>
         <GhostBtn onClick={exportBulk}><Download size={13} style={{ marginRight:6 }} />Bulk export</GhostBtn>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap:14 }}>
         <Card style={{ padding:14, background: 'var(--panel)', border: '1px solid var(--border)' }}>
           <div style={{ fontWeight:800, fontSize:13, marginBottom:8, color: 'var(--fg)' }}>Businesses ({filteredBiz.length})</div>
           {filteredBiz.length===0 ? <div style={{ fontSize:12, color: 'var(--muted)' }}>No matches</div> : filteredBiz.map(b=>(
@@ -1190,81 +1150,6 @@ function LedgerUnifiedPanel() {
           )}
         </Card>
       )}
-      <Toast msg={msg} type={type} />
-    </div>
-  )
-}
-
-// ── Payouts (spec §8) ────────────────────────────────────────────────────
-function PayoutsUnifiedPanel() {
-  const { msg, type, show: showToast } = useToast()
-  const [rows, setRows] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all')
-  const [busy, setBusy] = useState(false)
-  const [confirmPaid, setConfirmPaid] = useState(null)
-  const load = useCallback(async()=>{
-    setLoading(true)
-    const r = await getPayoutRequests().catch(()=>[])
-    setRows(r||[]); setLoading(false)
-  },[])
-  useEffect(()=>{ load() },[load])
-  const safeRows = Array.isArray(rows) ? rows : []
-  const filtered = filter==='all' ? safeRows : safeRows.filter(r=>r.status===filter)
-  const updateStatus = async (row, next) => {
-    if (busy) return
-    setBusy(true)
-    try {
-      await updatePayoutRequest(row.id, { status: next, reviewed_at: new Date().toISOString() })
-      showToast(`Payout ${next}`,{type:'success'}); load()
-    } catch(e){ showToast(e.message,{type:'error'}) }
-    setBusy(false)
-  }
-  const doMarkPaid = async () => {
-    if (!confirmPaid) return
-    setBusy(true)
-    try {
-      await markPayoutPaidAtomic(confirmPaid.id, {})
-      await updatePayoutRequest(confirmPaid.id, { status: 'paid', processed_at: new Date().toISOString() })
-      showToast('Marked paid. The financial source was updated.', {type:'success'})
-      setConfirmPaid(null); load()
-    } catch(e){ showToast(e.message,{type:'error'}) }
-    setBusy(false)
-  }
-  if (loading) return <Loading />
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-      <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'space-between' }}>
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-          {['all','pending','processing','paid','rejected'].map(s=>(
-            <button key={s} onClick={()=>setFilter(s)} style={{ padding:'8px 14px', borderRadius: theme.radius.md, border:'none', cursor:'pointer', fontWeight:700, fontSize:12, background: filter===s? 'var(--teal)' : 'var(--hairline)', color: filter===s?'white':'var(--muted)', textTransform:'capitalize' }}>{s}</button>
-          ))}
-        </div>
-        <GhostBtn onClick={load}><RefreshCw size={13} style={{ marginRight:6 }} />Refresh</GhostBtn>
-      </div>
-      {filtered.length===0 ? <Empty icon={<Wallet size={28} />} message="No payout requests" /> : (
-        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-          {filtered.map(r=>(
-            <Card key={r.id} style={{ padding:14, display:'flex', justifyContent:'space-between', gap:12, flexWrap:'wrap', alignItems:'center', background: 'var(--panel)', border: '1px solid var(--border)' }}>
-              <div>
-                <div style={{ fontWeight:800, fontSize:14, color: 'var(--fg)' }}>{r.requester_type} • {r.requester_id.slice(0,8)} • {fmt(r.amount)}</div>
-                <div style={{ fontSize:12, color: 'var(--muted)' }}>{r.bank_name || r.bank_details?.bank_name || 'Not set'} • {r.account_number || r.bank_details?.account_number || ''} • {r.account_name || r.bank_details?.account_name || ''} • {fmtDate(r.requested_at)} • method {r.payout_method || r.bank_details?.method || 'bank_transfer'}</div>
-              </div>
-              <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
-                <Pill label={r.status} type={r.status==='paid'?'green': r.status==='rejected'?'red': r.status==='processing'?'blue':'amber'} />
-                {r.status==='pending' && <><TealBtn disabled={busy} onClick={()=>updateStatus(r,'processing')} style={{ padding:'6px 12px', fontSize:12 }}>Approve → processing</TealBtn><button disabled={busy} onClick={()=>updateStatus(r,'rejected')} style={{ padding:'6px 12px', borderRadius:8, border:'none', background: 'var(--red-bg)', color: 'var(--red)', fontWeight:700, fontSize:12, cursor: busy?'not-allowed':'pointer' }}>Reject</button></>}
-                {r.status==='processing' && <TealBtn disabled={busy} onClick={()=>setConfirmPaid(r)} style={{ padding:'6px 12px', fontSize:12, background: 'var(--green)' }}>Mark as Paid</TealBtn>}
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-      <ConfirmDialog show={!!confirmPaid} title="Confirm Mark as Paid?" onClose={()=>setConfirmPaid(null)} onConfirm={doMarkPaid} confirmLabel={busy?'Processing...':'Confirm Paid'} variant="danger" message={
-        <div style={{ fontSize:13 }}>
-          <div>This updates the payout status and its financial source together.</div>
-          <div style={{ marginTop:8, color: 'var(--red)', fontWeight:600 }}>Require confirmation for final Mark as Paid. This action is irreversible.</div>
-        </div>
-      } />
       <Toast msg={msg} type={type} />
     </div>
   )
@@ -1356,7 +1241,30 @@ function CmdPalette({ open, setOpen, commands, onSelect, query, setQuery }) {
 }
 
 // ── Sidebar Rail (256 → 64) ──────────────────────────────────────────────
-function SidebarRail({ collapsed, setCollapsed, active, setActive, counts, perms, onCmdOpen }) {
+// Laptop and wider: a sticky sidebar that collapses to a 64px rail. Below 1024px (phones, portrait tablets) the same
+// navigation is an off-canvas drawer opened from the header's menu button: a modal dialog that closes on Escape, on
+// the backdrop, or after choosing a destination, and gives focus back to the menu button.
+function SidebarRail({ collapsed: collapsedPref, setCollapsed, active, setActive, counts, perms, onCmdOpen, drawer = false, open = false, onClose }) {
+  const collapsed = drawer ? false : collapsedPref
+  const panelRef = useRef(null)
+  useEffect(() => {
+    if (!drawer || !open) return undefined
+    const prevOverflow = document.body.style.overflow
+    const prevFocus = document.activeElement
+    document.body.style.overflow = 'hidden'
+    const node = panelRef.current
+    ;(node?.querySelector('nav [aria-current="page"]') || node?.querySelector('nav button'))?.focus({ preventScroll: true })
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose?.(); return }
+      if (e.key !== 'Tab' || !node) return
+      const items = Array.from(node.querySelectorAll('button, [href]'))
+      if (!items.length) return
+      if (e.shiftKey && document.activeElement === items[0]) { e.preventDefault(); items[items.length - 1].focus() }
+      else if (!e.shiftKey && document.activeElement === items[items.length - 1]) { e.preventDefault(); items[0].focus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow; try { prevFocus?.focus?.() } catch { /* element gone */ } }
+  }, [drawer, open, onClose])
   const can = (perm) => {
     if (!perms) return true
     return !!perms[perm]
@@ -1372,17 +1280,24 @@ function SidebarRail({ collapsed, setCollapsed, active, setActive, counts, perms
     { id: 'coverage', label: 'Coverage', icon: MapPin, perm: 'Coverage', count: null },
     { id: 'health', label: 'Health', icon: ShieldAlert, perm: 'Health', count: null },
     { id: 'money', label: 'Money', icon: Wallet, perm: 'Money', count: null },
+    { id: 'subscriptions', label: 'Subscriptions', icon: CalendarClock, perm: 'Money', count: null },
     { id: 'trust', label: 'Trust', icon: Shield, perm: 'Trust', count: null },
     { id: 'growth', label: 'Growth', icon: TrendingUp, perm: 'Growth', count: null },
     { id: 'ops', label: 'Ops', icon: Inbox, perm: 'Ops', count: null },
     { id: 'compliance', label: 'Compliance', icon: ShieldAlert, perm: 'Compliance', count: null },
+    { id: 'adr-reports', label: 'ADR Reports', icon: ClipboardList, perm: 'Compliance', count: null },
     { id: 'pv-routing', label: 'PV Routing', icon: FileText, perm: 'Compliance', count: counts.pvRouting || null },
     { id: 'directory', label: 'Directory', icon: Building2, perm: 'Directory', count: null },
   ].filter(it => can(it.perm) || it.id==='dashboard')
 
+  if (drawer && !open) return null
   const width = collapsed ? 64 : 256
-  return (
-    <div style={{ width, minWidth: width, transition: 'width 200ms cubic-bezier(0.16,1,0.3,1)', background: 'var(--panel)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100vh', position: 'sticky', top: 0, overflow: 'hidden', flexShrink: 0 }}>
+  const choose = (id) => { setActive(id); if (drawer) onClose?.() }
+  const panelStyle = drawer
+    ? { position: 'fixed', top: 0, left: 0, bottom: 0, width: 'min(288px, 86vw)', zIndex: 997, background: 'var(--panel)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', boxShadow: 'var(--elevation-2)' }
+    : { width, minWidth: width, transition: 'width 200ms cubic-bezier(0.16,1,0.3,1)', background: 'var(--panel)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', height: '100vh', position: 'sticky', top: 0, overflow: 'hidden', flexShrink: 0 }
+  const panel = (
+    <div ref={panelRef} style={panelStyle} {...(drawer ? { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Admin navigation' } : {})}>
       <div style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', padding: collapsed ? 8 : '0 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         {!collapsed && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1391,13 +1306,19 @@ function SidebarRail({ collapsed, setCollapsed, active, setActive, counts, perms
           </div>
         )}
         {collapsed && <Logo size={28} />}
-        <button onClick={()=>setCollapsed(v=>!v)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse to rail'} aria-pressed={collapsed} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-          {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
-        </button>
+        {drawer ? (
+          <button onClick={onClose} aria-label="Close navigation" style={{ width: 36, height: 36, borderRadius: 9999, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <X size={16} aria-hidden="true" />
+          </button>
+        ) : (
+          <button onClick={()=>setCollapsed(v=>!v)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse to rail'} aria-pressed={collapsed} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+          </button>
+        )}
       </div>
 
       {!collapsed && (
-        <button onClick={onCmdOpen} style={{ margin: 12, padding: '9px 10px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', justifyContent: 'space-between' }}>
+        <button onClick={() => { if (drawer) onClose?.(); onCmdOpen() }} style={{ margin: 12, padding: '9px 10px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', justifyContent: 'space-between' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Search size={12} /> Search…</span>
           <span style={{ fontSize: 11, background: 'var(--hairline)', padding: '2px 6px', borderRadius: 6, fontFamily: 'var(--font-mono)' }}>⌘K</span>
         </button>
@@ -1413,14 +1334,14 @@ function SidebarRail({ collapsed, setCollapsed, active, setActive, counts, perms
           return (
             <button
               key={it.id}
-              onClick={()=>setActive(it.id)}
+              onClick={()=>choose(it.id)}
               aria-current={isActive ? 'page' : undefined}
               aria-label={collapsed ? it.label : undefined}
               title={collapsed ? it.label : undefined}
               style={{
                 display: 'flex', alignItems: 'center', gap: collapsed ? 0 : 10,
                 justifyContent: collapsed ? 'center' : 'flex-start',
-                padding: collapsed ? '10px 0' : '9px 10px',
+                padding: collapsed ? '10px 0' : drawer ? '12px 12px' : '9px 10px',
                 borderRadius: 10,
                 border: 'none',
                 background: isActive ? 'var(--teal)' : 'transparent',
@@ -1443,7 +1364,17 @@ function SidebarRail({ collapsed, setCollapsed, active, setActive, counts, perms
       </div>
     </div>
   )
+  if (!drawer) return panel
+  return (
+    <>
+      <div onClick={onClose} aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 996, background: 'var(--overlay)' }} />
+      {panel}
+    </>
+  )
 }
+
+// Header titles where the tab id does not read well on its own.
+const TAB_TITLES = { 'adr-reports': 'ADR Reports', 'pv-routing': 'PV Routing', 'team-agents': 'Team · Agents', 'team-platform': 'Team · Platform', team: 'Team' }
 
 // ── Main AdminDashboard ──────────────────────────────────────────────────
 export default function AdminDashboard() {
@@ -1485,6 +1416,14 @@ export default function AdminDashboard() {
   })
   const [cmdOpen, setCmdOpen] = useState(false)
   const [cmdQuery, setCmdQuery] = useState('')
+  // Responsive shell: below 1024px the navigation is a drawer; below 768px the header is compacted.
+  const { width: viewportWidth } = useBreakpoint()
+  const useNavDrawer = viewportWidth < 1024
+  const isPhone = viewportWidth < 768
+  const [navOpen, setNavOpen] = useState(false)
+  const closeNav = useCallback(() => setNavOpen(false), [])
+  useEffect(() => { if (!useNavDrawer) setNavOpen(false) }, [useNavDrawer])
+  const { requestExport, exportDialog } = useAuditedExport({ onExported: (s) => showToast(`Exported ${s.rowCount} ${s.rowCount === 1 ? 'business' : 'businesses'}.`, { type: 'info' }) })
   const [recentCmdIds, setRecentCmdIds] = useState(() => {
     try { const r = localStorage.getItem('carehub_cmd_recent'); return r ? JSON.parse(r) : [] } catch { return [] }
   })
@@ -1672,14 +1611,13 @@ export default function AdminDashboard() {
       } else if (cmd.action==='focusSearch') {
         setTab('businesses'); setTimeout(()=> document.querySelector('input[aria-label="Search businesses"]')?.focus(), 100)
       } else if (cmd.action==='exportBusinesses') {
-        const csv = toBusinessCsv((businesses||[]).filter(b=>!b.deleted_at))
-        downloadCsv(`businesses_all_${new Date().toISOString().slice(0,10)}.csv`, csv)
-        showToast('Exported', {type:'info'})
+        const all = (businesses||[]).filter(b=>!b.deleted_at)
+        requestExport({ exportType: 'admin.businesses.csv', label: 'all businesses', rowCount: all.length, run: () => downloadCsv(`businesses_all_${exportStamp()}.csv`, toCsv(BUSINESS_FULL_EXPORT_COLUMNS, all)) })
       }
     } catch(e) {
       showToast(e.message.includes('42501')||e.message.includes('permission') ? 'No permission' : e.message, {type:'error'})
     }
-  }, [handleStatusChange, businesses, showToast, load])
+  }, [handleStatusChange, businesses, showToast, load, requestExport])
 
   const allTeamCount = (Array.isArray(teamMembers) ? teamMembers.length : 0) || (Array.isArray(team) ? team.length : 0)
   const bizList = Array.isArray(businesses) ? businesses : []
@@ -1711,26 +1649,31 @@ export default function AdminDashboard() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--fg)', fontFamily: 'var(--font-family)', display: 'flex' }}>
-      <SidebarRail collapsed={collapsed} setCollapsed={setCollapsed} active={tab} setActive={setTab} counts={counts} perms={platformPerms} onCmdOpen={()=>setCmdOpen(true)} />
+      <SidebarRail collapsed={collapsed} setCollapsed={setCollapsed} active={tab} setActive={setTab} counts={counts} perms={platformPerms} onCmdOpen={()=>setCmdOpen(true)} drawer={useNavDrawer} open={navOpen} onClose={closeNav} />
 
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100vh', overflowY: 'auto' }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100dvh', overflowY: 'auto' }}>
         {/* header: pulse dot replaces Refresh */}
-        <div style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', borderBottom: '1px solid var(--border)', background: 'var(--panel)', position: 'sticky', top: 0, zIndex: 10, flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--fg)', textTransform: 'capitalize' }}>{tab.replace('-', ' ')}</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: pulseOnline ? 'var(--muted)' : 'var(--red)', background: pulseOnline ? 'var(--hairline)' : 'var(--red-bg)', padding: '4px 8px', borderRadius: 9999, fontWeight: 600 }} title={pulseOnline ? 'Realtime connected' : 'Offline, reconnecting'}>
+        <div style={{ minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: isPhone ? '0 12px' : '0 20px', borderBottom: '1px solid var(--border)', background: 'var(--panel)', position: 'sticky', top: 0, zIndex: 10, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: isPhone ? 8 : 12, minWidth: 0 }}>
+            {useNavDrawer && (
+              <button onClick={() => setNavOpen(true)} aria-label="Open navigation" aria-expanded={navOpen} aria-haspopup="dialog" style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--fg)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                <Menu size={18} aria-hidden="true" />
+              </button>
+            )}
+            <h1 style={{ margin: 0, fontWeight: 800, fontSize: 14, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{TAB_TITLES[tab] || tab.replace(/-/g, ' ').replace(/^./, c => c.toUpperCase())}</h1>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: pulseOnline ? 'var(--muted)' : 'var(--red)', background: pulseOnline ? 'var(--hairline)' : 'var(--red-bg)', padding: '4px 8px', borderRadius: 9999, fontWeight: 600, flexShrink: 0 }} title={pulseOnline ? `Realtime connected • last synced ${lastSynced}` : `Offline, reconnecting • last synced ${lastSynced}`}>
               <span style={{ width: 8, height: 8, borderRadius: 9999, background: pulseOnline ? 'var(--green)' : 'var(--red)', display: 'inline-block', animation: prefersReducedMotion ? 'none' : (pulseOnline ? 'pulse 1.6s ease-in-out infinite' : 'none'), boxShadow: pulseOnline ? '0 0 0 4px rgba(34,197,94,0.15)' : 'none' }} aria-hidden="true" />
-              {pulseOnline ? `live • last synced ${lastSynced}` : `offline • last synced ${lastSynced}`}
+              {isPhone ? (pulseOnline ? 'live' : 'offline') : (pulseOnline ? `live • last synced ${lastSynced}` : `offline • last synced ${lastSynced}`)}
             </span>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems:'center' }}>
-            {platformPerms && <span style={{ fontSize:11, color:'var(--muted)', display:'flex', gap:4, alignItems:'center' }}><Shield size={12} /> {Object.entries(platformPerms).filter(([,v])=>v).length}/{PLATFORM_PERMISSIONS.length} perms</span>}
-            <button onClick={()=>setCmdOpen(true)} aria-label="Open command palette" style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--panel)', color:'var(--muted)', fontWeight:600, fontSize:12, cursor:'pointer' }}><CommandIcon size={13} /> ⌘K</button>
-            <button onClick={logout} style={{ padding:'7px 12px', borderRadius:8, border:'none', background:'var(--hairline)', color:'var(--fg)', fontWeight:600, fontSize:12, cursor:'pointer' }}>Sign Out</button>
+          <div style={{ display: 'flex', gap: 8, alignItems:'center', flexShrink: 0 }}>
+            {platformPerms && !isPhone && <span style={{ fontSize:11, color:'var(--muted)', display:'flex', gap:4, alignItems:'center' }}><Shield size={12} aria-hidden="true" /> {Object.entries(platformPerms).filter(([,v])=>v).length}/{PLATFORM_PERMISSIONS.length} perms</span>}
+            <button onClick={()=>setCmdOpen(true)} aria-label="Open command palette" style={{ display:'flex', alignItems:'center', gap:6, padding: isPhone ? '9px 10px' : '7px 12px', borderRadius:8, border:'1px solid var(--border)', background:'var(--panel)', color:'var(--muted)', fontWeight:600, fontSize:12, cursor:'pointer' }}>{isPhone ? <Search size={15} aria-hidden="true" /> : <><CommandIcon size={13} aria-hidden="true" /> ⌘K</>}</button>
+            <button onClick={logout} style={{ padding: isPhone ? '9px 10px' : '7px 12px', borderRadius:8, border:'none', background:'var(--hairline)', color:'var(--fg)', fontWeight:600, fontSize:12, cursor:'pointer', whiteSpace: 'nowrap' }}>Sign Out</button>
           </div>
         </div>
 
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: 20, width: '100%', flex: 1 }}>
+        <main style={{ maxWidth: 1200, margin: '0 auto', padding: isPhone ? 12 : 20, width: '100%', flex: 1, boxSizing: 'border-box', minWidth: 0 }}>
           {pvQueueCount > 0 && tab!=='pv-routing' && isPermitted('Compliance') && (
             <div role="status" style={{ marginBottom: 16, padding:'12px 16px', borderRadius:12, background: 'var(--amber-bg)', border:'1px solid var(--amber)', display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
               <FileText size={18} color="var(--amber)" style={{ flexShrink:0 }} aria-hidden="true" />
@@ -1739,8 +1682,8 @@ export default function AdminDashboard() {
             </div>
           )}
           {pendingCount > 0 && tab==='dashboard' && (
-            <div style={{ marginBottom: 16, padding:'12px 16px', borderRadius:12, background: 'var(--amber-bg)', border:'1px solid var(--amber)', display:'flex', alignItems:'center', gap:10 }}>
-              <Bell size={18} color="var(--amber)" style={{ flexShrink:0 }} />
+            <div role="status" style={{ marginBottom: 16, padding:'12px 16px', borderRadius:12, background: 'var(--amber-bg)', border:'1px solid var(--amber)', display:'flex', alignItems:'center', gap:10, flexWrap: 'wrap' }}>
+              <Bell size={18} color="var(--amber)" style={{ flexShrink:0 }} aria-hidden="true" />
               <div style={{ fontWeight:700, color: 'var(--amber)', fontSize:13 }}>{pendingCount} business(es) waiting for approval. Review them in Businesses.</div>
             </div>
           )}
@@ -1771,26 +1714,29 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              {tab==='applications' && (isPermitted('Applications') ? <ApplicationsUnifiedPanel /> : <Empty icon={<Shield size={28} />} message="No access to Applications" />)}
+              {tab==='applications' && (isPermitted('Applications') ? <Suspense fallback={<PanelLoading />}><ApplicationsPanel businesses={businesses} /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Applications" />)}
               {tab==='ledger' && (isPermitted('Ledger') ? <LedgerUnifiedPanel /> : <Empty icon={<Shield size={28} />} message="No access to Ledger" />)}
-              {tab==='payouts' && (isPermitted('Payouts') ? <PayoutsUnifiedPanel /> : <Empty icon={<Shield size={28} />} message="No access to Payouts" />)}
+              {tab==='payouts' && (isPermitted('Payouts') ? <Suspense fallback={<PanelLoading />}><PayoutsPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Payouts" />)}
               {tab==='coverage' && (isPermitted('Coverage') ? <Suspense fallback={<PanelLoading />}><CoveragePanelWrapper /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Coverage" />)}
               {tab==='health' && (isPermitted('Health') ? <Suspense fallback={<PanelLoading />}><HealthPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Health" />)}
               {tab==='money' && (isPermitted('Money') ? <Suspense fallback={<PanelLoading />}><MoneyPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Money" />)}
+              {tab==='subscriptions' && (isPermitted('Money') ? <Suspense fallback={<PanelLoading />}><MoneyPanel key="subscriptions" initialSub="subs" /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Subscriptions" />)}
               {tab==='trust' && (isPermitted('Trust') ? <Suspense fallback={<PanelLoading />}><TrustPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Trust" />)}
               {tab==='growth' && (isPermitted('Growth') ? <Suspense fallback={<PanelLoading />}><GrowthPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Growth" />)}
               {tab==='ops' && (isPermitted('Ops') ? <Suspense fallback={<PanelLoading />}><SupportInbox /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Ops" />)}
               {tab==='compliance' && (isPermitted('Compliance') ? <Suspense fallback={<PanelLoading />}><Compliance /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Compliance" />)}
+              {tab==='adr-reports' && (isPermitted('Compliance') ? <Suspense fallback={<PanelLoading />}><AdrReportsAdmin businesses={businesses} /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to ADR Reports" />)}
               {tab==='pv-routing' && (isPermitted('Compliance') ? <Suspense fallback={<PanelLoading />}><RouteReviewQueue focusReportId={focusReportId} /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to PV Routing" />)}
               {tab==='directory' && (isPermitted('Directory') ? <Suspense fallback={<PanelLoading />}><BusinessDirectory brand={null} perms={{ canManageDirectory: true }} platformMode /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Directory" />)}
             </>
           )}
-        </div>
+        </main>
 
         <div style={{ textAlign:'center', fontSize:11, color: 'var(--muted)', padding: 12, borderTop: '1px solid var(--border)' }}>Coverage unchanged. Last synced {lastSynced}</div>
       </div>
 
       <CmdPalette open={cmdOpen} setOpen={setCmdOpen} commands={commands} onSelect={handleCmdSelect} query={cmdQuery} setQuery={setCmdQuery} />
+      {exportDialog}
       <Toast msg={toastMsg} />
       <style>{`@keyframes pulse { 0%,100%{opacity:1; transform:scale(1)} 50%{opacity:0.7; transform:scale(0.92)} } @media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; } } .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}`}</style>
     </div>

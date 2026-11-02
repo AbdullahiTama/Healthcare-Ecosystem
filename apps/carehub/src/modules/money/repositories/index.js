@@ -56,6 +56,30 @@ export function createMoneyRepository({ request = sbFetch } = {}) {
       return request(`business_subscriptions?business_id=eq.${businessId}`, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' })
     },
 
+    // ── Administrative subscription management ──────────────────────────
+    // The live plan is businesses.plan / plan_expires_at (business_subscriptions above is an unused mirror).
+    // These three RPCs (carehub_20261230_admin_subscription_management) are platform-admin only, and the manage
+    // call is the one audited write path: it validates, records subscription_events and admin_audit_log, and never
+    // writes plan_payments, so the automated Paystack/wallet renewals are untouched.
+    async getSubscriptionOverview() {
+      return request('rpc/admin_subscription_overview', { method: 'POST', body: '{}' })
+    },
+    async getSubscriptionHistory(businessId) {
+      if (!businessId) throw new Error('business id required')
+      return request('rpc/admin_subscription_history', { method: 'POST', body: JSON.stringify({ p_business_id: businessId }) })
+    },
+    async manageSubscription({ businessId, action, reason, plan = null, months = null, days = null, expiresAt = null, grantType = null }) {
+      if (!businessId) throw new Error('business id required')
+      if (!action) throw new Error('action required')
+      return request('rpc/admin_manage_subscription', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_business_id: businessId, p_action: action, p_reason: reason,
+          p_plan: plan, p_months: months, p_days: days, p_expires_at: expiresAt, p_grant_type: grantType,
+        }),
+      })
+    },
+
     // ── Tenant entitlements (security_invoker view) ─────────────────────
     async getEntitlements(businessId) {
       const rows = await request(`business_entitlements?business_id=eq.${businessId}&select=*`)

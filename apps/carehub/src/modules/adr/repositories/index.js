@@ -30,6 +30,25 @@ export function createAdrReportRepository({ request = sbFetch, upload = sbUpload
       return request(query)
     },
 
+    // Platform-wide list for the admin console. No business filter: row security decides, and only platform admins
+    // (is_platform_admin() in can_access_adr_report_row) see every business's and every public report. A business
+    // user calling this gets only their own rows. List columns only; the full case is loaded on open.
+    async getPlatformReports({ includeDrafts = false, status, source, moduleType, search, from, to, limit = 500 } = {}) {
+      let query = 'adr_reports?order=created_at.desc&select=report_id,report_number,status,module_type,report_source,business_id,reporter_facility_name,created_at,updated_at,submission_deadline,follow_up_of_report_id'
+      if (status) query += '&status=eq.' + encodeURIComponent(status)
+      else if (!includeDrafts) query += '&status=neq.draft'
+      if (source) query += '&report_source=eq.' + encodeURIComponent(source)
+      if (moduleType) query += '&module_type=eq.' + encodeURIComponent(moduleType)
+      if (search) {
+        const q = encodeURIComponent(String(search).replace(/[*,()]/g, ' ').trim())
+        if (q) query += '&or=(report_number.ilike.*' + q + '*,reporter_facility_name.ilike.*' + q + '*)'
+      }
+      if (from) query += '&created_at=gte.' + encodeURIComponent(from)
+      if (to) query += '&created_at=lte.' + encodeURIComponent(to)
+      query += '&limit=' + Math.max(1, Math.min(Number(limit) || 500, 1000))
+      return request(query)
+    },
+
     async getReport(reportId) {
       const rows = await request(`adr_reports?report_id=eq.${reportId}&select=*`)
       return (rows && rows[0]) || null

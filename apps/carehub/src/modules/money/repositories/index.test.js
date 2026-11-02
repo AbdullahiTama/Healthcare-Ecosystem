@@ -151,3 +151,33 @@ describe('moneyRepository', () => {
     })
   })
 })
+
+describe('administrative subscription RPCs', () => {
+  function recording() {
+    const calls = []
+    const repo = createMoneyRepository({ request: async (path, options) => { calls.push({ path, method: options?.method, body: options?.body ? JSON.parse(options.body) : null }); return [] } })
+    return { calls, repo }
+  }
+  it('reads the overview and history through the admin RPCs', async () => {
+    const { calls, repo } = recording()
+    await repo.getSubscriptionOverview()
+    await repo.getSubscriptionHistory('b1')
+    expect(calls).toEqual([
+      { path: 'rpc/admin_subscription_overview', method: 'POST', body: {} },
+      { path: 'rpc/admin_subscription_history', method: 'POST', body: { p_business_id: 'b1' } },
+    ])
+  })
+  it('sends every change through admin_manage_subscription with explicit nulls', async () => {
+    const { calls, repo } = recording()
+    await repo.manageSubscription({ businessId: 'b1', action: 'grant', reason: 'Partner', months: 6, grantType: 'partnership' })
+    expect(calls[0]).toEqual({ path: 'rpc/admin_manage_subscription', method: 'POST', body: {
+      p_business_id: 'b1', p_action: 'grant', p_reason: 'Partner', p_plan: null, p_months: 6, p_days: null, p_expires_at: null, p_grant_type: 'partnership',
+    } })
+  })
+  it('refuses incomplete calls before any request', async () => {
+    const { calls, repo } = recording()
+    await expect(repo.manageSubscription({ action: 'extend' })).rejects.toThrow('business id required')
+    await expect(repo.getSubscriptionHistory()).rejects.toThrow('business id required')
+    expect(calls).toHaveLength(0)
+  })
+})
