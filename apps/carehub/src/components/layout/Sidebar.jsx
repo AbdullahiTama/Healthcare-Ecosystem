@@ -19,14 +19,14 @@ const { tealDeep, tealMist, border, gray600, gray400, navy } = theme
 //  - Mobile: off-canvas drawer only, closed by default, opened via TopBar's
 //    hamburger (RESPONSIVENESS.md — CareHub does not persist a nav rail at
 //    a width with no room to spare).
-export default function Sidebar({ brand, role, customRoles = {}, mobileOpen, onClose }) {
+export default function Sidebar({ brand, role, customRoles = {}, navContext = {}, mobileOpen, onClose }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { auth, logout } = useAuth()
   const { isMobile, isTablet } = useBreakpoint()
   const userName = auth?.staff?.full_name || brand?.owner || 'Owner'
   const bType = brand?.business_type || brand?.type || 'skincare'
-  const navGroups = getNavGroups(role, bType, customRoles)
+  const navGroups = getNavGroups(role, bType, customRoles, navContext)
   const collapsed = isTablet
 
   function go(id) {

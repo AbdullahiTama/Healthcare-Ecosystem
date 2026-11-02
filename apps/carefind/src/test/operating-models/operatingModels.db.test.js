@@ -180,6 +180,8 @@ describe('the operating model column', () => {
 
   it('registration sets the chosen model once, for a pending importer only, through the service role', async () => {
     const id = (await one(`insert into businesses (name, owner, email, business_type, status) values ('New Co', 'N', 'new@co.ng', 'manufacturer_importer', 'pending') returning id`)).id
+    // Created without a choice: the safe default, how importers worked before.
+    expect((await one('select operating_model from businesses where id = $1', [id])).operating_model).toBe('centralised')
     await db.query('set role service_role')
     try {
       expect((await one(`select set_registration_operating_model('NEW@co.ng', 'decentralised') ok`)).ok).toBe(true)

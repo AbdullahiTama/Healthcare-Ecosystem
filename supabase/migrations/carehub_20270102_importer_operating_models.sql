@@ -52,7 +52,8 @@
 --      note): the migration summary (representatives, balances, custody or rep stock, pending items, blockers and
 --      warnings) and the switch itself, in one transaction, refused when anything changed since the preview.
 --      operating_model_changes records every change (append-only), audit_log records who did it.
---   9. set_registration_operating_model(email, model): service role only, called by /api/register-business.
+--   9. set_registration_operating_model(email, model): service role only, called by /api/register-business. A new
+--      importer is created Centralised by default (businesses_operating_model_guard) and this records the choice.
 --
 -- SECURITY
 --   * Every write is a SECURITY DEFINER function with a pinned search_path that checks the caller explicitly:
@@ -113,6 +114,11 @@ begin
        or new.operating_model_changed_at is distinct from old.operating_model_changed_at then
       raise exception 'Change the operating model from Settings > Operating model.' using errcode = '42501';
     end if;
+  end if;
+  -- Every top-level importer has a model: one registered without a choice (or retyped later) starts Centralised,
+  -- which is how importers worked before this migration. The owner's choice at registration replaces it.
+  if new.parent_business_id is null and new.business_type = 'manufacturer_importer' and new.operating_model is null then
+    new.operating_model := 'centralised';
   end if;
   if new.account_kind = 'rep_account' then
     new.visible_on_carefind := false;

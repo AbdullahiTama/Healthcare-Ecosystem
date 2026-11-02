@@ -25,6 +25,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A8 | Low | Tooling | CodeRabbit reviews never run on PRs to `main` | Open |
 | A9 | Low | Debt | About 600 `no-unused-vars` warnings | Open, tracked in Linting.md |
 | A12 | High | POS (production defect) | Re-holding an edited held sale is refused (`permission denied for table sales`); duplicate held sales; carts lost when leaving the POS | **Closed 2026-11-02**: grant live, app deployed and in use; owner review of 4 double-charged pairs pending |
+| A13 | Medium | Importer operating models | Centralised / Decentralised models, representative ledger and switching are code complete; migration not applied; four owner decisions open | Open: apply + owner decisions |
 
 ## 2. Items
 
@@ -177,6 +178,19 @@ duplicates, 5 held sales charged.
 
 **Still open (owner, not code):** the Owner of business `f7d9a912…` checks four pairs charged twice at the held amount
 (₦150, ₦1,700, ₦500, ₦100), listed in the note.
+
+### A13. Importer operating models: not applied, owner decisions open (Medium)
+
+**What:** `supabase/migrations/carehub_20270102_importer_operating_models.sql` and `apps/carehub/src/modules/representatives/`
+implement the spec "Importer & Manufacturer Operating Structures" (Centralised / Decentralised, representative ledger
+and statements, switching both ways). Verified by 36 PGlite checks
+(`apps/carefind/src/test/operating-models/operatingModels.db.test.js`) and unit tests. **Not applied to production.**
+
+**To close:** apply the migration (then the rolled-back probe in
+[Importer-Operating-Models.md](../docs/architecture/Importer-Operating-Models.md) §9) and decide the open questions in
+§2 of that note: whether a Centralised supply should take stock out of the company count; whether POS sales should
+reduce a rep's balance automatically; adding Facility Discovery to the Owner preset (no business owner has it today);
+whether representative accounts count against the plan's location limit.
 
 ## 3. Open items recorded in other audits
 

@@ -6,6 +6,8 @@ import {
   getPerms,
   can,
   getNavItems,
+  isRoleGrantable,
+  REP_ACCOUNT_HIDDEN,
   getNavGroups,
   getModulesForType,
   rolesForType,
@@ -472,5 +474,45 @@ describe('The Business Directory is platform-admin only: no company module for i
     expect(getPerms('Regional Rep').canManageDirectory).toBe(false)
     expect(buildCustomPerms({ nav: ['overview'] }).canManageDirectory).toBe(false)
     expect(buildCustomPerms({ nav: ['overview'], canManageDirectory: true }).canManageDirectory).toBe(true)
+  })
+})
+
+// Importer / manufacturer operating models (carehub_20270102_importer_operating_models).
+describe('operating model navigation', () => {
+  const ids = (role, type, custom, ctx) => getNavItems(role, type, custom, ctx).map((i) => i[0])
+  const MAIN = { isMainAccount: true, accountKind: 'business', isRepresentative: false }
+
+  it('the company owner, and roles allowed to manage or view the ledger, see Representatives on the main account only', () => {
+    expect(ids('Owner', 'manufacturer_importer', {}, MAIN)).toContain('representatives')
+    expect(ids('Accounts', 'manufacturer_importer', { Accounts: { nav: ['dashboard'], canViewRepLedger: true } }, MAIN)).toContain('representatives')
+    expect(ids('Cashier', 'manufacturer_importer', {}, MAIN)).not.toContain('representatives')
+    expect(ids('Owner', 'manufacturer_importer', {}, { ...MAIN, isMainAccount: false })).not.toContain('representatives')
+    // Wholesale has no operating models; nor does any caller that does not pass the context.
+    expect(ids('Owner', 'wholesale', {}, MAIN)).not.toContain('representatives')
+    expect(ids('Owner', 'manufacturer_importer')).not.toContain('representatives')
+  })
+
+  it('a representative sees "My company account" in either model, and it cannot be granted through a role', () => {
+    expect(ids('Medical sales rep', 'manufacturer_importer', {}, { ...MAIN, isRepresentative: true })).toContain('company-account')
+    expect(ids('Medical sales rep', 'manufacturer_importer', { 'Medical sales rep': { nav: ['company-account', 'representatives'] } }, MAIN))
+      .not.toEqual(expect.arrayContaining(['company-account']))
+    expect(isRoleGrantable('representatives')).toBe(false)
+    expect(isRoleGrantable('company-account')).toBe(false)
+  })
+
+  it('a representative account keeps every operating module but nothing that publishes it or administers the company', () => {
+    const rep = ids('Owner', 'manufacturer_importer', {}, { isMainAccount: false, accountKind: 'rep_account', isRepresentative: true })
+    // Exactly the Owner's menu otherwise (Facility Discovery is not in the Owner preset for any business today).
+    for (const keep of ['dashboard', 'pos', 'inventory', 'purchases', 'expenses', 'debts', 'clients', 'reports', 'activity', 'company-account']) expect(rep).toContain(keep)
+    const owner = ids('Owner', 'manufacturer_importer', {}, MAIN)
+    expect(rep.filter((id) => id !== 'company-account')).toEqual(owner.filter((id) => !REP_ACCOUNT_HIDDEN.includes(id) && !['representatives', 'field-reports', 'field-map', 'field-customers', 'field-checkins', 'field-approvals'].includes(id)))
+    for (const hide of REP_ACCOUNT_HIDDEN) expect(rep).not.toContain(hide)
+    for (const hide of ['field-reports', 'field-map', 'field-checkins', 'representatives']) expect(rep).not.toContain(hide)
+  })
+
+  it('custom roles carry the two ledger switches, off unless granted', () => {
+    expect(getPerms('X', { X: {} })).toMatchObject({ canManageRepLedger: false, canViewRepLedger: false })
+    expect(getPerms('X', { X: { canManageRepLedger: true } }).canManageRepLedger).toBe(true)
+    expect(getPerms('Owner')).toMatchObject({ canManageRepLedger: true, canViewRepLedger: true })
   })
 })

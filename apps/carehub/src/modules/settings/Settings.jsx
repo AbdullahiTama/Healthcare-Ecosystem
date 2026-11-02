@@ -3,6 +3,7 @@ import { Lock } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { settingsRepository } from './repositories'
 import BillingHistory from './BillingHistory'
+import OperatingModelSettings from '../representatives/OperatingModelSettings'
 import { confirmPlanPayment } from './services/billing'
 import { businessLucideIcon, businessName } from '../../lib/utils'
 import { NIG_STATES } from '../../config/constants'
@@ -330,6 +331,9 @@ export default function Settings({ brand, role, perms }) {
   return (
     <div>
       <SectionHead title='Settings' sub='Business details and receipt customization' />
+
+      {/* Operating model: importers and manufacturers, the company's own account, Owner only (the database checks again). */}
+      {isOwner && bType === 'manufacturer_importer' && !brand?.parent_business_id && <OperatingModelSettings brand={brand} />}
 
       {/* Billing */}
       <Card style={{ padding: '24px', marginBottom: '20px' }}>

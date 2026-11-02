@@ -6,7 +6,7 @@ import {
   Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
   Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map as MapIcon, Mail,
   ClipboardList, LayoutDashboard, Layers, AlertTriangle, FileCheck, CalendarClock, Store,
-  MapPin, ListChecks, Sliders, ArrowLeftRight,
+  MapPin, ListChecks, Sliders, ArrowLeftRight, Wallet, BookOpen,
 } from 'lucide-react'
 
 export const ROLES = {
@@ -23,6 +23,8 @@ export const ROLES = {
     canViewFinance: true,
     canMakeSales: true,
     canViewSettings: true,
+    canManageRepLedger: true,
+    canViewRepLedger: true,
     label: 'Owner (full access)',
   },
   Manager: {
@@ -155,8 +157,13 @@ export const DEFAULT_STAFF_PERMS = {
   canViewFinance: false,
   canMakeSales: false,
   canViewSettings: false,
+  canManageRepLedger: false,
+  canViewRepLedger: false,
   label: 'Staff',
 }
+
+// The role switches the representative ledger reads (carehub_20270102_importer_operating_models).
+export const REP_LEDGER_FLAGS = ['canManageRepLedger', 'canViewRepLedger']
 
 // Custom business-defined roles (the `roles` table: business_id, name,
 // permissions jsonb). A custom role's permissions.jsonb carries the same keys
@@ -179,6 +186,9 @@ export function buildCustomPerms(permissions) {
     canViewFinance: !!p.canViewFinance,
     canMakeSales: !!p.canMakeSales,
     canViewSettings: !!p.canViewSettings,
+    // Read by the database too (rep_ledger_can).
+    canManageRepLedger: !!p.canManageRepLedger,
+    canViewRepLedger: !!p.canViewRepLedger,
     label: p.label || 'Custom Role',
   }
 }
@@ -306,6 +316,11 @@ export const MODULES = {
   // are closed to companies by RLS (carehub_20261202 and carehub_20261208); the only thing a company
   // keeps is the bounded nearby suggestion in Live Field Activity (nearby_directory_businesses).
   orders: { label: 'Orders & LPO', icon: FileText, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  // Importer / manufacturer operating models (docs/architecture/Importer-Operating-Models.md). Both are decided by
+  // their access rule, never by a role's nav list: the company's view of every representative's account, and a
+  // representative's view of their own account with the company (and, when Decentralised, its catalogue).
+  representatives: { label: 'Representatives', icon: Wallet, types: ['manufacturer_importer'], section: 'people', access: 'rep-ledger' },
+  'company-account': { label: 'My company account', icon: BookOpen, types: ['manufacturer_importer'], section: 'finance', access: 'representative' },
   warehouses: { label: 'Warehouses & Branches', icon: Factory, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   stock: { label: 'Stock & Batches', icon: Boxes, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   territories: { label: 'Territories', icon: MapIcon, types: ENTERPRISE_TYPES, section: 'ecosystem' },
@@ -342,7 +357,7 @@ const NAV_ORDER = {
     // Clinics lead with the appointment book and consultation notes.
     clinic: ['overview', 'dashboard', 'appointments', 'consultation', 'pos', 'inventory', 'mastercatalog', 'transfers', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
     hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'transfers', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
-    enterprise: ['overview', 'dashboard', 'activity', 'field-reports', 'field-map', 'field-customers', 'field-checkins', 'field-approvals', 'field-places', 'field-fields', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'transfers', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
+    enterprise: ['overview', 'dashboard', 'activity', 'field-reports', 'field-map', 'field-customers', 'field-checkins', 'field-approvals', 'field-places', 'field-fields', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'transfers', 'staff', 'representatives', 'company-account', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
 }
 
 function familyOf(businessType) {
@@ -398,7 +413,11 @@ export const FIELD_REP_NAV = ['activity', 'orders', 'messages']
 // removes it. 'field-manager' is the same rule that decides who sees the whole team's activity. 'place-reviewer'
 // mirrors the database's is_business_manager (the owner, or a role named as a manager), which alone may confirm or
 // dismiss a place a rep added; "Manage field team" does not reach it.
-function accessAllows(module, { role, perms }) {
+function accessAllows(module, { role, perms, context = {} }) {
+  // The company's management of representatives lives on the company's own (main) account only.
+  if (module.access === 'rep-ledger') return !!context.isMainAccount && (role === 'Owner' || !!perms.canManageRepLedger || !!perms.canViewRepLedger)
+  if (module.access === 'representative') return !!context.isRepresentative
+  if (context.accountKind === 'rep_account' && module.access === 'field-manager') return false
   if (module.access === 'owner') return role === 'Owner'
   if (module.access === 'place-reviewer') return role === 'Owner' || isManagerRole(role)
   if (module.access === 'field-manager') return canSeeAllActivity({ isOwner: role === 'Owner', role, perms })
@@ -410,7 +429,13 @@ export function isRoleGrantable(id) {
   return !!MODULES[id] && !MODULES[id].access
 }
 
-export function getNavItems(role, businessType, customRoles = {}) {
+// A representative's independent account (Decentralised) is a private trading account under the company: it keeps
+// every operating module, but not the ones that would publish it, open branches under it, or administer the company.
+export const REP_ACCOUNT_HIDDEN = ['overview', 'locations', 'mastercatalog', 'carefind', 'ecommerce', 'warehouses', 'staff', 'wallet', 'field-fields']
+
+// context: { isMainAccount, accountKind, isRepresentative } from the signed-in account (BusinessDashboard). Omitted, it
+// changes nothing, so callers that do not know it (role editor, eligibility checks) keep today's answer.
+export function getNavItems(role, businessType, customRoles = {}, context = {}) {
   const perms = getPerms(role, customRoles)
   // A manufacturer's or wholesaler's unrecognised staff role is a field rep unless its name marks a manager
   // (the live "Regional Manager" keeps today's menu). Other business types keep the shared fallback.
@@ -418,7 +443,8 @@ export function getNavItems(role, businessType, customRoles = {}) {
   const nav = repFallback ? FIELD_REP_NAV : perms.nav
   return getModulesForType(businessType).filter(item => {
     const module = MODULES[item[0]]
-    return module.access ? accessAllows(module, { role, perms }) : nav.includes(item[0])
+    if (context.accountKind === 'rep_account' && REP_ACCOUNT_HIDDEN.includes(item[0])) return false
+    return module.access ? accessAllows(module, { role, perms, context }) : nav.includes(item[0])
   })
 }
 
@@ -435,8 +461,8 @@ export function landingRoute(allowedKeys) {
 // and NAV_ORDER stay the single source of truth, and this only slices the
 // allowed list into workflow sections so route guards and the role editor keep
 // consuming the flat form unchanged. Empty sections are dropped.
-export function getNavGroups(role, businessType, customRoles = {}) {
-  const items = getNavItems(role, businessType, customRoles)
+export function getNavGroups(role, businessType, customRoles = {}, context = {}) {
+  const items = getNavItems(role, businessType, customRoles, context)
   const groups = new Map(SECTION_ORDER.map(id => [id, []]))
   items.forEach(item => {
     const section = MODULES[item[0]].section
@@ -473,8 +499,8 @@ export function reportTabSlug(id) {
 
 // The tabs a role may actually open, in canonical order, filtered through the
 // same role/business-type matrix the sidebar and route guards use.
-export function getReportTabs(role, businessType, customRoles = {}) {
-  const allowed = getNavItems(role, businessType, customRoles).map(item => item[0])
+export function getReportTabs(role, businessType, customRoles = {}, context = {}) {
+  const allowed = getNavItems(role, businessType, customRoles, context).map(item => item[0])
   return REPORT_TABS.filter(id => allowed.includes(id))
 }
 

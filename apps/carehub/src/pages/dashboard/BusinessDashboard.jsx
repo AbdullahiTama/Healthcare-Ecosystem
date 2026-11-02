@@ -23,6 +23,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { MOBILE_MENU_TOP, MOBILE_MENU_LEFT, MOBILE_MENU_SIZE, MOBILE_MENU_CLEAR } from '../../components/layout/shellConstants'
 import { startRolePrefetching, stopPrefetching } from '../../utils/modulePrefetch'
 import OutboxRunner from '../../modules/live-activity/outbox/OutboxRunner'
+import { useOperatingContext } from '../../modules/representatives/useOperatingContext'
 
 // Lazy-loaded modules for code splitting
 const DashboardHome = lazy(() => import('../../modules/dashboard-home/DashboardHome'))
@@ -68,6 +69,8 @@ const Overview = lazy(() => import('../../modules/overview/Overview'))
 const AdrReportPage = lazy(() => import('../../modules/adr/AdrReportPage'))
 const PvTracker = lazy(() => import('../../modules/adr/PvTracker'))
 const PvCaseDetail = lazy(() => import('../../modules/adr/PvCaseDetail'))
+const Representatives = lazy(() => import('../../modules/representatives/Representatives'))
+const MyCompanyAccount = lazy(() => import('../../modules/representatives/MyCompanyAccount'))
 
 const PAGE_TITLES = {
   dashboard: 'Dashboard', pos: 'POS / Sales', inventory: 'Inventory', mastercatalog: 'Master Catalog', transfers: 'Stock Transfers',
@@ -76,7 +79,7 @@ const PAGE_TITLES = {
   staff: 'Staff', reports: 'Financial Reports', settings: 'Settings', carefind: 'CareFind Profile',
   reception: 'Reception', triage: 'Triage', doctor: 'Doctor Consultation', rx_inbox: 'Prescription Inbox',
   overview: 'Overview', 'adr-reports': 'Pharmacovigilance (ADR)', ecommerce: 'Online Store',
-  discovery: 'Facility Discovery', activity: 'Live Field Activity',
+  discovery: 'Facility Discovery', activity: 'Live Field Activity', representatives: 'Representatives', 'company-account': 'My company account',
 }
 
 const shortReason = (msg) => String(msg || '').replace(/^Supabase error \(\d{3}\):\s*/, '')
@@ -114,12 +117,16 @@ function BusinessDashboardContent() {
   // Judging it earlier treats it as the fallback menu for a moment, and the guard's redirect remounts the whole
   // tree (App keys <Routes> on location.key), which fetches the roles again: an endless redirect.
   const waitingForRoles = role !== 'Owner' && !ROLES[role] && !rolesLoaded
+  // Importers and manufacturers: where this account sits in the operating models (company account, a
+  // representative's own account, a representative signed in). Navigation waits for it for the same reason as above.
+  const operating = useOperatingContext(brand)
+  const navContext = operating.context
   const perms = getPerms(role, customRoles)
   const navigate = useNavigate()
   // Same business-type resolution Sidebar.jsx uses — kept identical so the
   // guard below never disagrees with what the sidebar actually shows.
   const bType = brand?.business_type || brand?.type || 'skincare'
-  const allowedRouteKeys = getNavItems(role, bType, customRoles).map(item => item[0])
+  const allowedRouteKeys = getNavItems(role, bType, customRoles, navContext).map(item => item[0])
 
   // Role-based module prefetching: pre-load commonly-used modules during idle time
   useEffect(() => {
@@ -155,7 +162,7 @@ function BusinessDashboardContent() {
   // legacy `reports` key — a Pharmacist who owns ADR must reach /dashboard/reports.
   // Same mobile top clearance as bareGuard so the hub's own header clears the
   // floating menu trigger.
-  const reportTabs = getReportTabs(role, bType, customRoles)
+  const reportTabs = getReportTabs(role, bType, customRoles, navContext)
   const reportHubGuard = (element) => (reportTabs.length > 0 ? (isMobile ? <div style={{ paddingTop: MOBILE_MENU_CLEAR }}>{element}</div> : element) : <Navigate to={'/dashboard/' + landing} replace />)
   // Sidebar.jsx's own nav handler closes this after a route change on mobile.
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -202,7 +209,7 @@ function BusinessDashboardContent() {
         collapsed={isTablet}
         navWidth={210}
         navCollapsedWidth={64}
-        nav={<Sidebar brand={brand} role={role} customRoles={customRoles} mobileOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />}
+        nav={<Sidebar brand={brand} role={role} customRoles={customRoles} navContext={navContext} mobileOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />}
         topbar={
           <>
             {/* Fallback menu trigger for routes that render their own header
@@ -238,7 +245,7 @@ function BusinessDashboardContent() {
       >
         <>
           <Suspense fallback={<Loading text='Loading module...' />}>
-            {waitingForRoles ? <Loading text='Loading your workspace...' /> : (
+            {waitingForRoles || !operating.loaded ? <Loading text='Loading your workspace...' /> : (
             // Keyed by the business: switching location remounts every module, so nothing from the previous location
             // (a cart, a half-filled form) survives the switch.
             <Routes key={brand?.id || 'none'}>
@@ -295,6 +302,9 @@ function BusinessDashboardContent() {
               <Route path='field-team/places' element={guard('field-places', <><TopBar title='Places to confirm' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><PlacesToConfirm businessId={brand?.id} /></div></>)} />
               <Route path='field-team/fields' element={guard('field-fields', <><TopBar title='Report fields' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><ReportFieldsSetup businessId={brand?.id} /></div></>)} />
               <Route path='discovery' element={bareGuard('discovery', <FacilityDiscovery {...pageProps} />)} />
+              {/* Importer / manufacturer operating models (lib/permissions.js decides who reaches each). */}
+              <Route path='representatives' element={guard('representatives', <><TopBar title='Representatives' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Representatives {...pageProps} accountProfile={operating.profile} /></div></>)} />
+              <Route path='company-account' element={guard('company-account', <><TopBar title='My company account' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><MyCompanyAccount repProfile={operating.repProfile} /></div></>)} />
               {/* The Business Directory, Business Discovery and Territory Intelligence live only in the platform
                   admin console now; keep old bookmarks from dead-ending. */}
               <Route path='directory' element={<Navigate to='/dashboard' replace />} />

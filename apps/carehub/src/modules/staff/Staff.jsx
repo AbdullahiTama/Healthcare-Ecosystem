@@ -4,7 +4,7 @@ import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus, 
 import { staffRepository } from './repositories'
 import StaffActivity from './StaffActivity'
 import { invitationService, readableError } from './services/invitations'
-import { rolesForType, getModulesForType, isRoleGrantable } from '../../lib/permissions'
+import { rolesForType, getModulesForType, isRoleGrantable, REP_LEDGER_FLAGS } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
 import { usePlanGate } from '../../hooks/usePlanGate'
 import { getTemplatesForBusinessType, applyTemplate } from '../../lib/roleTemplates'
@@ -89,6 +89,10 @@ function StaffTeam({ brand, role, perms }) {
     ['canViewFinance', 'View finance', 'Can see expenses, debts and financial figures.'],
     ['canMakeSales', 'Make sales', 'Can record sales at the POS / counter.'],
     ['canViewSettings', 'View settings', 'Can open Settings and change business configuration.'],
+    // Read by the database (rep_ledger_can): these switches authorise the representative ledger
+    // (carehub_20270102_importer_operating_models). Importers and manufacturers only.
+    ['canManageRepLedger', 'Manage representative accounts', 'Can record supplies, payments, returns, transfers and adjustments for representatives, approve returns and transfers, and reverse entries. The Owner can always do this.'],
+    ['canViewRepLedger', 'View representative accounts', 'Can view every representative\'s statement and the consolidated summary, without recording anything.'],
   ]
 
   // Every switch is read, applied and saved from FLAG_META, so a switch on the
@@ -527,7 +531,8 @@ function StaffTeam({ brand, role, perms }) {
           <div>
             <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Actions</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {FLAG_META.filter(([key]) => key !== 'canManageDirectory' || typeModuleIds.includes('activity')).map(([key, label, desc]) => (
+              {FLAG_META.filter(([key]) => (key !== 'canManageDirectory' || typeModuleIds.includes('activity'))
+                && (!REP_LEDGER_FLAGS.includes(key) || bType === 'manufacturer_importer')).map(([key, label, desc]) => (
                 <label key={key} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}>
                   <input type='checkbox' checked={!!roleForm.flags[key]} onChange={e => setRoleForm(p => ({ ...p, flags: { ...p.flags, [key]: e.target.checked } }))} style={{ marginTop: '2px', accentColor: tealDeep }} />
                   <span>
