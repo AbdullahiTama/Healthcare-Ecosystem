@@ -24,7 +24,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A7 | Low | Admin | Hard delete of a business is selectable again | Open: owner decision |
 | A8 | Low | Tooling | CodeRabbit reviews never run on PRs to `main` | Open |
 | A9 | Low | Debt | About 600 `no-unused-vars` warnings | Open, tracked in Linting.md |
-| A12 | High | POS (production defect) | Re-holding an edited held sale is refused (`permission denied for table sales`); duplicate held sales; carts lost when leaving the POS | **Fixed 2026-11-02**: grant applied live, app merged to `main`; awaiting deploy check and owner review of 4 double-charged pairs |
+| A12 | High | POS (production defect) | Re-holding an edited held sale is refused (`permission denied for table sales`); duplicate held sales; carts lost when leaving the POS | **Closed 2026-11-02**: grant live, app deployed and in use; owner review of 4 double-charged pairs pending |
 
 ## 2. Items
 
@@ -145,7 +145,7 @@ About 600 `no-unused-vars` and 140 `no-empty` warnings remain across both apps (
 burn-down plan and ratchet are in [docs/architecture/Linting.md](../docs/architecture/Linting.md) §3. The admin
 dashboard alone reports 28.
 
-### A12. POS held sales: re-hold refused, duplicates, lost carts (High) — fixed, awaiting deploy check
+### A12. POS held sales: re-hold refused, duplicates, lost carts (High) — closed 2026-11-02
 
 (A10 and A11 are taken on the open A3 branch `ccr-f80f15d6-yvi6ui`; its A11 records the same refusal as this item's
 first point and proposes the same grant.)
@@ -170,8 +170,13 @@ sale; release, status and payment changes on a held sale and money/customer chan
 **Also done:** merged to `main` 2026-11-02 (`2588533`). The one duplicate held sale still open (`HLD994467`) was closed
 by platform staff with an audit entry; no figure changed.
 
-**Close by:** CI and the Vercel deploy of `2588533` green, then mark closed. Separately, the Owner of business
-`f7d9a912…` checks four pairs charged twice at the held amount (₦150, ₦1,700, ₦500, ₦100), listed in the note.
+**Closed by:** CI green on `2588533` (CareHub, CareFind, financial mutation gate) and the deploy confirmed in use from
+the production edge logs: the new build's held-sale save (`PATCH …&is_on_hold=eq.true&select=id`) answered 200 at
+17:17 UTC, where every such save had been refused before. From 15:00 to 19:40 UTC: 4 held sales created, no
+duplicates, 5 held sales charged.
+
+**Still open (owner, not code):** the Owner of business `f7d9a912…` checks four pairs charged twice at the held amount
+(₦150, ₦1,700, ₦500, ₦100), listed in the note.
 
 ## 3. Open items recorded in other audits
 
