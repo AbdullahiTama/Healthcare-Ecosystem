@@ -181,3 +181,16 @@ describe('administrative subscription RPCs', () => {
     expect(calls).toHaveLength(0)
   })
 })
+
+describe('getSettledPlanPayments (Money › Revenue)', () => {
+  it('reads settled payments newest first with the receipt columns, capped', async () => {
+    const paths = []
+    const repo = createMoneyRepository({ request: async (path) => { paths.push(path); return [] } })
+    await repo.getSettledPlanPayments()
+    await repo.getSettledPlanPayments({ limit: 99999 })
+    expect(paths[0]).toContain('plan_payments?select=')
+    expect(paths[0]).toContain('receipt_number')
+    expect(paths[0]).toContain('&status=eq.success&order=paid_at.desc&limit=1000')
+    expect(paths[1]).toContain('&limit=5000')
+  })
+})

@@ -89,7 +89,8 @@ Every change needs a reason and a confirmation step.
 ### Database (`supabase/migrations/carehub_20261230_admin_subscription_management.sql`)
 
 - The live plan is `businesses.plan` / `plan_expires_at`, enforced by `plan_state()` and friends
-  (`carehub_20261214_plan_enforcement`). `business_subscriptions` is an unused, empty mirror and is left alone.
+  (`carehub_20261214_plan_enforcement`). `business_subscriptions` is an unused, empty mirror and is left alone; nothing in
+  the admin console reads it any more.
 - `subscription_events`: append-only history (update, delete and truncate refused by trigger); platform admins read it;
   no client can write it. No foreign key to `businesses`, so history outlives a hard delete and does not block it.
 - `admin_manage_subscription(business, action, reason, plan, months, days, expires_at, grant_type)`: the only write
@@ -107,6 +108,29 @@ Every change needs a reason and a confirmation step.
 - Suspension is a plan-level pause. To block all access, suspend the business itself (Businesses › Suspend).
 - Until `plan_enforcement_started_at() + 7 days` (2026-11-03 20:44 UTC in production) the go-live grace floor keeps
   every business in grace, so a suspension made before then shows as grace and becomes restricted at that moment.
+
+## 4. Revenue (Money › Revenue)
+
+The Revenue screen used to multiply `plan_catalog` prices by active rows of `business_subscriptions`, an empty mirror,
+so it always showed ₦0, and its sparklines were invented numbers. It now reads only what happened:
+
+| Figure | Definition | Source |
+|---|---|---|
+| Collected this month / last 30 days / all time | Money received, by payment date (Lagos calendar, UTC+1) | settled `plan_payments` |
+| Collected per month | Last 12 months, one column per month; hover or focus a column for its value; "Show table" lists every month | settled `plan_payments` |
+| Earning now, per month | For each payment whose paid-for period covers today: amount ÷ months bought. Free access adds nothing | settled `plan_payments` |
+| Paying businesses, average per paying business | Businesses with such a payment; earning now ÷ that count | as above |
+| Overdue | Main businesses in grace or restricted, split into paid-before (valued at last payment) and never paid | `admin_subscription_overview()` |
+| Plan mix | Businesses, paying, free, overdue per plan, with the yearly list price checkout charges | overview + `lib/planLimits.js` |
+| Renewals due in 30 days | Paying businesses expiring within 30 days, valued at their last payment | overview |
+| By payment method, recent payments | Paystack / wallet / recorded by staff; the last 10 with receipt numbers | settled `plan_payments` |
+
+"Export payments" exports every settled payment (receipt, date, business, plan, months, amount, method, period,
+references) through the same reason-and-log flow as the other exports. `plan_catalog` (whose keys do not match the
+plans the app sells) is no longer read here. Calculations: `modules/money/services/revenue.js`.
+
+Live on 2026-11-02 the screen shows ₦5,000 collected (one 1-month Basic payment, 11 Oct), ₦5,000 a month earning now,
+1 of 30 businesses paying, and that renewal due on 11 Nov.
 
 ## Security implications
 
@@ -166,7 +190,7 @@ switched on yet" and everything else works.
   grants added after paid time with no payment or commission; trial from today; exact expiry; suspend → restricted and
   activation restoring the remaining time; plan change while suspended; payment lifting a suspension; no-expiry
   suspension; audit rows; append-only; merged history; overview scope.
-- Unit and component (CareHub): `subscriptionAdmin.test.js`, money repository RPCs, `Subscriptions.test.jsx`,
+- Unit and component (CareHub): `subscriptionAdmin.test.js`, `revenue.test.js`, money repository RPCs and settled payments, `Subscriptions.test.jsx`, `RevenueOverview.test.jsx`,
   `shared.test.jsx` (record display, reason-gated export, fail-closed), `applicationRecords.test.js`,
   `ApplicationsPanel.test.jsx`, `PayoutsPanel.test.jsx`, `businessRecord.test.js`, `AdrReportsAdmin.test.jsx`, ADR
   repository `getPlatformReports`, ADR export escaping, CSV formula safety, `AdminShell.responsive.test.jsx`.

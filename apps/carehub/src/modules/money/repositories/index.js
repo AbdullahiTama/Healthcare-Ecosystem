@@ -100,6 +100,12 @@ export function createMoneyRepository({ request = sbFetch } = {}) {
       if (clauses.length) q += '&' + clauses.join('&')
       return request(q)
     },
+    // Every settled plan payment, newest first, for Money › Revenue. Platform admins read all rows
+    // ("plan_payments visible to their own business" ORs in is_platform_admin()).
+    async getSettledPlanPayments({ limit = 1000 } = {}) {
+      const n = Math.max(1, Math.min(Number(limit) || 1000, 5000))
+      return request(`plan_payments?select=id,business_id,months,naira_amount,reference,status,plan,period_start,period_end,payment_method,provider_transaction_id,currency,paid_at,receipt_number&status=eq.success&order=paid_at.desc&limit=${n}`)
+    },
     async createPlanPayment(payment) {
       if (!payment.reference) throw new Error('reference required')
       if (!payment.business_id) throw new Error('business_id required')
