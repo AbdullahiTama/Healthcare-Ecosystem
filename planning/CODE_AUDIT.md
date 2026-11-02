@@ -15,8 +15,8 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 
 | ID | Severity | Area | Item | Status |
 |---|---|---|---|---|
-| A1 | High | Security / ADR | PV routing P0-1 fix is live but was never probed live; the trigger is the only barrier | Open: live probe owed |
-| A2 | Medium | Governance | `export_logs` is not append-only: platform admins can edit or delete export records | Open |
+| A1 | High | Security / ADR | PV routing P0-1 fix is live but was never probed live; the trigger is the only barrier | **Closed 2026-11-02**: probed live, holds |
+| A2 | Medium | Governance | `export_logs` is not append-only: platform admins can edit or delete export records | **Closed 2026-11-02**: append-only, applied live |
 | A3 | Medium | Process | 27 migrations say "not applied", "draft" or "review only" but are all live; a live migration also sits in `pending-migrations/` | Open |
 | A4 | Medium | Security | Supabase security advisor: 2 errors and several actionable warnings | Open, partly accepted |
 | A5 | Medium | Quality | React hook rules are not linted | Open |
@@ -27,36 +27,35 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 
 ## 2. Items
 
-### A1. PV routing: the P0-1 fix has never been probed live (High)
+### A1. PV routing: the P0-1 fix has never been probed live (High) — closed 2026-11-02
 
-**What:** [docs/audits/carefind-carehub-pv-routing-audit.md](../docs/audits/carefind-carehub-pv-routing-audit.md)
-P0-1 found that a public reporter could set their own route to `status='routed'` at any business, exposing the case
-(including patient data) to that business. `carehub_20261113_adr_route_write_guard` (ledger `20261020185832`) adds the
-trigger `trg_adr_guard_route_writes`, which refuses API-role changes to routing columns. Its header says the catalogue
-was verified but **"Live behavioural probe NOT run."**
+**Was:** [docs/audits/carefind-carehub-pv-routing-audit.md](../docs/audits/carefind-carehub-pv-routing-audit.md)
+P0-1 (a public reporter could route their own case, with patient data, to any business) was fixed by the trigger
+`trg_adr_guard_route_writes` (`carehub_20261113_adr_route_write_guard`, extended by `carehub_20261114_adr_route_review`),
+but its live behaviour had never been tested while `authenticated` still holds column UPDATE on every route column and
+12 cases were routed.
 
-**Evidence (live, 2026-11-02):** the trigger is present and enabled. `authenticated` still holds column UPDATE on every
-route column (`status`, `responsible_business_id`, `selection_kind`, `verified_*` and others), so the trigger is the
-only barrier. 12 routes are `routed` and 2 `pending`, so real cases now depend on it.
+**Closed by:** a rolled-back live probe as an ordinary signed-in user owning a public draft. Every attempt to insert a
+non-pending, pre-verified, forged-review or ineligible-business route, and every attempt to change status, the
+responsible business, verification, hold/review fields, reporter-selection history or company workflow, was refused by
+the guard; a legitimate pending route was accepted (control). Routing data was identical before and after. Full results
+are in the `carehub_20261113_adr_route_write_guard` header.
 
-**Close by:** a rolled-back live probe as an `authenticated` public-draft owner (insert a non-pending route, flip
-`status` and `responsible_business_id` on an existing route); expect refusals. Record the result in the migration
-header. Optionally revoke the column grants too, as defence in depth.
+**Still optional:** revoke the unused column grants as defence in depth. **Not exercised:** a submitter-chain user on a
+routed *business* report, because none exists yet (all routed routes come from public reports); re-run the probe when
+one does.
 
-### A2. `export_logs` can be edited or deleted (Medium)
+### A2. `export_logs` can be edited or deleted (Medium) — closed 2026-11-02
 
-**What:** every platform-admin export (business, application, payout, subscription, ADR and payment exports since
-PR #39) is declared in `export_logs` with a reason and watermark before the file is produced. That record is meant to
-be the accountability trail, but it is not protected.
+**Was:** platform admins could UPDATE or DELETE export records through the REST API (one `FOR ALL` policy), every client
+role held TRUNCATE, and the actor was whatever id the browser sent.
 
-**Evidence (live, 2026-11-02):** policy `export_logs_platform_admin` is `ALL` for `is_platform_admin()`, so any
-platform admin can `UPDATE` or `DELETE` rows through the REST API. `authenticated` holds `INSERT, SELECT, UPDATE,
-DELETE, TRUNCATE`. There is no trigger on the table. Compare `audit_log`, which `carehub_20261209_record_export_audit`
-made append-only (client grants reduced to `SELECT`, update/delete/truncate refused by trigger).
-
-**Close by:** the same treatment as `audit_log`: revoke client `UPDATE, DELETE, TRUNCATE`, add an append-only trigger,
-keep `INSERT` for platform admins (or move writes behind a SECURITY DEFINER function that stamps the actor).
-The admin console only inserts and reads, so nothing in the app changes.
+**Closed by:** `carehub_20261231_export_logs_append_only` (applied live as version `20261102122934`): client roles keep
+only SELECT and INSERT (anon nothing) under read and insert policies for platform admins; a BEFORE INSERT trigger
+stamps the actor from the session and validates the reason, type, watermark and count; UPDATE, DELETE and TRUNCATE are
+refused by trigger for every role. Verified by 11 PGlite tests
+(`apps/carefind/src/test/admin-governance/exportLogs.db.test.js`, including one reproducing the original finding) and a
+rolled-back live probe. The admin console needed no change.
 
 ### A3. Migration status headers drift from the live ledger (Medium)
 
@@ -161,6 +160,8 @@ Not re-verified in this review; see each document for evidence and status.
 
 | Item | Closed in |
 |---|---|
+| A1: PV routing write guard verified live (no code change needed) | live probe 2026-11-02; result in `carehub_20261113_adr_route_write_guard` |
+| A2: `export_logs` append-only, actor stamped by the database | `carehub_20261231_export_logs_append_only` (live 2026-11-02) |
 | Stored XSS in ADR print documents (concomitant medication fields from the public form) | PR #39 (`e171e47`) |
 | CSV formula injection in admin and ADR exports | PR #39 (`e171e47`) |
 | Admin confirmation dialogs rendered no explanation (`message`/`variant` vs `consequence`/`danger`) | PR #39 (`e171e47`) |
