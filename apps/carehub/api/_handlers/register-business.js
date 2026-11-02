@@ -21,6 +21,10 @@ const TEXT_FIELDS = [
 const TEXT_MAX = { name: 160, owner: 120, email: 254 }
 const DEFAULT_TEXT_MAX = 500
 const COORD_RANGE = { lat: 90, lng: 180 }
+// Importers and manufacturers choose an operating model (carehub_20270102_importer_operating_models). It is not a
+// businesses column the registration function accepts: it is recorded by set_registration_operating_model, which
+// only touches a pending, top-level importer that has never had a model chosen.
+const OPERATING_MODELS = ['centralised', 'decentralised']
 
 // Returns the field name of the first invalid value, or null. Coerces lat/lng in place to numbers.
 function invalidField(business) {
@@ -59,6 +63,11 @@ export default async function handler(req, res) {
 
   const bad = invalidField(business)
   if (bad) return res.status(400).json({ error: `Invalid ${bad}` })
+  const isImporter = business.business_type === 'manufacturer_importer'
+  const operatingModel = body.operating_model
+  if (isImporter && operatingModel !== undefined && !OPERATING_MODELS.includes(operatingModel)) {
+    return res.status(400).json({ error: 'Invalid operating_model' })
+  }
 
   const email = String(business.email || '').trim().toLowerCase()
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'A valid email is required.' })
@@ -75,6 +84,13 @@ export default async function handler(req, res) {
     if (error.code === 'P0001') return res.status(400).json({ error: error.message })
     console.error('[register-business] rpc failed:', error.code)
     return res.status(500).json({ error: 'Registration failed. Please try again.' })
+  }
+
+  // Registration has succeeded. The database already defaulted an importer to Centralised; record the owner's choice.
+  // A failure here leaves that safe default (the owner can switch in Settings), so it is logged, not returned.
+  if (isImporter && operatingModel) {
+    const { error: modelError } = await supabase.rpc('set_registration_operating_model', { p_email: email, p_model: operatingModel })
+    if (modelError) console.error('[register-business] operating model not recorded:', modelError.code)
   }
 
   // Best effort: registration has succeeded. If the email cannot be sent, the owner recovers through

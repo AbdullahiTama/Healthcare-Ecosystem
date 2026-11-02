@@ -2,6 +2,7 @@
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { Hourglass, CheckCircle, Circle, Search, ArrowLeft, ArrowRight, ChevronLeft, Sparkles, Pill, Stethoscope, Smile, Eye, Leaf, Factory, Truck, Building2 } from 'lucide-react'
 import { registerBusiness } from '../../services/supabase'
+import { MODELS } from '../../modules/representatives/services/ledger'
 import { Card, Inp, Sel, TealBtn, DarkBtn, GhostBtn, Toggle, useToast, Toast, Logo } from '../../components/ui/index'
 import { DARK, businessName } from '../../lib/utils'
 import { BUSINESS_TYPES, NIG_STATES } from '../../config/constants'
@@ -43,6 +44,7 @@ export default function Register() {
 
   const canNext = () => {
     if (step === 1) return data.businessName && data.state && data.address && data.phone && data.businessEmail
+      && (data.businessType !== 'manufacturer_importer' || !!data.operatingModel)
     if (step === 2) return data.whatsapp && data.businessHours
     if (step === 3) return data.firstName && data.lastName && data.ownerEmail && data.ownerPhone
     if (step === 4) return data.agreedTerms
@@ -71,6 +73,8 @@ export default function Register() {
         website: data.website || '',
         visible_on_carefind: data.visibleOnCareFind !== false,
         referral_code_used: referralInput,
+        // Importers and manufacturers only; the server ignores it for every other type.
+        ...(data.businessType === 'manufacturer_importer' ? { operating_model: data.operatingModel } : {}),
       })
       // /api/register-business creates the pending business row and emails the
       // owner a verification link; the owner chooses their password from it.
@@ -190,6 +194,9 @@ export default function Register() {
                 <CInp label='Business Email' value={data.businessEmail} onChange={v => f('businessEmail', v)} type='email' placeholder='info@yourbiz.ng' required />
               </div>
               <CInp label='Website or Instagram (optional)' value={data.website} onChange={v => f('website', v)} placeholder='@yourbusiness' />
+              {data.businessType === 'manufacturer_importer' && (
+                <OperatingModelChoice value={data.operatingModel} onChange={v => f('operatingModel', v)} />
+              )}
             </div>
           )}
           {step === 2 && (
@@ -254,6 +261,7 @@ export default function Register() {
                 {[
                   ['Business Type', businessName(data.businessType)],
                   ['Business Name', data.businessName],
+                  ...(data.businessType === 'manufacturer_importer' ? [['Operating model', MODELS[data.operatingModel]?.label || 'Not chosen']] : []),
                   ['State', data.state],
                   ['WhatsApp', data.whatsapp],
                   ['Business Hours', data.businessHours],
@@ -295,5 +303,27 @@ export default function Register() {
       </div>
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
     </div>
+  )
+}
+
+// Importers and manufacturers choose how their representatives work. It can be changed later in Settings; every
+// CareHub and CareFind feature is available under both.
+function OperatingModelChoice({ value, onChange }) {
+  return (
+    <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+      <legend style={{ fontSize: '13px', fontWeight: '700', color: theme.slate, marginBottom: '8px' }}>How do your representatives work? <span aria-hidden='true' style={{ color: theme.danger }}>*</span></legend>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
+        {['centralised', 'decentralised'].map((m) => (
+          <label key={m} style={{ display: 'block', cursor: 'pointer', padding: '14px', borderRadius: theme.radius.md, border: `2px solid ${value === m ? theme.tealDeep : theme.border}`, background: value === m ? theme.tealMist : theme.cardBg }}>
+            <span style={{ display: 'flex', gap: '8px', alignItems: 'center', fontWeight: '800', color: theme.slate }}>
+              <input type='radio' name='operating-model' value={m} checked={value === m} onChange={() => onChange(m)} required />
+              {MODELS[m].label}
+            </span>
+            <span style={{ display: 'block', fontSize: '12px', color: theme.textMid, marginTop: '6px', lineHeight: '1.5' }}>{MODELS[m].short}</span>
+          </label>
+        ))}
+      </div>
+      <div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '8px' }}>You can switch at any time in Settings. All CareHub and CareFind features are included either way.</div>
+    </fieldset>
   )
 }

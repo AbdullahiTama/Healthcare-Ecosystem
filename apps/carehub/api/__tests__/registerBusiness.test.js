@@ -149,3 +149,28 @@ describe('POST /api/register-business', () => {
     expect(res.body).toEqual({ ok: true })
   })
 })
+
+describe('POST /api/register-business — importer operating model', () => {
+  const importer = { ...valid, business_type: 'manufacturer_importer' }
+
+  it('records the chosen model after the business is created, never as a business column', async () => {
+    const res = await call({ ...importer, operating_model: 'decentralised' })
+    expect(res.statusCode).toBe(200)
+    expect(h.rpc.mock.calls.map((c) => c[0])).toEqual(['register_business_unconfirmed', 'set_registration_operating_model'])
+    expect(h.rpc.mock.calls[0][1].p_business).not.toHaveProperty('operating_model')
+    expect(h.rpc.mock.calls[1][1]).toEqual({ p_email: 'ada@lifeline.test', p_model: 'decentralised' })
+  })
+
+  it('refuses an unknown model before touching the database', async () => {
+    expect((await call({ ...importer, operating_model: 'franchise' })).statusCode).toBe(400)
+    expect(h.rpc).not.toHaveBeenCalled()
+  })
+
+  it('ignores the field for other business types, and a failure to record it does not fail registration', async () => {
+    await call({ ...valid, business_type: 'pharmacy', operating_model: 'decentralised' })
+    expect(h.rpc.mock.calls.map((c) => c[0])).toEqual(['register_business_unconfirmed'])
+    vi.clearAllMocks()
+    h.rpc.mockResolvedValueOnce({ data: 'biz', error: null }).mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } })
+    expect((await call({ ...importer, operating_model: 'centralised' })).statusCode).toBe(200)
+  })
+})
