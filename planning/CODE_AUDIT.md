@@ -24,7 +24,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A7 | Low | Admin | Hard delete of a business is selectable again | Open: owner decision |
 | A8 | Low | Tooling | CodeRabbit reviews never run on PRs to `main` | Open |
 | A9 | Low | Debt | About 600 `no-unused-vars` warnings | Open, tracked in Linting.md |
-| A12 | High | POS (production defect) | Re-holding an edited held sale is refused (`permission denied for table sales`); duplicate held sales; carts lost when leaving the POS | **Grant applied live 2026-11-02**; app fixes on `claude/keen-mayer-4kpxda`, closes on merge |
+| A12 | High | POS (production defect) | Re-holding an edited held sale is refused (`permission denied for table sales`); duplicate held sales; carts lost when leaving the POS | **Fixed 2026-11-02**: grant applied live, app merged to `main`; awaiting deploy check and owner review of 4 double-charged pairs |
 
 ## 2. Items
 
@@ -145,7 +145,7 @@ About 600 `no-unused-vars` and 140 `no-empty` warnings remain across both apps (
 burn-down plan and ratchet are in [docs/architecture/Linting.md](../docs/architecture/Linting.md) §3. The admin
 dashboard alone reports 28.
 
-### A12. POS held sales: re-hold refused, duplicates, lost carts (High) — grant live, app fix awaiting merge
+### A12. POS held sales: re-hold refused, duplicates, lost carts (High) — fixed, awaiting deploy check
 
 (A10 and A11 are taken on the open A3 branch `ccr-f80f15d6-yvi6ui`; its A11 records the same refusal as this item's
 first point and proposes the same grant.)
@@ -167,8 +167,11 @@ test plan: [POS-Drafts-and-Held-Sale-Reliability.md](../docs/architecture/POS-Dr
 (version `20261102135828`); the rolled-back live probe in its header passed (owner and staff can save an edited held
 sale; release, status and payment changes on a held sale and money/customer changes on a completed sale stay refused).
 
-**Close by:** merging the branch to `main` (the app half). Separately, owner review of the duplicate held sales still
-open and of duplicates that were each charged (listed in the note).
+**Also done:** merged to `main` 2026-11-02 (`2588533`). The one duplicate held sale still open (`HLD994467`) was closed
+by platform staff with an audit entry; no figure changed.
+
+**Close by:** CI and the Vercel deploy of `2588533` green, then mark closed. Separately, the Owner of business
+`f7d9a912…` checks four pairs charged twice at the held amount (₦150, ₦1,700, ₦500, ₦100), listed in the note.
 
 ## 3. Open items recorded in other audits
 

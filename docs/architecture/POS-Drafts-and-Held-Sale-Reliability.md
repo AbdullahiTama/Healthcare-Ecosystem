@@ -81,12 +81,30 @@ Related: [Sales-Corrections.md](Sales-Corrections.md) (how held sales work), [Cl
 ## 4. Owner follow-ups (not done automatically)
 
 1. ~~Approve and apply the grant migration~~ — done 2026-11-02; live probe passed (see its header).
-2. **Duplicate held sales still open** (business `f7d9a912…`, 2026-11-02): `HLD994467` (₦13,600; its copy `HLD290011`
-   was charged) and the pair `HLD883219` / `HLD662036` (₦100 each). Held sales cannot be deleted by design; complete or
-   leave them, or ask platform staff for a one-off fix.
-3. **Duplicates that were each charged** (same items, held within seconds, each later completed, e.g. `HLD688936` /
-   `HLD112104` ₦150 each, `HLD995335` / `HLD964011` ₦1,700 each, `HLD426162` / `HLD820430` ₦500 each). Some may be real
-   repeat sales; any that are not are double revenue and can be corrected by the Owner in Financial Reports.
+2. ~~Duplicate held sales still open~~ — done 2026-11-02. `HLD994467` (₦13,600, business `f7d9a912…`), the exact copy
+   of `HLD290011` (created 0.5 s apart, charged as `TXN818844`), was closed by platform staff with the platform owner's
+   approval: `status = 'deleted'`, off hold, balance 0, `deleted_at` set. It had no payment, stock movement or debt, so
+   no figure changed. Recorded in `audit_log` (`sale.held_duplicate_closed`, actor type `platform`) with its prior state
+   and a one-line restore. The pair `HLD883219` / `HLD662036` had meanwhile been charged by the shop (see below). No
+   duplicate held sale is open now.
+3. **Duplicates that were each charged — for the Owner of business `f7d9a912…` to check** (nothing was changed). Each
+   pair is one held sale written twice by a double tap (same items and customer, created within 1.5 s); each copy was
+   later charged as its own sale.
+
+   **Charged twice at the held amount: likely double revenue.** If the customer paid once, delete the second sale in
+   Financial Reports (Owner only; it reverses the payment and stock and is audited):
+
+   | Held pair (created) | Sale 1 | Sale 2 |
+   |---|---|---|
+   | `HLD688936` / `HLD112104` (2026-10-29 10:28) | `TXN301803` ₦150 Cash 10:28 | `TXN359539` ₦150 Cash 10:29 |
+   | `HLD995335` / `HLD964011` (2026-10-30 11:57) | `TXN909263` ₦1,700 Cash 12:31 | `TXN514698` ₦1,700 Cash 12:32 |
+   | `HLD426162` / `HLD820430` (2026-10-31 10:09) | `TXN905116` ₦500 Cash 10:51 | `TXN433545` ₦500 Cash 11:10 |
+   | `HLD883219` / `HLD662036` (2026-11-02 13:42) | `TXN839116` ₦100 Cash 14:27 | `TXN127041` ₦100 Cash 14:30 |
+
+   **Charged at different amounts: probably real, separate sales.** Staff opened the extra copy and changed it into
+   another customer's sale. No action unless the shop knows otherwise: `HLD117549` / `HLD396957` (₦1,700 and ₦950),
+   `HLD589739` / `HLD957563` (₦30,100 and ₦600), `HLD660143` / `HLD949157` (₦500 and ₦4,000), `HLD934036` / `HLD395594`
+   (₦500 and ₦2,000), and the triple `HLD332863` / `HLD154051` / `HLD776054` (₦300, ₦1,400 and ₦1,800).
 
 ## 5. Test plan
 
