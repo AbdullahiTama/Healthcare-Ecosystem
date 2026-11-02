@@ -3,7 +3,16 @@
 --
 -- Status: APPLIED live 2026-10-20 (tracked as 20261020185832) under explicit owner
 --         approval. Catalog verified post-apply (trigger enabled; no anon/authenticated
---         EXECUTE; routing RPCs owned by postgres). Live behavioural probe NOT run.
+--         EXECUTE; routing RPCs owned by postgres).
+--         Live behavioural probe run 2026-11-02 (planning/CODE_AUDIT.md A1), against the guard as extended by
+--         carehub_20261114_adr_route_review, inside a DO block that raised and rolled back (route fingerprint, 63
+--         reports, 16 products, 127 events identical before and after). As an ordinary signed-in user owning a public
+--         draft: INSERT with status='routed', a 'verified' route to an ineligible business, a forged review stamp, or
+--         a pre-verified route -> all refused by the guard; UPDATE of status, responsible business + selection,
+--         verification fields, hold/review fields, reporter-selection history, company workflow -> all refused
+--         ("route columns are changed only through the routing functions"). Control: a legitimate pending route was
+--         accepted, so the refusals are the guard, not row security. Not exercised: a submitter-chain user on a routed
+--         business report (all 12 routed routes come from public reports).
 --
 -- Problem (docs/audits/carefind-carehub-pv-routing-audit.md, P0-1): the routes
 -- INSERT/UPDATE policies admit a public-draft owner (and the submitter chain)

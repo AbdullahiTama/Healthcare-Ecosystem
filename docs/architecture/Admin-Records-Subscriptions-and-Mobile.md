@@ -44,6 +44,10 @@ Exports carry personal and clinical data, so every admin export:
    platform-admin only and is visible under Health › Audit log;
 3. only then produces the file. If the log cannot be written, nothing is downloaded.
 
+`export_logs` is append-only (`carehub_20261231_export_logs_append_only`, applied 2026-11-02): nobody, including
+platform admins and the table owner, can edit, delete or truncate an entry; the database stamps the actor from the
+signed-in session (whatever id the browser sends is ignored) and refuses an entry without a reason, type or watermark.
+
 ADR exports also add an `exported` event to each case's own timeline (`adr_log_event`), as exports from the Hub do.
 
 | Export | Format | Notes |
