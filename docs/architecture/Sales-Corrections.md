@@ -97,8 +97,9 @@ the multi-branch overview. Deleted sales are not transactions in any of them.
 
 ## Known limits / follow-ups
 
-* `docs/architecture/pending-migrations/carehub_20261211_sales_write_hardening.sql`
-  (unapplied) grants clients `UPDATE (status, is_on_hold, notes)` and removes
+* `supabase/migrations/carehub_20261211_sales_write_hardening.sql` was in fact
+  applied live (`20261027012946`) before this note was written (found 2026-11-02,
+  planning/CODE_AUDIT.md A11). It grants clients `UPDATE (status, is_on_hold, notes)` and removes
   every other column; applied as-is it would re-allow release of held sales and
   block editing held contents. Reconcile it with this migration first (grant
   `items, subtotal, discount, total, balance, client_name, notes`, drop
@@ -108,8 +109,6 @@ the multi-branch overview. Deleted sales are not transactions in any of them.
 * Changing the customer name on an edit detaches the sale from the customer
   record (`client_id` null).
 * Sales & Accounts (`/pos/report`) no longer offers refunds; repayments remain.
-* `planning/ROADMAP.md`, `planning/CODE_AUDIT.md` and `docs/PROJECT_OVERVIEW.md`,
-  named in the engineering instructions, do not exist in the repository.
 
 ## Test plan
 

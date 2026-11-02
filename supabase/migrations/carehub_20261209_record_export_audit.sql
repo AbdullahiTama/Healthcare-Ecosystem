@@ -1,3 +1,6 @@
+-- LEDGER STATUS: APPLIED. Recorded live as `carehub_20261209_record_export_audit`, version 20261025190400.
+--   Checked against the live ledger 2026-11-02 (planning/CODE_AUDIT.md A3). Any status wording further down predates this and is kept as written.
+--
 -- Export audit trail: who exported what, when, from which business.
 --
 -- Status: NOT YET APPLIED. Written against the LIVE schema read on 2026-10-25:

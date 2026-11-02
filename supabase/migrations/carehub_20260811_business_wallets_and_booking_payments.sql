@@ -1,3 +1,7 @@
+-- LEDGER STATUS: APPLIED. Shipped live as `business_wallets_and_booking_payments`, version 20260921132819; the 2026-10-15 ledger reconciliation also
+--   recorded it under this file's name (version 202608119003). Checked against the live ledger 2026-11-02 (planning/CODE_AUDIT.md A3).
+--   Any status wording further down predates this and is kept as written.
+--
 -- ============================================================================
 -- Business wallets, booking payment settlement, 20% commission, and release
 --

@@ -1,3 +1,6 @@
+-- LEDGER STATUS: APPLIED. Recorded live as `carehub_20261101_businesses_insert_guard_expiry_default`, version 20261011084007.
+--   Checked against the live ledger 2026-11-02 (planning/CODE_AUDIT.md A3). Any status wording further down predates this and is kept as written.
+--
 -- ============================================================================
 -- Businesses INSERT guard: corrective follow-up (plan_expires_at default)
 --

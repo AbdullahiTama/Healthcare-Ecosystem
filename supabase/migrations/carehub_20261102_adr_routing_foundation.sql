@@ -1,3 +1,7 @@
+-- LEDGER STATUS: APPLIED. Shipped live as `adr_routing_foundation`, version 20261015115734; the 2026-10-15 ledger reconciliation also
+--   recorded it under this file's name (version 202611029001). Checked against the live ledger 2026-11-02 (planning/CODE_AUDIT.md A3).
+--   Any status wording further down predates this and is kept as written.
+--
 -- ============================================================================
 -- ADR Reporting Module - Phase 1 (Unified PV): routing foundation
 --

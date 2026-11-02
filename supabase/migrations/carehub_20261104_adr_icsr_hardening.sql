@@ -1,3 +1,7 @@
+-- LEDGER STATUS: APPLIED. Shipped live as `adr_icsr_hardening`, version 20261015120556; the 2026-10-15 ledger reconciliation also
+--   recorded it under this file's name (version 202611049001). Checked against the live ledger 2026-11-02 (planning/CODE_AUDIT.md A3).
+--   Any status wording further down predates this and is kept as written.
+--
 -- ============================================================================
 -- ADR Reporting Module - Phase 3: ICSR validation hardening
 --

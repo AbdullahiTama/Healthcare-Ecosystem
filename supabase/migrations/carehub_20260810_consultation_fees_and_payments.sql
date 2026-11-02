@@ -1,3 +1,7 @@
+-- LEDGER STATUS: APPLIED. Shipped live as `consultation_fees_and_payments`, version 20260921132949; the 2026-10-15 ledger reconciliation also
+--   recorded it under this file's name (version 202608109003). Checked against the live ledger 2026-11-02 (planning/CODE_AUDIT.md A3).
+--   Any status wording further down predates this and is kept as written.
+--
 -- ============================================================================
 -- Consultation fees, concern field, and payment tracking
 --

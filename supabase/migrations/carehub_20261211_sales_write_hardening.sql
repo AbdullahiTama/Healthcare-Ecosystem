@@ -1,3 +1,6 @@
+-- LEDGER STATUS: APPLIED. Recorded live as `carehub_20261211_sales_write_hardening`, version 20261027012946.
+--   Checked against the live ledger 2026-11-02 (planning/CODE_AUDIT.md A3). Any status wording further down predates this and is kept as written.
+--
 -- Sales write hardening: money columns change only through audited functions.
 --
 -- Design: docs/superpowers/specs/2026-10-25-pos-sales-report-design.md

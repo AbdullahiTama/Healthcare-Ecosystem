@@ -1,3 +1,8 @@
+-- LEDGER STATUS: APPLIED (by reconciliation). Recorded under this name by the 2026-10-15 ledger reconciliation
+--   (version 202608029002), which checked this file's objects against production (all present, or later
+--   superseded) and did not re-run the file; see apps/docs/architecture/Migration-Drift-Audit.md.
+--   Checked against the live ledger 2026-11-02 (planning/CODE_AUDIT.md A3). Any status wording further down predates this and is kept as written.
+--
 -- ============================================================================
 -- Configurable online/physical appointment booking
 --

@@ -1,3 +1,7 @@
+-- LEDGER STATUS: APPLIED. Shipped live as `adr_analytics_access`, version 20261015121435; the 2026-10-15 ledger reconciliation also
+--   recorded it under this file's name (version 202611079001). Checked against the live ledger 2026-11-02 (planning/CODE_AUDIT.md A3).
+--   Any status wording further down predates this and is kept as written.
+--
 -- ============================================================================
 -- ADR Reporting Module - Phase 6: analytics access logging
 --

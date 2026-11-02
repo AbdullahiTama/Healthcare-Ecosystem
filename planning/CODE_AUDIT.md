@@ -17,13 +17,15 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 |---|---|---|---|---|
 | A1 | High | Security / ADR | PV routing P0-1 fix is live but was never probed live; the trigger is the only barrier | **Closed 2026-11-02**: probed live, holds |
 | A2 | Medium | Governance | `export_logs` is not append-only: platform admins can edit or delete export records | **Closed 2026-11-02**: append-only, applied live |
-| A3 | Medium | Process | 27 migrations say "not applied", "draft" or "review only" but are all live; a live migration also sits in `pending-migrations/` | Open |
+| A3 | Medium | Process | 27 migrations say "not applied", "draft" or "review only" but are all live; a live migration also sits in `pending-migrations/` | **Closed 2026-11-02**: headers fixed, drift test added |
 | A4 | Medium | Security | Supabase security advisor: 2 errors and several actionable warnings | Open, partly accepted |
 | A5 | Medium | Quality | React hook rules are not linted | Open |
 | A6 | Medium | Data model | `plan_catalog` and `business_subscriptions` are unused mirrors; the Plan Catalog screen edits prices checkout ignores | Open: owner decision |
 | A7 | Low | Admin | Hard delete of a business is selectable again | Open: owner decision |
 | A8 | Low | Tooling | CodeRabbit reviews never run on PRs to `main` | Open |
 | A9 | Low | Debt | About 600 `no-unused-vars` warnings | Open, tracked in Linting.md |
+| A10 | Low | Process | 9 migration files have no ledger row under their own name and no status header | Open: reconcile per file |
+| A11 | High | POS (production defect) | Editing a held sale's contents is refused in production (`permission denied for table sales`) | Open: fix proposed, needs approval |
 
 ## 2. Items
 
@@ -57,26 +59,24 @@ refused by trigger for every role. Verified by 11 PGlite tests
 (`apps/carefind/src/test/admin-governance/exportLogs.db.test.js`, including one reproducing the original finding) and a
 rolled-back live probe. The admin console needed no change.
 
-### A3. Migration status headers drift from the live ledger (Medium)
+### A3. Migration status headers drift from the live ledger (Medium) — closed 2026-11-02
 
-**What:** headers are how a reader knows whether a protection is live. 27 files in `supabase/migrations/` still say
-`NOT YET APPLIED`, `STATUS: NOT APPLIED`, `DRAFT — not yet applied` or `REVIEW ONLY — do NOT apply`.
+**Was:** 27 files in `supabase/migrations/` said `NOT YET APPLIED`, `STATUS: NOT APPLIED`, `DRAFT — not yet applied` or
+`REVIEW ONLY — do NOT apply`, yet all 27 were in the live ledger; and `carehub_20261211_sales_write_hardening`, kept as a
+draft in `docs/architecture/pending-migrations/`, had been applied (`20261027012946`).
 
-**Evidence (live, 2026-11-02):** all 27 have a same-named entry in `supabase_migrations.schema_migrations`. They
-include the ADR delete guards and routing migrations, `carehub_20261209_record_export_audit`, the businesses insert
-guard, and the August referral, roles and master-catalogue migrations. Separately,
-`docs/architecture/pending-migrations/carehub_20261211_sales_write_hardening.sql` is a draft in the folder for
-migrations that must not be applied, yet `carehub_20261211_sales_write_hardening` is in the live ledger, and that
-folder's README does not mention it.
-
-**Risk:** someone re-applies a migration believing it is missing, or assumes a protection is absent (or present) when
-it is not.
-
-**Close by:** update the 27 headers to `APPLIED (version ...)`, move or annotate the stale draft, and add a check (a
-test that reads a committed ledger snapshot, or a header convention a script can verify) so the two cannot drift
-silently again. The file list is reproducible with
-`grep -l -i "NOT YET APPLIED\|STATUS: NOT APPLIED\|not applied yet\|REVIEW ONLY" supabase/migrations/*.sql`
-(27 files on 2026-11-02).
+**Closed by:**
+- Each of the 28 files now opens with a `LEDGER STATUS: APPLIED` line saying exactly what the ledger shows: applied
+  under its own name with a real version (4), shipped under a shorter name with the reconciliation adding this name
+  later (11; e.g. `adr_routing_foundation` @ `20261015115734`), or recorded only by the 2026-10-15 reconciliation, which
+  checked the file's objects against production and did not re-run it (13). The original status wording is kept below
+  it as historical.
+- `carehub_20261211_sales_write_hardening.sql` moved to `supabase/migrations/`; its docs now say it is applied (which
+  exposed A11).
+- `apps/carefind/src/test/migrations/migrationStatus.test.js` with `appliedLedger.snapshot.json` (447 ledger names,
+  2026-11-02): an applied file may not claim to be unapplied; a header that says APPLIED must be in the snapshot; a file
+  not in the ledger must say NOT YET APPLIED (or be a listed legacy exception, A10); nothing in `pending-migrations/` may
+  be applied. Each rule was checked to fail on a deliberately broken file.
 
 ### A4. Supabase security advisor findings (Medium)
 
@@ -144,6 +144,38 @@ About 600 `no-unused-vars` and 140 `no-empty` warnings remain across both apps (
 burn-down plan and ratchet are in [docs/architecture/Linting.md](../docs/architecture/Linting.md) §3. The admin
 dashboard alone reports 28.
 
+### A10. Migration files with no ledger row under their own name (Low)
+
+**Evidence (2026-11-02):** `carehub_20261212_supplier_payments`, `20261213_credit_customer_and_purchase_items`,
+`20261214_plan_enforcement`, `20261215_catalogue_foundation`, `20261216_sales_owner_corrections`,
+`20261217_staff_activity`, `20261220_client_totals_and_held_sales`, `20261221_prescription_safety` and
+`20261222_branch_stock_transfers` have no row under their file name and no status header. At least some shipped under
+other names: the ledger has `staff_activity` and `sales_owner_corrections_1/2/4` (there is no `_3`), and
+`plan_enforcement`'s functions are live.
+
+**Close by:** for each file, check its objects against production (as the 2026-10-15 reconciliation did), add a
+`LEDGER STATUS` header naming the version it shipped under, and remove it from `KNOWN_UNRECORDED` in
+`migrationStatus.test.js`. Find out why `sales_owner_corrections_3` is missing.
+
+### A11. Editing a held sale is refused in production (High)
+
+**What:** at the till, a held sale's contents (products, customer, totals) are re-saved by
+`posRepository.updateHeld`, a direct `PATCH` of `items, subtotal, discount, total, balance, client_id, client_name,
+notes`. `carehub_20261211_sales_write_hardening` (applied 2026-10-27) left signed-in users UPDATE on only
+`status, is_on_hold, notes`. Sales-Corrections.md (2026-10-27) said that migration must be reconciled *before* it was
+applied for exactly this reason, believing it unapplied; it had already been applied.
+
+**Evidence (live, 2026-11-02, rolled-back probe as the business owner on a real held sale):** the `updateHeld` update
+is refused with `42501 permission denied for table sales`; a notes-only update succeeds; releasing the held sale
+directly is still refused by `sales_guard_direct_update` ("A held sale can only be edited or completed at the till").
+8 held sales are open across 4 businesses; the latest was held today.
+
+**Proposed fix (not applied; needs approval):** grant `authenticated` UPDATE on `items, subtotal, discount, total,
+balance, client_id, client_name`. `sales_guard_direct_update` already limits direct updates to a held sale's contents
+(it refuses changing hold status, number, business, creation time or resume link) and refuses any money or customer
+change on a completed sale, and the existing row policy keeps it to the caller's business. Test on PGlite with the live
+trigger and a behavioural probe (edit a held sale: allowed; change a completed sale's total: refused).
+
 ## 3. Open items recorded in other audits
 
 Not re-verified in this review; see each document for evidence and status.
@@ -160,6 +192,7 @@ Not re-verified in this review; see each document for evidence and status.
 
 | Item | Closed in |
 |---|---|
+| A3: migration headers agree with the ledger; drift test | 28 headers, `migrationStatus.test.js` (2026-11-02) |
 | A1: PV routing write guard verified live (no code change needed) | live probe 2026-11-02; result in `carehub_20261113_adr_route_write_guard` |
 | A2: `export_logs` append-only, actor stamped by the database | `carehub_20261231_export_logs_append_only` (live 2026-11-02) |
 | Stored XSS in ADR print documents (concomitant medication fields from the public form) | PR #39 (`e171e47`) |

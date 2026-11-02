@@ -1,3 +1,7 @@
+-- LEDGER STATUS: APPLIED. Shipped live as `adr_delete_guards`, version 20261015122805; the 2026-10-15 ledger reconciliation also
+--   recorded it under this file's name (version 202611109001). Checked against the live ledger 2026-11-02 (planning/CODE_AUDIT.md A3).
+--   Any status wording further down predates this and is kept as written.
+--
 -- ============================================================================
 -- ADR Reporting Module - Phase 9: delete guards + submit EXECUTE hardening
 --                        + deadline-rule change audit

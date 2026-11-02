@@ -18,7 +18,7 @@ Design and decisions: `docs/superpowers/specs/2026-10-25-pos-sales-report-design
 |---|---|
 | Client (report, detail, shifts, exports, deposit method, collections) | On branch `feat/pos-sales-report` |
 | `carehub_20261210_pos_accounting.sql` | **APPLIED live 2026-10-26** (tracked as `20261026221943`), verified: ACLs (no anon; internals not executable by signed-in users), behavioural rollback test as a real Cashier, backfill 183 sales / ₦4,660,975.00 matching the pre-apply total, advisors +4 expected WARNs only |
-| `carehub_20261211_sales_write_hardening.sql` | **Drafted, NOT applied** |
+| `carehub_20261211_sales_write_hardening.sql` | **Applied live** (tracked as `20261027012946`; found 2026-11-02, see planning/CODE_AUDIT.md A3 and A11). Now in `supabase/migrations/`. It blocks editing a held sale's contents (A11). |
 
 Before migration 1 was applied the report still worked on `sales` alone. It shows
 a notice that money figures are estimated, hides the Payments tab, shift

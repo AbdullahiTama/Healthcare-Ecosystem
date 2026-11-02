@@ -87,6 +87,10 @@ subscription-expiry reminders). Deployment specifics: [apps/carefind/DEPLOYMENT.
 - Each migration opens with a header: problem, fix, security implications, rollback, and a **Status** line that is
   updated to `APPLIED ... (version ...)` with verification evidence once it is live. Drafts that must not be applied
   live in `docs/architecture/pending-migrations/`.
+- `apps/carefind/src/test/migrations/migrationStatus.test.js` keeps headers honest against a snapshot of the live
+  ledger (`appliedLedger.snapshot.json`): an applied file may not claim to be unapplied, a header that says APPLIED must
+  be in the snapshot, and nothing in `pending-migrations/` may be applied. After applying a migration, add its name to
+  the snapshot.
 - Database behaviour is tested on PGlite (real Postgres in WebAssembly) with the live table shapes, in
   `apps/carefind/src/test/*/*.db.test.js`, before anything is applied.
 

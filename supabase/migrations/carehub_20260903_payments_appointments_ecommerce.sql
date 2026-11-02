@@ -1,3 +1,7 @@
+-- LEDGER STATUS: APPLIED. Shipped live as `payments_appointments_ecommerce`, version 20260903174926; the 2026-10-15 ledger reconciliation also
+--   recorded it under this file's name (version 202609039002). Checked against the live ledger 2026-11-02 (planning/CODE_AUDIT.md A3).
+--   Any status wording further down predates this and is kept as written.
+--
 -- ============================================================================
 -- Payments — Appointments (CareHub) + E-commerce Shop strict Paystack
 -- Spec: _bmad-output/specs/spec-payments-appointments-ecommerce

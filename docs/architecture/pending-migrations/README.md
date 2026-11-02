@@ -19,6 +19,10 @@ The other three drafts of this work were applied on 2026-10-24 (see "Already app
 
 ## Already applied (files in `supabase/migrations/`)
 
+`carehub_20261211_sales_write_hardening` was kept here as a draft but had been applied live (`20261027012946`); it was
+moved to `supabase/migrations/` on 2026-11-02 (planning/CODE_AUDIT.md A3). A test now fails if any file in this folder is
+in the live ledger (`apps/carefind/src/test/migrations/migrationStatus.test.js`).
+
 | Applied as | Version | Fixes |
 |---|---|---|
 | `carehub_20261020_default_viewers_own_rows` | 20261020154020 | F7: any member could rewrite a colleague's default viewers |
