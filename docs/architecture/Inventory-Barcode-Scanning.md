@@ -1,9 +1,9 @@
-# Inventory, Stock Management and Master Catalog: USB barcode scanners
+# Inventory, Stock Management, Master Catalog and Stock Transfers: USB barcode scanners
 
 2026-11-04. Client only, no database change. The same fix as Purchases
 (`Purchases-Editing-and-Analytics.md`, "USB scanner routing") and the POS (`POS-Barcode-Scanning.md`).
 Stock Management's **Inventory** tab is this same screen; its **Stock Validation** tab is covered at the end;
-**Stock History** has no inputs. The Master Catalog is covered in the last section.
+**Stock History** has no inputs. The Master Catalog and Stock Transfers have their own sections at the end.
 
 ## Problem
 
@@ -98,4 +98,32 @@ nothing focused, are that dialog's.
 
 **Tests:** `master-catalog/__tests__/MasterCatalog.scanner.test.jsx`, 11 tests. 9 fail against the previous
 screens; the other 2 (hand typing, fields outside) check what must not change.
+
+## Stock Transfers
+
+**Problem:** a scan with focus in a Send stock line's Quantity, or in a transfer's Received count, typed the
+code there, and the scanner's Enter pressed a focused **Send**, **Confirm received** or **Cancel transfer**
+button (or Open transfer / + Send stock on the list). The item search matched names only, so scanning could
+not add an item to a transfer.
+
+**Fix (`transfers/`):**
+
+- **Send stock** (`NewTransferModal.jsx`, `useDialogKeyboardScanner`): a scan anywhere in the dialog undoes
+  what it typed (destination, search, lines, note), then looks the code up with the new
+  `transferRepository.findByBarcode(locationId, code)`: this location's products with exactly that barcode
+  (trimmed), linked or not, in stock or not. A linked item in stock is added ("Added … Enter the quantity.")
+  with focus on its quantity, or pointed at when already listed. Otherwise the reason is shown: no product
+  here has it, it is not linked to the master catalogue, or it has no stock here. A failed lookup says so.
+  Nothing is sent: the stock still leaves only through `send_stock_transfer`, with its own checks.
+- **Transfer detail** (`TransferDetailModal.jsx`): no barcode field, so a scan into a Received count or a note
+  is undone with "Scan ignored (…)", and it presses no button.
+- **List** (`StockTransfers.jsx`, window listener while no dialog is open): a scan presses nothing; for the
+  owner or a manager it opens Send stock with the scanned item added, for other staff it is explained.
+
+**Security:** `findByBarcode` is a read of `products` for the current location under the same row level
+security as the existing item search (`sendable`). No permission, write or server function changed.
+
+**Tests:** `transfers/__tests__/StockTransfers.scanner.test.jsx`, 11 tests, and the lookup's query in
+`transferRules.test.js`. 10 of the 11 fail against the previous screens (the hand-typing check only because
+its setup adds the item by scan); fields outside the screen are left alone.
 

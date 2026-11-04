@@ -69,4 +69,11 @@ describe('transfer repository', () => {
     await repo.sendable('loc', 'amox(')
     expect(calls[0].path).toBe('products?business_id=eq.loc&master_product_id=not.is.null&stock=gt.0&name=ilike.*amox*&order=name.asc,id.asc&limit=30&select=id,name,stock,master_product_id')
   })
+
+  it('a scanned barcode is looked up exactly (trimmed) among this location\'s products', async () => {
+    const { calls, repo } = recording([])
+    await repo.findByBarcode('loc', ' 6151100001 ')
+    expect(await repo.findByBarcode('loc', '  ')).toEqual([])
+    expect(calls.map((c) => c.path)).toEqual(['products?business_id=eq.loc&barcode=eq.6151100001&order=name.asc,id.asc&limit=5&select=id,name,stock,master_product_id'])
+  })
 })

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useDialogKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { theme } from '../../styles/theme'
 import { Modal, Pill, Inp, GhostBtn, TealBtn, RedBtn } from '../../components/ui'
 import { STATUS, totals, checkReceived, locationName } from './transferRules'
@@ -15,6 +16,14 @@ export default function TransferDetailModal({ transfer, locationId, locations, c
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [error, setError] = useState('')
   useEffect(() => { setReceived({}); setNote(''); setReason(''); setConfirmCancel(false); setError('') }, [transfer?.id])
+  // No barcode field here: a USB scan into a Received quantity or a note (or
+  // onto Confirm received / Cancel transfer) is undone and explained, never
+  // recorded as a count or pressing a button. Hooks run before the early return.
+  const scanArea = useRef(null)
+  useDialogKeyboardScanner(scanArea, {
+    snapshot: () => ({ received, note, reason }),
+    onScan: (code, before) => { setReceived(before.received); setNote(before.note); setReason(before.reason); setError('Scan ignored (' + code + '): there is no barcode field here, so nothing was changed.') },
+  }, { enabled: !!transfer })
   if (!transfer) return null
 
   const lines = transfer.stock_transfer_lines || []
@@ -40,7 +49,7 @@ export default function TransferDetailModal({ transfer, locationId, locations, c
 
   return (
     <Modal show onClose={onClose} title={`Transfer ${transfer.transfer_no || ''}`} wide footer={footer}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div ref={scanArea} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <Pill label={status.label} type={status.pill} />
           <span style={{ fontSize: '14px', fontWeight: 700, color: navy }}>{locationName(byId(transfer.from_branch_id))} → {locationName(byId(transfer.to_branch_id))}</span>

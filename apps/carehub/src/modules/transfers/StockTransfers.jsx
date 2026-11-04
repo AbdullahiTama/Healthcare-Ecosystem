@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { ArrowLeftRight, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { SectionHead, Card, Pill, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
@@ -24,6 +25,7 @@ export default function StockTransfers({ brand, role, loadProducts }) {
   const [state, setState] = useState({ status: 'loading', transfers: [], available: true })
   const [filter, setFilter] = useState('all')
   const [showNew, setShowNew] = useState(false)
+  const [scannedCode, setScannedCode] = useState(null)
   const [openId, setOpenId] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -89,11 +91,35 @@ export default function StockTransfers({ brand, role, loadProducts }) {
   }
 
   const onlyOne = locations.length > 0 && locations.length < 2
+  const sendAllowed = canSend && state.available && !onlyOne
+
+  // A USB scan on the list (no dialog open) pressed a focused button with its
+  // Enter. Now it presses nothing: the scanned item is meant for a transfer,
+  // so Send stock opens with it added (for staff who cannot send, it is
+  // explained).
+  const rootRef = useRef(null)
+  useKeyboardScanner({
+    ignore: (e) => {
+      const t = e.target
+      const root = rootRef.current
+      if (!root || !t || t.tagName === 'TEXTAREA' || t.isContentEditable) return true
+      return (t.tagName === 'INPUT' || t.tagName === 'SELECT') && !root.contains(t)
+    },
+    snapshot: () => null,
+    onScan: (code) => {
+      if (sendAllowed) {
+        setScannedCode(code)
+        setShowNew(true)
+      } else {
+        showToast('Scan ignored (' + code + '): scanning adds items when sending stock.', { type: 'info' })
+      }
+    },
+  }, { window: true, enabled: !showNew && !open })
 
   return (
-    <div>
+    <div ref={rootRef}>
       <SectionHead title='Stock Transfers' sub={`Move stock between your locations. You are at ${locationName(here)}.`}
-        btn={canSend && state.available && !onlyOne ? '+ Send stock' : undefined} onBtn={() => setShowNew(true)} />
+        btn={sendAllowed ? '+ Send stock' : undefined} onBtn={() => { setScannedCode(null); setShowNew(true) }} />
 
       {waiting > 0 && (
         <div role='status' style={{ marginBottom: 14, padding: '12px 14px', borderRadius: theme.radius.md, background: theme.warningBg, color: theme.warning, fontSize: '13px', fontWeight: 600 }}>
@@ -149,7 +175,7 @@ export default function StockTransfers({ brand, role, loadProducts }) {
           </ul>
         )}
 
-      <NewTransferModal show={showNew} fromLocation={here} locations={locations} sending={busy} onSend={send} onClose={() => setShowNew(false)} />
+      <NewTransferModal show={showNew} fromLocation={here} locations={locations} sending={busy} onSend={send} onClose={() => setShowNew(false)} scannedCode={scannedCode} />
       {open && (
         <TransferDetailModal transfer={open} locationId={brand?.id} locations={locations} canCancel={canSend} busy={busy}
           onReceive={receive} onCancel={cancel} onClose={() => setOpenId(null)} />

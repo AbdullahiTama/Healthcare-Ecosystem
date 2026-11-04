@@ -37,6 +37,15 @@ export function createTransferRepository(request = sbFetch) {
         + '&order=name.asc,id.asc&limit=30&select=id,name,stock,master_product_id')
     },
 
+    // This location's products with exactly this barcode (a scan), linked or not and in stock or not, so the
+    // screen can say why one cannot be sent. Exact match after trimming, the rule every scan path uses.
+    async findByBarcode(locationId, code) {
+      const c = String(code || '').trim()
+      if (!c) return []
+      return request(`products?business_id=eq.${locationId}&barcode=eq.${encodeURIComponent(c)}`
+        + '&order=name.asc,id.asc&limit=5&select=id,name,stock,master_product_id')
+    },
+
     async send(fromId, toId, lines, note = '') {
       return rpc('send_stock_transfer', {
         p_from_branch_id: fromId, p_to_branch_id: toId, p_note: note || null,
