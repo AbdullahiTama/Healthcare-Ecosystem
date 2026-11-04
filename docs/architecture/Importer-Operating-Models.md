@@ -4,7 +4,7 @@ How a pharmaceutical importer or manufacturer runs its sales representatives in 
 **Decentralised**, the representative ledger and statements that work under both, and switching between the two.
 
 Spec: "CareHub | Importer & Manufacturer Operating Structures" (owner, 2026-11-02; gap review and completion 2026-11-04).
-Migration: `supabase/migrations/carehub_20270102_importer_operating_models.sql` (**not applied**).
+Migration: `supabase/migrations/carehub_20270102_importer_operating_models.sql` (**applied 2026-11-04**, §10).
 Code: `apps/carehub/src/modules/representatives/`.
 
 > The operating model changes how the company and its representatives work. It never reduces the platform: every
@@ -233,6 +233,32 @@ its products are forced to `list_on_carefind = false`, and it cannot list on the
 
 ## 10. Applying
 
-Apply the migration, then deploy the client. The client tolerates the migration being absent (new screens say
-"not available yet", nothing else changes), but the new screens need it. After applying: re-read the function
-bodies and grants, run the security advisor, and run a rolled-back probe as a real owner (supply, statement, preview).
+**Applied to production 2026-11-04** in seven parts split at the file's section boundaries (every statement is
+re-runnable), recorded in the migration history as `carehub_20270102_importer_operating_models_1_columns`, `_2_ledger`,
+`_3_accounts_stock`, `_4_recording`, `_5_statements`, `_6_switching`, `_7_locations_grants`. The two live importers
+started Centralised.
+
+Checks before applying: every function, column and trigger the migration depends on exists live; the live triggers on
+`businesses`, `staff` and `products` that the PGlite fixture does not model (branch email, verified owner, privileged
+columns, staff plan limit, master-catalogue link) accept what the migration does.
+
+Verification after applying:
+- **Fidelity:** md5 of each of the 48 function bodies in production equals the repo file loaded on PGlite.
+- **Security advisor:** nothing new. The only new entries are the app-callable functions under "authenticated security
+  definer function executable" (intended; each checks its caller). None is executable by `anon`; every new table has
+  RLS.
+- **Rolled-back probe** as the owner of a real importer (a `DO` block ending in a raised exception, so nothing was kept;
+  nothing on the touched tables calls outside the database):
+
+| Check | Result |
+|---|---|
+| Owner's browser update of `operating_model` | refused |
+| Add a staff member as representative | REP-001 |
+| Supply 2 units at ₦100 on credit; same request key again | posted ₦200; replay returned the first entry |
+| Payment ₦50 | balance ₦150 |
+| Statement | opening ₦0, 2 entries, closing ₦150, "owes" |
+| Register filtered by type and product; summary | 1 supply, recorded by the owner; summary closing ₦150 |
+| Switch to Decentralised | no blockers; 1 converted; reconciled (691,317 units before and after); custody of 2 moved: company 999 → 997, rep account 2 |
+| Rep account | `rep_account`, off CareFind, no shop; the rep's login moved into it |
+| As the representative | sees only their own account; company catalogue readable; own statement ₦150; company products visible only as the public CareFind listing (existing public policy) |
+| Switch back to Centralised | 1 converted; reconciled; rep back in the company with their previous role; company stock 999 again; custody 2; balance ₦150; 2 history rows |

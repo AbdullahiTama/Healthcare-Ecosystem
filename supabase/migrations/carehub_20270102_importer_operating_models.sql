@@ -3,9 +3,11 @@
 -- 2027-01-02 (sequence date). Spec: "CareHub | Importer & Manufacturer Operating Structures" (owner, 2026-11-02).
 -- Design: docs/architecture/Importer-Operating-Models.md
 --
--- Status: NOT APPLIED. Tested on PGlite (apps/carefind/src/test/operating-models/operatingModels.db.test.js) against
--- the live shapes of businesses, staff, roles, products and the live stock ledger snapshot. Apply only after review,
--- then update this line with the version and the verification evidence.
+-- Status: APPLIED 2026-11-04 to production (szdybxmgmhndoytqanfb) in seven parts, split at the section boundaries
+-- (migration history: carehub_20270102_importer_operating_models_1_columns, _2_ledger, _3_accounts_stock,
+-- _4_recording, _5_statements, _6_switching, _7_locations_grants). Verified: md5 of every one of the 48 function
+-- bodies in production equals this file loaded on PGlite; a rolled-back probe as the owner of a real importer passed
+-- (docs/architecture/Importer-Operating-Models.md §10); security advisor shows nothing new.
 --
 -- PROBLEM
 --   A manufacturer/importer runs its sales representatives in one of two ways, and CareHub supported only one:
