@@ -7,10 +7,11 @@ import { MODELS, defaultPeriod, validPeriod, money, positionText, entryTypeLabel
 import { exportSummaryXlsx } from './services/statementExport'
 import RecordEntryModal from './RecordEntryModal'
 import RepStatement from './RepStatement'
+import TransactionRegister from './TransactionRegister'
 
 const { navy, gray500, gray600, border, danger, tealDeep } = theme
 const log = (what, e) => console.error(`[representatives] ${what}:`, e)
-const TABS = [['reps', 'Representatives'], ['pending', 'Awaiting approval'], ['summary', 'Consolidated summary']]
+const TABS = [['reps', 'Representatives'], ['register', 'Transactions'], ['pending', 'Awaiting approval'], ['summary', 'Consolidated summary']]
 const ACTIONS = [['supply', 'Supply'], ['payment', 'Payment'], ['return', 'Return'], ['transfer', 'Transfer'], ['adjustment', 'Adjustment']]
 
 // The company's view of its representatives' accounts (Centralised and Decentralised alike). Who may open it is
@@ -23,7 +24,7 @@ export default function Representatives({ brand, role, perms, accountProfile }) 
   const model = accountProfile?.operating_model || 'centralised'
 
   const [tab, setTab] = useState('reps')
-  const [state, setState] = useState({ status: 'loading', reps: [], available: true, balances: {} })
+  const [state, setState] = useState({ status: 'loading', reps: [], available: true, balances: {}, territories: [] })
   const [statementRep, setStatementRep] = useState(null)
   const [entry, setEntry] = useState(null) // { kind, repId }
   const [adding, setAdding] = useState(false)
@@ -39,7 +40,12 @@ export default function Representatives({ brand, role, perms, accountProfile }) 
         const s = await representativesRepository.summary(companyId, p.from, p.to)
         balances = Object.fromEntries((s?.representatives || []).map((x) => [x.id, x]))
       }
-      setState({ status: 'ready', reps: r.representatives, available: r.available, balances })
+      // Territories only label and filter; a failure to load them must not hide the representatives.
+      let territories = []
+      if (r.available) {
+        try { territories = (await representativesRepository.territories(companyId)) || [] } catch (e) { log('territories', e) }
+      }
+      setState({ status: 'ready', reps: r.representatives, available: r.available, balances, territories })
     } catch (e) {
       log('load', e)
       setState((s) => ({ ...s, status: 'error' }))
@@ -99,6 +105,7 @@ export default function Representatives({ brand, role, perms, accountProfile }) 
                           {model === 'decentralised' && r.rep_account_id && !r.account_dormant_since && <Pill label='Own account' type='teal' />}
                           {r.account_dormant_since && <Pill label='Account archived' type='gray' />}
                           {b?.pending_count > 0 && <Pill label={`${b.pending_count} awaiting approval`} type='amber' />}
+                          {b?.territory_name && <Pill label={b.territory_name} type='gray' />}
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
@@ -113,17 +120,23 @@ export default function Representatives({ brand, role, perms, accountProfile }) 
                       ))}
                       {canManage && <StatusToggle rep={r} onChanged={load} showToast={showToast} />}
                     </div>
+                    {canManage && state.territories.length > 0 && (
+                      <TerritoryPicker rep={r} territories={state.territories} onChanged={load} showToast={showToast} />
+                    )}
                   </Card>
                 )
               })}
             </div>
           )
       )}
+      {state.status === 'ready' && state.available && tab === 'register' && (
+        <TransactionRegister companyId={companyId} companyName={brand?.name} representatives={state.reps} territories={state.territories} />
+      )}
       {state.status === 'ready' && state.available && tab === 'pending' && (
         <PendingApprovals companyId={companyId} canManage={canManage} showToast={showToast} onChanged={load} />
       )}
       {state.status === 'ready' && state.available && tab === 'summary' && (
-        <ConsolidatedSummary companyId={companyId} companyName={brand?.name} />
+        <ConsolidatedSummary companyId={companyId} companyName={brand?.name} territories={state.territories} />
       )}
 
       <RecordEntryModal show={!!entry} kind={entry?.kind} company={brand} model={model} representatives={state.reps} defaultRepId={entry?.repId}
@@ -145,6 +158,22 @@ function StatusToggle({ rep, onChanged, showToast }) {
     setBusy(false)
   }
   return <GhostBtn onClick={toggle} disabled={busy}>{next === 'inactive' ? 'Make inactive' : 'Reactivate'}</GhostBtn>
+}
+
+// Where the representative works, for location filters in reports. Saves on change.
+function TerritoryPicker({ rep, territories, onChanged, showToast }) {
+  const [busy, setBusy] = useState(false)
+  async function change(v) {
+    setBusy(true)
+    try { await representativesRepository.setTerritory(rep.id, v || null); onChanged() } catch (e) { log('territory', e); showToast(repLedgerError(e), { type: 'error' }) }
+    setBusy(false)
+  }
+  return (
+    <div style={{ marginTop: 10, maxWidth: 280 }}>
+      <Sel id={`territory-${rep.id}`} label='Territory' value={rep.territory_id || ''} onChange={change} disabled={busy} placeholder='No territory'
+        options={territories.map((t) => ({ value: t.id, label: t.name }))} />
+    </div>
+  )
 }
 
 function AddRepresentativeModal({ show, companyId, model, existing, onClose, onDone }) {
@@ -239,17 +268,18 @@ function PendingApprovals({ companyId, canManage, showToast, onChanged }) {
   )
 }
 
-function ConsolidatedSummary({ companyId, companyName }) {
+function ConsolidatedSummary({ companyId, companyName, territories = [] }) {
   const [period, setPeriod] = useState(defaultPeriod)
+  const [territoryId, setTerritoryId] = useState('')
   const [state, setState] = useState({ status: 'loading', summary: null, error: '' })
   const load = useCallback(async () => {
     const problem = validPeriod(period)
     if (problem) { setState({ status: 'invalid', summary: null, error: problem }); return }
     setState((s) => ({ ...s, status: 'loading' }))
-    try { setState({ status: 'ready', summary: await representativesRepository.summary(companyId, period.from, period.to), error: '' }) } catch (e) {
+    try { setState({ status: 'ready', summary: await representativesRepository.summary(companyId, period.from, period.to, territoryId), error: '' }) } catch (e) {
       log('summary', e); setState({ status: 'error', summary: null, error: repLedgerError(e, "We couldn't load the summary.") })
     }
-  }, [companyId, period])
+  }, [companyId, period, territoryId])
   useEffect(() => { load() }, [load])
   const s = state.summary
   const cols = [['Opening', 'opening_balance'], ['Supplies', 'supplies'], ['Payments', 'payments'], ['Returns', 'returns'], ['Transfers (net)', 'transfers_net'], ['Adjustments (net)', 'adjustments_net'], ['Closing', 'closing_balance']]
@@ -260,6 +290,10 @@ function ConsolidatedSummary({ companyId, companyName }) {
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <Inp id='summary-from' label='From' type='date' value={period.from} onChange={(v) => setPeriod((p) => ({ ...p, from: v }))} style={{ width: 170 }} />
           <Inp id='summary-to' label='To' type='date' value={period.to} onChange={(v) => setPeriod((p) => ({ ...p, to: v }))} style={{ width: 170 }} />
+          {territories.length > 0 && (
+            <Sel id='summary-territory' label='Territory' value={territoryId} onChange={setTerritoryId} placeholder='All territories'
+              options={territories.map((t) => ({ value: t.id, label: t.name }))} style={{ width: 200 }} />
+          )}
           <GhostBtn onClick={() => exportSummaryXlsx(s, companyName).catch((e) => log('summary export', e))} disabled={!s}><FileSpreadsheet size={14} aria-hidden='true' /> Spreadsheet</GhostBtn>
         </div>
       </Card>
@@ -271,7 +305,7 @@ function ConsolidatedSummary({ companyId, companyName }) {
         : (
           <Card style={{ padding: 0, overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: 760 }}>
-              <caption style={{ textAlign: 'left', padding: '12px 16px', fontWeight: 700, color: navy }}>Balances by representative, {s.period.from} to {s.period.to}</caption>
+              <caption style={{ textAlign: 'left', padding: '12px 16px', fontWeight: 700, color: navy }}>Balances by representative, {s.period.from} to {s.period.to}{s.territory_name ? ` · ${s.territory_name}` : ''}</caption>
               <thead><tr style={{ background: theme.bg }}>
                 <th scope='col' style={{ textAlign: 'left', padding: '10px 12px', color: gray600 }}>Representative</th>
                 {cols.map(([h]) => <th key={h} scope='col' style={{ textAlign: 'right', padding: '10px 12px', color: gray600 }}>{h}</th>)}

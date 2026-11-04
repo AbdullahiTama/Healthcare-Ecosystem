@@ -139,9 +139,10 @@ export const ROLE_TEMPLATES = {
     // created from it are stored copies and do not change.
     {
       name: 'Field Rep',
-      description: 'Field sales rep: checks in, logs visits, raises orders and messages the office',
+      description: 'Field sales rep: checks in, logs visits, finds facilities in their area, raises orders and messages the office',
       permissions: {
-        nav: ['activity', 'orders', 'messages'],
+        // Facility Discovery: reps search hospitals, pharmacies and labs by location (operating models spec 5.1).
+        nav: ['activity', 'orders', 'messages', 'discovery'],
         canEditPrice: false,
         canEditStock: false,
         canDelete: false,

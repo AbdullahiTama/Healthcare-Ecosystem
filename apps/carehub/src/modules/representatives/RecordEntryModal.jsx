@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Modal, Sel, Inp, GhostBtn, TealBtn } from '../../components/ui'
 import { representativesRepository } from './repositories'
+import { useProductSearch } from './useProductSearch'
 import { PAYMENT_METHODS, RETURN_CONDITIONS, toLines, positiveAmount, money, repLedgerError } from './services/ledger'
 
 const { navy, gray500, border, danger, tealDeep, tealMist } = theme
@@ -35,38 +36,20 @@ export default function RecordEntryModal({ show, kind, company, model, represent
   const [toRepId, setToRepId] = useState('')
   const [rows, setRows] = useState([])
   const [search, setSearch] = useState('')
-  const [results, setResults] = useState([])
-  const [searching, setSearching] = useState(false)
   const [f, setF] = useState({})
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const requestKey = useRef(null)
   const withLines = kind === 'supply' || kind === 'return' || kind === 'transfer'
+  const { results, searching } = useProductSearch(company?.id, search, show && withLines)
   const active = (representatives || []).filter((r) => r.status === 'active')
 
   useEffect(() => {
     if (!show) return
-    setRepId(defaultRepId || ''); setToRepId(''); setRows([]); setSearch(''); setResults([]); setError(''); setSaving(false)
+    setRepId(defaultRepId || ''); setToRepId(''); setRows([]); setSearch(''); setError(''); setSaving(false)
     setF({ method: 'cash', condition: 'good', direction: 'credit', accept: true, entryDate: '' })
     requestKey.current = representativesRepository.newRequestKey()
   }, [show, kind, defaultRepId])
-
-  useEffect(() => {
-    if (!show || !withLines || !company?.id) return undefined
-    let alive = true
-    const t = setTimeout(async () => {
-      setSearching(true)
-      try {
-        const r = await representativesRepository.searchProducts(company.id, search)
-        if (alive) setResults(r || [])
-      } catch (e) {
-        console.error('[representatives] product search failed:', e)
-        if (alive) setResults([])
-      }
-      if (alive) setSearching(false)
-    }, 250)
-    return () => { alive = false; clearTimeout(t) }
-  }, [search, show, withLines, company?.id])
 
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }))
   const addProduct = (p) => {

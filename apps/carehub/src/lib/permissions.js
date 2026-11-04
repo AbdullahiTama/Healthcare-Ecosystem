@@ -11,7 +11,10 @@ import {
 
 export const ROLES = {
   Owner: {
-    nav: ['overview','dashboard','pos','inventory','mastercatalog','transfers','clients','appointments','consultation','expenses','debts','purchases','demand','staff','wallet','reports','adr-reports','pv-tracker','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging','ecommerce'],
+    // `discovery` (Facility Discovery) is gated to manufacturers and wholesalers by the registry; listing it here gives
+    // their owner, and so a representative running their own account (its Owner), location-based facility search in
+    // both operating models (Importer-Operating-Models.md, spec 5.1).
+    nav: ['overview','dashboard','pos','inventory','mastercatalog','transfers','clients','appointments','consultation','expenses','debts','purchases','demand','staff','wallet','reports','adr-reports','pv-tracker','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','discovery','reception','triage','doctor','rx_inbox','lab','imaging','ecommerce'],
     canEditPrice: true,
     canEditStock: true,
     canDelete: true,
@@ -406,8 +409,10 @@ export const ALL_NAV_HOSPITAL = NAV_ORDER.hospital.filter(isRoleGrantable).map(i
 export const ALL_NAV_ENTERPRISE = NAV_ORDER.enterprise.filter(isRoleGrantable).map(id => [id, MODULES[id].icon, MODULES[id].label])
 
 // What a field rep's login offers when their role is neither a preset nor a custom role (the live "Medical
-// sales rep" is one): their field tool, orders, and messages to the office.
-export const FIELD_REP_NAV = ['activity', 'orders', 'messages']
+// sales rep" is one): their field tool, orders, messages to the office, and Facility Discovery to find the hospitals,
+// pharmacies and laboratories in their area (spec 5.1: in both operating models). Discovery reads only public
+// facility data and the business's own field records (RLS), so it exposes nothing private.
+export const FIELD_REP_NAV = ['activity', 'orders', 'messages', 'discovery']
 
 // A module with an `access` rule is decided by that rule alone; a role's nav list neither grants nor
 // removes it. 'field-manager' is the same rule that decides who sees the whole team's activity. 'place-reviewer'

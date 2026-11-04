@@ -25,7 +25,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A8 | Low | Tooling | CodeRabbit reviews never run on PRs to `main` | Open |
 | A9 | Low | Debt | About 600 `no-unused-vars` warnings | Open, tracked in Linting.md |
 | A12 | High | POS (production defect) | Re-holding an edited held sale is refused (`permission denied for table sales`); duplicate held sales; carts lost when leaving the POS | **Closed 2026-11-02**: grant live, app deployed and in use; owner review of 4 double-charged pairs pending |
-| A13 | Medium | Importer operating models | Centralised / Decentralised models, representative ledger and switching are code complete; migration not applied; four owner decisions open | Open: apply + owner decisions |
+| A13 | Medium | Importer operating models | Every spec section implemented (gap review 2026-11-04); migration not applied; two owner decisions and one proposal open | Open: apply + owner decisions |
 | A14 | Medium | Payments | Reported ~1% reduction in amounts: not reproduced in code or live data; Paystack's fee was not stored, so bank deposits could not be matched to payments | Open: migration applied 2026-11-04; confirm backfill, then match deposits |
 | A15 | Medium | Expenses | The expense budget lived only in the browser, per month: it vanished at each new month, on another device and for staff | Open: migration applied 2026-11-04; the reporting Owner opens Expenses once on the original device |
 
@@ -185,14 +185,22 @@ duplicates, 5 held sales charged.
 
 **What:** `supabase/migrations/carehub_20270102_importer_operating_models.sql` and `apps/carehub/src/modules/representatives/`
 implement the spec "Importer & Manufacturer Operating Structures" (Centralised / Decentralised, representative ledger
-and statements, switching both ways). Verified by 36 PGlite checks
-(`apps/carefind/src/test/operating-models/operatingModels.db.test.js`) and unit tests. **Not applied to production.**
+and statements, switching both ways). Verified by 43 PGlite checks
+(`apps/carefind/src/test/operating-models/operatingModels.db.test.js`) and unit tests. **Not applied to production**
+(checked live 2026-11-04: no `operating_model` column, no ledger tables).
 
-**To close:** apply the migration (then the rolled-back probe in
-[Importer-Operating-Models.md](../docs/architecture/Importer-Operating-Models.md) §9) and decide the open questions in
-§2 of that note: whether a Centralised supply should take stock out of the company count; whether POS sales should
-reduce a rep's balance automatically; adding Facility Discovery to the Owner preset (no business owner has it today);
-whether representative accounts count against the plan's location limit.
+**Gap review 2026-11-04** (spec read section by section against the code; traceability table in
+[Importer-Operating-Models.md](../docs/architecture/Importer-Operating-Models.md) §8). Closed in this pass:
+Facility Discovery for reps in both models (5.1); a company transaction register filtered by representative, type,
+product, territory and date, with the audit trail, print and export (7, 8); representative territories (7); switch
+reconciliation before and after with full rollback on a mismatch (9.2, 9.4); open orders and customers' unpaid credit
+in the migration summary (9.3); company admins notified of a switch (9.3); representative accounts no longer use up
+the plan's locations or mix into the company's Locations figures (5.5).
+
+**To close:** apply the migration (then the rolled-back probe in §10 of that note). Owner decisions still open (§2):
+whether a Centralised supply should take stock out of the company count; whether POS sales should reduce a rep's
+balance automatically. Proposal awaiting owner and privacy sign-off: let company field managers read field activity
+inside the company's own rep accounts under Decentralised (today only the owner can, by opening the account).
 
 ### A14. Reported ~1% reduction in amounts; Paystack fee not stored (Medium)
 

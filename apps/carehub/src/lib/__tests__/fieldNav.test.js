@@ -8,12 +8,13 @@ const ids = (role, type, custom) => getNavItems(role, type, custom).map((i) => i
 const FIELD_TEAM = ['field-reports', 'field-map', 'field-customers', 'field-checkins', 'field-approvals', 'field-places']
 
 describe('the rep login', () => {
-  it('an unrecognised, non-manager role at a manufacturer gets exactly Field, Orders, Messages', () => {
-    expect(ids('Medical sales rep', 'manufacturer_importer')).toEqual(['activity', 'orders', 'messages'])
+  // Facility Discovery joined the rep login with the operating models (spec 5.1: reps search facilities by location).
+  it('an unrecognised, non-manager role at a manufacturer gets exactly Field, Facility Discovery, Orders, Messages', () => {
+    expect(ids('Medical sales rep', 'manufacturer_importer')).toEqual(['activity', 'discovery', 'orders', 'messages'])
   })
 
   it('the same holds for a wholesaler', () => {
-    expect(ids('Sales Rep', 'wholesale')).toEqual(['activity', 'orders', 'messages'])
+    expect(ids('Sales Rep', 'wholesale')).toEqual(['activity', 'discovery', 'orders', 'messages'])
   })
 
   it('an unrecognised MANAGER role keeps today\'s menu and gains the Field team section, not Report fields', () => {

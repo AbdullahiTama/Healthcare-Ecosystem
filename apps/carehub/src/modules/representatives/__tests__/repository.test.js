@@ -56,4 +56,23 @@ describe('representatives repository', () => {
     const { repo } = recorder(() => [{ id: 's1' }, { id: 's2' }])
     expect(await repo.candidateStaff('co', ['s1', null])).toEqual([{ id: 's2' }])
   })
+
+  it('runs the register with every filter, and the summary by territory', async () => {
+    const { calls, repo } = recorder()
+    await repo.register('co', { from: '2026-11-01', to: '2026-11-30', representativeId: 'r1', entryType: 'transfer', productId: 'p1', territoryId: 't1', offset: 200 })
+    await repo.register('co', { from: '2026-11-01', to: '2026-11-30' })
+    await repo.summary('co', '2026-11-01', '2026-11-30', 't1')
+    expect(calls[0]).toEqual({ path: 'rpc/rep_ledger_register', method: 'POST', body: { p_company: 'co', p_from: '2026-11-01', p_to: '2026-11-30',
+      p_representative_id: 'r1', p_entry_type: 'transfer', p_product_id: 'p1', p_territory: 't1', p_limit: 200, p_offset: 200 } })
+    expect(calls[1].body).toMatchObject({ p_representative_id: null, p_entry_type: null, p_product_id: null, p_territory: null, p_offset: 0 })
+    expect(calls[2].body).toEqual({ p_company: 'co', p_from: '2026-11-01', p_to: '2026-11-30', p_territory: 't1' })
+  })
+
+  it('assigns or clears a territory through the database function', async () => {
+    const { calls, repo } = recorder()
+    await repo.setTerritory('r1', 't1')
+    await repo.setTerritory('r1', '')
+    expect(calls.map((c) => c.body)).toEqual([{ p_representative_id: 'r1', p_territory_id: 't1' }, { p_representative_id: 'r1', p_territory_id: null }])
+    expect(calls[0].path).toBe('rpc/set_representative_territory')
+  })
 })

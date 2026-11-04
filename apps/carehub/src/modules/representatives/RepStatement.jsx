@@ -132,7 +132,8 @@ export default function RepStatement({ repId, title, onBack, canManage = false, 
                         <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>{rows[i].date}</td>
                         <td style={{ padding: '10px 12px' }}><div style={{ fontWeight: 600, color: navy }}>{entryTypeLabel(e.entry_type)}</div>
                           <div style={{ fontSize: '11px', color: gray500 }}>{e.entry_no}{e.reference ? ` · ${e.reference}` : ''}</div></td>
-                        <td style={{ padding: '10px 12px', color: gray600 }}>{rows[i].description}</td>
+                        <td style={{ padding: '10px 12px', color: gray600 }}>{rows[i].description}
+                          {rows[i].recordedBy && <div style={{ fontSize: '11px', color: gray500, marginTop: 2 }}>Recorded by {rows[i].recordedBy}{rows[i].approvedBy ? ` · approved by ${rows[i].approvedBy}` : ''}</div>}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>{rows[i].debit ? money(rows[i].debit) : ''}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>{rows[i].credit ? money(rows[i].credit) : ''}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600 }}>{money(rows[i].balance)}</td>

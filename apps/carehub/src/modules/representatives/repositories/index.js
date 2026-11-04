@@ -54,6 +54,15 @@ export function createRepresentativesRepository(request = sbFetch) {
 
     async add(companyId, staffId) { return rpc('add_company_representative', { p_company: companyId, p_staff_id: staffId }) },
     async setStatus(repId, status) { return rpc('set_representative_status', { p_representative_id: repId, p_status: status }) },
+    // The representative's territory (their location for reports); null clears it.
+    async setTerritory(repId, territoryId) {
+      return rpc('set_representative_territory', { p_representative_id: repId, p_territory_id: territoryId || null })
+    },
+
+    // The company's territories (Territories page), for assigning representatives and filtering reports.
+    async territories(companyId) {
+      return request(`territories?business_id=eq.${companyId}&order=name.asc,id.asc&select=id,name,level`)
+    },
 
     // Company products for the entry forms (the company's own catalogue, with its price and cost as defaults).
     async searchProducts(companyId, search = '') {
@@ -101,7 +110,15 @@ export function createRepresentativesRepository(request = sbFetch) {
     },
 
     async statement(repId, from, to) { return rpc('rep_statement', { p_representative_id: repId, p_from: from, p_to: to }) },
-    async summary(companyId, from, to) { return rpc('rep_ledger_summary', { p_company: companyId, p_from: from, p_to: to }) },
+    async summary(companyId, from, to, territoryId = null) {
+      return rpc('rep_ledger_summary', { p_company: companyId, p_from: from, p_to: to, p_territory: territoryId || null })
+    },
+    // The company's transaction register with its audit trail. Filters are optional; type 'transfer' means both halves.
+    async register(companyId, { from, to, representativeId, entryType, productId, territoryId, limit = 200, offset = 0 }) {
+      return rpc('rep_ledger_register', { p_company: companyId, p_from: from, p_to: to,
+        p_representative_id: representativeId || null, p_entry_type: entryType || null, p_product_id: productId || null,
+        p_territory: territoryId || null, p_limit: limit, p_offset: offset })
+    },
 
     async companyCatalog(search = '', offset = 0) {
       return rpc('rep_company_catalog', { p_search: search || null, p_limit: 50, p_offset: offset })

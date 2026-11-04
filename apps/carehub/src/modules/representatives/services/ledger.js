@@ -36,6 +36,14 @@ export const ENTRY_TYPES = {
 }
 export const entryTypeLabel = (t) => ENTRY_TYPES[t] || t
 
+// Transaction-type filter of the register ('transfer' matches both halves).
+export const REGISTER_TYPES = [
+  ['', 'All types'], ['supply', 'Supplies on credit'], ['payment', 'Payments'], ['return', 'Returns'], ['transfer', 'Transfers'],
+  ['adjustment', 'Adjustments'], ['reversal', 'Reversals'],
+]
+
+export const STATUS_LABELS = { posted: 'Posted', pending: 'Awaiting approval', rejected: 'Rejected' }
+
 export const PAYMENT_METHODS = [
   ['cash', 'Cash'], ['bank_transfer', 'Bank transfer'], ['pos', 'POS / card'], ['cheque', 'Cheque'], ['mobile_money', 'Mobile money'], ['other', 'Other'],
 ]
@@ -91,7 +99,52 @@ export function detailRows(st) {
     debit: Number(e.debit || 0),
     credit: Number(e.credit || 0),
     balance: Number(e.running_balance || 0),
+    recordedBy: e.created_by_name || '',
+    approvedBy: e.decided_by_name && e.decided_by_name !== e.created_by_name ? e.decided_by_name : '',
   }))
+}
+
+// Who did what to an entry, in words (spec 7: who created, approved, reversed each record).
+export function auditTrail(e) {
+  const parts = []
+  if (e.created_by_name) parts.push(`Recorded by ${e.created_by_name}`)
+  if (e.status === 'rejected') parts.push(`Rejected by ${e.decided_by_name || 'an approver'}${e.decision_note ? ` (${e.decision_note})` : ''}`)
+  else if (e.status === 'posted' && e.decided_by_name && e.decided_by_name !== e.created_by_name) parts.push(`Approved by ${e.decided_by_name}`)
+  else if (e.status === 'pending') parts.push('Awaiting approval')
+  if (e.reverses_entry_no) parts.push(`Reverses ${e.reverses_entry_no}`)
+  if (e.reversed_by_entry_no) parts.push(`Reversed by ${e.reversed_by_entry_no}`)
+  return parts.join(' · ')
+}
+
+// Register rows (one per entry) for the screen and both exports. Figures come from the database unchanged.
+export function registerRows(register) {
+  return (register?.entries || []).map((e) => ({
+    id: e.id,
+    date: e.entry_date,
+    entryNo: e.entry_no,
+    type: entryTypeLabel(e.entry_type),
+    status: STATUS_LABELS[e.status] || e.status,
+    posted: e.status === 'posted',
+    representative: `${e.representative_name || ''}${e.rep_code ? ` (${e.rep_code})` : ''}`,
+    territory: e.territory_name || '',
+    reference: e.reference || '',
+    description: describeEntry(e),
+    debit: Number(e.debit || 0),
+    credit: Number(e.credit || 0),
+    model: e.operating_model ? (MODELS[e.operating_model]?.label || e.operating_model) : '',
+    audit: auditTrail(e),
+  }))
+}
+
+// The filters a register was run with, in words (for its heading and its exports).
+export function registerFilterText(register) {
+  const f = register?.filters || {}
+  const parts = []
+  if (f.representative_name) parts.push(f.representative_name)
+  if (f.entry_type) parts.push((REGISTER_TYPES.find(([k]) => k === f.entry_type) || [null, f.entry_type])[1])
+  if (f.product_name) parts.push(f.product_name)
+  if (f.territory_name) parts.push(f.territory_name)
+  return parts.length ? parts.join(' · ') : 'All representatives, types, products and territories'
 }
 
 export function describeEntry(e) {

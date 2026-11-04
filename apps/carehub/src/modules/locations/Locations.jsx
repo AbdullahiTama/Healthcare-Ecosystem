@@ -82,7 +82,7 @@ export default function Locations({ brand, role }) {
     if (!form.name || !form.address) { showToast('Please enter branch name and address.', { type: 'warning' }); return }
     if (!plan.allow('adding branches')) return
     const limit = planLimitsFor(brand?.plan).maxLocations
-    if (locations.length >= limit) {
+    if (planLocations.length >= limit) {
       showToast(`Your ${PLAN_LABELS[brand?.plan] || 'current'} plan allows up to ${limit} location${limit === 1 ? '' : 's'}. Upgrade your plan in Settings to add more.`, { type: 'warning' })
       return
     }
@@ -126,12 +126,20 @@ export default function Locations({ brand, role }) {
     setSaving(false)
   }
 
-  // Main business first; the list from the server is never reordered in place.
-  const ordered = [...locations].sort((a, b) => (a.parent_business_id ? 1 : 0) - (b.parent_business_id ? 1 : 0))
-  const totalRevenue = Object.values(stats).reduce((s, x) => s + (x.todayRevenue || 0), 0)
-  const totalTransactions = Object.values(stats).reduce((s, x) => s + (x.todayCount || 0), 0)
-  const totalProducts = Object.values(stats).reduce((s, x) => s + (x.productCount || 0), 0)
-  const totalLowStock = Object.values(stats).reduce((s, x) => s + (x.lowStock || 0), 0)
+  // A representative's own account (Decentralised importers) is listed so the owner can review it, but it is not a
+  // location: it does not count against the plan (the database counts the same way, carehub_20270102).
+  const isRepAccount = (loc) => loc.account_kind === 'rep_account'
+  const planLocations = locations.filter((loc) => !isRepAccount(loc))
+  const repAccounts = locations.length - planLocations.length
+  // Main business first, then branches, then representative accounts; the list from the server is never reordered in place.
+  const rank = (loc) => (!loc.parent_business_id ? 0 : isRepAccount(loc) ? 2 : 1)
+  const ordered = [...locations].sort((a, b) => rank(a) - rank(b))
+  // The company's combined figures: a representative account's sales and stock are the representative's own.
+  const companyStats = planLocations.map((loc) => stats[loc.id] || {})
+  const totalRevenue = companyStats.reduce((s, x) => s + (x.todayRevenue || 0), 0)
+  const totalTransactions = companyStats.reduce((s, x) => s + (x.todayCount || 0), 0)
+  const totalProducts = companyStats.reduce((s, x) => s + (x.productCount || 0), 0)
+  const totalLowStock = companyStats.reduce((s, x) => s + (x.lowStock || 0), 0)
 
   if (!isOwner) return (
     <div style={{ padding: '32px', textAlign: 'center', color: gray400 }}>
@@ -157,8 +165,8 @@ export default function Locations({ brand, role }) {
             <div style={{ fontSize: '11px', opacity: 0.5 }}>Transactions</div>
           </div>
           <div>
-            <div style={{ fontSize: '24px', fontWeight: '900' }}>{locations.length}</div>
-            <div style={{ fontSize: '11px', opacity: 0.5 }}>Locations</div>
+            <div style={{ fontSize: '24px', fontWeight: '900' }}>{planLocations.length}</div>
+            <div style={{ fontSize: '11px', opacity: 0.5 }}>Locations{repAccounts > 0 ? ` (+${repAccounts} representative account${repAccounts === 1 ? '' : 's'})` : ''}</div>
           </div>
           <div>
             <div style={{ fontSize: '24px', fontWeight: '900', color: totalLowStock > 0 ? theme.warning : 'white' }}>{totalLowStock}</div>
@@ -189,6 +197,7 @@ export default function Locations({ brand, role }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{loc.branch_name || (isMain ? 'Main Location' : loc.name)}</span>
                         {isMain && <Pill label='Main' type='blue' />}
+                        {isRepAccount(loc) && <Pill label='Representative account' type='teal' />}
                         {isCurrentLocation && <Pill label='Current' type='green' />}
                       </div>
                       <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{loc.address || 'No address set'}{loc.state ? ', ' + loc.state : ''}</div>
@@ -204,7 +213,7 @@ export default function Locations({ brand, role }) {
                     </div>
                   </div>
                   {!isCurrentLocation && (
-                    <TealBtn onClick={() => requestSwitch(loc)} style={{ padding: '8px 16px', fontSize: '12px' }}>Switch to this branch →</TealBtn>
+                    <TealBtn onClick={() => requestSwitch(loc)} style={{ padding: '8px 16px', fontSize: '12px' }}>{isRepAccount(loc) ? 'Open this account →' : 'Switch to this branch →'}</TealBtn>
                   )}
                 </div>
               </Card>

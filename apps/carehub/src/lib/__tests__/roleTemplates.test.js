@@ -13,15 +13,15 @@ describe('field role templates', () => {
     expect(t['Sales Representative']).toBeUndefined()
   })
 
-  it('Field Rep is exactly Field, Orders, Messages, with no other powers', () => {
+  it('Field Rep is exactly Field, Orders, Messages and Facility Discovery, with no other powers', () => {
     const p = byName('manufacturer_importer')['Field Rep']
-    expect(p.nav).toEqual(['activity', 'orders', 'messages'])
+    expect(p.nav).toEqual(['activity', 'orders', 'messages', 'discovery'])
     for (const [k, v] of Object.entries(p)) if (k !== 'nav') expect(v).toBe(false)
   })
 
   it('a role made from Field Rep sees exactly that menu and no Field team pages', () => {
     const custom = { 'Field Rep': byName('manufacturer_importer')['Field Rep'] }
-    expect(getNavItems('Field Rep', 'manufacturer_importer', custom).map((i) => i[0])).toEqual(['activity', 'orders', 'messages'])
+    expect(getNavItems('Field Rep', 'manufacturer_importer', custom).map((i) => i[0])).toEqual(['activity', 'discovery', 'orders', 'messages'])
   })
 
   it('Field Manager can manage the field team and reaches the Field team pages', () => {

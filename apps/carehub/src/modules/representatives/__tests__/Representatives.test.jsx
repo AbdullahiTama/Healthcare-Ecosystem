@@ -8,7 +8,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const repo = vi.hoisted(() => ({
   list: vi.fn(), summary: vi.fn(), statement: vi.fn(), pending: vi.fn(), candidateStaff: vi.fn(), add: vi.fn(), setStatus: vi.fn(),
   searchProducts: vi.fn(), payment: vi.fn(), supply: vi.fn(), decide: vi.fn(), reverse: vi.fn(), newRequestKey: vi.fn(() => 'key-1'),
-  accountProfile: vi.fn(), history: vi.fn(), preview: vi.fn(), switchModel: vi.fn(),
+  accountProfile: vi.fn(), history: vi.fn(), preview: vi.fn(), switchModel: vi.fn(), territories: vi.fn(), setTerritory: vi.fn(), register: vi.fn(),
 }))
 vi.mock('../repositories', () => ({ representativesRepository: repo }))
 
@@ -19,6 +19,15 @@ const BRAND = { id: 'co', name: 'Zenith Pharma Ltd', business_type: 'manufacture
 const ADA = { id: 'r1', full_name: 'Ada Obi', rep_code: 'REP-001', status: 'active', staff_id: 's1', rep_account_id: null }
 const SUMMARY = { period: { from: '2026-11-01', to: '2026-11-02' }, representatives: [{ id: 'r1', full_name: 'Ada Obi', rep_code: 'REP-001', closing_balance: 6000, pending_count: 1,
   opening_balance: 0, supplies: 10000, payments: 4000, returns: 0, transfers_net: 0, adjustments_net: 0 }], totals: { closing_balance: 6000 } }
+
+const REGISTER = { period: { from: '2026-11-01', to: '2026-11-04' }, generated_at: '2026-11-04T10:00:00Z', currency: 'NGN', filters: {}, has_more: false,
+  totals: { count: 2, posted: 1, pending: 0, rejected: 1, debits: 10000, credits: 0 },
+  entries: [
+    { id: 'e1', entry_no: 'RL-1', entry_type: 'supply', status: 'posted', entry_date: '2026-11-01', description: 'Products supplied on credit', debit: 10000, credit: 0,
+      representative_id: 'r1', representative_name: 'Ada Obi', rep_code: 'REP-001', territory_name: 'Lagos Mainland', created_by_name: 'Musa Manager', lines: [] },
+    { id: 'e2', entry_no: 'RL-2', entry_type: 'return', status: 'rejected', entry_date: '2026-11-02', description: 'Products returned (good)', debit: 0, credit: 0,
+      representative_id: 'r1', representative_name: 'Ada Obi', rep_code: 'REP-001', created_by_name: 'Musa Manager', decided_by_name: 'Mrs Owner', decision_note: 'Not ours', lines: [] },
+  ] }
 
 let host, root
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)) })
@@ -38,6 +47,8 @@ beforeEach(() => {
   repo.payment.mockResolvedValue({ id: 'e9', entry_no: 'RL-9', status: 'posted', balance: 5000 })
   repo.accountProfile.mockResolvedValue({ available: true, profile: { operating_model: 'centralised', account_kind: 'business' } })
   repo.history.mockResolvedValue({ available: true, changes: [] })
+  repo.territories.mockResolvedValue([{ id: 't1', name: 'Lagos Mainland' }])
+  repo.register.mockResolvedValue(REGISTER)
   host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host)
 })
 afterEach(async () => { await act(async () => root.unmount()); host.remove() })
@@ -91,6 +102,44 @@ describe('Representatives page', () => {
     expect(text()).toContain('No representatives yet')
   })
 
+  it('the Transactions tab lists every entry with its audit trail and filters by representative, type and territory', async () => {
+    await render(<Representatives brand={BRAND} role='Accounts' perms={{ canViewRepLedger: true }} accountProfile={{ operating_model: 'centralised' }} />)
+    await click([...document.body.querySelectorAll('[role=tab]')].find((t) => t.textContent === 'Transactions'))
+    expect(repo.register).toHaveBeenLastCalledWith('co', expect.objectContaining({ representativeId: '', entryType: '', territoryId: '', productId: undefined, offset: 0 }))
+    expect(text()).toContain('Recorded by Musa Manager')
+    expect(text()).toContain('Rejected by Mrs Owner (Not ours)')
+    expect(text()).toContain('1 posted')
+    expect(text()).toContain('₦10,000.00')
+    await setValue(document.getElementById('register-rep'), 'r1')
+    await flush()
+    await setValue(document.getElementById('register-type'), 'transfer')
+    await flush()
+    await setValue(document.getElementById('register-territory'), 't1')
+    await flush()
+    expect(repo.register).toHaveBeenLastCalledWith('co', expect.objectContaining({ representativeId: 'r1', entryType: 'transfer', territoryId: 't1' }))
+  })
+
+  it('the Transactions tab says when nothing matches, and when it could not load', async () => {
+    repo.register.mockResolvedValueOnce({ ...REGISTER, entries: [], totals: { count: 0 } })
+    await render(<Representatives brand={BRAND} role='Owner' perms={{}} accountProfile={{ operating_model: 'centralised' }} />)
+    await click([...document.body.querySelectorAll('[role=tab]')].find((t) => t.textContent === 'Transactions'))
+    expect(text()).toContain('No transactions match these filters')
+    repo.register.mockRejectedValueOnce(new Error('Failed to fetch'))
+    await setValue(document.getElementById('register-type'), 'payment')
+    await flush()
+    expect(text()).toContain("We couldn't load the transactions.")
+  })
+
+  it('a manager places a representative in a territory; a viewer cannot', async () => {
+    await render(<Representatives brand={BRAND} role='Owner' perms={{}} accountProfile={{ operating_model: 'centralised' }} />)
+    await setValue(document.getElementById('territory-r1'), 't1')
+    await flush()
+    expect(repo.setTerritory).toHaveBeenCalledWith('r1', 't1')
+    await act(async () => root.unmount()); root = createRoot(host)
+    await render(<Representatives brand={BRAND} role='Accounts' perms={{ canViewRepLedger: true }} accountProfile={{ operating_model: 'centralised' }} />)
+    expect(document.getElementById('territory-r1')).toBeNull()
+  })
+
   it('opens a statement with opening and closing balances', async () => {
     repo.statement.mockResolvedValue({ company: { name: 'Zenith' }, representative: { full_name: 'Ada Obi', rep_code: 'REP-001' }, period: { from: '2026-11-01', to: '2026-11-02' },
       currency: 'NGN', opening_balance: 0, closing_balance: 6000, position: 'owes', totals: { supplies: 10000, payments: 4000 }, pending: [],
@@ -112,7 +161,9 @@ describe('Settings > Operating model', () => {
 
   it('reviews the migration summary, lets the owner change custody quantities, and switches with the reviewed token', async () => {
     repo.preview.mockResolvedValue(PREVIEW)
-    repo.switchModel.mockResolvedValue({ from: 'centralised', to: 'decentralised', converted: 1, exceptions: [] })
+    repo.switchModel.mockResolvedValue({ from: 'centralised', to: 'decentralised', converted: 1, exceptions: [],
+      reconciliation: { balanced: true, before: { total_balance: 6000, ledger_entries: 4, stock_units: 160, stock_value: 1000, custody_units: 4 },
+        after: { total_balance: 6000, ledger_entries: 4, stock_units: 160, stock_value: 1000, custody_units: 0 } } })
     await render(<OperatingModelSettings brand={BRAND} />)
     expect(text()).toContain('Current')
     await click(btn('Switch to Decentralised'))
@@ -123,6 +174,8 @@ describe('Settings > Operating model', () => {
     await click(btn('Confirm switch to Decentralised'))
     expect(repo.switchModel).toHaveBeenCalledWith('co', 'decentralised', 'tok-1', { stockPlan: [{ representative_id: 'r1', company_product_id: 'p1', qty: 2 }], note: '' })
     expect(text()).toContain('1 representative(s) moved')
+    expect(text()).toContain('Reconciled')
+    expect(text()).toContain('Stock units (company and representative accounts)')
   })
 
   it('cannot confirm while something blocks the switch', async () => {

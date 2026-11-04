@@ -60,6 +60,22 @@ beforeEach(() => {
 afterEach(() => { if (offBlocker) { offBlocker(); offBlocker = null } act(() => root.unmount()); host.remove() })
 
 describe('Locations page', () => {
+  it('a representative\'s own account is listed and labelled, but is not a location and not part of the company\'s figures', async () => {
+    const REP = { id: 'rep', name: 'Allen Pharmacy · Ada Obi', branch_name: 'Ada Obi', plan: 'growth', parent_business_id: 'root', account_kind: 'rep_account', address: '1 Marina' }
+    repo.getAll.mockResolvedValue([ROOT, REP, YABA])
+    saleRepository.getToday.mockImplementation(async (id) => (id === 'rep' ? [{ total: 50000 }] : [{ total: 1000 }]))
+    await show()
+    const text = host.textContent
+    expect(text).toContain('Representative account')
+    expect(text).toContain('Locations (+1 representative account)')
+    expect(text).toContain('Open this account')
+    // Main, then branches, then representative accounts.
+    expect(text.indexOf('Yaba')).toBeLessThan(text.indexOf('Ada Obi'))
+    // Two company locations at 1,000 each; the representative's 50,000 is theirs.
+    expect(text).toMatch(/2,000/)
+    expect(text).not.toMatch(/52,000/)
+  })
+
   it('lists every location with its figures, the main one first, without reordering what it was given', async () => {
     const list = [YABA, ROOT]
     repo.getAll.mockResolvedValue(list)

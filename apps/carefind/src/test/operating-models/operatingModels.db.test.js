@@ -5,6 +5,9 @@
 // and products RLS policies, a guard_staff_writes that refuses browser moves between businesses (as the live one
 // does), and the live stock ledger (docs/architecture/stock-ledger-live-snapshot.sql).
 //
+// Also the live shapes of territories, orders and the sales credit columns, and the live plan rules (plan_limit,
+// plan_state) behind guard_business_insert, which this migration re-creates.
+//
 // One company is taken through its whole life: Centralised ledger work, a switch to Decentralised (with a custody
 // plan), independent-account work and privacy, a switch back, and a second switch forward that must reuse the
 // representative accounts. The tests share state and run in order.
@@ -28,6 +31,7 @@ const S = { mgr: 'e0000000-0000-4000-8000-000000000001', viewer: 'e0000000-0000-
 const USERS = { 'owner@co.com': 1, 'mgr@co.com': 2, 'viewer@co.com': 3, 'ada@co.com': 4, 'bayo@co.com': 5, 'clerk@co.com': 6,
   'other@x.com': 7, 'chi@co.com': 8, 'admin@carehub.ng': 9 }
 const OWNER = 'owner@co.com'
+const T = { lagos: 'f0000000-0000-4000-8000-000000000001', ibadan: 'f0000000-0000-4000-8000-000000000002', foreign: 'f0000000-0000-4000-8000-000000000003' }
 let db
 
 async function as(email, fn) {
@@ -64,7 +68,7 @@ beforeAll(async () => {
       parent_business_id uuid references businesses(id), branch_depth_limit integer default 3, is_platform_admin boolean default false,
       business_type text, status text default 'active', plan text default 'growth', plan_expires_at timestamptz, state text, city text, lga text, area text,
       address text, phone text, visible_on_carefind boolean default true, ecommerce_enabled boolean not null default false, booking_enabled boolean default false,
-      deleted_at timestamptz, created_at timestamptz default now(),
+      deleted_at timestamptz, created_at timestamptz default now(), referring_agent_id uuid,
       constraint businesses_main_has_email check (parent_business_id is not null or email is not null));
     create table staff (id uuid primary key default gen_random_uuid(), business_id uuid references businesses(id), full_name text not null, email text not null,
       role text, status text default 'active', auth_user_id uuid);
@@ -88,7 +92,15 @@ beforeAll(async () => {
     create table audit_log (id uuid primary key default gen_random_uuid(), actor_id uuid not null, actor_type text not null, branch_id uuid not null references businesses(id),
       action text not null, target_type text, target_id uuid, metadata jsonb, created_at timestamptz not null default now());
     create table sales (id uuid primary key default gen_random_uuid(), business_id uuid, txn_no text not null default 'T', is_on_hold boolean, status text,
-      cashier_staff_id uuid, deleted_at timestamptz);
+      cashier_staff_id uuid, deleted_at timestamptz, is_credit boolean default false, balance numeric default 0);
+    create table territories (id uuid primary key default gen_random_uuid(), business_id uuid references businesses(id), name text not null, level text,
+      parent_territory_id uuid, created_at timestamptz default now());
+    create table orders (id uuid primary key default gen_random_uuid(), business_id uuid, order_ref text, customer_name text, status text not null default 'submitted',
+      total_value numeric default 0, created_by_staff_id uuid, created_by_name text, created_at timestamptz default now());
+    create function plan_limit(p_plan text, p_what text) returns integer language sql immutable as $$
+      select case coalesce(p_plan, 'basic') when 'growth' then case p_what when 'locations' then 5 end
+        when 'custom' then null else case p_what when 'staff' then 5 when 'locations' then 2 when 'products' then 5000 end end $$;
+    create function plan_state(p_expires_at timestamptz) returns text language sql stable as $$ select 'active'::text $$;
     create table stock_transfers (id uuid primary key default gen_random_uuid(), from_branch_id uuid, to_branch_id uuid, status text not null default 'in_transit');
     create table ecommerce_products (id uuid primary key default gen_random_uuid(), business_id uuid not null, product_id uuid not null, status text not null default 'draft');
 
@@ -129,7 +141,7 @@ beforeAll(async () => {
     create trigger enforce_product_stock_floor before insert or update of stock on products for each row execute function enforce_product_stock_floor();
 
     do $$ declare t text; begin foreach t in array array['businesses','staff','roles','products','master_products','stock_movements','staff_notifications','audit_log',
-      'sales','stock_transfers','ecommerce_products'] loop
+      'sales','stock_transfers','ecommerce_products','territories','orders'] loop
       execute format('alter table %I enable row level security', t);
       execute format('grant select, insert, update, delete on %I to authenticated', t);
       execute format('grant all on %I to service_role', t);
@@ -165,6 +177,10 @@ beforeAll(async () => {
   `)
   await db.exec(LEDGER_LIVE)
   await db.exec(MIGRATION)
+  // Live: guard_business_insert runs before every insert into businesses.
+  await db.exec('create trigger guard_business_insert before insert on businesses for each row execute function guard_business_insert()')
+  await db.exec(`insert into territories (id, business_id, name, level) values
+    ('${T.lagos}', '${CO}', 'Lagos Mainland', 'area'), ('${T.ibadan}', '${CO}', 'Ibadan', 'area'), ('${T.foreign}', '${OTHER}', 'Abuja', 'area')`)
 })
 
 describe('the operating model column', () => {
@@ -360,6 +376,61 @@ describe('statements', () => {
   })
 })
 
+describe('the transaction register and locations (spec 7)', () => {
+  it('a representative is placed in one of the company\'s own territories', async () => {
+    await expect(call(OWNER, 'select set_representative_territory($1, $2)', [rep.ada, T.foreign])).rejects.toThrow(/your company's territories/)
+    await expect(call('viewer@co.com', 'select set_representative_territory($1, $2)', [rep.ada, T.lagos])).rejects.toThrow(/do not have permission/)
+    await call('mgr@co.com', 'select set_representative_territory($1, $2)', [rep.ada, T.lagos])
+    await call(OWNER, 'select set_representative_territory($1, $2)', [rep.bayo, T.ibadan])
+    expect((await one(`select count(*)::int n from audit_log where action = 'representative.territory'`)).n).toBe(2)
+  })
+
+  it('lists every entry with its audit trail; posted entries make the totals', async () => {
+    const r = await call('viewer@co.com', 'select rep_ledger_register($1, $2::date, $3::date)', [CO, '2026-01-01', TODAY])
+    const all = await one('select count(*)::int n from rep_ledger_entries where company_id = $1', [CO])
+    expect(r.entries).toHaveLength(all.n)
+    expect(r.totals.count).toBe(all.n)
+    expect(r.totals.rejected).toBe(2) // the rejected pending transfer pair
+    const posted = await one(`select sum(debit)::float d, sum(credit)::float c from rep_ledger_entries where company_id = $1 and status = 'posted'`, [CO])
+    expect([r.totals.debits, r.totals.credits]).toEqual([posted.d, posted.c])
+    const supply = r.entries.find((e) => e.reference === 'INV-001')
+    expect(supply).toMatchObject({ representative_name: 'Ada Obi', rep_code: 'REP-001', territory_name: 'Lagos Mainland', created_by_name: 'Musa Manager' })
+    const reversed = r.entries.find((e) => e.reversed_by_entry_no)
+    const reversal = r.entries.find((e) => e.reverses_entry_no === reversed.entry_no)
+    expect(reversal).toMatchObject({ entry_type: 'reversal', reason: 'Cheque bounced' })
+    const rejected = r.entries.find((e) => e.status === 'rejected')
+    expect(rejected.decided_by_name).toBe('Mrs Owner')
+    expect(r.entries.find((e) => e.entry_type === 'transfer_out').counterparty_name).toBe('Bayo Ade')
+  })
+
+  it('filters by representative, transaction type, product and territory', async () => {
+    const reg = (args) => call(OWNER, 'select rep_ledger_register($1, $2::date, $3::date, $4, $5, $6, $7)',
+      [CO, '2026-01-01', TODAY, args.rep || null, args.type || null, args.product || null, args.territory || null])
+    const bayo = await reg({ rep: rep.bayo })
+    expect(new Set(bayo.entries.map((e) => e.representative_id))).toEqual(new Set([rep.bayo]))
+    expect(bayo.filters.representative_name).toBe('Bayo Ade')
+    const transfers = await reg({ type: 'transfer' })
+    expect(new Set(transfers.entries.map((e) => e.entry_type))).toEqual(new Set(['transfer_out', 'transfer_in']))
+    const para = await reg({ product: P.para })
+    expect(para.entries.length).toBeGreaterThan(0)
+    expect(para.entries.every((e) => e.lines.some((l) => l.company_product_id === P.para))).toBe(true)
+    expect(para.filters.product_name).toBe('Paracetamol')
+    const ibadan = await reg({ territory: T.ibadan })
+    expect(new Set(ibadan.entries.map((e) => e.representative_id))).toEqual(new Set([rep.bayo]))
+    const lagosSummary = await call(OWNER, 'select rep_ledger_summary($1, $2::date, $3::date, $4)', [CO, '2026-01-01', TODAY, T.lagos])
+    expect(lagosSummary.representatives.map((x) => x.full_name)).toEqual(['Ada Obi'])
+    expect(lagosSummary.territory_name).toBe('Lagos Mainland')
+    await expect(reg({ type: 'gift' })).rejects.toThrow(/Unknown transaction type/)
+  })
+
+  it('is closed to representatives, staff without the permission and other companies', async () => {
+    for (const who of ['ada@co.com', 'clerk@co.com', 'other@x.com']) {
+      await expect(call(who, 'select rep_ledger_register($1, $2::date, $3::date)', [CO, '2026-01-01', TODAY])).rejects.toThrow(/do not have permission/)
+    }
+    await expect(call(OWNER, 'select operating_model_reconciliation($1)', [CO])).rejects.toThrow(/permission denied/)
+  })
+})
+
 describe('switching Centralised → Decentralised', () => {
   let preview
 
@@ -367,10 +438,12 @@ describe('switching Centralised → Decentralised', () => {
     await expect(call('mgr@co.com', `select operating_model_preview($1, 'decentralised')`, [CO])).rejects.toThrow(/Only the company owner/)
     await expect(call(OWNER, `select operating_model_preview($1, 'centralised')`, [CO])).rejects.toThrow(/already runs/)
     await db.query(`insert into sales (business_id, is_on_hold, cashier_staff_id) values ($1, true, $2)`, [CO, S.ada])
+    await db.query(`insert into orders (business_id, order_ref, status, created_by_staff_id) values ($1, 'ORD-1', 'approved', $2), ($1, 'ORD-0', 'delivered', $2)`, [CO, S.ada])
     const pend = await call(OWNER, 'select record_rep_return($1, $2, $3::jsonb, $4, false)', [CO, rep.bayo, j([{ product_id: P.amox, qty: 1, unit_value: 900 }]), 'good'])
     preview = await call(OWNER, `select operating_model_preview($1, 'decentralised')`, [CO])
     expect(preview.blockers.map((b) => b.code).sort()).toEqual(['pending_entries', 'rep_without_login'])
-    expect(preview.warnings.map((w) => w.code)).toEqual(['held_sales_stay'])
+    expect(preview.warnings.map((w) => w.code)).toEqual(['held_sales_stay', 'open_orders_stay'])
+    expect(preview.warnings[1]).toMatchObject({ representative_id: rep.ada, count: 1 })
     const ada = preview.representatives.find((r) => r.id === rep.ada)
     expect(ada).toMatchObject({ balance: 1500, converts: true, reuses_account: false })
     expect(ada.stock.find((s) => s.company_product_id === P.amox)).toMatchObject({ custody: 4, company_stock: 99, carry: 4 })
@@ -383,13 +456,38 @@ describe('switching Centralised → Decentralised', () => {
     await expect(call(OWNER, `select switch_operating_model($1, 'decentralised', $2)`, [CO, preview.token])).rejects.toThrow(/changed since you reviewed/)
   })
 
+  it('a switch whose figures do not reconcile is rolled back completely', async () => {
+    preview = await call(OWNER, `select operating_model_preview($1, 'decentralised')`, [CO])
+    // Something inside the switch silently changes stock (a stand-in for a bug): validation must catch it.
+    await db.exec(`create function tamper() returns trigger language plpgsql as $$ begin
+        update products set stock = stock + 1 where id = '${P.loose}'; return new; end $$;
+      create trigger tamper after insert on staff_notifications for each row execute function tamper();`)
+    try {
+      await expect(call(OWNER, `select switch_operating_model($1, 'decentralised', $2)`, [CO, preview.token])).rejects.toThrow(/stock quantities did not reconcile/)
+    } finally { await db.exec('drop trigger tamper on staff_notifications; drop function tamper();') }
+    expect((await one('select operating_model from businesses where id = $1', [CO])).operating_model).toBe('centralised')
+    expect((await one('select business_id from staff where id = $1', [S.ada])).business_id).toBe(CO)
+    expect((await one(`select count(*)::int n from businesses where account_kind = 'rep_account'`)).n).toBe(0)
+    expect(await stock(P.loose)).toBe(10)
+    expect(await custody(rep.ada, P.amox)).toBe(4)
+  })
+
   it('converts each active rep into an independent account, moves the planned custody, and keeps balances and history', async () => {
     const entriesBefore = (await one('select count(*)::int n from rep_ledger_entries')).n
+    const custodyBefore = (await one('select sum(quantity)::int n from rep_custody where company_id = $1', [CO])).n
+    expect(custodyBefore).toBeGreaterThan(0)
     preview = await call(OWNER, `select operating_model_preview($1, 'decentralised')`, [CO])
     expect(preview.blockers).toEqual([])
     const res = await call(OWNER, `select switch_operating_model($1, 'decentralised', $2, $3::jsonb, 'Going independent')`,
       [CO, preview.token, j([{ representative_id: rep.ada, company_product_id: P.amox, qty: 2 }])])
     expect(res).toMatchObject({ from: 'centralised', to: 'decentralised', converted: 2 })
+    expect(res.reconciliation.balanced).toBe(true)
+    expect(res.reconciliation.before).toMatchObject({ total_balance: 4700, custody_units: custodyBefore })
+    expect(res.reconciliation.after).toMatchObject({ total_balance: 4700, custody_units: 0,
+      stock_units: res.reconciliation.before.stock_units, stock_value: res.reconciliation.before.stock_value })
+    // Company staff who manage or view representative accounts are told too; plain staff are not.
+    const told = await rows(`select staff_id from staff_notifications where kind = 'operating_model_changed' and business_id = $1 and staff_id is not null`, [CO])
+    expect(told.map((x) => x.staff_id).sort()).toEqual([S.mgr, S.viewer].sort())
     expect((await one('select operating_model from businesses where id = $1', [CO])).operating_model).toBe('decentralised')
 
     const ada = await one('select * from company_representatives where id = $1', [rep.ada])
@@ -509,12 +607,23 @@ describe('Decentralised: independent accounts and privacy', () => {
 })
 
 describe('switching Decentralised → Centralised, and forward again', () => {
-  it('open held sales in a rep account block the switch', async () => {
+  it('open held sales and open orders in a rep account block the switch', async () => {
     const adaAcct = (await one('select rep_account_id from company_representatives where id = $1', [rep.ada])).rep_account_id
     const held = (await one(`insert into sales (business_id, is_on_hold) values ($1, true) returning id`, [adaAcct])).id
+    const order = (await one(`insert into orders (business_id, order_ref, status) values ($1, 'ADA-7', 'processing') returning id`, [adaAcct])).id
     const p = await call(OWNER, `select operating_model_preview($1, 'centralised')`, [CO])
-    expect(p.blockers.map((b) => b.code)).toEqual(['held_sales'])
+    expect(p.blockers.map((b) => b.code)).toEqual(['held_sales', 'open_orders'])
     await db.query(`update sales set status = 'deleted' where id = $1`, [held])
+    await db.query(`update orders set status = 'delivered' where id = $1`, [order])
+  })
+
+  it('customers\' unpaid credit in a rep account is listed; it stays in the archived account', async () => {
+    const adaAcct = (await one('select rep_account_id from company_representatives where id = $1', [rep.ada])).rep_account_id
+    await db.query(`insert into sales (business_id, is_credit, balance) values ($1, true, 2500.5), ($1, true, 0)`, [adaAcct])
+    const p = await call(OWNER, `select operating_model_preview($1, 'centralised')`, [CO])
+    const w = p.warnings.find((x) => x.code === 'customer_credit_in_account')
+    expect(w).toMatchObject({ representative_id: rep.ada, count: 1, amount: 2500.5 })
+    expect(w.message).toMatch(/₦2,500\.50/)
   })
 
   it('brings every rep back as company staff, returns linked stock to the company as custody, and keeps the accounts and balances', async () => {
@@ -525,9 +634,10 @@ describe('switching Decentralised → Centralised, and forward again', () => {
     const before = { co: await stock(P.amox), ada: await accountStock(adaAcct, M.amox), bayo: await accountStock(bayoAcct, M.amox), balances: [await balance(rep.ada), await balance(rep.bayo)] }
     const p = await call(OWNER, `select operating_model_preview($1, 'centralised')`, [CO])
     expect(p.blockers).toEqual([])
-    expect(p.warnings.map((w) => w.code)).toEqual(['unlinked_stock'])
+    expect(p.warnings.map((w) => w.code)).toEqual(['unlinked_stock', 'customer_credit_in_account'])
     const res = await call(OWNER, `select switch_operating_model($1, 'centralised', $2)`, [CO, p.token])
     expect(res.converted).toBe(3)
+    expect(res.reconciliation.after.total_balance).toBe(res.reconciliation.before.total_balance)
     expect(res.exceptions.map((e) => e.product)).toEqual(['Ada own brand'])
 
     expect(await one('select business_id, role from staff where id = $1', [S.ada])).toEqual({ business_id: CO, role: 'Medical sales rep' })
@@ -564,5 +674,16 @@ describe('switching Decentralised → Centralised, and forward again', () => {
     await expect(call('other@x.com', `select operating_model_preview($1, 'centralised')`, [CO])).rejects.toThrow(/Only the company owner/)
     const p = await call('admin@carehub.ng', `select operating_model_preview($1, 'centralised')`, [CO])
     expect(p.from).toBe('decentralised')
+  })
+})
+
+describe('representative accounts and the plan (spec 5.5)', () => {
+  it('representative accounts do not use up the plan\'s locations: the company can still add its branches', async () => {
+    const reps = (await one(`select count(*)::int n from businesses where parent_business_id = $1 and account_kind = 'rep_account'`, [CO])).n
+    expect(reps).toBe(3)
+    // Growth allows 5 locations: the main account and 4 branches, whatever the number of representative accounts.
+    const addBranch = (n) => as(OWNER, (q) => q(`insert into businesses (name, owner, parent_business_id, business_type, status, plan) values ($1, 'Mrs Owner', $2, 'manufacturer_importer', 'active', 'growth')`, ['Branch ' + n, CO]))
+    for (const n of [1, 2, 3, 4]) await addBranch(n)
+    await expect(addBranch(5)).rejects.toThrow(/allows up to 5 locations/)
   })
 })

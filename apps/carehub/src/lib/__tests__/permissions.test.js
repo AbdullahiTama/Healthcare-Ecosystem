@@ -502,12 +502,27 @@ describe('operating model navigation', () => {
 
   it('a representative account keeps every operating module but nothing that publishes it or administers the company', () => {
     const rep = ids('Owner', 'manufacturer_importer', {}, { isMainAccount: false, accountKind: 'rep_account', isRepresentative: true })
-    // Exactly the Owner's menu otherwise (Facility Discovery is not in the Owner preset for any business today).
-    for (const keep of ['dashboard', 'pos', 'inventory', 'purchases', 'expenses', 'debts', 'clients', 'reports', 'activity', 'company-account']) expect(rep).toContain(keep)
+    // Exactly the Owner's menu otherwise, including Facility Discovery (spec 5.1).
+    for (const keep of ['dashboard', 'pos', 'inventory', 'purchases', 'expenses', 'debts', 'clients', 'reports', 'activity', 'discovery', 'company-account']) expect(rep).toContain(keep)
     const owner = ids('Owner', 'manufacturer_importer', {}, MAIN)
     expect(rep.filter((id) => id !== 'company-account')).toEqual(owner.filter((id) => !REP_ACCOUNT_HIDDEN.includes(id) && !['representatives', 'field-reports', 'field-map', 'field-customers', 'field-checkins', 'field-approvals'].includes(id)))
     for (const hide of REP_ACCOUNT_HIDDEN) expect(rep).not.toContain(hide)
     for (const hide of ['field-reports', 'field-map', 'field-checkins', 'representatives']) expect(rep).not.toContain(hide)
+  })
+
+  it('shared platform features are in both models: Facility Discovery, Field (live activity), reports and Demand intelligence', () => {
+    const SHARED = ['discovery', 'activity', 'reports', 'demand']
+    const centralRep = ids('Medical sales rep', 'manufacturer_importer', {}, { ...MAIN, isRepresentative: true })
+    const ownAccount = ids('Owner', 'manufacturer_importer', {}, { isMainAccount: false, accountKind: 'rep_account', isRepresentative: true })
+    const company = ids('Owner', 'manufacturer_importer', {}, MAIN)
+    for (const id of SHARED) {
+      expect(company).toContain(id)
+      expect(ownAccount).toContain(id)
+    }
+    // A Centralised rep on the default field login keeps Field and Facility Discovery.
+    expect(centralRep).toEqual(expect.arrayContaining(['activity', 'discovery']))
+    // Discovery stays an enterprise module: a pharmacy owner is not offered it.
+    expect(ids('Owner', 'pharmacy')).not.toContain('discovery')
   })
 
   it('custom roles carry the two ledger switches, off unless granted', () => {

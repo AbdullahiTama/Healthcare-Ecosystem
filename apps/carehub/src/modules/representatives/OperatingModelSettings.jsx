@@ -108,6 +108,7 @@ export default function OperatingModelSettings({ brand, onChanged }) {
         {result ? (
           <div style={{ fontSize: '13px', color: gray600, lineHeight: 1.6 }}>
             <p style={{ marginTop: 0 }}>{result.converted} representative(s) moved to the {MODELS[result.to]?.label} structure. Balances and history are unchanged. Representatives have been notified; they should sign out and back in.</p>
+            {result.reconciliation && <Reconciliation r={result.reconciliation} />}
             {result.exceptions?.length > 0 && (<><strong style={{ color: navy }}>Notes</strong><ul style={{ paddingLeft: 18 }}>{result.exceptions.map((x, i) => <li key={i}>{x.message}</li>)}</ul></>)}
           </div>
         ) : (
@@ -184,5 +185,40 @@ export default function OperatingModelSettings({ brand, onChanged }) {
         )}
       </Modal>
     </Card>
+  )
+}
+
+// The checks the database ran before and after the switch (it refuses to finish if any of them differ).
+function Reconciliation({ r }) {
+  const b = r.before || {}
+  const a = r.after || {}
+  const lines = [
+    ['Outstanding balances (all representatives)', money(b.total_balance), money(a.total_balance)],
+    ['Ledger entries', b.ledger_entries, a.ledger_entries],
+    ['Stock units (company and representative accounts)', b.stock_units, a.stock_units],
+    ['Stock value at company cost', money(b.stock_value), money(a.stock_value)],
+    ['Goods held in representatives\' custody', b.custody_units, a.custody_units],
+  ]
+  return (
+    <section aria-label='Reconciliation' style={{ margin: '0 0 12px' }}>
+      <strong style={{ color: navy, display: 'flex', gap: 6, alignItems: 'center' }}><CheckCircle2 size={14} aria-hidden='true' /> Reconciled</strong>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 6, fontSize: '12px' }}>
+          <thead><tr>
+            <th scope='col' style={{ textAlign: 'left', padding: 4 }}>Checked</th>
+            <th scope='col' style={{ textAlign: 'right', padding: 4 }}>Before</th>
+            <th scope='col' style={{ textAlign: 'right', padding: 4 }}>After</th>
+          </tr></thead>
+          <tbody>{lines.map(([label, before, after]) => (
+            <tr key={label} style={{ borderTop: `1px solid ${border}` }}>
+              <th scope='row' style={{ textAlign: 'left', padding: 4, fontWeight: 500 }}>{label}</th>
+              <td style={{ textAlign: 'right', padding: 4 }}>{before}</td>
+              <td style={{ textAlign: 'right', padding: 4 }}>{after}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <div style={{ fontSize: '12px', color: gray500, marginTop: 4 }}>Custody changes by design: goods in custody become stock in each representative's account, and back.</div>
+    </section>
   )
 }

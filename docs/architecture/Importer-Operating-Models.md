@@ -3,7 +3,7 @@
 How a pharmaceutical importer or manufacturer runs its sales representatives in CareHub: **Centralised** or
 **Decentralised**, the representative ledger and statements that work under both, and switching between the two.
 
-Spec: "CareHub | Importer & Manufacturer Operating Structures" (owner, 2026-11-02).
+Spec: "CareHub | Importer & Manufacturer Operating Structures" (owner, 2026-11-02; gap review and completion 2026-11-04).
 Migration: `supabase/migrations/carehub_20270102_importer_operating_models.sql` (**not applied**).
 Code: `apps/carehub/src/modules/representatives/`.
 
@@ -29,6 +29,10 @@ A representative account hides only what would publish it, open branches under i
 (`REP_ACCOUNT_HIDDEN` in `lib/permissions.js`: overview, locations, master catalogue, CareFind profile, online store,
 warehouses, staff, wallet, report-field setup) and the field-team manager pages.
 
+A representative account is **not a location**: it does not count against the plan's location limit
+(`guard_business_insert`, `business_billing_overview`), and the Locations page lists it separately ("Representative
+account", "Open this account") and leaves its sales out of the company's combined figures.
+
 ## 2. Decisions taken (review these)
 
 1. **Existing importers start Centralised.** That is how they work today (reps are company staff). A new importer is
@@ -44,12 +48,22 @@ warehouses, staff, wallet, report-field setup) and the field-team manager pages.
    counts the money against the rep it records a payment. Automating this needs a rule for which sales count.
 4. **Products move between accounts by master catalogue item** (`products.master_product_id`), as branch transfers do.
    An unlinked company product can be supplied under Centralised but not moved to a rep account; the database says so.
-5. **Facility Discovery** is not in the Owner preset for any business today (only a custom role can grant it), so a
-   representative account, whose rep is its `Owner`, does not get it either. The `Representative` role the database
-   creates on a switch back to Centralised includes it. *Open question:* add `discovery` to the Owner preset.
-6. **Representative accounts count as locations** in the plan's location limit (the existing `guard_business_insert`
-   counts the whole tree). The switch bypasses that guard, so it never blocks a switch, but a company on a small plan
-   may then be unable to add a branch. *Open question:* exclude `rep_account` rows from the count, or bill them.
+5. **Facility Discovery is in both models** (spec 5.1, decided 2026-11-04). It is now in the Owner preset (so the
+   company owner and a rep running their own account have it), in the default rep login (`FIELD_REP_NAV`) and the
+   "Field Rep" role template, and in the `Representative` role the database creates on a switch back. The registry
+   still limits it to manufacturers and wholesalers. Custom roles a company already saved keep their own menu.
+6. **Representative accounts are not locations** (spec 5.5, decided 2026-11-04). Counting them would let a switch to
+   Decentralised use up the plan's branch allowance. Both counting functions skip `account_kind = 'rep_account'`.
+   *Revisit* if the owner wants to bill per representative account; that is a pricing change, not a code one.
+7. **Open field orders in a rep account block a switch to Centralised**: the rep loses access to the account, so
+   nobody who knows the order could finish it, and it would likely be raised again centrally (spec 9.3: never lost or
+   double-processed). Open company orders a rep raised (switch to Decentralised) stay company orders and are listed.
+8. **Customers' unpaid credit in a rep account** stays in the archived account on a switch to Centralised. Nothing is
+   moved or written off; the preview lists it and the owner can collect from that account (Locations).
+9. **Company field managers do not see activity inside representative accounts** under Decentralised. The owner does
+   (open the account from Locations). *Proposal, not built:* let a company role with "Manage field team" read field
+   activity of the company's own rep accounts. It widens row level security across businesses, so it needs the owner's
+   and the privacy lead's sign-off first.
 
 ## 3. The ledger
 
@@ -84,6 +98,20 @@ different structure); an adjustment is used instead.
 
 The two role switches are in Staff > Roles & Permissions (importers only). `rep_ledger_can()` reads them.
 
+### Transaction register (spec 7 and 8)
+
+Representatives > **Transactions**: `rep_ledger_register(company, from, to, rep, type, product, territory)` lists every
+entry in the period (posted, pending and rejected, each marked) in date order, with its products, the representative
+and their territory, the model it was recorded under and its **audit trail**: recorded by, approved or rejected by
+(with the note), what it reverses and what reversed it. Only posted entries count in its totals. Filters:
+representative, transaction type (`transfer` = both halves), product (a reversal matches through the entry it
+reverses), territory and date range. Print/PDF and spreadsheet export; 200 rows a page with "Show more". Ledger viewers
+only. The detailed statement and its exports also show who recorded and approved each line.
+
+**Territory** is the representative's location for reports: `company_representatives.territory_id`, one of the
+company's own territories (Territories page), set on the representative's card by a ledger manager
+(`set_representative_territory`, audited). The consolidated summary takes the same territory filter.
+
 ## 4. Statements
 
 `rep_statement(rep, from, to)` returns company and rep details, period, generation time, currency, opening balance
@@ -110,9 +138,19 @@ Settings > Operating model (importer's main account, Owner). Two steps:
 | Returns / transfers awaiting approval | Blocker: approve or reject first |
 | Held sales in a rep account (to Centralised) | Blocker: complete or delete |
 | Stock transfers in transit to/from a rep account (to Centralised) | Blocker: receive or cancel |
+| Open field orders in a rep account (to Centralised) | Blocker: deliver, reject or cancel |
 | A rep with no active login (to Decentralised) | Blocker: wait for acceptance, or make the rep inactive |
 | Held sales a rep left on the company POS (to Decentralised) | Warning: they stay company sales |
+| Open orders a rep raised on the company account (to Decentralised) | Warning: they stay company orders; company staff finish them |
 | Rep-account stock the company does not carry (to Centralised) | Warning: it stays in the rep's archived account |
+| Customers' unpaid credit sales in a rep account (to Centralised) | Warning: they stay in the archived account; the owner can collect |
+| Unpaid supplies (rep balances) | Carried over unchanged, both ways |
+
+**Reconciliation and rollback (spec 9.2, 9.4).** Inside the switch, `operating_model_reconciliation` is taken before
+and after: ledger entries, pending entries, every representative's balance, stock units by master item across the
+company and every rep account it has had, and stock value at company cost. Any difference raises, which rolls the whole
+switch back ("nothing changed"). The figures are stored with the change (`result.reconciliation`) and shown to the
+owner after the switch. Custody is reported but not compared (it becomes account stock and back by design).
 
 **To Decentralised:** each active rep gets their account (their previous one if it exists), their staff row moves into
 it with role `Owner` (their company role is remembered), and their custody moves from company stock into the account
@@ -122,8 +160,9 @@ it with role `Owner` (their company role is remembered), and their custody moves
 their custody, and the account is kept as history (`account_dormant_since`).
 
 Balances and ledger history are never touched. `operating_model_changes` (append-only) records who switched, when,
-from and to, the reviewed summary, the result and exceptions; `audit_log` records it too. Reps and the owner are
-notified (`staff_notifications`).
+from and to, the reviewed summary, the result (with the reconciliation) and exceptions; `audit_log` records it too.
+Reps, the owner and company staff whose role manages or views representative accounts are notified
+(`staff_notifications`).
 
 ## 6. CareFind visibility
 
@@ -144,15 +183,41 @@ its products are forced to `list_on_carefind = false`, and it cannot list on the
   a statement is the rep's own data or data the viewer is entitled to read. Add `rep_statement.xlsx` to the allow-list if
   the owner wants exports audited.
 
-## 8. Test plan
+## 8. Spec traceability
 
-- **Database (PGlite)**: `apps/carefind/src/test/operating-models/operatingModels.db.test.js`, 36 checks on one company
+| Spec | Where |
+|---|---|
+| 2 Model chosen at registration | Register form → `/api/register-business` → `set_registration_operating_model` |
+| 3.1 Company prices, central POS and stock, rep attribution | Reps are company staff; `canEditPrice` per role; sales carry `cashier_staff_id` |
+| 3.2 Individual ledger: supply, payment, return, transfer, all details | `record_rep_*`, `rep_ledger_entries/lines` (§3) |
+| 3.3 Account statement (opening, running, closing, company/rep details, position) | `rep_statement`, Representatives > Statement |
+| 3.4 Summary and detailed views, date range, PDF and spreadsheet, consolidated | Statement views and exports; Consolidated summary tab |
+| 4.1 Private rep accounts | `rep_account` child business; `current_business_ids()` gives a rep one business |
+| 4.2 Reps view company catalogue, cannot sell through it | `rep_company_catalog`; reps are no longer company staff |
+| 4.3 Supplies, payments, returns, transfers; supply value separate from retail price | Same ledger; stock moves between accounts; value on the ledger line |
+| 5.1 Directory and location-based facility search | Facility Discovery in Owner preset, rep login and templates (decision 5) |
+| 5.2 Reporting intact; attribution vs privacy | Every report module unchanged and per business; register and summary for the company |
+| 5.3 AI intelligence | Demand and product insight modules unchanged, per business (no cross-account data) |
+| 5.4 Live Feed | Field (live activity) in both models; per business RLS unchanged (decision 9) |
+| 5.5 Nothing removed | Rep accounts keep every operating module; not counted as locations (decision 6) |
+| 6 CareFind shows the company catalogue only | §6 triggers |
+| 7 Company management, filters, exports, audit trail | Representatives page; Transactions register; territories |
+| 8 Transaction records and balance treatment | §3; adjustments and reversals need reason, reference, audited |
+| 9 Switching both ways, summary, preservation, reconciliation, rollback, notification | §5 |
+| 10 Access control and integrity | §3 "Who may do what", §7 |
+
+## 9. Test plan
+
+- **Database (PGlite)**: `apps/carefind/src/test/operating-models/operatingModels.db.test.js`, 43 checks on one company
   through Centralised work, a switch to Decentralised with a custody plan, independent-account work and privacy, a
   switch back, and a second switch forward reusing the accounts: credit supply, payment, pending and accepted returns
   (accepted value), damaged returns, custody limits, transfers and pending transfers (as a pair), adjustments, reversals
   (once, not of a reversal, both halves of a transfer, stock undone), idempotent replays, statements (opening balance
   carried forward, running balance, totals, summary), access (rep sees only own, viewer vs plain staff vs another
-  company), append-only, browser writes refused, blockers, stale preview, public visibility, registration default.
+  company), append-only, browser writes refused, blockers, stale preview, public visibility, registration default; the
+  transaction register (audit trail, every filter, access), territories, open orders and customer credit in the
+  preview, admin notifications, reconciliation recorded both ways, a tampered switch rolled back completely, and
+  representative accounts not counted against the plan's locations.
 - **Unit**: `src/modules/representatives/__tests__/` (services, repository with a recording transport, the page and
   the switch flow), `src/lib/__tests__/permissions.test.js` (navigation by context), `api/__tests__/registerBusiness.test.js`.
 - **Manual, after applying** (in a rolled-back probe first, as for earlier migrations):
@@ -162,9 +227,11 @@ its products are forced to `list_on_carefind = false`, and it cannot list on the
   3. Switch to Decentralised: sign in as a rep, confirm their own POS and stock, the company catalogue, that the
      company's and the other rep's records are unreachable, and that nothing of theirs appears on CareFind.
   4. Switch back: confirm stock, custody, balances and history; then forward again and confirm no duplicate accounts.
-  5. Confirm Directory search, reports, AI features and the Live Feed behave as before in both models.
+  5. Confirm Facility Discovery (search hospitals in an LGA), reports, Demand intelligence and Field (live activity)
+     work for the owner, a Centralised rep and a Decentralised rep; and that Locations shows rep accounts separately.
+  6. Representatives > Transactions: filter by rep, type, product and territory; print and export.
 
-## 9. Applying
+## 10. Applying
 
 Apply the migration, then deploy the client. The client tolerates the migration being absent (new screens say
 "not available yet", nothing else changes), but the new screens need it. After applying: re-read the function

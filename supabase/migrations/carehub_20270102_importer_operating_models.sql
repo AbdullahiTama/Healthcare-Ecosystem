@@ -54,6 +54,18 @@
 --      operating_model_changes records every change (append-only), audit_log records who did it.
 --   9. set_registration_operating_model(email, model): service role only, called by /api/register-business. A new
 --      importer is created Centralised by default (businesses_operating_model_guard) and this records the choice.
+--  10. rep_ledger_register(company, from, to, rep, type, product, territory): the company's transaction register with
+--      every filter of spec 7 and the audit trail of each entry (recorded by, approved or rejected by, what it
+--      reverses, what reversed it). company_representatives.territory_id (set_representative_territory) is the
+--      representative's location for reports; rep_ledger_summary takes the same territory filter.
+--  11. A switch reconciles before and after (operating_model_reconciliation: ledger entries, pending entries, each
+--      representative's balance, stock units by master item across the company and every rep account, stock value at
+--      company cost) and raises on any difference, which rolls the whole switch back (spec 9.2, 9.4). Open field
+--      orders in a rep account block a switch to Centralised; open company orders a rep raised and customers' unpaid
+--      credit in a rep account are listed as warnings. Company staff who manage or view representative accounts are
+--      notified with the owner and the representatives.
+--  12. Representative accounts do not count as locations against the plan (guard_business_insert and
+--      business_billing_overview, re-created from their live definitions with that one change).
 --
 -- SECURITY
 --   * Every write is a SECURITY DEFINER function with a pinned search_path that checks the caller explicitly:
@@ -72,6 +84,8 @@
 --     ledger, custody and the company's product catalogue (rep_company_catalog: names, prices, no stock or cost).
 --
 -- ROLLBACK
+--   Re-apply guard_business_insert from carehub_20261214_plan_enforcement.sql and business_billing_overview from
+--   carehub_20261218_subscription_billing.sql (both only gain the rep-account filter here).
 --   Before any switch has happened: drop the functions, triggers, policy and tables added here, then
 --   alter table businesses drop column operating_model, drop column operating_model_changed_at,
 --   drop column account_kind. After a switch to Decentralised, first switch every company back to Centralised
@@ -179,6 +193,8 @@ create table if not exists public.company_representatives (
   company_role          text,
   status                text not null default 'active' check (status in ('active', 'inactive')),
   account_dormant_since timestamptz,
+  -- The representative's sales territory (spec 7: reports filter by location). Optional; set by a ledger manager.
+  territory_id          uuid references public.territories(id) on delete set null,
   created_at            timestamptz not null default now(),
   created_by            uuid,
   created_by_name       text,
@@ -187,6 +203,7 @@ create table if not exists public.company_representatives (
 create unique index if not exists company_representatives_staff on public.company_representatives (staff_id) where staff_id is not null;
 create unique index if not exists company_representatives_account on public.company_representatives (rep_account_id) where rep_account_id is not null;
 create index if not exists company_representatives_company on public.company_representatives (company_id, status);
+create index if not exists company_representatives_territory on public.company_representatives (territory_id) where territory_id is not null;
 
 -- ── 3. The ledger ──────────────────────────────────────────────────────────────────────────────────────────────────
 create table if not exists public.rep_ledger_entries (
@@ -535,6 +552,22 @@ begin
   end if;
   update public.company_representatives set status = p_status where id = r.id;
   perform public.rep_ledger_audit(r.company_id, 'representative.' || p_status, r.id, jsonb_build_object('from', r.status));
+end $$;
+
+-- The representative's territory (one of the company's own territories), or null to clear it.
+create or replace function public.set_representative_territory(p_representative_id uuid, p_territory_id uuid)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare r public.company_representatives%rowtype;
+begin
+  select * into r from public.company_representatives where id = p_representative_id for update;
+  if not found then raise exception 'Representative not found.' using errcode = 'P0002'; end if;
+  perform public.rep_ledger_require(r.company_id, 'manage');
+  if p_territory_id is not null and not exists (select 1 from public.territories t where t.id = p_territory_id and t.business_id = r.company_id) then
+    raise exception 'Choose one of your company''s territories.' using errcode = '22023';
+  end if;
+  update public.company_representatives set territory_id = p_territory_id where id = r.id;
+  perform public.rep_ledger_audit(r.company_id, 'representative.territory', r.id,
+    jsonb_build_object('from', r.territory_id, 'to', p_territory_id));
 end $$;
 
 -- ── 7. Stock effects ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -1055,7 +1088,8 @@ begin
     'totals', v_totals, 'entries', v_entries, 'pending', v_pending);
 end $$;
 
-create or replace function public.rep_ledger_summary(p_company uuid, p_from date, p_to date)
+-- Consolidated figures for every representative of the company; p_territory narrows it to one territory.
+create or replace function public.rep_ledger_summary(p_company uuid, p_from date, p_to date, p_territory uuid default null)
 returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare v_rows jsonb;
 begin
@@ -1064,7 +1098,8 @@ begin
     raise exception 'Choose a period whose start is on or before its end.' using errcode = '22023';
   end if;
   select coalesce(jsonb_agg(row_to_json(t)::jsonb order by t.full_name), '[]'::jsonb) into v_rows from (
-    select r.id, r.full_name, r.rep_code, r.status, r.rep_account_id, r.account_dormant_since,
+    select r.id, r.full_name, r.rep_code, r.status, r.rep_account_id, r.account_dormant_since, r.territory_id,
+      (select tt.name from public.territories tt where tt.id = r.territory_id) as territory_name,
       round(coalesce(sum(e.debit - e.credit) filter (where e.entry_date < p_from), 0), 2) as opening_balance,
       round(coalesce(sum(e.debit) filter (where e.entry_type = 'supply' and e.entry_date between p_from and p_to), 0), 2) as supplies,
       round(coalesce(sum(e.credit) filter (where e.entry_type = 'payment' and e.entry_date between p_from and p_to), 0), 2) as payments,
@@ -1075,15 +1110,77 @@ begin
       (select count(*) from public.rep_ledger_entries p where p.representative_id = r.id and p.status = 'pending') as pending_count
     from public.company_representatives r
     left join public.rep_ledger_entries e on e.representative_id = r.id and e.status = 'posted'
-   where r.company_id = p_company
+   where r.company_id = p_company and (p_territory is null or r.territory_id = p_territory)
    group by r.id) t;
   return jsonb_build_object('company_id', p_company, 'period', jsonb_build_object('from', p_from, 'to', p_to), 'generated_at', now(),
-    'currency', 'NGN', 'operating_model', public.operating_company_model(p_company), 'representatives', v_rows,
+    'currency', 'NGN', 'operating_model', public.operating_company_model(p_company), 'territory_id', p_territory,
+    'territory_name', (select name from public.territories where id = p_territory), 'representatives', v_rows,
     'totals', (select jsonb_build_object(
       'opening_balance', coalesce(sum((x ->> 'opening_balance')::numeric), 0), 'supplies', coalesce(sum((x ->> 'supplies')::numeric), 0),
       'payments', coalesce(sum((x ->> 'payments')::numeric), 0), 'returns', coalesce(sum((x ->> 'returns')::numeric), 0),
       'transfers_net', coalesce(sum((x ->> 'transfers_net')::numeric), 0), 'adjustments_net', coalesce(sum((x ->> 'adjustments_net')::numeric), 0),
       'closing_balance', coalesce(sum((x ->> 'closing_balance')::numeric), 0)) from jsonb_array_elements(v_rows) x));
+end $$;
+
+-- The company's transaction register (spec 7 and 8): every entry in the period, in date order, filtered by
+-- representative, transaction type ('transfer' means both halves), product and territory, with its full audit
+-- trail: who recorded it, who approved or rejected it, what it reverses and what reversed it. Pending and rejected
+-- entries are listed (with their status) but only posted ones count in the totals.
+create or replace function public.rep_ledger_register(p_company uuid, p_from date, p_to date,
+  p_representative_id uuid default null, p_entry_type text default null, p_product_id uuid default null,
+  p_territory uuid default null, p_limit integer default 200, p_offset integer default 0)
+returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare v_rows jsonb; v_totals jsonb; v_limit integer := least(greatest(coalesce(p_limit, 200), 1), 500);
+begin
+  perform public.rep_ledger_require(p_company, 'view');
+  if p_from is null or p_to is null or p_from > p_to then
+    raise exception 'Choose a period whose start is on or before its end.' using errcode = '22023';
+  end if;
+  if p_entry_type is not null and p_entry_type not in ('supply', 'payment', 'return', 'transfer', 'transfer_out', 'transfer_in', 'adjustment', 'reversal') then
+    raise exception 'Unknown transaction type.' using errcode = '22023';
+  end if;
+
+  with m as (
+    select e.*, r.full_name as representative_name, r.rep_code, r.territory_id as rep_territory_id
+      from public.rep_ledger_entries e join public.company_representatives r on r.id = e.representative_id
+     where e.company_id = p_company and e.entry_date between p_from and p_to
+       and (p_representative_id is null or e.representative_id = p_representative_id)
+       and (p_entry_type is null or e.entry_type = p_entry_type or (p_entry_type = 'transfer' and e.entry_type in ('transfer_out', 'transfer_in')))
+       and (p_territory is null or r.territory_id = p_territory)
+       and (p_product_id is null
+            or exists (select 1 from public.rep_ledger_lines l where l.entry_id = e.id and l.company_product_id = p_product_id)
+            -- a reversal carries no lines of its own: it matches through the entry it reverses
+            or exists (select 1 from public.rep_ledger_lines l where l.entry_id = e.reverses_entry_id and l.company_product_id = p_product_id)))
+  select
+    (select jsonb_build_object('count', count(*), 'posted', count(*) filter (where status = 'posted'),
+        'pending', count(*) filter (where status = 'pending'), 'rejected', count(*) filter (where status = 'rejected'),
+        'debits', coalesce(sum(debit) filter (where status = 'posted'), 0),
+        'credits', coalesce(sum(credit) filter (where status = 'posted'), 0)) from m),
+    (select coalesce(jsonb_agg(row_to_json(t)::jsonb order by t.entry_date, t.created_at, t.entry_no), '[]'::jsonb) from (
+      select m.id, m.entry_no, m.entry_type, m.status, m.entry_date, m.created_at, m.description, m.reference, m.reason, m.note,
+             m.payment_method, m.payment_recipient, m.return_condition, m.debit, m.credit, m.operating_model, m.stock_effect,
+             m.created_by_name, m.decided_by_name, m.decided_at, m.decision_note,
+             m.representative_id, m.representative_name, m.rep_code,
+             (select tt.name from public.territories tt where tt.id = m.rep_territory_id) as territory_name,
+             (select c.full_name from public.company_representatives c where c.id = m.counterparty_representative_id) as counterparty_name,
+             (select o.entry_no from public.rep_ledger_entries o where o.id = m.reverses_entry_id) as reverses_entry_no,
+             (select x.entry_no from public.rep_ledger_entries x where x.reverses_entry_id = m.id) as reversed_by_entry_no,
+             (select coalesce(jsonb_agg(jsonb_build_object('company_product_id', l.company_product_id, 'product_name', l.product_name,
+                       'quantity', l.quantity, 'unit_value', l.unit_value, 'line_value', l.line_value) order by l.created_at, l.id), '[]'::jsonb)
+                from public.rep_ledger_lines l where l.entry_id = m.id) as lines
+        from m order by m.entry_date, m.created_at, m.entry_no
+       limit v_limit offset greatest(coalesce(p_offset, 0), 0)) t)
+    into v_totals, v_rows;
+
+  return jsonb_build_object('company_id', p_company, 'period', jsonb_build_object('from', p_from, 'to', p_to), 'generated_at', now(),
+    'currency', 'NGN', 'operating_model', public.operating_company_model(p_company),
+    'filters', jsonb_build_object('representative_id', p_representative_id, 'entry_type', p_entry_type, 'product_id', p_product_id,
+                                  'territory_id', p_territory,
+                                  'representative_name', (select full_name from public.company_representatives where id = p_representative_id and company_id = p_company),
+                                  'product_name', (select name from public.products where id = p_product_id and business_id = p_company),
+                                  'territory_name', (select name from public.territories where id = p_territory and business_id = p_company)),
+    'totals', v_totals, 'entries', v_rows,
+    'has_more', (v_totals ->> 'count')::integer > greatest(coalesce(p_offset, 0), 0) + v_limit);
 end $$;
 
 -- The signed-in representative's own profile (navigation and the "My company account" page).
@@ -1134,11 +1231,40 @@ returns text language sql stable security definer set search_path = public, pg_t
     (select count(*) from public.rep_ledger_entries where company_id = p_company and status = 'pending')))
 $$;
 
+-- The figures a switch must leave unchanged (spec 9.2), taken just before and just after it inside the same
+-- transaction. Stock is counted across the company and every representative account it has ever had (dormant ones
+-- included), by master catalogue item, so a unit that moves between them is the same unit; a product with no
+-- master item is counted on its own. Value is at the company's cost price for that item. Custody is reported but not
+-- compared: a switch converts custody into account stock and back by design.
+create or replace function public.operating_model_reconciliation(p_company uuid)
+returns jsonb language sql stable security definer set search_path = public, pg_temp as $$
+  with accounts as (
+    select p_company as id
+    union select r.rep_account_id from public.company_representatives r where r.company_id = p_company and r.rep_account_id is not null),
+  units as (
+    select coalesce(p.master_product_id, p.id) as item, sum(coalesce(p.stock, 0))::bigint as qty
+      from public.products p where p.business_id in (select id from accounts) group by 1),
+  cost as (
+    select distinct on (coalesce(p.master_product_id, p.id)) coalesce(p.master_product_id, p.id) as item, coalesce(p.cost_price, 0) as unit_cost
+      from public.products p where p.business_id = p_company order by coalesce(p.master_product_id, p.id), coalesce(p.stock, 0) desc, p.id)
+  select jsonb_build_object(
+    'ledger_entries', (select count(*) from public.rep_ledger_entries where company_id = p_company),
+    'pending_entries', (select count(*) from public.rep_ledger_entries where company_id = p_company and status = 'pending'),
+    'total_balance', (select coalesce(sum(debit - credit), 0) from public.rep_ledger_entries where company_id = p_company and status = 'posted'),
+    'balances', (select coalesce(jsonb_object_agg(r.id, public.rep_balance(r.id)), '{}'::jsonb)
+                   from public.company_representatives r where r.company_id = p_company),
+    'stock_units', (select coalesce(sum(qty), 0) from units),
+    'stock_value', (select round(coalesce(sum(u.qty * c.unit_cost), 0), 2) from units u join cost c on c.item = u.item),
+    'custody_units', (select coalesce(sum(quantity), 0) from public.rep_custody where company_id = p_company),
+    'items', (select coalesce(jsonb_object_agg(item, qty), '{}'::jsonb) from units))
+$$;
+
 create or replace function public.operating_model_preview(p_company uuid, p_target text)
 returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare
   v_model text; v_reps jsonb := '[]'::jsonb; v_blockers jsonb := '[]'::jsonb; v_warnings jsonb := '[]'::jsonb;
   r record; v_stock jsonb; v_held integer; v_transit integer; v_pending integer; v_staff public.staff%rowtype;
+  v_orders integer; v_credit_count integer; v_credit_total numeric;
 begin
   if auth.uid() is null then raise exception 'Sign in to continue.' using errcode = '42501'; end if;
   v_model := public.operating_company_model(p_company);
@@ -1178,6 +1304,13 @@ begin
         v_warnings := v_warnings || jsonb_build_object('code', 'held_sales_stay', 'representative_id', r.id,
           'message', r.full_name || ' has ' || v_held || ' held sale(s) on the company POS. They stay company sales.');
       end if;
+      -- Field orders the rep raised on the company account are the company's orders: company staff finish them.
+      select count(*) into v_orders from public.orders
+       where business_id = p_company and created_by_staff_id = r.staff_id and status in ('submitted', 'approved', 'processing', 'dispatched');
+      if v_orders > 0 then
+        v_warnings := v_warnings || jsonb_build_object('code', 'open_orders_stay', 'representative_id', r.id, 'count', v_orders,
+          'message', r.full_name || ' has ' || v_orders || ' open order(s) on the company account. They stay company orders; company staff approve, dispatch and deliver them.');
+      end if;
     else
       select coalesce(jsonb_agg(jsonb_build_object('rep_product_id', p.id, 'product_name', p.name, 'stock', p.stock,
                'company_product_id', cp.id, 'returns_to_company', cp.id is not null) order by p.name), '[]'::jsonb)
@@ -1201,6 +1334,25 @@ begin
       if v_transit > 0 then
         v_blockers := v_blockers || jsonb_build_object('code', 'transfers_in_transit', 'representative_id', r.id,
           'message', r.full_name || ' has ' || v_transit || ' stock transfer(s) in transit. Receive or cancel them first.');
+      end if;
+      -- Open orders in the rep's own account: a rep loses access to the account, so they must be finished first
+      -- (otherwise nobody who knows them could deliver them, and they would be raised a second time centrally).
+      select count(*) into v_orders from public.orders
+       where business_id = r.rep_account_id and status in ('submitted', 'approved', 'processing', 'dispatched');
+      if v_orders > 0 then
+        v_blockers := v_blockers || jsonb_build_object('code', 'open_orders', 'representative_id', r.id, 'count', v_orders,
+          'message', r.full_name || ' has ' || v_orders || ' open order(s) in their own account. Deliver, reject or cancel them first.');
+      end if;
+      -- Customers who owe the rep for credit sales: the sales stay in the archived account, where the company owner
+      -- can still collect them (Locations); nothing is moved or written off.
+      select count(*), coalesce(sum(balance), 0) into v_credit_count, v_credit_total from public.sales
+       where business_id = r.rep_account_id and coalesce(is_credit, false) and coalesce(balance, 0) > 0 and deleted_at is null
+         and coalesce(status, '') not in ('deleted', 'refunded');
+      if v_credit_count > 0 then
+        v_warnings := v_warnings || jsonb_build_object('code', 'customer_credit_in_account', 'representative_id', r.id,
+          'count', v_credit_count, 'amount', round(v_credit_total, 2),
+          'message', r.full_name || '''s customers owe ₦' || to_char(round(v_credit_total, 2), 'FM999,999,999,990.00') || ' on '
+            || v_credit_count || ' credit sale(s). They stay in ' || r.full_name || '''s archived account, where the owner can still collect them.');
       end if;
     end if;
     v_reps := v_reps || jsonb_build_object('id', r.id, 'full_name', r.full_name, 'rep_code', r.rep_code, 'status', r.status,
@@ -1237,6 +1389,7 @@ declare
   v_preview jsonb; v_from text; r public.company_representatives%rowtype; k public.rep_custody%rowtype; p public.products%rowtype;
   v_account uuid; v_rep_prod uuid; v_qty integer; v_plan jsonb; v_cp uuid; v_moved jsonb := '[]'::jsonb; v_exceptions jsonb := '[]'::jsonb;
   v_change uuid := gen_random_uuid(); v_converted integer := 0; v_stock integer; v_found boolean; v_result jsonb;
+  v_before jsonb; v_after jsonb; v_mismatch text;
 begin
   perform 1 from public.businesses where id = p_company for update;
   v_preview := public.operating_model_preview(p_company, p_target);
@@ -1247,6 +1400,7 @@ begin
   if jsonb_array_length(v_preview -> 'blockers') > 0 then
     raise exception 'Resolve the items listed before switching: %', (v_preview -> 'blockers' -> 0 ->> 'message') using errcode = '22023';
   end if;
+  v_before := public.operating_model_reconciliation(p_company);
 
   if p_target = 'decentralised' then
     -- Active representatives get (or get back) their own account; inactive ones stay company-side.
@@ -1319,8 +1473,26 @@ begin
 
   update public.businesses set operating_model = p_target, operating_model_changed_at = now() where id = p_company;
 
+  -- Validation (spec 9.4): nothing may be gained or lost. Any difference raises, which rolls the whole switch back, so
+  -- the company is never left half converted.
+  v_after := public.operating_model_reconciliation(p_company);
+  v_mismatch := case
+    when v_after -> 'ledger_entries' <> v_before -> 'ledger_entries' then 'ledger entries'
+    when v_after -> 'pending_entries' <> v_before -> 'pending_entries' then 'pending entries'
+    when v_after -> 'balances' <> v_before -> 'balances' then 'representative balances'
+    when v_after -> 'items' <> v_before -> 'items' then 'stock quantities'
+    when v_after -> 'stock_value' <> v_before -> 'stock_value' then 'stock value'
+  end;
+  if v_mismatch is not null then
+    raise exception 'The switch was cancelled and nothing changed: % did not reconcile after the move. Please contact CareHub support.', v_mismatch
+      using errcode = 'P0001';
+  end if;
+
   v_result := jsonb_build_object('change_id', v_change, 'from', v_from, 'to', p_target, 'converted', v_converted,
-                                 'stock', v_moved, 'exceptions', v_exceptions, 'effective_at', now());
+                                 'stock', v_moved, 'exceptions', v_exceptions, 'effective_at', now(),
+                                 'reconciliation', jsonb_build_object('balanced', true,
+                                   'before', v_before - 'items' - 'balances', 'after', v_after - 'items' - 'balances',
+                                   'items_checked', (select count(*) from jsonb_object_keys(v_after -> 'items'))));
   insert into public.operating_model_changes (id, company_id, from_model, to_model, initiated_by, initiated_by_name, summary, result, exceptions, note)
   values (v_change, p_company, v_from, p_target, auth.uid(), public.rep_ledger_actor_name(p_company), v_preview, v_result, v_exceptions,
           nullif(btrim(p_note), ''));
@@ -1329,6 +1501,14 @@ begin
   insert into public.staff_notifications (business_id, staff_id, is_owner, kind, title, body, link)
   values (p_company, null, true, 'operating_model_changed', 'Operating model changed to ' || initcap(p_target),
           v_converted || ' representative(s) moved to the new structure. Balances and history are unchanged.', '/dashboard/settings');
+  -- Company staff who manage or view representative accounts (not the representatives themselves, notified above).
+  insert into public.staff_notifications (business_id, staff_id, is_owner, kind, title, body, link)
+  select p_company, s.id, false, 'operating_model_changed', 'Operating model changed to ' || initcap(p_target),
+         v_converted || ' representative(s) moved to the new structure. Balances and history are unchanged.', '/dashboard/representatives'
+    from public.staff s join public.roles ro on ro.business_id = s.business_id and ro.name = s.role
+   where s.business_id = p_company and s.status = 'active'
+     and ((ro.permissions ->> 'canManageRepLedger') = 'true' or (ro.permissions ->> 'canViewRepLedger') = 'true')
+     and not exists (select 1 from public.company_representatives cr where cr.staff_id = s.id);
   return v_result;
 end $$;
 
@@ -1350,7 +1530,177 @@ begin
   return true;
 end $$;
 
--- ── 11. Grants ─────────────────────────────────────────────────────────────────────────────────────────────────────
+-- ── 11. Representative accounts are not locations ──────────────────────────────────────────────────────────────────
+-- Spec 5.5: the operating model must not take away an existing capability. Counting representative accounts as
+-- locations would let a switch to Decentralised use up the plan's branch allowance and stop the company adding
+-- branches. Both functions below are their live definitions (read 2026-11-04) with one change each: the location
+-- tree skips account_kind = 'rep_account' rows (a rep account has no children, so nothing below it is skipped).
+
+create or replace function public.guard_business_insert()
+returns trigger language plpgsql set search_path to 'public' as $function$
+declare
+  v_parent_status text;
+  v_parent_plan   text;
+  v_parent_expiry timestamptz;
+  v_parent_found  boolean := false;
+  v_root          uuid;
+  v_locations     integer;
+  v_limit         integer;
+begin
+  -- Server endpoints, migrations, SECURITY DEFINER RPCs (current_user is the
+  -- owner there) and platform admins are trusted.
+  if current_user in ('postgres', 'service_role', 'supabase_admin', 'supabase_auth_admin')
+     or coalesce(public.is_platform_admin(), false) then
+    return new;
+  end if;
+
+  if coalesce(new.is_platform_admin, false) then
+    raise exception 'Only a platform administrator can create a business with platform-admin access.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if new.referring_agent_id is not null then
+    raise exception 'referring_agent_id cannot be supplied; it is derived from referral_code_used.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if new.parent_business_id is null then
+    -- Root business: never by direct insert. Registration goes through the
+    -- SECURITY DEFINER RPCs (exempt above); no client code inserts a root row.
+    raise exception 'Businesses are created through registration, not by direct insert.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  -- Branch: the caller must own an active parent (read under the caller's RLS).
+  select true, b.status, b.plan, b.plan_expires_at
+    into v_parent_found, v_parent_status, v_parent_plan, v_parent_expiry
+    from public.businesses b
+   where b.id = new.parent_business_id
+     and lower(b.email) = lower(auth.email());
+
+  if not coalesce(v_parent_found, false) then
+    raise exception 'A branch can only be added to a business you own (parent_business_id).'
+      using errcode = 'insufficient_privilege';
+  end if;
+  if v_parent_status is distinct from 'active' then
+    raise exception 'A branch can only be added to an active business (parent_business_id).'
+      using errcode = 'insufficient_privilege';
+  end if;
+  if new.status is null or new.status not in ('active', 'pending') then
+    raise exception 'A new branch must have status active or pending; only a platform administrator can set another status.'
+      using errcode = 'insufficient_privilege';
+  end if;
+  if new.plan is not null and new.plan is distinct from v_parent_plan then
+    raise exception 'A new branch must be on its parent business''s plan; only a platform administrator can set another plan.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  -- Plan (carehub_20261214): no new branch once the plan is restricted, and no more locations (the main business plus
+  -- every branch below it) than the plan allows.
+  if public.plan_state(v_parent_expiry) = 'restricted' then
+    raise exception 'Your CareHub plan has expired. Renew it in Settings to add branches.' using errcode = '23514';
+  end if;
+  v_limit := public.plan_limit(v_parent_plan, 'locations');
+  if v_limit is not null then
+    with recursive up(id, parent_business_id, depth) as (
+      select b.id, b.parent_business_id, 0 from public.businesses b where b.id = new.parent_business_id
+      union all
+      select p.id, p.parent_business_id, up.depth + 1 from public.businesses p join up on p.id = up.parent_business_id where up.depth < 10
+    )
+    select id into v_root from up where parent_business_id is null limit 1;
+    with recursive tree(id, depth) as (
+      select v_root, 0
+      union all
+      select c.id, t.depth + 1 from public.businesses c join tree t on c.parent_business_id = t.id
+       where t.depth < 10 and c.deleted_at is null and c.account_kind = 'business'  -- carehub_20270102: rep accounts are not locations
+    )
+    select count(*) into v_locations from tree;
+    if v_locations >= v_limit then
+      raise exception 'Your plan allows up to % locations. Upgrade your plan in Settings to add more.', v_limit using errcode = '23514';
+    end if;
+  end if;
+
+  -- The expiry is never the caller's (nor the column default's): a branch
+  -- inherits its parent's.
+  new.plan_expires_at := v_parent_expiry;
+
+  return new;
+end
+$function$;
+
+create or replace function public.business_billing_overview(p_business_id uuid)
+returns json language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare
+  v_root uuid;
+  v_out json;
+begin
+  if p_business_id is null or not (public.is_business_owner(p_business_id) or public.is_platform_admin()) then
+    return null;
+  end if;
+
+  with recursive up(id, parent_business_id, depth) as (
+    select b.id, b.parent_business_id, 0 from public.businesses b where b.id = p_business_id
+    union all
+    select p.id, p.parent_business_id, up.depth + 1 from public.businesses p join up on p.id = up.parent_business_id where up.depth < 10
+  )
+  select id into v_root from up where parent_business_id is null limit 1;
+  v_root := coalesce(v_root, p_business_id);
+
+  with recursive tree(id, depth) as (
+    select v_root, 0
+    union all
+    select c.id, t.depth + 1 from public.businesses c join tree t on c.parent_business_id = t.id
+     where t.depth < 10 and c.deleted_at is null and c.account_kind = 'business'  -- carehub_20270102: rep accounts are not locations
+  )
+  select json_build_object(
+    'business', json_build_object('id', b.id, 'name', b.name, 'email', b.email, 'phone', b.phone,
+                                  'address', b.address, 'city', b.city, 'state', b.state, 'logo_url', b.logo_url),
+    'plan', coalesce(b.plan, 'basic'),
+    'expires_at', b.plan_expires_at,
+    'grace_ends_at', public.plan_grace_ends_at(b.plan_expires_at),
+    'state', public.plan_state(b.plan_expires_at),
+    'limits', json_build_object(
+      'staff', public.plan_limit(b.plan, 'staff'),
+      'locations', public.plan_limit(b.plan, 'locations'),
+      'products', public.plan_limit(b.plan, 'products')),
+    'usage', json_build_object(
+      'staff', (select count(*) from public.staff s where s.business_id = p_business_id),
+      'locations', (select count(*) from tree),
+      'products', (select count(*) from public.products pr where pr.business_id = p_business_id)),
+    'payments', coalesce((
+      select json_agg(json_build_object(
+               'id', pp.id, 'receipt_number', pp.receipt_number, 'reference', pp.reference, 'plan', pp.plan,
+               'months', pp.months, 'amount', pp.naira_amount, 'currency', pp.currency,
+               'payment_method', pp.payment_method, 'provider_transaction_id', pp.provider_transaction_id,
+               'period_start', pp.period_start, 'period_end', pp.period_end, 'paid_at', pp.paid_at,
+               'is_first_payment', pp.is_first_payment)
+             order by pp.paid_at desc)
+        from public.plan_payments pp
+       where pp.business_id = v_root and pp.status = 'success'), '[]'::json),
+    'attempts', coalesce((
+      select json_agg(a order by a.created_at desc) from (
+        select i.reference, i.status, i.purpose, i.provider, i.expected_amount / 100 as amount, i.currency,
+               (i.metadata ->> 'months')::int as months, i.metadata ->> 'plan' as plan,
+               i.metadata ->> 'refund_reason' as refund_reason, i.created_at, i.updated_at
+          from public.payment_intents i
+         where i.business_id = v_root
+           and i.purpose in ('plan_renewal', 'plan_renewal_wallet')
+           and i.status <> 'settled'
+           and not exists (select 1 from public.plan_payments pp where pp.reference = i.reference)
+           and i.created_at > now() - interval '180 days'
+         order by i.created_at desc
+         limit 50) a), '[]'::json)
+  ) into v_out
+  from public.businesses b
+  where b.id = v_root;
+
+  return v_out;
+end;
+$$;
+-- Grants on business_billing_overview are unchanged by create or replace (authenticated may execute; it checks the
+-- caller itself). guard_business_insert is a trigger function and keeps its trigger.
+
+-- ── 12. Grants ─────────────────────────────────────────────────────────────────────────────────────────────────────
 do $$
 declare f text;
 begin
@@ -1368,8 +1718,9 @@ begin
     'record_rep_return(uuid, uuid, jsonb, text, boolean, date, text, text, text)',
     'record_rep_transfer(uuid, uuid, uuid, jsonb, text, boolean, date, text, text)',
     'decide_rep_entry(uuid, text, text, jsonb)', 'record_rep_adjustment(uuid, uuid, text, numeric, text, text, date, text)',
-    'reverse_rep_entry(uuid, text, text)', 'rep_statement(uuid, date, date)', 'rep_ledger_summary(uuid, date, date)',
-    'my_representative()', 'rep_company_catalog(text, integer, integer)', 'operating_model_state_token(uuid)',
+    'reverse_rep_entry(uuid, text, text)', 'rep_statement(uuid, date, date)', 'rep_ledger_summary(uuid, date, date, uuid)',
+    'rep_ledger_register(uuid, date, date, uuid, text, uuid, uuid, integer, integer)', 'set_representative_territory(uuid, uuid)',
+    'operating_model_reconciliation(uuid)', 'my_representative()', 'rep_company_catalog(text, integer, integer)', 'operating_model_state_token(uuid)',
     'operating_model_preview(uuid, text)', 'switch_operating_model(uuid, text, text, jsonb, text)',
     'set_registration_operating_model(text, text)'] loop
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
@@ -1383,7 +1734,8 @@ begin
     'record_rep_return(uuid, uuid, jsonb, text, boolean, date, text, text, text)',
     'record_rep_transfer(uuid, uuid, uuid, jsonb, text, boolean, date, text, text)',
     'decide_rep_entry(uuid, text, text, jsonb)', 'record_rep_adjustment(uuid, uuid, text, numeric, text, text, date, text)',
-    'reverse_rep_entry(uuid, text, text)', 'rep_statement(uuid, date, date)', 'rep_ledger_summary(uuid, date, date)',
+    'reverse_rep_entry(uuid, text, text)', 'rep_statement(uuid, date, date)', 'rep_ledger_summary(uuid, date, date, uuid)',
+    'rep_ledger_register(uuid, date, date, uuid, text, uuid, uuid, integer, integer)', 'set_representative_territory(uuid, uuid)',
     'my_representative()', 'rep_company_catalog(text, integer, integer)', 'operating_model_preview(uuid, text)',
     'switch_operating_model(uuid, text, text, jsonb, text)',
     -- used inside RLS policies, which run as the caller

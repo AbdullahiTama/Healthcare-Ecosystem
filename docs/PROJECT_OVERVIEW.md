@@ -133,7 +133,7 @@ and database migrations on PGlite. On 2026-11-02 CareHub had 304 test files and 
 | Payments, settlement, wallets, withdrawals | [architecture/CareHub-Payment-Flows.md](architecture/CareHub-Payment-Flows.md), [architecture/Settlement-Engine.md](architecture/Settlement-Engine.md), [architecture/Withdrawal-Engine.md](architecture/Withdrawal-Engine.md) |
 | Stock and inventory | [architecture/Stock-Ledger.md](architecture/Stock-Ledger.md), [architecture/Inventory-Large-Catalogs.md](architecture/Inventory-Large-Catalogs.md) |
 | ADR / pharmacovigilance | [architecture/ADR-Routing-Foundation.md](architecture/ADR-Routing-Foundation.md), [architecture/ADR-Privacy-Security-Audit.md](architecture/ADR-Privacy-Security-Audit.md), [audits/carefind-carehub-pv-routing-audit.md](audits/carefind-carehub-pv-routing-audit.md) |
-| Importer / manufacturer operating models, representative ledgers | [architecture/Importer-Operating-Models.md](architecture/Importer-Operating-Models.md) |
+| Importer / manufacturer operating models, representative ledgers, transaction register | [architecture/Importer-Operating-Models.md](architecture/Importer-Operating-Models.md) |
 | Business directory and discovery | [architecture/CareHub-Business-Directory-and-Discovery.md](architecture/CareHub-Business-Directory-and-Discovery.md) |
 | Production readiness, performance | [architecture/Production-Readiness.md](architecture/Production-Readiness.md), [architecture/Performance-and-Resilience.md](architecture/Performance-and-Resilience.md) |
 | Linting | [architecture/Linting.md](architecture/Linting.md) |
