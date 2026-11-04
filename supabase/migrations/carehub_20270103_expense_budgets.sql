@@ -1,9 +1,25 @@
 -- carehub_20270103_expense_budgets
 --
--- Status: NOT APPLIED. Written 2026-11-04; apply only with the owner's approval. Tested on PGlite
--- (apps/carefind/src/test/expenses/expenseBudgets.db.test.js) with the live current_business_ids(),
--- is_business_owner() and is_platform_admin(), read verbatim on 2026-11-04. The app works before it is applied
--- (budgets stay in the browser, as before, with a notice) and switches to the database once it is.
+-- Status: APPLIED TO PRODUCTION 2026-11-04 with the owner's approval (Supabase migration version 20261104143040),
+-- applied verbatim from this file. Tested first on PGlite (apps/carefind/src/test/expenses/expenseBudgets.db.test.js)
+-- with the live current_business_ids(), is_business_owner() and is_platform_admin(), read verbatim that day.
+-- After applying: RLS on; authenticated SELECT only, anon nothing; set_expense_budget SECURITY DEFINER with
+-- search_path public, pg_temp, EXECUTE for authenticated only. Live behavioural probe, as a real Owner, one of their
+-- active staff and the owner of another business, inside DO blocks that raised and rolled back (0 rows remained):
+--   1 Owner sets 2026-10 = 50,000:                 ALLOWED
+--   2 Owner sets it again (55,000):                one row, 55,000 (upsert)
+--   3 Owner reads 2026-11:                         2026-10 = 55,000 (carried over)
+--   4-6 Owner INSERT / UPDATE / DELETE directly:   refused, permission denied
+--   7 bad month 2026-13:                           refused, "The budget month must look like 2026-11."
+--   8 staff member reads 2026-11:                  2026-10 = 55,000
+--   9 staff member sets a budget:                  refused, 42501 "Only the Owner can set the expense budget."
+--  10 staff member INSERT directly:                refused
+--  11 owner of another business reads it:          0 rows
+--  12 owner of another business sets it:          refused, 42501
+--  13 anon reads / sets:                           refused, permission denied (table / function)
+-- Security advisor afterwards: the 2026-11-04 baseline (8 groups, 208 findings) plus exactly one finding,
+-- authenticated_security_definer_function_executable for set_expense_budget, which is intended (it is the app's way
+-- to save a budget and refuses everyone but the Owner).
 --
 -- PROBLEM ("the expense budget I set suddenly disappeared")
 -- ---------------------------------------------------------

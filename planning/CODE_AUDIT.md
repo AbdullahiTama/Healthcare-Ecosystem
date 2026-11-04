@@ -27,7 +27,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A12 | High | POS (production defect) | Re-holding an edited held sale is refused (`permission denied for table sales`); duplicate held sales; carts lost when leaving the POS | **Closed 2026-11-02**: grant live, app deployed and in use; owner review of 4 double-charged pairs pending |
 | A13 | Medium | Importer operating models | Centralised / Decentralised models, representative ledger and switching are code complete; migration not applied; four owner decisions open | Open: apply + owner decisions |
 | A14 | Medium | Payments | Reported ~1% reduction in amounts: not reproduced in code or live data; Paystack's fee was not stored, so bank deposits could not be matched to payments | Open: migration applied 2026-11-04; confirm backfill, then match deposits |
-| A15 | Medium | Expenses | The expense budget lived only in the browser, per month: it vanished at each new month, on another device and for staff | Open: fix shipped in the app; apply `carehub_20270103_expense_budgets` |
+| A15 | Medium | Expenses | The expense budget lived only in the browser, per month: it vanished at each new month, on another device and for staff | Open: migration applied 2026-11-04; the reporting Owner opens Expenses once on the original device |
 
 ## 2. Items
 
@@ -239,8 +239,10 @@ shown as an error, never as "no budget" or "all remaining". Before the migration
 before, with a notice. Tests: `expenseBudgets.db.test.js` (PGlite, live helpers), `Expenses.budget.test.jsx`.
 See [Expense-Budgets.md](../docs/architecture/Expense-Budgets.md).
 
-**To close:** apply the migration with the owner's approval, run the rolled-back probe in Expense-Budgets.md, then ask
-the reporting Owner to open Expenses once on the device where the budget was set (that moves it to the database).
+**Applied 2026-11-04** (version 20261104143040) with the owner's approval; rolled-back live probe passed (Owner sets,
+staff and other businesses refused, carry-over, no direct writes, anon refused); security advisor: baseline plus the
+one intended `set_expense_budget` finding. **To close:** the reporting Owner opens Expenses once on the device where the
+budget was set (that moves it to the database), and it shows there and to staff.
 
 ## 3. Open items recorded in other audits
 

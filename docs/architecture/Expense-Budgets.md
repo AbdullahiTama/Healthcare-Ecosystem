@@ -1,7 +1,7 @@
 # Expense budgets
 
-2026-11-04. Migration `supabase/migrations/carehub_20270103_expense_budgets.sql`, **not yet applied** (see "Applying").
-CODE_AUDIT item A15.
+2026-11-04. Migration `supabase/migrations/carehub_20270103_expense_budgets.sql`, **applied to production 2026-11-04**
+(version 20261104143040) with the owner's approval. CODE_AUDIT item A15.
 
 ## Report
 
@@ -65,13 +65,35 @@ so each recorded expense reduces it and a deleted one gives it back.
   matching the screen. Definer function with pinned `search_path`; EXECUTE revoked from PUBLIC and anon.
 - No existing table, policy, grant or function changes.
 
-## Applying
+## Applied (2026-11-04)
 
-1. Apply the migration (owner's approval).
-2. Rolled-back probe as a real Owner and a real staff member: set a budget (Owner: allowed; staff: 42501); direct
-   INSERT/UPDATE/DELETE on `expense_budgets` (both: permission denied); read for the next month returns the carried
-   budget; another business sees nothing. Then the security advisor: no new finding.
-3. Ask the reporting Owner to open Expenses on the device where the budget was set.
+Applied verbatim, version 20261104143040. Verified afterwards: RLS on; `authenticated` may only SELECT the table and
+`anon` nothing; `set_expense_budget` is `SECURITY DEFINER` with `search_path = public, pg_temp`, executable by
+`authenticated` only. Expense records unchanged.
+
+Rolled-back probe (DO blocks that raised; 0 budget rows remained), as a real Owner, one of their active staff and the
+owner of another business:
+
+| # | Who / what | Result |
+|---|---|---|
+| 1 | Owner sets 2026-10 = 50,000 | allowed |
+| 2 | Owner sets it again (55,000) | one row, 55,000 |
+| 3 | Owner reads 2026-11 | 2026-10 = 55,000 (carried over) |
+| 4–6 | Owner INSERT / UPDATE / DELETE directly | refused, permission denied |
+| 7 | Bad month 2026-13 | refused |
+| 8 | Staff reads 2026-11 | 2026-10 = 55,000 |
+| 9 | Staff sets a budget | refused, 42501 |
+| 10 | Staff INSERT directly | refused |
+| 11 | Another business reads it | 0 rows |
+| 12 | Another business sets it | refused, 42501 |
+| 13 | anon reads / sets | refused, permission denied |
+
+Security advisor: the day's baseline (8 groups, 208 findings) plus one intended finding,
+`authenticated_security_definer_function_executable` for `set_expense_budget` (the app's way to save a budget; it
+refuses everyone but the Owner).
+
+**Remaining step:** ask the reporting Owner to open Expenses once on the phone or computer where they set the
+budget. That moves it from the browser to the database; from then on it shows on every device and to staff.
 
 ## Tests
 
