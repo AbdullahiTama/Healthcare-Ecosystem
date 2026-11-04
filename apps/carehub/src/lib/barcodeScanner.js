@@ -1,7 +1,7 @@
-// Reading a barcode with the device camera (BarcodeDetector), shared by the POS
-// and Purchases. Desktop browsers mostly lack BarcodeDetector; there a USB
-// scanner (which types into the focused field) or typing the number is the way
-// in, and callers fall back accordingly.
+// Reading barcodes, shared by the POS and Purchases: with the device camera
+// (BarcodeDetector, mostly missing on desktop browsers), and from USB scanners
+// in keyboard mode, which type the code into the focused field. Callers fall
+// back to typing the number when neither is available.
 
 export const BARCODE_FORMATS = ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
 
@@ -51,4 +51,49 @@ export function startCameraScan({ getVideo, onCode, onEnd, onError, timeoutMs = 
     finish()
   })
   return finish
+}
+
+// USB / Bluetooth scanners in keyboard mode ("keyboard wedge") type the code
+// into whichever field has focus, one key every few milliseconds, usually
+// followed by Enter (sometimes Tab, sometimes nothing). A person cannot keep
+// that pace, so a fast burst of at least `minLength` characters is a scan.
+// Auto-repeat (a held key) and shortcuts are never part of one.
+export const SCAN_MIN_LENGTH = 6
+export const SCAN_MAX_GAP_MS = 50
+// A burst with no Enter/Tab is taken as finished once the keys stop this long.
+export const SCAN_IDLE_MS = 100
+
+// Pure: the caller passes each keydown and the time it happened (ms).
+//   keydown(event, at) -> { type: 'start' }        this key began a new burst
+//                         { type: 'scan', code }   Enter/Tab ended a scan
+//                         null                     anything else
+//   pending()  -> true when the burst so far is long enough to be a scan
+//   idle()     -> the code when the keys stopped after a scan with no suffix
+//                 (null otherwise); either way the burst is over.
+export function createKeyboardScanDetector({ minLength = SCAN_MIN_LENGTH, maxGapMs = SCAN_MAX_GAP_MS } = {}) {
+  let buffer = ''
+  let lastAt = -Infinity
+  const reset = () => { buffer = ''; lastAt = -Infinity }
+  return {
+    keydown({ key, repeat, ctrlKey, metaKey, altKey }, at) {
+      // Shift comes before every capital letter a scanner types: not a break.
+      if (key === 'Shift') return null
+      if (key === 'Enter' || key === 'Tab') {
+        const code = buffer.length >= minLength && at - lastAt <= maxGapMs ? buffer : null
+        reset()
+        return code ? { type: 'scan', code } : null
+      }
+      if (typeof key !== 'string' || key.length !== 1 || repeat || ctrlKey || metaKey || altKey) { reset(); return null }
+      const start = !buffer || at - lastAt > maxGapMs
+      buffer = start ? key : buffer + key
+      lastAt = at
+      return start ? { type: 'start' } : null
+    },
+    pending: () => buffer.length >= minLength,
+    idle() {
+      const code = buffer.length >= minLength ? buffer : null
+      reset()
+      return code
+    },
+  }
 }

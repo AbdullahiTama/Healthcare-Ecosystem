@@ -2,7 +2,7 @@ import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 're
 import { Plus, X, AlertTriangle, Package, ScanLine, Lock } from 'lucide-react'
 import { fmt, todayDate } from '../../lib/utils'
 import { normalize } from '../../lib/productMatches'
-import { canScanWithCamera, startCameraScan } from '../../lib/barcodeScanner'
+import { canScanWithCamera, startCameraScan, createKeyboardScanDetector, SCAN_IDLE_MS } from '../../lib/barcodeScanner'
 import { PRODUCT_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
 import { Inp, Textarea } from '../../components/ui'
@@ -64,6 +64,15 @@ const PurchaseForm = forwardRef(function PurchaseForm({
   const [scanningId, setScanningId] = useState(null)
   const fieldRefs = useRef({})
   const stopScan = useRef(null)
+  // USB scanner bursts (see onScannerKey): the form as it was when the burst
+  // began, and the line it was typed into.
+  const latestForm = useRef(form)
+  latestForm.current = form
+  const scanDetector = useRef(null)
+  if (!scanDetector.current) scanDetector.current = createKeyboardScanDetector()
+  const scanStart = useRef(null)
+  const scanIdle = useRef(null)
+  const [scanNotice, setScanNotice] = useState('')
   const editing = mode === 'edit'
   const today = todayDate()
 
@@ -100,7 +109,7 @@ const PurchaseForm = forwardRef(function PurchaseForm({
     setFocusTarget(null)
   }, [focusTarget])
 
-  useEffect(() => () => stopScan.current?.(), [])
+  useEffect(() => () => { stopScan.current?.(); clearTimeout(scanIdle.current) }, [])
 
   function addItem() {
     const item = blankItem()
@@ -164,11 +173,59 @@ const PurchaseForm = forwardRef(function PurchaseForm({
     })
   }
 
+  // A USB scanner types into whichever field has focus, and focus usually sits
+  // on Quantity (it moves there after every pick), so a scan used to land in
+  // Quantity, Batch no. or any other field and change the stock received.
+  // Every scan in this form goes to a Barcode field instead: the form goes
+  // back to how it was before the first scanned key, and the code is entered
+  // into the Barcode of the line the scan was typed into (or, from outside the
+  // lines, the empty last line or a new one), exactly as a camera scan is.
+  // Notes are free text (an invoice number may be scanned there) and are left alone.
+  function onScannerKey(e) {
+    if (e.target?.tagName === 'TEXTAREA') return
+    const detector = scanDetector.current
+    const result = detector.keydown(e, Date.now())
+    clearTimeout(scanIdle.current)
+    if (result?.type === 'start') {
+      scanStart.current = { form: latestForm.current, lineId: e.target?.closest?.('[data-line-id]')?.getAttribute('data-line-id') || null }
+    } else if (result?.type === 'scan') {
+      // The scanner's Enter/Tab must not also move focus or press a button.
+      e.preventDefault()
+      e.stopPropagation()
+      routeScan(result.code)
+      return
+    }
+    if (detector.pending()) {
+      scanIdle.current = setTimeout(() => {
+        const code = detector.idle()
+        if (code) routeScan(code)
+      }, SCAN_IDLE_MS)
+    }
+  }
+
+  function routeScan(code) {
+    const start = scanStart.current
+    scanStart.current = null
+    if (!start) return
+    const before = start.form
+    let items = before.items
+    let target = items.find(it => it.id === start.lineId)
+    if (!target) {
+      const last = items[items.length - 1]
+      target = last && isBlankItem(last) ? last : blankItem()
+      if (target !== last) items = [...items, target]
+    }
+    setForm(() => ({ ...before, items }))
+    changeBarcode(target, code)
+    setFocusTarget({ id: target.id, field: 'qty' })
+    setScanNotice('Scanned ' + code + ' into the barcode of item ' + (items.indexOf(target) + 1) + '.')
+  }
+
   // Enter moves through the sheet like a spreadsheet: from the product field
   // to its quantity, from any other field to the next line's product, adding
   // a new line when this is the last one.
   function onLineKeyDown(e, index, field) {
-    if (e.key !== 'Enter') return
+    if (e.key !== 'Enter' || e.defaultPrevented) return
     e.preventDefault()
     const item = form.items[index]
     if (field === 'name' || field === 'barcode') { setFocusTarget({ id: item.id, field: 'qty' }); return }
@@ -196,7 +253,7 @@ const PurchaseForm = forwardRef(function PurchaseForm({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+    <div onKeyDownCapture={onScannerKey} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', alignItems: 'start' }}>
         <SupplierField id={editing ? 'edit-purchase-supplier' : 'purchase-supplier'} value={form.supplier} onChange={v => f('supplier', v)}
           suppliers={suppliers} status={suppliersStatus}
@@ -223,9 +280,10 @@ const PurchaseForm = forwardRef(function PurchaseForm({
         )}
         {inventoryStatus === 'ready' && (
           <div style={{ fontSize: '12px', color: gray500, marginBottom: '8px', lineHeight: 1.5 }}>
-            Pick a product from your inventory, or scan or type its barcode, and its details fill in. Enter the quantity and change only what is different, then press Enter for the next item.
+            Pick a product from your inventory, or scan or type its barcode, and its details fill in. Enter the quantity and change only what is different, then press Enter for the next item. A scan always goes into the Barcode field, whichever field you are in.
           </div>
         )}
+        <div role='status' aria-live='polite' style={{ fontSize: '12px', color: tealDeep, fontWeight: '700', marginBottom: scanNotice ? '8px' : 0 }}>{scanNotice}</div>
 
         <div role='list' aria-labelledby={editing ? 'edit-purchase-items-label' : 'purchase-items-label'} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {form.items.map((item, i) => {
@@ -257,7 +315,7 @@ const PurchaseForm = forwardRef(function PurchaseForm({
             const reg = (k) => (el) => { fieldRefs.current[item.id + ':' + k] = el }
             const described = (k) => problems[k] ? fid(k) + '-error' : undefined
             return (
-              <div key={item.id} role='listitem' aria-label={'Item ' + (i + 1) + (item.name ? ': ' + item.name : '')}
+              <div key={item.id} data-line-id={item.id} role='listitem' aria-label={'Item ' + (i + 1) + (item.name ? ': ' + item.name : '')}
                 style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${hasProblems ? danger : gray100}`, background: bg }}>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
                   <div style={{ width: '24px', height: '40px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '800', color: gray400 }} aria-hidden='true'>{i + 1}</div>

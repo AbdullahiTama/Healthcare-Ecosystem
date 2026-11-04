@@ -415,3 +415,135 @@ describe('Purchases — suppliers, barcodes and purchase insight', () => {
     expect(host.querySelector('[aria-label="Edit purchase from MedSupply Ltd"]')).not.toBeNull()
   })
 })
+
+// A USB scanner in keyboard mode: every character is a keydown followed by the
+// input it produces, a few milliseconds apart, then usually Enter. Keydowns
+// fired back to back here are well inside the scan pace.
+const key = (el, k) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }))
+const scanWithScanner = async (input, code, suffix = 'Enter') => {
+  await act(async () => {
+    for (const ch of code) {
+      key(input, ch)
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, input.value + ch)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    if (suffix) key(input, suffix)
+  })
+}
+
+describe('Purchases — USB barcode scanner goes to the Barcode field', () => {
+  it('a scan while Quantity has focus fills Barcode and leaves Quantity and the stock alone', async () => {
+    await render(OWNER, { products: [AMOXIL] })
+    await openForm()
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    expect(document.activeElement).toBe(field(0, 'qty'))
+    await type(field(0, 'qty'), '10')
+    await scanWithScanner(field(0, 'qty'), '8901234567890')
+    expect(field(0, 'qty').value).toBe('10')
+    expect(field(0, 'barcode').value).toBe('8901234567890')
+    expect(host.textContent).toMatch(/Stock\s*24\s*→\s*34 after saving/)
+    // The scanner's Enter did not move on to a new line.
+    expect(host.querySelectorAll('[id^="pi-"][id$="-qty"]')).toHaveLength(1)
+    expect(document.activeElement).toBe(field(0, 'qty'))
+    expect(host.textContent).toContain('Scanned 8901234567890 into the barcode of item 1.')
+  })
+
+  it('a scan of a known product from Quantity links the line to it, without typing into Quantity', async () => {
+    await render(OWNER, { products: [AMOXIL, { id: 'p2', name: 'Panadol', price: 100, cost_price: 50, stock: 3, barcode: '6151100001' }] })
+    await openForm()
+    await act(async () => { field(0, 'qty').focus() })
+    await scanWithScanner(field(0, 'qty'), '6151100001')
+    expect(field(0, 'name').value).toBe('Panadol')
+    expect(field(0, 'cost').value).toBe('50')
+    expect(field(0, 'qty').value).toBe('')
+    expect(field(0, 'barcode').value).toBe('6151100001')
+    expect(document.activeElement).toBe(field(0, 'qty'))
+  })
+
+  it('a scan into Batch no. or Unit cost goes to Barcode instead', async () => {
+    await render()
+    await openForm()
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    await scanWithScanner(field(0, 'batch'), '8903882000125', 'Tab')
+    expect(field(0, 'batch').value).toBe('')
+    expect(field(0, 'barcode').value).toBe('8903882000125')
+    expect(host.textContent).not.toContain('The batch number looks like a barcode')
+    await scanWithScanner(field(0, 'cost'), '8903882000125')
+    expect(field(0, 'cost').value).toBe('800')
+  })
+
+  it('an unknown code scanned into Product becomes the barcode, not the product name', async () => {
+    await render()
+    await openForm()
+    await scanWithScanner(field(0, 'name'), '8909999999999')
+    expect(field(0, 'name').value).toBe('')
+    expect(field(0, 'barcode').value).toBe('8909999999999')
+  })
+
+  it('goes to the line the scan was typed into', async () => {
+    await render()
+    await openForm()
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    await click(button('Add another item'))
+    await type(field(1, 'name'), 'Brand New Syrup')
+    await scanWithScanner(field(1, 'qty'), '8909999999999')
+    expect(field(0, 'barcode').value).toBe('')
+    expect(field(1, 'barcode').value).toBe('8909999999999')
+  })
+
+  it('a scan outside the lines (Amount Paid) goes to a new line, and Amount Paid is unchanged', async () => {
+    await render()
+    await openForm()
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    const paid = host.querySelector('#purchase-amount-paid')
+    await type(paid, '500')
+    await scanWithScanner(paid, '8909999999999')
+    expect(paid.value).toBe('500')
+    expect(field(0, 'barcode').value).toBe('')
+    expect(field(1, 'barcode').value).toBe('8909999999999')
+  })
+
+  it('a scanner that sends no Enter is still caught once the keys stop', async () => {
+    await render()
+    await openForm()
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    await scanWithScanner(field(0, 'qty'), '8901234567890', null)
+    await act(async () => { await new Promise((r) => setTimeout(r, 150)) })
+    expect(field(0, 'qty').value).toBe('')
+    expect(field(0, 'barcode').value).toBe('8901234567890')
+  })
+
+  it('typing a long number by hand into Quantity stays in Quantity', async () => {
+    await render()
+    await openForm()
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    const qty = field(0, 'qty')
+    for (const ch of '1200000') {
+      await act(async () => {
+        key(qty, ch)
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(qty, qty.value + ch)
+        qty.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await act(async () => { await new Promise((r) => setTimeout(r, 70)) })
+    }
+    await act(async () => { key(qty, 'Enter') })
+    expect(qty.value).toBe('1200000')
+    expect(field(0, 'barcode').value).toBe('')
+  })
+
+  it('leaves Notes alone (an invoice number may be scanned there)', async () => {
+    await render()
+    await openForm()
+    const notes = host.querySelector('#purchase-notes')
+    await act(async () => {
+      for (const ch of 'INV000123') {
+        key(notes, ch)
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(notes, notes.value + ch)
+        notes.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    })
+    expect(notes.value).toBe('INV000123')
+    expect(field(0, 'barcode').value).toBe('')
+  })
+})
+

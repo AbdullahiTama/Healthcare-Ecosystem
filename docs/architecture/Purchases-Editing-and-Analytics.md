@@ -119,6 +119,7 @@ This week, This month, Last month, Last 30 days, This year). An incomplete perio
   product without one is saved on it; one that belongs to another product blocks the save. Phones and
   tablets with `BarcodeDetector` get a camera button (`lib/barcodeScanner.js`, now shared with the POS).
   An 8 to 14 digit "batch number" offers **Move it to Barcode**.
+- **USB scanners always fill Barcode (2026-11-04):** see "USB scanner routing" below.
 
 ## Security
 
@@ -197,6 +198,41 @@ Rollback: see the migration header.
   supplier pick, barcode and insight; edit and save; history, presets, product narrowing; no Edit for a
   Manager; no horizontal page overflow. This caught screen-reader-only text escaping the table scrollers
   on phones, which is fixed.
+
+## USB scanner routing (2026-11-04)
+
+**Reported:** scanning in Record Purchase put the code into another field, such as the stock quantity,
+instead of Barcode.
+
+**Cause:** a USB or Bluetooth scanner in keyboard mode types the code, then Enter, into whichever field
+has focus. The form moves focus to Quantity after every pick (and Enter moves Product → Quantity → next
+line), so a scan landed in Quantity, a number field: a 13 digit code became a 13 digit stock increase in
+the "Stock … after saving" preview. The same mechanism is why live purchases had EAN-13 codes in Batch no.
+
+**Fix (client only, `PurchaseForm.jsx`, so Record and Edit both get it):**
+
+- `createKeyboardScanDetector` (`lib/barcodeScanner.js`, pure) recognises a scan by its pace: at least
+  6 characters, each within 50 ms of the last, ended by Enter or Tab, or by 100 ms of silence for
+  scanners with no suffix. Shift (before capitals) is ignored; auto-repeat and Ctrl/Alt/Meta shortcuts
+  never count. People do not type six keys 50 ms apart, so typing, including long quantities, is untouched.
+- The form listens in the capture phase. On a scan it puts the form back exactly as it was before the
+  first scanned key (undoing what the keys typed, and any product the partial code linked), enters the
+  code into the Barcode of the line the scan was typed into, the same path as typing or a camera scan
+  (a known code links the product; an unknown one is kept to be saved on it), and moves focus to that
+  line's Quantity. The scanner's Enter/Tab is swallowed, so it no longer adds a line or presses a button.
+- A scan typed outside the lines (supplier, dates, Amount Paid) goes to the empty last line, or a new one.
+- Notes are excluded: free text where an invoice number may deliberately be scanned.
+- A polite live region announces "Scanned … into the barcode of item N." for sighted and screen reader users.
+
+**Security:** none affected. No data, permission or server change; restoring the form only returns it to a
+state the user already had, so read-only selling prices stay read-only.
+
+**Tests:** `src/lib/barcodeScanner.test.js` (pace, suffixes, Shift, auto-repeat, shortcuts, pauses,
+no-suffix scanners); `Purchases.test.jsx` "USB barcode scanner goes to the Barcode field" (scans from
+Quantity, Batch, Unit cost, Product, another line and Amount Paid; no-suffix scanner; hand typing and Notes
+untouched). The seven routing tests fail against the previous form.
+
+**Limit:** a scan with focus outside the purchase form (e.g. on the page behind the dialog) is not caught.
 
 ## Known limits / follow-ups
 
