@@ -3,7 +3,7 @@
 2026-11-04. Client only, no database change. The same fix as Purchases
 (`Purchases-Editing-and-Analytics.md`, "USB scanner routing") and the POS (`POS-Barcode-Scanning.md`).
 Stock Management's **Inventory** tab is this same screen; its **Stock Validation** tab is covered at the end;
-**Stock History** has no inputs. The Master Catalog and Stock Transfers have their own sections at the end.
+**Stock History** has no inputs. The Master Catalog and Stock Transfers have their own sections at the end. Expenses (no barcode field: scans are ignored) is in `Expense-Budgets.md`.
 
 ## Problem
 

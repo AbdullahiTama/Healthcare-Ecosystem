@@ -5,6 +5,7 @@ import { expenseRepository } from './repositories'
 import { useQueryParamAction } from '../../hooks/useQueryParamAction'
 import { validateExpense, newExpenseId, budgetSummary } from './expenseRules'
 import { useExpenseBudget } from './useExpenseBudget'
+import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { fmt, todayDate, currentMonth } from '../../lib/utils'
 import { EXPENSE_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
@@ -163,8 +164,34 @@ export default function Expenses({ brand, role, perms }) {
   const byCategory = {}
   categories.forEach(c => { byCategory[c.category] = c.total })
 
+  // A USB barcode scanner types the code into whichever field has focus, then
+  // presses Enter. Expenses has no barcode field, so a scan is never meant
+  // here: in Amount it became the expense (a 12-digit code is under the cap),
+  // in the budget it became the budget, and its Enter pressed a focused Save
+  // Expense, Save Budget or Delete. A scan anywhere on this screen is now
+  // undone and explained, and presses nothing. Description and Recorded By are
+  // free text (a receipt or invoice number may be scanned there on purpose) and
+  // are left alone, as are fields outside this screen.
+  const rootRef = useRef(null)
+  useKeyboardScanner({
+    ignore: (e) => {
+      const t = e.target
+      const root = rootRef.current
+      if (!root || !t || t.tagName === 'TEXTAREA' || t.isContentEditable) return true
+      if (t.id === 'expense-description' || t.id === 'expense-recorded-by') return true
+      return (t.tagName === 'INPUT' || t.tagName === 'SELECT') && !root.contains(t)
+    },
+    snapshot: () => ({ form, budgetInput, filterMonth }),
+    onScan: (code, snap) => {
+      setForm(snap.form)
+      setBudgetInput(snap.budgetInput)
+      setFilterMonth(snap.filterMonth)
+      showToast('Scan ignored (' + code + '): Expenses has no barcode field, so nothing was changed.', { type: 'warning' })
+    },
+  }, { window: true })
+
   return (
-    <div>
+    <div ref={rootRef}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
           <div style={{ fontSize: '20px', fontWeight: '900', color: navy }}>Expenses</div>
@@ -349,7 +376,7 @@ export default function Expenses({ brand, role, perms }) {
           <div style={{ padding: '14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealMist}`, fontSize: '13px', color: tealDeep, lineHeight: '1.7' }}>
             Set a spending limit from <strong>{filterMonth}</strong>. It carries over to the following months until you change it; enter 0 to have no budget from this month on. {budgetState.onDevice ? 'Until CareHub finishes updating, it is saved on this device only.' : 'It is saved to your business, so everyone working here sees it on any device.'} You will be alerted when 80% is used and when the budget is exceeded.
           </div>
-          <Inp label={'Monthly Budget for ' + filterMonth + ' (₦)'} value={budgetInput} onChange={setBudgetInput} type='number' placeholder='e.g. 100000' />
+          <Inp id='expense-budget-amount' label={'Monthly Budget for ' + filterMonth + ' (₦)'} value={budgetInput} onChange={setBudgetInput} type='number' placeholder='e.g. 100000' />
           {budgetInput && parseFloat(budgetInput) > 0 && (
             <div style={{ padding: '12px 16px', borderRadius: theme.radius.md, background: bg, border: `1px solid ${border}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
@@ -381,12 +408,12 @@ export default function Expenses({ brand, role, perms }) {
             </div>
           )}
           <Sel label='Category *' value={form.category} onChange={v => f('category', v)} options={EXPENSE_CATS} required error={formErrors.category} />
-          <Inp label='Description' value={form.description} onChange={v => f('description', v)} placeholder='What was this expense for?' error={formErrors.description} />
+          <Inp id='expense-description' label='Description' value={form.description} onChange={v => f('description', v)} placeholder='What was this expense for?' error={formErrors.description} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Inp label='Amount (₦) *' value={form.amount} onChange={v => f('amount', v)} type='number' min='0' placeholder='0' required error={formErrors.amount} />
+            <Inp id='expense-amount' label='Amount (₦) *' value={form.amount} onChange={v => f('amount', v)} type='number' min='0' placeholder='0' required error={formErrors.amount} />
             <Inp label='Date' value={form.date} onChange={v => f('date', v)} type='date' error={formErrors.date} />
           </div>
-          <Inp label='Recorded By' value={form.staffName} onChange={v => f('staffName', v)} placeholder='Your name' />
+          <Inp id='expense-recorded-by' label='Recorded By' value={form.staffName} onChange={v => f('staffName', v)} placeholder='Your name' />
           {form.amount && budget > 0 && spendingKnown && (
             <div style={{ padding: '10px', borderRadius: theme.radius.md, background: bg, fontSize: '12px', color: gray600 }}>
               After this expense: <strong style={{ color: remaining - (parseFloat(form.amount) || 0) < 0 ? danger : success }}>

@@ -102,3 +102,24 @@ budget. That moves it from the browser to the database; from then on it shows on
 | `apps/carefind/src/test/expenses/expenseBudgets.db.test.js` | PGlite with the live `current_business_ids`, `is_business_owner`, `is_platform_admin`: Owner sets, upsert, staff / manager / other business / anon refused, bad input, no direct writes, member-only reads, carry-over, 0 stops it (9) |
 | `apps/carehub/src/modules/expenses/Expenses.budget.test.jsx` | carried over with November spending deducted, staff see it, save, failed save, browser budgets moved once and not over the database, staff never upload, failed budget read, failed spending read, 0 stops carry-over, earlier month, fallback before the migration (12; 10 fail on the previous screen) |
 | `expenseRules.test.js`, `repositories/index.test.js` | the rules and the queries |
+
+## USB barcode scanners on the Expenses screen (2026-11-04)
+
+The same scanner fix as the stock screens (`Inventory-Barcode-Scanning.md`, shared `useKeyboardScanner` hook).
+Expenses has no barcode field, so a scan is never meant there. Before, a scan typed its code into whichever field had
+focus, then pressed Enter:
+
+- **Amount:** the code became the expense. A 12-digit UPC (e.g. 615,110,000,123) is under the ₦1 trillion cap, so it
+  could be saved; the scanner's Enter on a focused **Save Expense** saved it.
+- **Monthly budget:** the code became the budget; Enter on **Save Budget** saved it.
+- **List:** Enter on a focused **Delete** opened the confirmation, and Enter on its **Delete** deleted the expense.
+
+Now a scan anywhere on the screen (any field, button or dialog, or with nothing focused) puts the expense form, the
+budget field and the month back as they were, shows "Scan ignored (…): Expenses has no barcode field, so nothing was
+changed.", and presses nothing. **Description** and **Recorded By** are free text (a receipt or invoice number may be
+scanned there on purpose) and are left alone, as are fields outside the screen. Typing by hand is never taken for a
+scan (6+ keys each within 50 ms).
+
+Tests: `Expenses.scanner.test.jsx`, 9 tests; 6 fail against the previous screen, the other 3 check what must not
+change (free-text fields, hand typing, fields outside).
+
