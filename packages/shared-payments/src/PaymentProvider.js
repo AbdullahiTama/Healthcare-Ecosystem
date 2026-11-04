@@ -10,7 +10,8 @@
 // @typedef {'success'|'failed'|'pending'|'abandoned'|'reversed'} PaymentStatus
 // @typedef {object} VerifiedTransaction
 //   provider: string, reference: string, providerTransactionId: string, status: PaymentStatus,
-//   amountKobo: number, currency: string, paidAt: string|null, payerEmail: string|null,
+//   amountKobo: number, feeKobo: number|null (what the provider kept; it pays amountKobo - feeKobo out to the bank),
+//   currency: string, paidAt: string|null, payerEmail: string|null,
 //   channel: string|null, metadata: object, raw: object
 // @typedef {'pending'|'success'|'failed'|'reversed'|'unknown'} TransferStatus
 // @typedef {'requested'|'processing'|'completed'|'failed'} RefundStatus

@@ -26,6 +26,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A9 | Low | Debt | About 600 `no-unused-vars` warnings | Open, tracked in Linting.md |
 | A12 | High | POS (production defect) | Re-holding an edited held sale is refused (`permission denied for table sales`); duplicate held sales; carts lost when leaving the POS | **Closed 2026-11-02**: grant live, app deployed and in use; owner review of 4 double-charged pairs pending |
 | A13 | Medium | Importer operating models | Centralised / Decentralised models, representative ledger and switching are code complete; migration not applied; four owner decisions open | Open: apply + owner decisions |
+| A14 | Medium | Payments | Reported ~1% reduction in amounts: not reproduced in code or live data; Paystack's fee was not stored, so bank deposits could not be matched to payments | Open: apply migration, then match deposits |
 
 ## 2. Items
 
@@ -191,6 +192,33 @@ and statements, switching both ways). Verified by 36 PGlite checks
 §2 of that note: whether a Centralised supply should take stock out of the company count; whether POS sales should
 reduce a rep's balance automatically; adding Facility Discovery to the Owner preset (no business owner has it today);
 whether representative accounts count against the plan's location limit.
+
+### A14. Reported ~1% reduction in amounts; Paystack fee not stored (Medium)
+
+**Report (owner, 2026-11-04):** transaction amounts appear reduced by about 1% across business types and modules.
+
+**Verified 2026-11-04 (code at `ccd7b57`, live project read-only):** no code path or live database function applies a
+1% reduction. No trigger on a money table rewrites an amount; `financial_config` has no rate near 1%. Live data:
+1,030 sales, every line-item sum equals the subtotal and every total equals subtotal minus the cashier's discount
+(discounts are 0.26% of sales); the `sale_payments` ledger matches what 812 completed sales were paid (one N200
+difference, likely a later repayment); wallet top-ups credit the full base (the 10% fee is added on top); shop vendor
+credits equal subtotal minus commission. The only deduction on card money outside our books is Paystack's own fee
+(1.5%, plus N100 at N2,500 and above, capped at N2,000), kept before Paystack pays the bank. Of 12 settled payments
+(N36,940, 2026-10-06 to 10-12) only 2 had that fee recorded (exactly 1.5%), in webhook payloads.
+
+**Change:** `supabase/migrations/carefind_20270103_payment_provider_fee.sql` adds `payment_intents.provider_fee_kobo`
+(write-once) and `provider_net_kobo` (generated: charged minus fee). `shared-payments` stores the fee after every
+settlement (webhook and redirect), the 48-hour Paystack comparison fills it in, and a new reconciliation step
+(`backfillProviderFees`, every 6 hours, up to 25 per pass) asks Paystack about older payments, so the October payments
+backfill on their own. Storing the fee never changes or blocks a settlement. Verified by 35 PGlite checks
+(`scripts/db-tests/paymentProviderFee.pglite.mjs`) and `shared-payments/src/__tests__/providerFee.test.js` (29).
+**Migration not applied to production.**
+
+**To close:** apply the migration and update its status header; after the next reconciliation pass confirm every
+settled payment has a fee (`select count(*) from payment_intents where status in ('settled','refunded') and
+provider_fee_kobo is null and purpose not like '%\_wallet'` returns 0); match `provider_net_kobo` against the
+Paystack settlements export or the bank statement. If a ~1% gap remains in POS or report figures (which never touch
+Paystack), get a specific transaction from the owner and trace it.
 
 ## 3. Open items recorded in other audits
 

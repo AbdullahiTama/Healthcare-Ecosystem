@@ -170,7 +170,7 @@ describe('reconcileProviderTransactions', () => {
 
 describe('runReconciliation', () => {
   const base = (over = {}) => ({
-    sync_reconciliation_findings: () => ({}), list_open_intents_to_check: () => [], list_replayable_provider_events: () => [],
+    sync_reconciliation_findings: () => ({}), list_open_intents_to_check: () => [], list_replayable_provider_events: () => [], list_intents_missing_provider_fee: () => [],
     run_db_reconciliation: () => ({ run_id: 'r', totals: { open_critical: 0, open_warning: 0, open_info: 1 } }), ...over,
   })
 
@@ -180,7 +180,7 @@ describe('runReconciliation', () => {
     const r = await runReconciliation(s, p, { processEvent: async () => 'processed', force: true })
     expect(r.failed).toEqual([])
     expect(r.replay).toMatchObject({ checked: 0 }); expect(r.sweep).toMatchObject({ checked: 0 }); expect(r.provider).toMatchObject({ scanned: 0 }); expect(r.db.totals.open_info).toBe(1)
-    expect(s.calls.filter((c) => c.op === 'rpc').map((c) => c.name)).toEqual(['list_replayable_provider_events', 'list_open_intents_to_check', 'sync_reconciliation_findings', 'run_db_reconciliation'])
+    expect(s.calls.filter((c) => c.op === 'rpc').map((c) => c.name)).toEqual(['list_replayable_provider_events', 'list_open_intents_to_check', 'sync_reconciliation_findings', 'list_intents_missing_provider_fee', 'run_db_reconciliation'])
     expect(s.calls.some((c) => c.name === 'claim_job_slot')).toBe(false)      // force bypasses the gate
   })
 
@@ -265,7 +265,7 @@ describe('alertOnCriticalFindings', () => {
 
 describe('runReconciliation gating and alerts', () => {
   const rpcs = (over = {}) => ({
-    sync_reconciliation_findings: () => ({}), list_open_intents_to_check: () => [], list_replayable_provider_events: () => [], mark_intents_checked: () => 0,
+    sync_reconciliation_findings: () => ({}), list_open_intents_to_check: () => [], list_replayable_provider_events: () => [], mark_intents_checked: () => 0, list_intents_missing_provider_fee: () => [],
     run_db_reconciliation: () => ({ totals: { open_critical: 1, open_warning: 0, open_info: 0 } }), claim_findings_to_alert: () => [], ...over,
   })
   const p = () => provider({ listTransactions: async () => ({ transactions: [], hasMore: false }) })
@@ -288,7 +288,7 @@ describe('runReconciliation gating and alerts', () => {
     const s = createFakeSupabase({ rpc: rpcs({ claim_job_slot: () => true }) })
     await runReconciliation(s, p(), { processEvent: async () => 'processed', sendAlert: async () => {} })
     const asked = Object.fromEntries(s.calls.filter((c) => c.name === 'claim_job_slot').map((c) => [c.args.p_job, c.args.p_min_minutes]))
-    expect(asked).toEqual({ recon_replay: RECONCILIATION_SCHEDULE.replay, recon_sweep: RECONCILIATION_SCHEDULE.sweep, recon_provider: RECONCILIATION_SCHEDULE.provider, recon_db: RECONCILIATION_SCHEDULE.db, recon_db_heavy: RECONCILIATION_SCHEDULE.db_heavy, recon_alert: RECONCILIATION_SCHEDULE.alert })
+    expect(asked).toEqual({ recon_replay: RECONCILIATION_SCHEDULE.replay, recon_sweep: RECONCILIATION_SCHEDULE.sweep, recon_provider: RECONCILIATION_SCHEDULE.provider, recon_fees: RECONCILIATION_SCHEDULE.fees, recon_db: RECONCILIATION_SCHEDULE.db, recon_db_heavy: RECONCILIATION_SCHEDULE.db_heavy, recon_alert: RECONCILIATION_SCHEDULE.alert })
     expect(RECONCILIATION_SCHEDULE.provider).toBeGreaterThan(RECONCILIATION_SCHEDULE.sweep)
   })
 
@@ -317,7 +317,7 @@ describe('runReconciliation gating and alerts', () => {
 
 describe('the heavy database checks have their own, longer slot', () => {
   const rpcs = (over = {}) => ({
-    sync_reconciliation_findings: () => ({}), list_open_intents_to_check: () => [], list_replayable_provider_events: () => [], mark_intents_checked: () => 0,
+    sync_reconciliation_findings: () => ({}), list_open_intents_to_check: () => [], list_replayable_provider_events: () => [], mark_intents_checked: () => 0, list_intents_missing_provider_fee: () => [],
     run_db_reconciliation: () => ({ totals: { open_critical: 0, open_warning: 0, open_info: 0 } }), ...over,
   })
   const p = () => provider({ listTransactions: async () => ({ transactions: [], hasMore: false }) })
@@ -345,6 +345,7 @@ describe('the heavy database checks have their own, longer slot', () => {
     expect(r.replay).toEqual({ skipped: 'out_of_time' })
     expect(r.sweep).toEqual({ skipped: 'out_of_time' })
     expect(r.provider).toEqual({ skipped: 'out_of_time' })
+    expect(r.fees).toEqual({ skipped: 'out_of_time' })
     expect(r.db).toEqual({ skipped: 'out_of_time' })
     expect(r.alert).toEqual({ skipped: 'out_of_time' })
     expect(s.calls.filter((c) => c.op === 'rpc')).toEqual([])

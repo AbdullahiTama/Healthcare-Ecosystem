@@ -71,5 +71,40 @@ export async function settleByReference({ supabase, provider, reference, logger 
   const result = Array.isArray(data) ? data[0] : data
   if (!result || typeof result.outcome !== 'string') throw new PaymentIntentError('settlement_failed', 'settlement returned no outcome')
   logger.info('payment.settlement', { reference, outcome: result.outcome, purpose: result.purpose, reason: result.reason })
-  return { ...result, intent }
+  // After settlement, never before: the database only accepts a fee for a payment that was taken.
+  const fee = await recordProviderFee({ supabase, provider: provider.name, reference, verified, logger })
+  return { ...result, intent, fee }
+}
+
+// Answers from record_payment_provider_fee that are not a problem worth a warning.
+const FEE_QUIET = new Set(['recorded', 'already_recorded', 'not_taken'])
+
+/**
+ * Store the fee the provider kept from a payment (write-once, on payment_intents.provider_fee_kobo), so bank
+ * deposits can be matched to payments exactly. The database checks the provider, transaction id and amount against
+ * the intent. This never throws and never changes the settlement: a failure is logged and reported as an outcome.
+ * @returns {Promise<string>} the database's answer, 'no_fee' when the provider reported none, or 'error'
+ */
+export async function recordProviderFee({ supabase, provider, reference, verified, logger = { info() {}, warn() {} } }) {
+  if (verified?.feeKobo == null) {
+    logger.warn('payment.fee_missing', { reference })
+    return 'no_fee'
+  }
+  try {
+    const { data, error } = await supabase.rpc('record_payment_provider_fee', {
+      p_reference: reference,
+      p_provider: provider,
+      p_provider_txn_id: verified.providerTransactionId,
+      p_amount_kobo: verified.amountKobo,
+      p_fee_kobo: verified.feeKobo,
+    })
+    if (error) throw new Error(error.message)
+    const outcome = String(Array.isArray(data) ? data[0] : data)
+    if (FEE_QUIET.has(outcome)) logger.info('payment.fee_recorded', { reference, outcome, feeKobo: verified.feeKobo })
+    else logger.warn('payment.fee_refused', { reference, outcome, feeKobo: verified.feeKobo })
+    return outcome
+  } catch (err) {
+    logger.warn('payment.fee_record_failed', { reference, message: String(err?.message || err).slice(0, 200) })
+    return 'error'
+  }
 }

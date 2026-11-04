@@ -17,7 +17,7 @@
 // Every step is isolated: one failing never stops the others, and every step is safe to run twice or concurrently.
 
 import { findIntent } from './intents.js'
-import { settleByReference } from './settlement.js'
+import { settleByReference, recordProviderFee } from './settlement.js'
 import { finishProviderEvent } from './events.js'
 import { ERROR_CODES, isProviderError } from './errors.js'
 import { createLoopGuard } from './scheduler.js'
@@ -118,7 +118,9 @@ export async function sweepOpenIntents(supabase, provider, { olderThanMinutes = 
  *   transaction_id_mismatch our intent names a different provider transaction than the one the provider lists
  *   paid_not_settled        the provider says paid, our intent is still open: settlement is attempted right here, and only a
  *                           payment that STILL is not settled stays a finding
- * @returns {Promise<{ scanned, skipped, findings, recovered, pages }>}
+ * A payment that was taken but has no stored provider fee (settled before fees were recorded, or the fee write failed)
+ * gets it filled in from the provider's list: this is the backfill. It never produces a finding and never moves money.
+ * @returns {Promise<{ scanned, skipped, findings, recovered, feesRecorded, pages }>}
  */
 export async function reconcileProviderTransactions(supabase, provider, { from, to, maxPages = 20, perPage = 100, onSettled, logger = quietLogger, deadline = null } = {}) {
   const txns = []
@@ -136,6 +138,7 @@ export async function reconcileProviderTransactions(supabase, provider, { from, 
   const current = []
   const scanned = []
   let recovered = 0
+  let feesRecorded = 0
   for (const tx of txns) {
     scanned.push(tx.reference)
     const intent = await findIntent(supabase, tx.reference)
@@ -153,6 +156,9 @@ export async function reconcileProviderTransactions(supabase, provider, { from, 
       current.push({ kind: 'transaction_id_mismatch', subject_type: 'payment_reference', subject_id: tx.reference, severity: 'critical',
         detail: `intent is bound to provider transaction ${intent.provider_transaction_id} but Paystack lists ${tx.providerTransactionId}` })
       continue
+    }
+    if (['settled', 'refunded', 'needs_refund'].includes(intent.status) && intent.provider_fee_kobo == null && tx.feeKobo != null) {
+      if ((await recordProviderFee({ supabase, provider: provider.name, reference: tx.reference, verified: tx, logger })) === 'recorded') feesRecorded++
     }
     if (['created', 'pending', 'verified', 'failed', 'expired'].includes(intent.status)) {
       // Paid at the provider, still open here: settle it now (the engine re-verifies with the provider and is idempotent).
@@ -175,7 +181,7 @@ export async function reconcileProviderTransactions(supabase, provider, { from, 
   }
 
   await rpc(supabase, 'sync_reconciliation_findings', { p_source: 'provider', p_current: current, p_scope: scanned })
-  return { scanned: scanned.length, skipped, findings: current.length, recovered, pages }
+  return { scanned: scanned.length, skipped, findings: current.length, recovered, feesRecorded, pages }
 }
 
 /**
@@ -200,17 +206,48 @@ export async function alertOnCriticalFindings(supabase, { send, remindHours = 24
   return { claimed: findings.length }
 }
 
+/**
+ * Fill in the provider fee for payments taken before fees were recorded, or whose fee write failed: ask the provider about
+ * each (newest first, at most `limit` per pass) and store what it reports. Never moves money and never raises a finding;
+ * a payment the provider no longer reports as successful, or whose answer the database refuses, is logged and left alone.
+ * -> { checked, recorded, refused, errors }
+ */
+export async function backfillProviderFees(supabase, provider, { limit = 25, logger = quietLogger, deadline = null } = {}) {
+  const rows = (await rpc(supabase, 'list_intents_missing_provider_fee', { p_provider: provider.name, p_limit: limit })) || []
+  const summary = { checked: 0, recorded: 0, refused: 0, errors: 0 }
+  for (const row of rows) {
+    if (deadline != null && Date.now() >= deadline) break
+    summary.checked++
+    try {
+      const verified = await provider.verifyPayment({ reference: row.reference })
+      if (verified.status !== 'success') {
+        summary.refused++
+        logger.warn('payment.fee_backfill_not_success', { reference: row.reference, providerStatus: verified.status })
+        continue
+      }
+      const outcome = await recordProviderFee({ supabase, provider: provider.name, reference: row.reference, verified, logger })
+      if (outcome === 'recorded' || outcome === 'already_recorded') summary.recorded++
+      else if (outcome === 'error') summary.errors++
+      else summary.refused++
+    } catch (err) {
+      summary.errors++
+      logger.warn('payment.fee_backfill_failed', { reference: row.reference, code: err.code, message: String(err.message).slice(0, 200) })
+    }
+  }
+  return summary
+}
+
 // How often each step is due (minutes). The cron endpoint runs every minute; Paystack and the database should not be asked that often.
-export const RECONCILIATION_SCHEDULE = Object.freeze({ replay: 5, sweep: 5, provider: 30, db: 10, db_heavy: 60, alert: 5 })
+export const RECONCILIATION_SCHEDULE = Object.freeze({ replay: 5, sweep: 5, provider: 30, fees: 360, db: 10, db_heavy: 60, alert: 5 })
 
 /**
- * One reconciliation pass: replay, sweep, compare with the provider, the database checks (last, so they see the repairs), then the
+ * One reconciliation pass: replay, sweep, compare with the provider, fill in missing provider fees, the database checks (last, so they see the repairs), then the
  * alert for anything critical. Each step runs only when it is due (an atomic database gate shared by every instance), unless `force`
- * (an administrator pressing "run now"). Every step is isolated. -> { replay, sweep, provider, db, alert, failed: string[] }
+ * (an administrator pressing "run now"). Every step is isolated. -> { replay, sweep, provider, fees, db, alert, failed: string[] }
  * A step that was not due reports { skipped: 'not_due' }.
  */
 export async function runReconciliation(supabase, provider, { processEvent, onSettled, sendAlert, logger = quietLogger, now = () => new Date(), lookbackHours = 48, force = false, schedule = RECONCILIATION_SCHEDULE, deadline = null } = {}) {
-  const report = { replay: null, sweep: null, provider: null, db: null, alert: null, failed: [] }
+  const report = { replay: null, sweep: null, provider: null, fees: null, db: null, alert: null, failed: [] }
   const due = async (name) => {
     if (force) return true
     try { return Boolean(await rpc(supabase, 'claim_job_slot', { p_job: `recon_${name}`, p_min_minutes: schedule[name] })) } catch (err) {
@@ -233,6 +270,7 @@ export async function runReconciliation(supabase, provider, { processEvent, onSe
   const to = now()
   const from = new Date(to.getTime() - lookbackHours * 3600 * 1000)
   await step('provider', () => reconcileProviderTransactions(supabase, provider, { from: from.toISOString(), to: to.toISOString(), onSettled, logger, deadline }))
+  await step('fees', () => backfillProviderFees(supabase, provider, { logger, deadline }))
   // the cheap checks every `db` minutes; the history-sized ones only when their own (longer) slot is won
   await step('db', async () => runDbReconciliation(supabase, { heavy: force || (await due('db_heavy')) }))
   if (sendAlert) await step('alert', () => alertOnCriticalFindings(supabase, { send: sendAlert, logger }))

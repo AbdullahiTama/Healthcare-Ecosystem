@@ -53,6 +53,11 @@ function assertPattern(operation, value, re, name) {
   if (typeof value !== 'string' || !re.test(value)) throw invalid(operation, `${name} is missing or malformed`)
 }
 
+// Paystack's processing fee on a charge (`fees`, kobo). Null when absent or malformed: never guessed.
+function feeKobo(d) {
+  return Number.isSafeInteger(d?.fees) && d.fees >= 0 && d.fees <= d.amount ? d.fees : null
+}
+
 // Paystack returns `metadata` as an object, a JSON string, or null.
 function parseMetadata(raw) {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw
@@ -162,6 +167,7 @@ export class PaystackProvider {
       providerTransactionId: String(d.id ?? ''),
       status,
       amountKobo: d.amount,
+      feeKobo: feeKobo(d),
       currency: String(d.currency || '').toUpperCase(),
       paidAt: d.paid_at || null,
       payerEmail: d.customer?.email || null,
@@ -324,6 +330,7 @@ export class PaystackProvider {
         providerTransactionId: String(d.id ?? ''),
         status: st,
         amountKobo: d.amount,
+        feeKobo: feeKobo(d),
         currency: String(d.currency || '').toUpperCase(),
         paidAt: d.paid_at || null,
         payerEmail: d.customer?.email || null,

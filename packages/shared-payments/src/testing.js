@@ -56,7 +56,7 @@ export function createFakeSupabase({ tables = {}, rpc = {} } = {}) {
       const fn = rpc[name]
       if (!fn) return { data: null, error: { message: `rpc ${name} not scripted` } }
       const out = await fn(args, data)
-      return out && 'data' in out ? out : { data: out, error: null }
+      return out && typeof out === 'object' && 'data' in out ? out : { data: out, error: null }
     },
     auth: { admin: { getUserById: async () => ({ data: { user: { email: 'user@example.com' } } }) } },
   }
