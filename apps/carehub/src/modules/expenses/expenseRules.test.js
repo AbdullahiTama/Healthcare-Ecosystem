@@ -66,3 +66,34 @@ describe('totals', () => {
       .toEqual({ Rent: 3.3, Tax: 5 })
   })
 })
+
+describe('monthly budget rules', async () => {
+  const { effectiveBudget, legacyBudgetEntries, budgetSummary } = await import('./expenseRules')
+
+  it('a month uses its own budget, else the latest earlier one', () => {
+    const b = { '2026-09': 40000, '2026-10': 50000, '2027-01': 0 }
+    expect(effectiveBudget(b, '2026-10')).toEqual({ month: '2026-10', amount: 50000 })
+    expect(effectiveBudget(b, '2026-11')).toEqual({ month: '2026-10', amount: 50000 })
+    expect(effectiveBudget(b, '2027-02')).toEqual({ month: '2027-01', amount: 0 })
+    expect(effectiveBudget(b, '2026-08')).toBeNull()
+    expect(effectiveBudget(b, '')).toBeNull()
+    expect(effectiveBudget(undefined, '2026-11')).toBeNull()
+    expect(effectiveBudget({ 'bad': 1, '2026-10': 'x' }, '2026-11')).toBeNull()
+  })
+
+  it('reads the old browser budgets for one business, valid ones only, oldest first', () => {
+    const stored = { A: { '2026-10': 50000, '2026-09': '40000', '2026-13': 5, '2026-08': 0, '2026-07': -1, '2026-06': 'abc' }, B: { '2026-10': 1 } }
+    expect(legacyBudgetEntries(stored, 'A')).toEqual([{ month: '2026-09', amount: 40000 }, { month: '2026-10', amount: 50000 }])
+    expect(legacyBudgetEntries(stored, 'C')).toEqual([])
+    expect(legacyBudgetEntries(null, 'A')).toEqual([])
+  })
+
+  it('every recorded expense reduces what remains, to the kobo', () => {
+    expect(budgetSummary(50000, 0)).toEqual({ active: true, remaining: 50000, pctUsed: 0, over: false, near: false })
+    expect(budgetSummary(50000, 12000.1)).toMatchObject({ remaining: 37999.9, pctUsed: 24 })
+    expect(budgetSummary(50000, 40000)).toMatchObject({ remaining: 10000, near: true, over: false })
+    expect(budgetSummary(50000, 50000.01)).toMatchObject({ remaining: -0.01, over: true, near: false })
+    expect(budgetSummary(0.3, 0.1 + 0.2)).toMatchObject({ remaining: 0, over: false })
+    expect(budgetSummary(0, 100)).toEqual({ active: false, remaining: 0, pctUsed: 0, over: false, near: false })
+  })
+})

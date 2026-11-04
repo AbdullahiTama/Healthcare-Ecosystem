@@ -3,7 +3,8 @@ import { useState, useEffect, useRef } from 'react'
 import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus, ChevronDown } from 'lucide-react'
 import { expenseRepository } from './repositories'
 import { useQueryParamAction } from '../../hooks/useQueryParamAction'
-import { validateExpense, newExpenseId } from './expenseRules'
+import { validateExpense, newExpenseId, budgetSummary } from './expenseRules'
+import { useExpenseBudget } from './useExpenseBudget'
 import { fmt, todayDate, currentMonth } from '../../lib/utils'
 import { EXPENSE_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
@@ -11,26 +12,7 @@ import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Text
 
 const { tealDeep, tealBright, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, bg } = theme
 
-const BUDGET_KEY = 'carehub_expense_budget'
 const PAGE_SIZE = 50
-
-function getBudgets() {
-  try { return JSON.parse(localStorage.getItem(BUDGET_KEY) || '{}') } catch (e) { return {} }
-}
-function saveBudget(businessId, month, amount) {
-  try {
-    const budgets = getBudgets()
-    if (!budgets[businessId]) budgets[businessId] = {}
-    budgets[businessId][month] = parseFloat(amount) || 0
-    localStorage.setItem(BUDGET_KEY, JSON.stringify(budgets))
-  } catch (e) {}
-}
-function getBudget(businessId, month) {
-  try {
-    const budgets = getBudgets()
-    return budgets[businessId]?.[month] || 0
-  } catch (e) { return 0 }
-}
 
 export default function Expenses({ brand, role, perms }) {
   const [expenses, setExpenses] = useState([])
@@ -44,7 +26,7 @@ export default function Expenses({ brand, role, perms }) {
   const [showBudget, setShowBudget] = useState(false)
   const [form, setForm] = useState({ date: todayDate() })
   const [budgetInput, setBudgetInput] = useState('')
-  const [budget, setBudget] = useState(0)
+  const [savingBudget, setSavingBudget] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState(null)
   const [formErrors, setFormErrors] = useState({})
@@ -65,13 +47,13 @@ export default function Expenses({ brand, role, perms }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isOwner = role === 'Owner'
+  // The monthly budget, stored in the database (it used to live only in this browser and vanished).
+  const budgetState = useExpenseBudget(brand?.id, filterMonth, { isOwner })
+  const budget = budgetState.status === 'ready' ? budgetState.amount : 0
+  const carriedFrom = budget > 0 && budgetState.fromMonth && budgetState.fromMonth !== filterMonth ? budgetState.fromMonth : null
 
   useEffect(() => { load() }, [brand?.id, filterMonth])
-  useEffect(() => {
-    const b = getBudget(brand?.id, filterMonth)
-    setBudget(b)
-    setBudgetInput(b > 0 ? String(b) : '')
-  }, [brand?.id, filterMonth])
+  useEffect(() => { setBudgetInput(budget > 0 ? String(budget) : '') }, [budget, filterMonth])
 
   async function load() {
     const seq = ++loadSeq.current
@@ -150,19 +132,33 @@ export default function Expenses({ brand, role, perms }) {
     try { await expenseRepository.delete(id, brand.id); load(); showToast('Expense deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete expense. Please try again.', { type: 'error' }) }
   }
 
-  function saveBudgetAmount() {
-    const amount = parseFloat(budgetInput) || 0
-    saveBudget(brand?.id, filterMonth, amount)
-    setBudget(amount)
-    setShowBudget(false)
-    showToast('Budget set to ' + fmt(amount) + ' for ' + filterMonth, { type: 'success' })
+  async function saveBudgetAmount() {
+    if (savingBudget) return
+    const raw = String(budgetInput).trim()
+    const amount = raw === '' ? 0 : Number(raw)
+    if (!Number.isFinite(amount) || amount < 0 || amount > 1e12) { showToast('Enter a budget of 0 or more.', { type: 'warning' }); return }
+    setSavingBudget(true)
+    try {
+      // Resolves only once the budget is stored; the modal stays open otherwise.
+      await budgetState.save(Math.round(amount * 100) / 100)
+      setShowBudget(false)
+      showToast(amount > 0 ? 'Budget set to ' + fmt(amount) + ' from ' + filterMonth + '.' : 'Budget removed from ' + filterMonth + '.', { type: 'success' })
+    } catch (e) {
+      console.error('[Expenses] budget save failed:', e?.message)
+      showToast(/Only the Owner/.test(e?.message || '') ? 'Only the Owner can set the expense budget.' : 'Could not save the budget. Nothing was changed; please try again.', { type: 'error' })
+    }
+    setSavingBudget(false)
   }
 
   const total = Number(totals.total_amount) || 0
-  const remaining = budget > 0 ? budget - total : 0
-  const pctUsed = budget > 0 ? Math.round((total / budget) * 100) : 0
-  const overBudget = budget > 0 && total > budget
-  const nearLimit = budget > 0 && pctUsed >= 80 && !overBudget
+  // Spending that could not be read (or is still loading) must not show as "nothing spent, all remaining".
+  const spendingKnown = !loading && !loadError
+  const summary = budgetSummary(budget, total)
+  const remaining = summary.remaining
+  const pctUsed = spendingKnown ? summary.pctUsed : 0
+  const overBudget = spendingKnown && summary.over
+  const nearLimit = spendingKnown && summary.near
+  const money = (n) => (spendingKnown ? fmt(n) : '—')
 
   const byCategory = {}
   categories.forEach(c => { byCategory[c.category] = c.total })
@@ -185,8 +181,19 @@ export default function Expenses({ brand, role, perms }) {
         </div>
       </div>
 
+      {/* Budget could not be read: never shown as "no budget" */}
+      {budgetState.status === 'error' && filterMonth && (
+        <div role='alert' style={{ padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', borderRadius: theme.radius.lg, background: 'white', border: `1px solid ${warning}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: navy }}><AlertTriangle size={15} color={warning} aria-hidden='true' /> The budget could not be loaded. It has not been lost.</div>
+          <TealBtn onClick={budgetState.reload} style={{ padding: '8px 16px', fontSize: '12px' }}>Try again</TealBtn>
+        </div>
+      )}
+      {budgetState.status === 'loading' && filterMonth && (
+        <div role='status' style={{ marginBottom: '20px', fontSize: '12px', color: gray500 }}>Loading the budget…</div>
+      )}
+
       {/* Budget Tracker */}
-      {budget > 0 && (
+      {budget > 0 && filterMonth && (
         <Card style={{ padding: '20px', marginBottom: '20px', border: overBudget ? `2px solid ${danger}` : nearLimit ? `2px solid ${warning}` : `1px solid ${border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
             <div>
@@ -194,15 +201,16 @@ export default function Expenses({ brand, role, perms }) {
                 {overBudget ? <><AlertCircle size={15} color={danger} /> Over budget!</> : nearLimit ? <><AlertTriangle size={15} color={warning} /> Approaching limit</> : <><CheckCircle size={15} color={success} /> Budget tracker</>}
               </div>
               <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>
-                {filterMonth} · Set by Owner
+                {filterMonth} · {carriedFrom ? 'Carried over from ' + carriedFrom + ' budget' : 'Set by Owner'}
+                {budgetState.onDevice && ' · saved on this device only'}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '22px', fontWeight: '900', color: overBudget ? danger : tealDeep }}>
-                {overBudget ? '-' + fmt(Math.abs(remaining)) : fmt(remaining)}
+                {overBudget ? '-' + fmt(Math.abs(remaining)) : money(remaining)}
               </div>
               <div style={{ fontSize: '11px', color: gray500 }}>
-                {overBudget ? 'over budget' : 'remaining'}
+                {!spendingKnown ? (loadError ? 'spending could not be loaded' : 'loading spending…') : overBudget ? 'over budget' : 'remaining'}
               </div>
             </div>
           </div>
@@ -225,12 +233,12 @@ export default function Expenses({ brand, role, perms }) {
             </div>
             <div style={{ textAlign: 'center', padding: '10px', borderRadius: theme.radius.md, background: dangerBg }}>
               <div style={{ fontSize: '11px', color: gray500, fontWeight: '600' }}>Spent</div>
-              <div style={{ fontSize: '15px', fontWeight: '900', color: danger, marginTop: '2px' }}>{fmt(total)}</div>
+              <div style={{ fontSize: '15px', fontWeight: '900', color: danger, marginTop: '2px' }}>{money(total)}</div>
             </div>
             <div style={{ textAlign: 'center', padding: '10px', borderRadius: theme.radius.md, background: overBudget ? dangerBg : successBg }}>
               <div style={{ fontSize: '11px', color: gray500, fontWeight: '600' }}>{overBudget ? 'Over by' : 'Remaining'}</div>
               <div style={{ fontSize: '15px', fontWeight: '900', color: overBudget ? danger : success, marginTop: '2px' }}>
-                {overBudget ? fmt(Math.abs(remaining)) : fmt(remaining)}
+                {overBudget ? fmt(Math.abs(remaining)) : money(remaining)}
               </div>
             </div>
           </div>
@@ -249,7 +257,7 @@ export default function Expenses({ brand, role, perms }) {
       )}
 
       {/* No budget set — prompt owner */}
-      {budget === 0 && isOwner && (
+      {budget === 0 && isOwner && budgetState.status === 'ready' && filterMonth && (
         <div style={{ marginBottom: '20px', padding: '14px 18px', borderRadius: theme.radius.lg, background: tealMist, border: `1px dashed ${tealBright}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: tealDeep, fontSize: '14px' }}><Target size={15} /> Set a monthly expense budget</div>
@@ -336,10 +344,10 @@ export default function Expenses({ brand, role, perms }) {
 
       {/* Set Budget Modal */}
       <Modal show={showBudget} onClose={() => setShowBudget(false)} title={'Set Expense Budget: ' + filterMonth}
-        footer={<><GhostBtn onClick={() => setShowBudget(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveBudgetAmount} style={{ flex: 1, padding: '12px' }}>Save Budget</TealBtn></>}>
+        footer={<><GhostBtn onClick={() => setShowBudget(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveBudgetAmount} disabled={savingBudget} aria-busy={savingBudget || undefined} style={{ flex: 1, padding: '12px' }}>{savingBudget ? 'Saving…' : 'Save Budget'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ padding: '14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealMist}`, fontSize: '13px', color: tealDeep, lineHeight: '1.7' }}>
-            Set a spending limit for <strong>{filterMonth}</strong>. All staff can see the budget and how much has been spent. You will be alerted when 80% is used and when the budget is exceeded.
+            Set a spending limit from <strong>{filterMonth}</strong>. It carries over to the following months until you change it; enter 0 to have no budget from this month on. {budgetState.onDevice ? 'Until CareHub finishes updating, it is saved on this device only.' : 'It is saved to your business, so everyone working here sees it on any device.'} You will be alerted when 80% is used and when the budget is exceeded.
           </div>
           <Inp label={'Monthly Budget for ' + filterMonth + ' (₦)'} value={budgetInput} onChange={setBudgetInput} type='number' placeholder='e.g. 100000' />
           {budgetInput && parseFloat(budgetInput) > 0 && (
@@ -350,12 +358,12 @@ export default function Expenses({ brand, role, perms }) {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
                 <span style={{ color: gray500 }}>Already spent ({filterMonth})</span>
-                <span style={{ fontWeight: '700', color: danger }}>{fmt(total)}</span>
+                <span style={{ fontWeight: '700', color: danger }}>{money(total)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', borderTop: `1px solid ${border}`, paddingTop: '8px', marginTop: '4px' }}>
                 <span style={{ color: gray500 }}>Remaining</span>
-                <span style={{ fontWeight: '900', color: parseFloat(budgetInput) - total < 0 ? danger : success }}>
-                  {fmt(parseFloat(budgetInput) - total)}
+                <span style={{ fontWeight: '900', color: spendingKnown && parseFloat(budgetInput) - total < 0 ? danger : success }}>
+                  {money(parseFloat(budgetInput) - total)}
                 </span>
               </div>
             </div>
@@ -367,7 +375,7 @@ export default function Expenses({ brand, role, perms }) {
       <Modal show={showAdd} onClose={closeAdd} title='Log Expense'
         footer={<><GhostBtn onClick={closeAdd} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} disabled={saving} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Expense'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {budget > 0 && (
+          {budget > 0 && spendingKnown && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: theme.radius.md, background: overBudget ? dangerBg : tealMist, border: `1px solid ${overBudget ? danger : tealMist}`, fontSize: '12px', color: overBudget ? danger : tealDeep, fontWeight: '600' }}>
               {overBudget ? <><AlertTriangle size={13} /> Already over budget by {fmt(Math.abs(remaining))}</> : <><DollarSign size={13} /> Budget remaining this month: {fmt(remaining)}</>}
             </div>
@@ -379,7 +387,7 @@ export default function Expenses({ brand, role, perms }) {
             <Inp label='Date' value={form.date} onChange={v => f('date', v)} type='date' error={formErrors.date} />
           </div>
           <Inp label='Recorded By' value={form.staffName} onChange={v => f('staffName', v)} placeholder='Your name' />
-          {form.amount && budget > 0 && (
+          {form.amount && budget > 0 && spendingKnown && (
             <div style={{ padding: '10px', borderRadius: theme.radius.md, background: bg, fontSize: '12px', color: gray600 }}>
               After this expense: <strong style={{ color: remaining - (parseFloat(form.amount) || 0) < 0 ? danger : success }}>
                 {fmt(remaining - (parseFloat(form.amount) || 0))} remaining

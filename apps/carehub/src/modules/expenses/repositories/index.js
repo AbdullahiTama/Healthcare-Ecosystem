@@ -74,6 +74,33 @@ export function createExpenseRepository(request = sbFetch) {
       return existing[0]
     },
 
+    // ── Monthly budget (carehub_20270103_expense_budgets) ──
+    // The budget in force for a month: that month's own, else the latest
+    // earlier one (a budget carries over). { month, amount } or null.
+    async getBudget(businessId, month) {
+      const rows = await request(`expense_budgets?business_id=eq.${businessId}&month=lte.${month}&order=month.desc&limit=1&select=month,amount,updated_at`)
+      const row = Array.isArray(rows) ? rows[0] : rows
+      return row ? { month: row.month, amount: Number(row.amount) || 0, updatedAt: row.updated_at || null } : null
+    },
+
+    // Months that have a stored budget, to know which browser-held budgets
+    // still need moving to the database.
+    async getBudgetMonths(businessId) {
+      const rows = await request(`expense_budgets?business_id=eq.${businessId}&select=month&order=month.asc&limit=1000`)
+      return (rows || []).map((r) => r.month)
+    },
+
+    // Owner only (the database refuses anyone else). 0 = no budget from this month on.
+    async setBudget(businessId, month, amount) {
+      const rows = await request('rpc/set_expense_budget', {
+        method: 'POST',
+        body: JSON.stringify({ p_business_id: businessId, p_month: month, p_amount: amount }),
+      })
+      const row = Array.isArray(rows) ? rows[0] : rows
+      if (!row || row.month !== month) throw new Error('The budget could not be confirmed as saved.')
+      return { month: row.month, amount: Number(row.amount) || 0, updatedAt: row.updated_at || null }
+    },
+
     async delete(expenseId, businessId) {
       return request(`expenses?id=eq.${expenseId}&business_id=eq.${businessId}`, {
         method: 'DELETE',

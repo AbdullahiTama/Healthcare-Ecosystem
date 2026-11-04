@@ -13,6 +13,9 @@ vi.mock('./repositories', () => ({
     create: vi.fn(),
     delete: vi.fn(),
     getById: vi.fn(),
+    getBudget: vi.fn(),
+    getBudgetMonths: vi.fn(),
+    setBudget: vi.fn(),
   },
 }))
 
@@ -57,6 +60,9 @@ beforeEach(() => {
   repo.getTotals.mockResolvedValue([{ total_amount: 1000, transaction_count: 1 }])
   repo.getCategories.mockResolvedValue([{ category: 'Rent', category_amount: 1000 }])
   repo.create.mockResolvedValue({ id: 'x' })
+  repo.getBudget.mockResolvedValue(null)
+  repo.getBudgetMonths.mockResolvedValue([])
+  repo.setBudget.mockImplementation(async (_b, month, amount) => ({ month, amount }))
 })
 afterEach(async () => {
   await act(async () => root.unmount())

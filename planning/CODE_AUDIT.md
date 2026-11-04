@@ -27,6 +27,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A12 | High | POS (production defect) | Re-holding an edited held sale is refused (`permission denied for table sales`); duplicate held sales; carts lost when leaving the POS | **Closed 2026-11-02**: grant live, app deployed and in use; owner review of 4 double-charged pairs pending |
 | A13 | Medium | Importer operating models | Centralised / Decentralised models, representative ledger and switching are code complete; migration not applied; four owner decisions open | Open: apply + owner decisions |
 | A14 | Medium | Payments | Reported ~1% reduction in amounts: not reproduced in code or live data; Paystack's fee was not stored, so bank deposits could not be matched to payments | Open: migration applied 2026-11-04; confirm backfill, then match deposits |
+| A15 | Medium | Expenses | The expense budget lived only in the browser, per month: it vanished at each new month, on another device and for staff | Open: fix shipped in the app; apply `carehub_20270103_expense_budgets` |
 
 ## 2. Items
 
@@ -220,6 +221,26 @@ settled payment has a fee (`select count(*) from payment_intents where status in
 provider_fee_kobo is null and purpose not like '%\_wallet'` returns 0); match `provider_net_kobo` against the
 Paystack settlements export or the bank statement. If a ~1% gap remains in POS or report figures (which never touch
 Paystack), get a specific transaction from the owner and trace it.
+
+### A15. Expense budget disappeared: stored only in the browser (Medium)
+
+**Report (2026-11-04):** a ₦50,000 expense budget, with its remaining balance, disappeared from Expenses.
+
+**Verified 2026-11-04 (live project read-only):** the budget was never stored on the server. `Expenses.jsx` kept it in
+`localStorage` (`carehub_expense_budget[business][YYYY-MM]`); no live table or column holds a budget. Expense records are
+intact (2026-10: 22 rows across 4 businesses; 2026-11: 16). So the budget vanished at every new month (it was read for
+the month shown only; the report came in on 4 November), on another device, browser or profile, after site data was
+cleared or evicted (Safari, 7 days unused), and staff never saw it although the screen said they could.
+
+**Fixed in code:** `supabase/migrations/carehub_20270103_expense_budgets.sql` (table `expense_budgets`, members read,
+Owner-only `set_expense_budget`), `modules/expenses/useExpenseBudget.js`. A month without its own budget uses the latest
+earlier one; budgets still in the Owner's browser are moved to the database on their first visit; a failed read is
+shown as an error, never as "no budget" or "all remaining". Before the migration is applied the browser is used, as
+before, with a notice. Tests: `expenseBudgets.db.test.js` (PGlite, live helpers), `Expenses.budget.test.jsx`.
+See [Expense-Budgets.md](../docs/architecture/Expense-Budgets.md).
+
+**To close:** apply the migration with the owner's approval, run the rolled-back probe in Expense-Budgets.md, then ask
+the reporting Owner to open Expenses once on the device where the budget was set (that moves it to the database).
 
 ## 3. Open items recorded in other audits
 

@@ -110,4 +110,34 @@ describe('expenseRepository', () => {
       `rpc/get_expense_summary?p_business_id=${A}`,
     ])
   })
+
+  it('budget reads are tenant-scoped and take the latest month on or before the one shown', async () => {
+    const calls = []
+    const repo = createExpenseRepository(async (path, opts) => {
+      calls.push([path, opts])
+      if (path.startsWith('expense_budgets?') && path.includes('month=lte')) return [{ month: '2026-10', amount: '50000.00', updated_at: 't' }]
+      if (path.startsWith('expense_budgets?')) return [{ month: '2026-09' }, { month: '2026-10' }]
+      return null
+    })
+    expect(await repo.getBudget(A, '2026-11')).toEqual({ month: '2026-10', amount: 50000, updatedAt: 't' })
+    expect(await repo.getBudgetMonths(A)).toEqual(['2026-09', '2026-10'])
+    expect(calls.map((c) => c[0])).toEqual([
+      `expense_budgets?business_id=eq.${A}&month=lte.2026-11&order=month.desc&limit=1&select=month,amount,updated_at`,
+      `expense_budgets?business_id=eq.${A}&select=month&order=month.asc&limit=1000`,
+    ])
+  })
+
+  it('no stored budget reads as null', async () => {
+    const repo = createExpenseRepository(async () => [])
+    expect(await repo.getBudget(A, '2026-11')).toBeNull()
+  })
+
+  it('setBudget goes through the Owner-only database function and confirms what was stored', async () => {
+    const calls = []
+    const repo = createExpenseRepository(async (path, opts) => { calls.push([path, JSON.parse(opts.body)]); return { business_id: A, month: '2026-11', amount: 50000 } })
+    expect(await repo.setBudget(A, '2026-11', 50000)).toEqual({ month: '2026-11', amount: 50000, updatedAt: null })
+    expect(calls).toEqual([['rpc/set_expense_budget', { p_business_id: A, p_month: '2026-11', p_amount: 50000 }]])
+    const silent = createExpenseRepository(async () => [])
+    await expect(silent.setBudget(A, '2026-11', 50000)).rejects.toThrow('could not be confirmed')
+  })
 })

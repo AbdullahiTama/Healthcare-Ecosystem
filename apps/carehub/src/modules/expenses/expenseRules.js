@@ -76,3 +76,46 @@ export function validateExpense(form, categories) {
 export function newExpenseId() {
   return globalThis.crypto.randomUUID()
 }
+
+// ── Monthly budget ───────────────────────────────────────────────────────────
+// A budget is set per month (YYYY-MM). A month without its own budget uses the
+// latest earlier one, so a budget carries over until the Owner changes it; a
+// budget of 0 means "no budget from this month on". The database query
+// (expenseRepository.getBudget) and the browser fallback below follow the same
+// rule. Docs: docs/architecture/Expense-Budgets.md.
+
+// The budget in force for `month` from { 'YYYY-MM': amount }: { amount, month }
+// of the latest month on or before it, or null when there is none.
+export function effectiveBudget(byMonth, month) {
+  if (!month || !MONTH_RE.test(month) || !byMonth || typeof byMonth !== 'object') return null
+  let best = null
+  for (const [m, raw] of Object.entries(byMonth)) {
+    const amount = Number(raw)
+    if (!MONTH_RE.test(m) || m > month || !Number.isFinite(amount) || amount < 0) continue
+    if (!best || m > best.month) best = { month: m, amount }
+  }
+  return best
+}
+
+// Budgets the old screen kept in this browser (localStorage
+// carehub_expense_budget = { [businessId]: { 'YYYY-MM': amount } }), as valid
+// [{ month, amount }] entries for one business, for moving to the database.
+export function legacyBudgetEntries(stored, businessId) {
+  const forBiz = stored && typeof stored === 'object' ? stored[businessId] : null
+  if (!forBiz || typeof forBiz !== 'object') return []
+  return Object.entries(forBiz)
+    .map(([month, raw]) => ({ month, amount: Number(raw) }))
+    .filter((e) => MONTH_RE.test(e.month) && Number.isFinite(e.amount) && e.amount > 0 && e.amount <= MAX_EXPENSE_AMOUNT)
+    .sort((a, b) => (a.month < b.month ? -1 : 1))
+}
+
+// What the budget tracker shows for a budget and the month's spending (in kobo,
+// so 0.1 + 0.2 style sums never show a stray remainder).
+export function budgetSummary(budget, spent) {
+  const b = toKobo(budget)
+  const s = toKobo(spent)
+  if (b <= 0) return { active: false, remaining: 0, pctUsed: 0, over: false, near: false }
+  const pctUsed = Math.round((s / b) * 100)
+  const over = s > b
+  return { active: true, remaining: (b - s) / 100, pctUsed, over, near: !over && pctUsed >= 80 }
+}
