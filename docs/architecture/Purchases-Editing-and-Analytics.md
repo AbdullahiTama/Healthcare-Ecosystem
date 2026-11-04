@@ -211,6 +211,8 @@ the "Stock … after saving" preview. The same mechanism is why live purchases h
 
 **Fix (client only, `PurchaseForm.jsx`, so Record and Edit both get it):**
 
+- The wiring is the shared `useKeyboardScanner` hook (`src/hooks/useKeyboardScanner.js`), also used by
+  the POS (`POS-Barcode-Scanning.md`).
 - `createKeyboardScanDetector` (`lib/barcodeScanner.js`, pure) recognises a scan by its pace: at least
   6 characters, each within 50 ms of the last, ended by Enter or Tab, or by 100 ms of silence for
   scanners with no suffix. Shift (before capitals) is ignored; auto-repeat and Ctrl/Alt/Meta shortcuts

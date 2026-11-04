@@ -2,7 +2,8 @@ import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 're
 import { Plus, X, AlertTriangle, Package, ScanLine, Lock } from 'lucide-react'
 import { fmt, todayDate } from '../../lib/utils'
 import { normalize } from '../../lib/productMatches'
-import { canScanWithCamera, startCameraScan, createKeyboardScanDetector, SCAN_IDLE_MS } from '../../lib/barcodeScanner'
+import { canScanWithCamera, startCameraScan } from '../../lib/barcodeScanner'
+import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { PRODUCT_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
 import { Inp, Textarea } from '../../components/ui'
@@ -64,14 +65,6 @@ const PurchaseForm = forwardRef(function PurchaseForm({
   const [scanningId, setScanningId] = useState(null)
   const fieldRefs = useRef({})
   const stopScan = useRef(null)
-  // USB scanner bursts (see onScannerKey): the form as it was when the burst
-  // began, and the line it was typed into.
-  const latestForm = useRef(form)
-  latestForm.current = form
-  const scanDetector = useRef(null)
-  if (!scanDetector.current) scanDetector.current = createKeyboardScanDetector()
-  const scanStart = useRef(null)
-  const scanIdle = useRef(null)
   const [scanNotice, setScanNotice] = useState('')
   const editing = mode === 'edit'
   const today = todayDate()
@@ -109,7 +102,7 @@ const PurchaseForm = forwardRef(function PurchaseForm({
     setFocusTarget(null)
   }, [focusTarget])
 
-  useEffect(() => () => { stopScan.current?.(); clearTimeout(scanIdle.current) }, [])
+  useEffect(() => () => stopScan.current?.(), [])
 
   function addItem() {
     const item = blankItem()
@@ -181,32 +174,13 @@ const PurchaseForm = forwardRef(function PurchaseForm({
   // into the Barcode of the line the scan was typed into (or, from outside the
   // lines, the empty last line or a new one), exactly as a camera scan is.
   // Notes are free text (an invoice number may be scanned there) and are left alone.
-  function onScannerKey(e) {
-    if (e.target?.tagName === 'TEXTAREA') return
-    const detector = scanDetector.current
-    const result = detector.keydown(e, Date.now())
-    clearTimeout(scanIdle.current)
-    if (result?.type === 'start') {
-      scanStart.current = { form: latestForm.current, lineId: e.target?.closest?.('[data-line-id]')?.getAttribute('data-line-id') || null }
-    } else if (result?.type === 'scan') {
-      // The scanner's Enter/Tab must not also move focus or press a button.
-      e.preventDefault()
-      e.stopPropagation()
-      routeScan(result.code)
-      return
-    }
-    if (detector.pending()) {
-      scanIdle.current = setTimeout(() => {
-        const code = detector.idle()
-        if (code) routeScan(code)
-      }, SCAN_IDLE_MS)
-    }
-  }
+  const onScannerKey = useKeyboardScanner({
+    ignore: (e) => e.target?.tagName === 'TEXTAREA',
+    snapshot: (e) => ({ form, lineId: e.target?.closest?.('[data-line-id]')?.getAttribute('data-line-id') || null }),
+    onScan: routeScan,
+  })
 
-  function routeScan(code) {
-    const start = scanStart.current
-    scanStart.current = null
-    if (!start) return
+  function routeScan(code, start) {
     const before = start.form
     let items = before.items
     let target = items.find(it => it.id === start.lineId)

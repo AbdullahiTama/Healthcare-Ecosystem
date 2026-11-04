@@ -150,3 +150,131 @@ describe('POS barcode lookup', () => {
     }
   })
 })
+
+// A USB scanner in keyboard mode: a keydown then the input it produces for
+// every character, back to back (well inside the scan pace), then Enter.
+const keydown = (el, key) => el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+async function scanWithScanner(el, code, suffix = 'Enter') {
+  await act(async () => {
+    for (const ch of code) {
+      const default_ = keydown(el, ch)
+      if (default_ && 'value' in el && el.tagName !== 'BUTTON') setNativeValue(el, el.value + ch)
+    }
+    if (suffix) keydown(el, suffix)
+  })
+}
+const qtyOf = (host, name) => host.querySelector(`input[aria-label="Quantity of ${name}"]`)
+
+describe('POS — USB scanner works wherever focus is', () => {
+  let m
+  beforeEach(() => { vi.clearAllMocks() })
+  afterEach(async () => { if (m) { await m.unmount(); m = null } })
+
+  async function withAmoxilInCart() {
+    m = await renderPOS()
+    await typeSearch(m.host, '6201234567890')
+    await pressEnter(searchInput(m.host))
+    expect(qtyOf(m.host, 'Amoxicillin 500mg').value).toBe('1')
+  }
+
+  it('a scan while a cart quantity has focus adds the product and leaves the quantity alone', async () => {
+    await withAmoxilInCart()
+    await scanWithScanner(qtyOf(m.host, 'Amoxicillin 500mg'), '6205555555555')
+    expect(qtyOf(m.host, 'Amoxicillin 500mg').value).toBe('1')
+    expect(qtyOf(m.host, 'Vitamin C 1000mg').value).toBe('1')
+    expect(m.host.textContent).toContain('Added: Vitamin C 1000mg')
+  })
+
+  it('scanning the same product again from its quantity field adds one more, not a 13 digit quantity', async () => {
+    await withAmoxilInCart()
+    await scanWithScanner(qtyOf(m.host, 'Amoxicillin 500mg'), '6201234567890')
+    expect(qtyOf(m.host, 'Amoxicillin 500mg').value).toBe('2')
+  })
+
+  it('a scan in Discount or Cash received leaves them as they were', async () => {
+    await withAmoxilInCart()
+    const disc = m.host.querySelector('input[placeholder="Discount"]')
+    await act(async () => { setNativeValue(disc, '50') })
+    await scanWithScanner(disc, '6205555555555')
+    expect(disc.value).toBe('50')
+    const cash = m.host.querySelector('input[placeholder="Cash received (₦)"]')
+    await act(async () => { setNativeValue(cash, '2000') })
+    await scanWithScanner(cash, '6201234567890', 'Tab')
+    expect(cash.value).toBe('2000')
+    expect(qtyOf(m.host, 'Amoxicillin 500mg').value).toBe('2')
+    expect(qtyOf(m.host, 'Vitamin C 1000mg').value).toBe('1')
+  })
+
+  it('with a button focused, the scanner\'s Enter does not press it', async () => {
+    await withAmoxilInCart()
+    const remove = m.host.querySelector('button[aria-label="Remove item"]')
+    let pressed = 0
+    remove.addEventListener('keydown', (e) => { if (e.key === 'Enter') pressed++ })
+    await scanWithScanner(remove, '6205555555555')
+    expect(pressed).toBe(0)
+    expect(qtyOf(m.host, 'Amoxicillin 500mg').value).toBe('1')
+    expect(qtyOf(m.host, 'Vitamin C 1000mg').value).toBe('1')
+  })
+
+  it('a scan with nothing focused still adds the product', async () => {
+    m = await renderPOS()
+    await scanWithScanner(document.body, '6201234567890')
+    expect(cartHasItem(m.host)).toBe(true)
+    expect(m.host.textContent).toContain('Added: Amoxicillin 500mg')
+  })
+
+  it('a scan typed into the search box after other text replaces it and adds the product', async () => {
+    m = await renderPOS()
+    await typeSearch(m.host, 'amo')
+    await scanWithScanner(searchInput(m.host), '6201234567890')
+    expect(cartHasItem(m.host)).toBe(true)
+    expect(searchInput(m.host).value).toBe('')
+  })
+
+  it('an unknown code goes to the search box with a warning, and the cart is untouched', async () => {
+    await withAmoxilInCart()
+    await scanWithScanner(qtyOf(m.host, 'Amoxicillin 500mg'), '0000000000000')
+    expect(qtyOf(m.host, 'Amoxicillin 500mg').value).toBe('1')
+    expect(searchInput(m.host).value).toBe('0000000000000')
+    expect(m.host.textContent).toContain('No product has the barcode 0000000000000.')
+  })
+
+  it('an out-of-stock scan warns and adds nothing', async () => {
+    m = await renderPOS()
+    await scanWithScanner(document.body, '6209876543210')
+    expect(m.host.textContent).toContain('Paracetamol 500mg is out of stock.')
+    expect(cartHasItem(m.host)).toBe(false)
+  })
+
+  it('a scanner that sends no Enter is still caught once the keys stop', async () => {
+    await withAmoxilInCart()
+    await scanWithScanner(qtyOf(m.host, 'Amoxicillin 500mg'), '6205555555555', null)
+    await act(async () => { await new Promise((r) => setTimeout(r, 150)) })
+    expect(qtyOf(m.host, 'Amoxicillin 500mg').value).toBe('1')
+    expect(qtyOf(m.host, 'Vitamin C 1000mg').value).toBe('1')
+  })
+
+  it('typing by hand into a quantity is not a scan', async () => {
+    await withAmoxilInCart()
+    const qty = qtyOf(m.host, 'Amoxicillin 500mg')
+    for (const ch of '20000') {
+      await act(async () => { keydown(qty, ch); setNativeValue(qty, qty.value + ch) })
+      await act(async () => { await new Promise((r) => setTimeout(r, 70)) })
+    }
+    expect(qtyOf(m.host, 'Amoxicillin 500mg').value).toBe('120000')
+  })
+
+  it('fields outside the POS are left alone', async () => {
+    m = await renderPOS()
+    const outside = document.createElement('input')
+    document.body.appendChild(outside)
+    try {
+      await scanWithScanner(outside, '6201234567890')
+      expect(outside.value).toBe('6201234567890')
+      expect(cartHasItem(m.host)).toBe(false)
+    } finally {
+      outside.remove()
+    }
+  })
+})
+

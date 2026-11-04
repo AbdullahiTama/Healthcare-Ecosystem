@@ -32,6 +32,7 @@ import SaleDetailModal from './SaleDetailModal'
 import { creditCustomerFor } from './customerPick'
 import { isDuplicateError } from '../../lib/dbErrors'
 import { startCameraScan } from '../../lib/barcodeScanner'
+import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useOpenSales, useRecentSales, useSettings, useClients, useCreateClient, useInvalidateSales } from '../../hooks/queries'
 
@@ -302,6 +303,44 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     showToast('Added: ' + match.name, { type: 'success' })
     setSearch('')
   }
+
+  // A USB scanner types into whichever field has focus. At the till that is
+  // often Cash received, Discount, or a cart line's quantity or price, so a
+  // scan wrote a 13 digit code into the sale; with a button focused (a product
+  // card, Charge), the scanner's Enter pressed it. Every scan on the Sell tab
+  // is now taken as a scan, wherever focus is: the sale goes back to how it
+  // was before the first scanned key, and the code is looked up exactly like a
+  // camera scan (docs/architecture/POS-Barcode-Scanning.md). Open dialogs,
+  // free text and fields outside the POS are left alone.
+  const posRootRef = useRef(null)
+  const ignoreScanKey = (e) => {
+    const t = e.target
+    const root = posRootRef.current
+    if (!root || !t || t.tagName === 'TEXTAREA' || t.isContentEditable) return true
+    if (t.closest?.('[role="dialog"], [aria-modal="true"]')) return true
+    const editable = t.tagName === 'INPUT' || t.tagName === 'SELECT'
+    return editable && !root.contains(t)
+  }
+  const onScannedCode = (code, snap) => {
+    setDraft(() => snap.draft)
+    setFilter(snap.filter); setStockFilter(snap.stockFilter); setExpiryFilter(snap.expiryFilter); setSortBy(snap.sortBy)
+    const match = findByBarcode(code)
+    if (!match) {
+      setSearch(code)
+      showToast('No product has the barcode ' + code + '.', { type: 'warning' })
+      return
+    }
+    setSearch(snap.inSearch ? '' : snap.search)
+    if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
+    add(match)
+    showToast('Added: ' + match.name, { type: 'success' })
+  }
+  useKeyboardScanner({
+    ignore: ignoreScanKey,
+    snapshot: (e) => ({ draft: rawDraft, search, filter, stockFilter, expiryFilter, sortBy, inSearch: e.target === productSearchRef.current }),
+    onScan: onScannedCode,
+  }, { window: true, enabled: view === 'pos' && !receipt })
+
   const rmv = id => setCart(cart.filter(c => c.id !== id))
   const setQty = (id, v) => { const n = parseInt(v) || 0; if (n <= 0) rmv(id); else setCart(cart.map(c => c.id === id ? { ...c, qty: n } : c)) }
   // One-off unit-price override for a single sale — the vendor can charge a
@@ -910,7 +949,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const creditBlocked = method === 'Credit' && !creditCustomer
 
   return (
-    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: isMobile ? 'auto' : '100%', minHeight: isMobile ? 'auto' : '100%', overflow: isMobile ? 'visible' : 'hidden', background: bg }}>
+    <div ref={posRootRef} style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: isMobile ? 'auto' : '100%', minHeight: isMobile ? 'auto' : '100%', overflow: isMobile ? 'visible' : 'hidden', background: bg }}>
 
       {/* Products panel */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: isMobile ? 'visible' : 'hidden' }}>
@@ -1116,7 +1155,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${border}`, borderRadius: theme.radius.md, overflow: 'hidden' }}>
                   <button onClick={() => setQty(item.id, item.qty - 1)} aria-label='Decrease quantity' style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, background: 'white', border: 'none', cursor: 'pointer', color: gray600 }}><Minus size={13} /></button>
-                  <input type='number' value={item.qty} onChange={e => setQty(item.id, e.target.value)} style={{ width: 34, textAlign: 'center', padding: '4px 0', border: 'none', borderLeft: `1px solid ${border}`, borderRight: `1px solid ${border}`, fontSize: 13, fontWeight: 700, outline: 'none', color: navy }} />
+                  <input type='number' value={item.qty} onChange={e => setQty(item.id, e.target.value)} aria-label={'Quantity of ' + item.name} style={{ width: 34, textAlign: 'center', padding: '4px 0', border: 'none', borderLeft: `1px solid ${border}`, borderRight: `1px solid ${border}`, fontSize: 13, fontWeight: 700, outline: 'none', color: navy }} />
                   <button onClick={() => setQty(item.id, item.qty + 1)} aria-label='Increase quantity' style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, background: 'white', border: 'none', cursor: 'pointer', color: tealDeep }}><Plus size={13} /></button>
                 </div>
                 <button onClick={() => rmv(item.id)} aria-label='Remove item' style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', color: gray400, background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><Trash2 size={14} /></button>
