@@ -1,9 +1,9 @@
-# Inventory and Stock Management: USB barcode scanners
+# Inventory, Stock Management and Master Catalog: USB barcode scanners
 
 2026-11-04. Client only, no database change. The same fix as Purchases
 (`Purchases-Editing-and-Analytics.md`, "USB scanner routing") and the POS (`POS-Barcode-Scanning.md`).
 Stock Management's **Inventory** tab is this same screen; its **Stock Validation** tab is covered at the end;
-**Stock History** has no inputs.
+**Stock History** has no inputs. The Master Catalog is covered in the last section.
 
 ## Problem
 
@@ -74,4 +74,28 @@ per product ("Adjustment quantity for …"), and search says it takes barcodes.
 **Tests:** `StockValidation.scanner.test.jsx`, 9 tests (nothing focused, from a quantity, product already
 counted, search box, unknown code, no-suffix scanner, summary open, hand typing, fields outside). 8 fail
 against the previous screen (the hand-typing check only because its setup adds the product by scan).
+
+## Master Catalog
+
+**Problem:** the add / edit item form is a real `<form>`: a scan with focus in Default price, Default cost,
+Reorder level, Pack size or Name typed the code there and the scanner's Enter **submitted** it. The Carry
+dialog's "Own price" and each location's price took the code as a price, and the scanner's Enter pressed a
+focused Carry, Stop carrying, Set price, Push or Archive button, or confirmed an open Push / Archive.
+
+**Fix:** the dialogs use `useDialogKeyboardScanner` (moved from Inventory into
+`src/hooks/useKeyboardScanner.js`; Inventory now imports it): keys anywhere inside the open dialog, or with
+nothing focused, are that dialog's.
+
+- **Item form:** a scan goes into Barcode, everything else as it was, nothing submitted;
+  "Scanned … into Barcode." is announced. Before the catalogue update (no Barcode field) the scan is undone:
+  "barcodes can be added once the catalogue update is installed".
+- **Carry dialog and Locations and prices:** no barcode field, so the scan is undone and "Scan ignored (…):
+  there is no barcode field here, so nothing was changed." is shown; no button is pressed.
+- **List** (window listener while no own dialog is open): a scan anywhere searches the catalogue for the code
+  at once (the server search covers barcodes; the 300 ms typing pause is skipped), replacing what was in the
+  box. With a Push or Archive confirmation open the scan does nothing ("confirm or cancel first") and its
+  Enter does not confirm.
+
+**Tests:** `master-catalog/__tests__/MasterCatalog.scanner.test.jsx`, 11 tests. 9 fail against the previous
+screens; the other 2 (hand typing, fields outside) check what must not change.
 

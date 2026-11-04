@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useDialogKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { theme } from '../../styles/theme'
 import { Modal, Inp, Sel, Textarea, GhostBtn, TealBtn } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -12,7 +13,28 @@ export default function MasterItemForm({ show, item, categories, upgraded, savin
   const [form, setForm] = useState(formFromMaster(item))
   const [errors, setErrors] = useState({})
   const { isMobile } = useBreakpoint()
-  useEffect(() => { if (show) { setForm(formFromMaster(item)); setErrors({}) } }, [show, item])
+  const [scanNotice, setScanNotice] = useState('')
+  useEffect(() => { if (show) { setForm(formFromMaster(item)); setErrors({}); setScanNotice('') } }, [show, item])
+
+  // A USB scanner types into whichever field has focus, then presses Enter,
+  // which submitted this form with the code in the price, cost or name. A scan
+  // anywhere in the dialog now goes into Barcode (everything else as it was)
+  // and its Enter submits nothing. Before the catalogue update there is no
+  // Barcode field: the scan is undone and explained.
+  const scanArea = useRef(null)
+  useDialogKeyboardScanner(scanArea, {
+    snapshot: () => form,
+    onScan: (code, before) => {
+      if (!upgraded) {
+        setForm(before)
+        setScanNotice('Scan ignored (' + code + '): barcodes can be added once the catalogue update is installed.')
+        return
+      }
+      setForm({ ...before, barcode: code })
+      setErrors((e) => ({ ...e, barcode: undefined }))
+      setScanNotice('Scanned ' + code + ' into Barcode.')
+    },
+  }, { enabled: show })
 
   const f = (k) => (v) => setForm((p) => ({ ...p, [k]: v }))
   const grid = { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }
@@ -29,7 +51,8 @@ export default function MasterItemForm({ show, item, categories, upgraded, savin
     <Modal show={show} onClose={onClose} title={item ? 'Edit catalogue item' : 'Add catalogue item'}
       footer={<><GhostBtn onClick={onClose} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
         <TealBtn onClick={submit} disabled={saving} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving…' : item ? 'Save item' : 'Add item'}</TealBtn></>}>
-      <form onSubmit={(e) => { e.preventDefault(); submit() }} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <form ref={scanArea} onSubmit={(e) => { e.preventDefault(); submit() }} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div role='status' aria-live='polite' style={{ fontSize: '12px', fontWeight: 700, color: tealDeep, display: scanNotice ? 'block' : 'none' }}>{scanNotice}</div>
         {item && (
           <div role='note' style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep }}>
             Every location's product is linked to this item, so a new name or price reaches them when you press Push. Locations with their own price keep it.

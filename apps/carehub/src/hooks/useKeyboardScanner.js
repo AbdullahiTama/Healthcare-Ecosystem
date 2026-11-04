@@ -70,3 +70,22 @@ export function useKeyboardScanner({ snapshot, onScan, ignore }, { window: onWin
 
   return onKeyDown
 }
+
+// Scans while a dialog is open belong to that dialog: keys typed anywhere
+// inside it (its footer buttons too) or with nothing focused. `area` is a ref
+// to an element inside the dialog's content; `enabled` is whether the dialog
+// is showing. Text areas are left alone.
+export function useDialogKeyboardScanner(area, { snapshot, onScan, ignore }, { enabled = true } = {}) {
+  return useKeyboardScanner({
+    ignore: (e) => {
+      const dialog = area.current?.closest('[role="dialog"]')
+      const t = e.target
+      if (!dialog || !t || t.tagName === 'TEXTAREA' || t.isContentEditable) return true
+      if (!(dialog.contains(t) || t === document.body)) return true
+      return !!ignore?.(e)
+    },
+    snapshot,
+    onScan,
+  }, { window: true, enabled })
+}
+

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useDialogKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { theme } from '../../styles/theme'
 import { Modal, Inp, GhostBtn, TealBtn } from '../../components/ui'
 import { locationName, parseBranchPrice } from './catalogueRules'
@@ -15,6 +16,14 @@ export default function CarryDialog({ show, items, locations, busy, onCarry, onC
   useEffect(() => { if (show) { setChosen([]); setPrice(''); setError('') } }, [show])
 
   const single = items.length === 1
+
+  // No barcode field here: a USB scan into the price (or onto Carry) is undone
+  // and explained, never saved as a price or pressing a button.
+  const scanArea = useRef(null)
+  useDialogKeyboardScanner(scanArea, {
+    snapshot: () => ({ price }),
+    onScan: (code, before) => { setPrice(before.price); setError('Scan ignored (' + code + '): there is no barcode field here, so nothing was changed.') },
+  }, { enabled: show })
   const toggle = (id, on) => setChosen((c) => (on ? [...c, id] : c.filter((x) => x !== id)))
 
   function submit() {
@@ -29,7 +38,7 @@ export default function CarryDialog({ show, items, locations, busy, onCarry, onC
     <Modal show={show} onClose={onClose} title={title}
       footer={<><GhostBtn onClick={onClose} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
         <TealBtn onClick={submit} disabled={busy} style={{ flex: 1, padding: '12px' }}>{busy ? 'Carrying…' : 'Carry'}</TealBtn></>}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div ref={scanArea} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div role='note' style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep }}>
           Locations that do not have {single ? 'this item' : 'an item'} get it at stock 0, at the default price. Items a location stopped carrying start again. Nothing already in stock changes.
         </div>

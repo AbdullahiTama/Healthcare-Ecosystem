@@ -7,6 +7,7 @@ import { isDuplicateError } from '../../lib/dbErrors'
 import { theme } from '../../styles/theme'
 import { SectionHead, ConfirmDialog, Sel, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
 import { usePlanGate } from '../../hooks/usePlanGate'
+import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { RX_STATUSES, locationName } from './catalogueRules'
 import MasterItemCard from './MasterItemCard'
 import MasterItemForm from './MasterItemForm'
@@ -165,6 +166,36 @@ export default function MasterCatalog({ brand, role }) {
     }
   }
 
+  // A USB scanner types into whichever field has focus and presses Enter: on a
+  // focused Push or Archive button that pressed it, and on an open Push /
+  // Archive confirmation it confirmed. On the list a scan now searches the
+  // catalogue for the code at once (the search covers barcodes), wherever
+  // focus is, with whatever it typed undone. With a confirmation open a scan
+  // does nothing. The item form and the carry / location dialogs handle their
+  // own scans, so this one is off while they are open.
+  const rootRef = useRef(null)
+  const ownDialogOpen = formItem !== undefined || !!carryItems || !!locationsItemId
+  useKeyboardScanner({
+    ignore: (e) => {
+      const t = e.target
+      const root = rootRef.current
+      if (!root || !t || t.tagName === 'TEXTAREA' || t.isContentEditable) return true
+      return (t.tagName === 'INPUT' || t.tagName === 'SELECT') && !root.contains(t)
+    },
+    snapshot: () => ({ searchText, filters }),
+    onScan: (code, snap) => {
+      setFilters(snap.filters)
+      if (pushTarget || archiveTargets) {
+        setSearchText(snap.searchText)
+        showToast('Scan ignored (' + code + '): confirm or cancel first.', { type: 'warning' })
+        return
+      }
+      setSearchText(code)
+      setFilters((f) => ({ ...f, search: code }))
+      showToast('Searching the catalogue for barcode ' + code + '.', { type: 'info' })
+    },
+  }, { window: true, enabled: isOwner && !ownDialogOpen })
+
   const select = (id, on) => setSelected((s) => (on ? [...s, id] : s.filter((x) => x !== id)))
   const allOnPage = page.items.filter((i) => !i.archived_at)
   const allSelected = allOnPage.length > 0 && allOnPage.every((i) => selected.includes(i.id))
@@ -181,7 +212,7 @@ export default function MasterCatalog({ brand, role }) {
   const to = Math.min(offset + page.items.length, page.total)
 
   return (
-    <div>
+    <div ref={rootRef}>
       <SectionHead title='Master Catalog' sub='Every product of your business in one list. Carry items at your locations and keep them in step.'
         btn='+ Add item' onBtn={() => { if (allow('adding products')) setFormItem(null) }}
         extraBtns={locations.length > 1 ? [{ label: 'Stock transfers', icon: <ArrowLeftRight size={14} aria-hidden='true' />, onClick: () => navigate('/dashboard/transfers') }] : []} />

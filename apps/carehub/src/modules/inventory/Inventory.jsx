@@ -15,7 +15,7 @@ import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidF
 import { findAllDuplicateGroups, createDuplicateIndex } from '../../lib/productMatches'
 import { intentKey } from '../../lib/intentKey'
 import { findProductByBarcode } from '../../lib/barcodeScanner'
-import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
+import { useKeyboardScanner, useDialogKeyboardScanner as useScansInDialog } from '../../hooks/useKeyboardScanner'
 import { upsertProducts, removeProducts, toRows } from './productListState'
 import { CatalogStatusBanner, CatalogSkeleton } from './components/CatalogStatus'
 import { theme } from '../../styles/theme'
@@ -941,23 +941,6 @@ function keeperOf(group) {
     if (aScore !== bScore) return bScore - aScore
     return (b.stock || 0) - (a.stock || 0)
   })[0]
-}
-
-// Scans while one of this module's dialogs is open belong to that dialog: keys
-// typed anywhere inside it (its footer buttons too) or with nothing focused.
-// `area` is an element inside the dialog's content.
-function useScansInDialog(area, { snapshot, onScan, ignore }) {
-  useKeyboardScanner({
-    ignore: (e) => {
-      const dialog = area.current?.closest('[role="dialog"]')
-      const t = e.target
-      if (!dialog || !t || t.tagName === 'TEXTAREA' || t.isContentEditable) return true
-      if (!(dialog.contains(t) || t === document.body)) return true
-      return !!ignore?.(e)
-    },
-    snapshot,
-    onScan,
-  }, { window: true })
 }
 
 function ProductModal({ product, products = [], perms, onSave, onClose, showToast }) {

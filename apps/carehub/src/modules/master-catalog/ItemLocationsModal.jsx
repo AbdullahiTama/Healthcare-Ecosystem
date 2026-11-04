@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useDialogKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { fmt } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Modal, Inp, GhostBtn, TealBtn } from '../../components/ui'
@@ -11,7 +12,15 @@ const { navy, gray500, border, bg, warning } = theme
 export default function ItemLocationsModal({ item, locations, busy, onCarry, onStop, onClose }) {
   const [prices, setPrices] = useState({})
   const [errors, setErrors] = useState({})
-  useEffect(() => { setPrices({}); setErrors({}) }, [item?.id])
+  const [scanNotice, setScanNotice] = useState('')
+  useEffect(() => { setPrices({}); setErrors({}); setScanNotice('') }, [item?.id])
+  // No barcode field here: a USB scan into a price (or onto Stop carrying,
+  // Carry, Set price) is undone and explained. Hooks run before the early return.
+  const scanArea = useRef(null)
+  useDialogKeyboardScanner(scanArea, {
+    snapshot: () => ({ prices }),
+    onScan: (code, before) => { setPrices(before.prices); setScanNotice('Scan ignored (' + code + '): there is no barcode field here, so nothing was changed.') },
+  }, { enabled: !!item })
   if (!item) return null
 
   const rows = carryingByLocation(item, locations)
@@ -26,6 +35,7 @@ export default function ItemLocationsModal({ item, locations, busy, onCarry, onS
   return (
     <Modal show onClose={onClose} title={`${item.name} at each location`}
       footer={<GhostBtn onClick={onClose} style={{ flex: 1, padding: '12px' }}>Done</GhostBtn>}>
+      <div ref={scanArea} role='status' aria-live='polite' style={{ fontSize: '13px', color: theme.danger, marginBottom: scanNotice ? '10px' : 0 }}>{scanNotice}</div>
       <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {rows.map((r) => {
           const id = r.location.id
