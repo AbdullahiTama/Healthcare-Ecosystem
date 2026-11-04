@@ -3,7 +3,7 @@
 2026-11-04. Client only, no database change. The same fix as Purchases
 (`Purchases-Editing-and-Analytics.md`, "USB scanner routing") and the POS (`POS-Barcode-Scanning.md`).
 Stock Management's **Inventory** tab is this same screen; its **Stock Validation** tab is covered at the end;
-**Stock History** has no inputs. The Master Catalog and Stock Transfers have their own sections at the end. Expenses (no barcode field: scans are ignored) is in `Expense-Budgets.md`.
+**Stock History** has no inputs. The Master Catalog and Stock Transfers have their own sections at the end. Expenses (no barcode field: scans are ignored) is in `Expense-Budgets.md`; Debts is the last section.
 
 ## Problem
 
@@ -126,4 +126,26 @@ security as the existing item search (`sendable`). No permission, write or serve
 **Tests:** `transfers/__tests__/StockTransfers.scanner.test.jsx`, 11 tests, and the lookup's query in
 `transferRules.test.js`. 10 of the 11 fail against the previous screens (the hand-typing check only because
 its setup adds the item by scan); fields outside the screen are left alone.
+
+## Debts
+
+**Problem:** Debts has no barcode field, but a scan typed its code into whichever field had focus: Record Debt's Total
+Amount or Amount Already Paid (a 12-digit code is a valid amount), the party name, the search, or, inside an opened
+debt, the POS sale view's quantities, prices, discount and amount received / refunded, or the supplier payment dialog.
+The scanner's Enter pressed a focused **Save Debt**, **Mark paid** in the Record payment dialog, or a row's **Mark
+paid**, which settles a hand-entered debt at once with no confirmation.
+
+**Fix (`Debts.jsx`, window listener while the screen is mounted):** a scan anywhere on the screen, its dialogs
+included, puts the field it was typed into back as it was, shows "Scan ignored (…): Debts has no barcode field, so
+nothing was changed.", and presses nothing. Text areas (Description, notes) and fields outside the screen are left
+alone.
+
+The opened sale and supplier-payment dialogs belong to other modules, so their state cannot be snapshotted from Debts.
+The shared hook therefore gained `fieldSnapshot` / `restoreField` (`src/hooks/useKeyboardScanner.js`): the value of the
+field the scan began in, put back the way typing would (native value setter plus an `input` / `change` event), so the
+owning component's `onChange` records it, whoever owns it.
+
+**Tests:** `debts/Debts.scanner.test.jsx`, 10 tests (amounts, party name, Save Debt, both Mark paid buttons, search,
+no-suffix scanner; Description, hand typing and outside fields untouched); 7 fail against the previous screen.
+`hooks/__tests__/useKeyboardScanner.restore.test.jsx` covers restoring a field owned by another component.
 

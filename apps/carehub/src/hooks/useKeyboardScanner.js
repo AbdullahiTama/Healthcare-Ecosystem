@@ -89,3 +89,21 @@ export function useDialogKeyboardScanner(area, { snapshot, onScan, ignore }, { e
   }, { window: true, enabled })
 }
 
+
+// The field a scan was typed into and its value before the first scanned key,
+// for screens with no barcode field that only need the scan undone. It works on
+// any controlled input or select, whichever component owns its state (e.g. a
+// sale or supplier-payment dialog opened inside another module): restoreField
+// puts the value back the way typing would, so React's onChange records it.
+export function fieldSnapshot(target) {
+  const el = target && (target.tagName === 'INPUT' || target.tagName === 'SELECT') && target.type !== 'checkbox' && target.type !== 'radio' ? target : null
+  return el ? { el, value: el.value } : null
+}
+
+export function restoreField(snap) {
+  const el = snap?.el
+  if (!el || !el.isConnected || el.value === snap.value) return
+  const proto = el.tagName === 'SELECT' ? window.HTMLSelectElement.prototype : window.HTMLInputElement.prototype
+  Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, snap.value)
+  el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }))
+}

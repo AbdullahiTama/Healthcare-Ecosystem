@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useKeyboardScanner, fieldSnapshot, restoreField } from '../../hooks/useKeyboardScanner'
 import { debtTotals, matchesParty } from './debtTotals'
 import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck } from 'lucide-react'
 import { debtRepository } from './repositories'
@@ -149,6 +150,29 @@ export default function Debts({ brand, role, perms, staffName }) {
     }
   }
 
+  // A USB barcode scanner types the code into whichever field has focus, then
+  // presses Enter. Debts has no barcode field, so a scan is never meant here:
+  // it typed the code into a debt's amount, a payment or refund amount, a
+  // quantity or price in an opened sale, or the search, and its Enter pressed a
+  // focused Save Debt or Mark paid (which settles a hand-entered debt at once).
+  // A scan anywhere on this screen, its dialogs included, now puts the field it
+  // was typed into back as it was, is explained, and presses nothing. Text areas
+  // (Description, notes) and fields outside this screen are left alone.
+  const rootRef = useRef(null)
+  useKeyboardScanner({
+    ignore: (e) => {
+      const t = e.target
+      const root = rootRef.current
+      if (!root || !t || t.tagName === 'TEXTAREA' || t.isContentEditable) return true
+      return (t.tagName === 'INPUT' || t.tagName === 'SELECT') && !root.contains(t)
+    },
+    snapshot: (e) => fieldSnapshot(e.target),
+    onScan: (code, field) => {
+      restoreField(field)
+      showToast('Scan ignored (' + code + '): Debts has no barcode field, so nothing was changed.', { type: 'warning' })
+    },
+  }, { window: true })
+
   const filtered = debts.filter(d => matchesParty(d, search) && (!filterMonth || d.created_at?.startsWith(filterMonth)))
   const isFiltered = !!search.trim() || !!filterMonth
   const { owedToUs, weOwe } = debtTotals(debts)
@@ -157,7 +181,7 @@ export default function Debts({ brand, role, perms, staffName }) {
   const filterLabel = [search.trim() && `"${search.trim()}"`, filterMonth && new Date(filterMonth + '-01T00:00:00').toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })].filter(Boolean).join(' · ')
 
   return (
-    <div>
+    <div ref={rootRef}>
       <SectionHead title='Debts' sub='Track money owed to you and money you owe' btn='+ Record Debt' onBtn={() => setShowAdd(true)} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
