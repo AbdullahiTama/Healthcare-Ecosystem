@@ -1,7 +1,9 @@
-# Inventory: USB barcode scanners
+# Inventory and Stock Management: USB barcode scanners
 
-2026-11-04. Client only, no database change. Third of three screens given the same fix: Purchases
+2026-11-04. Client only, no database change. The same fix as Purchases
 (`Purchases-Editing-and-Analytics.md`, "USB scanner routing") and the POS (`POS-Barcode-Scanning.md`).
+Stock Management's **Inventory** tab is this same screen; its **Stock Validation** tab is covered at the end;
+**Stock History** has no inputs.
 
 ## Problem
 
@@ -48,3 +50,28 @@ button already did, and the edit dialog applies the same permissions.
 hand typing (product form); Units, + Add Stock button, batch label (Restock); nothing focused, search box,
 unknown code, typed barcode search, fields outside Inventory (list). 10 fail against the previous Inventory;
 the other 3 check what must not change. Not yet tried with a physical scanner.
+
+## Stock Management ▸ Stock Validation
+
+**Problem:** the count worksheet's Adjustment quantity clamps what is typed to 10000
+(`parseAdjustmentQty`), so a scan with focus there became a **10000 unit adjustment**. Scanning could not add
+a product to the count: the search box matched barcodes, but Enter did nothing.
+
+**Fix (`StockValidation.jsx`, same hook, window listener while the tab is shown):** a scan anywhere on the
+tab puts the worksheet, the search text and the save's request key back as they were before the first
+scanned key, then looks the code up with `findProductByBarcode`:
+
+- a product not yet on the count is added ("Added: …") and focus moves to its Adjustment quantity, ready
+  for the counted number; one already on it keeps its quantity and its row is shown, as a click does;
+- an unknown code goes into search with "No product has the barcode …";
+- with the Validation Summary open, a scan changes nothing ("Close the summary to add scanned products.")
+  and its Enter does not press Save Validation.
+
+The request key is restored with the worksheet so that retrying a save whose result was unknown still
+reuses its key (the server's protection against applying one count twice). Quantity inputs are now named
+per product ("Adjustment quantity for …"), and search says it takes barcodes.
+
+**Tests:** `StockValidation.scanner.test.jsx`, 9 tests (nothing focused, from a quantity, product already
+counted, search box, unknown code, no-suffix scanner, summary open, hand typing, fields outside). 8 fail
+against the previous screen (the hand-typing check only because its setup adds the product by scan).
+

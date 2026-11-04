@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { Search, Plus, Minus, Package } from 'lucide-react'
 import { stockValidationRepository, isCountRefusal } from './repositories'
 import { intentKey } from '../../lib/intentKey'
@@ -7,6 +7,8 @@ import { SessionUnavailableError } from '../../lib/sessionFetch'
 import { theme } from '../../styles/theme'
 import { Pill, Modal, GhostBtn, TealBtn, Empty, useToast, Toast } from '../../components/ui'
 import { fmt } from '../../lib/utils'
+import { findProductByBarcode } from '../../lib/barcodeScanner'
+import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
 
 const REASONS = [
   'Physical stock discrepancy',
@@ -91,11 +93,13 @@ export default function StockValidation({ brand, products, loadProducts }) {
     })
   }, [products, categoryFilter, search])
 
-  function addProduct(product) {
-    const alreadyExists = worksheet.some(w => w.product.id === product.id)
+  // `base`: the worksheet to add to (a scan passes the worksheet as it was
+  // before the scanner's keys). Returns the product's row index.
+  function addProduct(product, base = worksheet) {
+    const alreadyExists = base.some(w => w.product.id === product.id)
     if (alreadyExists) {
       showToast('This product is already on the validation screen', { type: 'warning' })
-      const rowIndex = worksheet.findIndex(w => w.product.id === product.id)
+      const rowIndex = base.findIndex(w => w.product.id === product.id)
       const rowEl = rowRefs.current[rowIndex]
       if (rowEl) {
         rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -103,17 +107,57 @@ export default function StockValidation({ brand, products, loadProducts }) {
         rowEl.style.background = theme.warningBg
         setTimeout(() => { rowEl.style.background = '' }, 1500)
       }
-      return
+      return rowIndex
     }
     requestKey.current = null
-    setWorksheet([...worksheet, {
+    setWorksheet([...base, {
       product,
       currentStock: product.stock,
       adjustmentQty: 0,
       direction: '+',
       reason: '',
     }])
+    return base.length
   }
+
+  // A USB scanner types into whichever field has focus and presses Enter. On
+  // a count that is often a row's Adjustment quantity, which clamps to 10000:
+  // a scanned code became a 10000 unit adjustment. A scan anywhere on this tab
+  // is now a scan: the worksheet and search go back to how they were before
+  // the first scanned key, and the product is added to the count (or its row
+  // shown), with focus on its quantity for the counted number. While the
+  // summary is open a scan changes nothing (its Enter must not press Save).
+  const rootRef = useRef(null)
+  const [focusRow, setFocusRow] = useState(null)
+  useEffect(() => {
+    if (focusRow == null) return
+    document.getElementById(`adjustment-qty-${focusRow}`)?.focus()
+    setFocusRow(null)
+  }, [focusRow])
+  useKeyboardScanner({
+    ignore: (e) => {
+      const t = e.target
+      const root = rootRef.current
+      if (!root || !t || t.tagName === 'TEXTAREA' || t.isContentEditable) return true
+      return (t.tagName === 'INPUT' || t.tagName === 'SELECT') && !root.contains(t)
+    },
+    snapshot: () => ({ worksheet, search, requestKey: requestKey.current }),
+    onScan: (code, snap) => {
+      setWorksheet(snap.worksheet)
+      setSearch(snap.search)
+      requestKey.current = snap.requestKey
+      if (showSummary) { showToast('Close the summary to add scanned products.', { type: 'warning' }); return }
+      const match = findProductByBarcode(products, code)
+      if (!match) {
+        setSearch(code)
+        showToast('No product has the barcode ' + code + '.', { type: 'warning' })
+        return
+      }
+      const isNew = !snap.worksheet.some(w => w.product.id === match.id)
+      setFocusRow(addProduct(match, snap.worksheet))
+      if (isNew) showToast('Added: ' + match.name, { type: 'success' })
+    },
+  }, { window: true })
 
   function addAllInCategory() {
     const newItems = filteredProducts.filter(p =>
@@ -205,12 +249,12 @@ export default function StockValidation({ brand, products, loadProducts }) {
   }
 
   return (
-    <>
+    <div ref={rootRef}>
       <div style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
             <Search size={15} color={theme.gray400} style={{ flexShrink: 0 }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search products...'
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search name, generic name or barcode...' aria-label='Search products'
               style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: theme.navy, minWidth: 0 }} />
           </div>
           {categoryFilter !== 'All' && (
@@ -285,7 +329,7 @@ export default function StockValidation({ brand, products, loadProducts }) {
                           e.preventDefault()
                         }
                       }}
-                      aria-label="Adjustment quantity"
+                      aria-label={`Adjustment quantity for ${item.product.name}`}
                       aria-describedby={showInlineError ? errorId : undefined}
                       id={`adjustment-qty-${index}`}
                       style={{ width: '80px', padding: '8px', borderRadius: theme.radius.md, border: `1px solid ${isNegative ? theme.danger : theme.border}`, fontSize: '16px', fontWeight: '700', textAlign: 'center' }} />
@@ -358,6 +402,6 @@ export default function StockValidation({ brand, products, loadProducts }) {
       </Modal>
 
       <Toast msg={toastMsg} type={toastType} />
-    </>
+    </div>
   )
 }
