@@ -26,7 +26,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A9 | Low | Debt | About 600 `no-unused-vars` warnings | Open, tracked in Linting.md |
 | A12 | High | POS (production defect) | Re-holding an edited held sale is refused (`permission denied for table sales`); duplicate held sales; carts lost when leaving the POS | **Closed 2026-11-02**: grant live, app deployed and in use; owner review of 4 double-charged pairs pending |
 | A13 | Medium | Importer operating models | Centralised / Decentralised models, representative ledger and switching are code complete; migration not applied; four owner decisions open | Open: apply + owner decisions |
-| A14 | Medium | Payments | Reported ~1% reduction in amounts: not reproduced in code or live data; Paystack's fee was not stored, so bank deposits could not be matched to payments | Open: apply migration, then match deposits |
+| A14 | Medium | Payments | Reported ~1% reduction in amounts: not reproduced in code or live data; Paystack's fee was not stored, so bank deposits could not be matched to payments | Open: migration applied 2026-11-04; confirm backfill, then match deposits |
 
 ## 2. Items
 
@@ -212,9 +212,10 @@ settlement (webhook and redirect), the 48-hour Paystack comparison fills it in, 
 (`backfillProviderFees`, every 6 hours, up to 25 per pass) asks Paystack about older payments, so the October payments
 backfill on their own. Storing the fee never changes or blocks a settlement. Verified by 35 PGlite checks
 (`scripts/db-tests/paymentProviderFee.pglite.mjs`) and `shared-payments/src/__tests__/providerFee.test.js` (29).
-**Migration not applied to production.**
+**Migration applied to production 2026-11-04 (version 20261104071227)**; the rolled-back live probe is in its header.
+The app code (`62e1292`) records fees once CareFind and CareHub are deployed.
 
-**To close:** apply the migration and update its status header; after the next reconciliation pass confirm every
+**To close:** after the deploy and the next `fees` reconciliation step, confirm every
 settled payment has a fee (`select count(*) from payment_intents where status in ('settled','refunded') and
 provider_fee_kobo is null and purpose not like '%\_wallet'` returns 0); match `provider_net_kobo` against the
 Paystack settlements export or the bank statement. If a ~1% gap remains in POS or report figures (which never touch

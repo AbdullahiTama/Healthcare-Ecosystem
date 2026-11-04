@@ -1,8 +1,13 @@
 -- carefind_20270103_payment_provider_fee
 --
--- Status: NOT APPLIED. Tested on PGlite (scripts/db-tests/paymentProviderFee.pglite.mjs) against the live shape of
--- payment_intents and its guard as read on 2026-11-04. Apply only after review, then update this line with the
--- version and the verification evidence.
+-- Status: APPLIED TO PRODUCTION 2026-11-04 (Supabase migration version 20261104071227). Its own verify block passed.
+-- Tested beforehand on PGlite (scripts/db-tests/paymentProviderFee.pglite.mjs, 35 checks). Pre-check: payment_intents
+-- had 19 columns, 69 rows, 12 settled, and none of the new names existed. Live probe afterwards, inside a DO block that
+-- raised and rolled back (0 rows carried a fee before and after): the backfill list returned all 12 settled payments;
+-- recording N14.25 on cf_topup_c7ccc152_cf9262f078f5 (N950) gave net N935.75 with status and amount untouched;
+-- repeat -> already_recorded, different fee -> fee_conflict, wrong amount -> amount_mismatch, wrong transaction id ->
+-- transaction_mismatch; a direct UPDATE of the stored fee was refused; EXECUTE held by service_role only (not anon or
+-- authenticated) on both functions. Security advisor afterwards: no finding mentions the new columns or functions.
 --
 -- PROBLEM
 --   Paystack keeps its processing fee (1.5%, plus N100 at N2,500 and above, capped at N2,000) before it pays money
