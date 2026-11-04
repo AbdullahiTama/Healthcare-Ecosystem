@@ -3,7 +3,7 @@
 2026-11-04. Client only, no database change. The same fix as Purchases
 (`Purchases-Editing-and-Analytics.md`, "USB scanner routing") and the POS (`POS-Barcode-Scanning.md`).
 Stock Management's **Inventory** tab is this same screen; its **Stock Validation** tab is covered at the end;
-**Stock History** has no inputs. The Master Catalog and Stock Transfers have their own sections at the end. Expenses (no barcode field: scans are ignored) is in `Expense-Budgets.md`; Debts is the last section.
+**Stock History** has no inputs. The Master Catalog and Stock Transfers have their own sections at the end. Expenses (no barcode field: scans are ignored) is in `Expense-Budgets.md`; Debts and Clients are the last sections.
 
 ## Problem
 
@@ -148,4 +148,19 @@ owning component's `onChange` records it, whoever owns it.
 **Tests:** `debts/Debts.scanner.test.jsx`, 10 tests (amounts, party name, Save Debt, both Mark paid buttons, search,
 no-suffix scanner; Description, hand typing and outside fields untouched); 7 fail against the previous screen.
 `hooks/__tests__/useKeyboardScanner.restore.test.jsx` covers restoring a field owned by another component.
+
+## Clients
+
+**Problem:** Clients has no barcode field, but a scan typed its code into whichever field had focus. In **Phone Number**
+the digits look like a real phone number, so a client could be saved with a scanned code as their phone. The search
+and the history filters took the code too. The scanner's Enter pressed a focused **Add Client**, the CSV **Import**,
+**Start a new consultation** (leaving the page) or **Export history**.
+
+**Fix (`Clients.jsx`, window listener while the screen is mounted, same as Debts):** a scan anywhere on the screen, its
+dialogs included, puts the field it was typed into back (`fieldSnapshot` / `restoreField`), shows "Scan ignored (…):
+Clients has no barcode field, so nothing was changed.", and presses nothing. The Notes text area and fields outside the
+screen are left alone.
+
+**Tests:** `clients/Clients.scanner.test.jsx`, 8 tests (Phone Number, Add Client, search, New consultation, no-suffix
+scanner; Notes, hand typing and outside fields untouched); 5 fail against the previous screen.
 

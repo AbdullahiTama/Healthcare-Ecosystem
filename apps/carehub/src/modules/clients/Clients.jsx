@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useKeyboardScanner, fieldSnapshot, restoreField } from '../../hooks/useKeyboardScanner'
 import { Users, UserPlus, DollarSign, Search, Download, Upload, ShoppingCart, Calendar, Landmark, Clipboard, History, FileUp, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { clientRepository, isDuplicateError } from './repositories'
@@ -372,10 +373,32 @@ export default function Clients({ brand, role, perms }) {
   const newThisMonth = clients.filter(c => c.created_at?.startsWith(thisMonth)).length
   const totalSpend = clients.reduce((s, c) => s + (c.total_spend || 0), 0)
 
+  // A USB barcode scanner types the code into whichever field has focus, then
+  // presses Enter. Clients has no barcode field, so a scan is never meant here:
+  // in Phone Number the digits look like a real phone number, and its Enter
+  // pressed a focused Add Client, Import, consultation or export button. A scan
+  // anywhere on this screen, its dialogs included, now puts the field it was
+  // typed into back as it was, is explained, and presses nothing. The Notes text
+  // area and fields outside this screen are left alone.
+  const rootRef = useRef(null)
+  useKeyboardScanner({
+    ignore: (e) => {
+      const t = e.target
+      const root = rootRef.current
+      if (!root || !t || t.tagName === 'TEXTAREA' || t.isContentEditable) return true
+      return (t.tagName === 'INPUT' || t.tagName === 'SELECT') && !root.contains(t)
+    },
+    snapshot: (e) => fieldSnapshot(e.target),
+    onScan: (code, field) => {
+      restoreField(field)
+      showToast('Scan ignored (' + code + '): Clients has no barcode field, so nothing was changed.', { type: 'warning' })
+    },
+  }, { window: true })
+
   return (
     <>
     <style>{`.spin{animation:spin 0.8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    <div>
+    <div ref={rootRef}>
       <SectionHead title='Clients' sub='All your client and patient records' btn='+ Add Client' onBtn={() => setShowAdd(true)}
         extraBtns={[
           { label: 'Upload CSV', icon: <Upload size={14} />, onClick: () => setShowUpload(true) },
