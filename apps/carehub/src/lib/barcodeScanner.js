@@ -3,6 +3,15 @@
 // in keyboard mode, which type the code into the focused field. Callers fall
 // back to typing the number when neither is available.
 
+// The product a scanned or typed barcode belongs to: exact match after
+// trimming, the POS rule (docs/architecture/POS-Barcode-Scanning.md). A partial
+// code never matches. Used by Purchases and Inventory.
+export function findProductByBarcode(products, code) {
+  const raw = String(code || '').trim()
+  if (!raw) return null
+  return (products || []).find(p => p.barcode && String(p.barcode).trim() === raw) || null
+}
+
 export const BARCODE_FORMATS = ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
 
 export function canScanWithCamera() {

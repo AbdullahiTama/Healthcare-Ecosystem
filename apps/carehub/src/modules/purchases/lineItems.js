@@ -20,14 +20,8 @@ export function isBlankItem(item) {
   return !String(item.name || '').trim() && !item.qty && !item.cost && !item.sell && !item.batch && !item.expiry && !String(item.barcode || '').trim()
 }
 
-// The product a scanned or typed barcode belongs to: exact match after
-// trimming, the POS rule (docs/architecture/POS-Barcode-Scanning.md). A partial
-// code never matches.
-export function findProductByBarcode(products, code) {
-  const raw = String(code || '').trim()
-  if (!raw) return null
-  return (products || []).find(p => p.barcode && String(p.barcode).trim() === raw) || null
-}
+// The product a scanned or typed barcode belongs to (lib/barcodeScanner.js).
+export { findProductByBarcode } from '../../lib/barcodeScanner'
 
 // 8 to 14 digits: the EAN-8 / UPC-A / EAN-13 / GTIN-14 family. Live purchases
 // show these typed into "Batch no.", so the form offers to move them.

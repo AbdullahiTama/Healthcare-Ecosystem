@@ -77,6 +77,8 @@ within 50 ms, ended by Enter/Tab or a 100 ms pause), so typing by hand is untouc
    "No product has the barcode …". A scan typed into the search box clears it after adding.
 3. The scanner's Enter/Tab is swallowed: no button is pressed and focus stays where it was.
 
+Inventory has the same fix (`Inventory-Barcode-Scanning.md`).
+
 Left alone: open dialogs (hold sale, out of stock), text areas, and inputs outside the POS screen. The Held,
 Recent and Credit tabs and the receipt screen are not covered. A scan with nothing focused now adds the
 product too. Cart quantity inputs gained an accessible name ("Quantity of …").

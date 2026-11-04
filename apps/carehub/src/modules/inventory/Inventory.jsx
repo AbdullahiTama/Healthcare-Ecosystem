@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Download, Upload, AlertTriangle, Package, DollarSign, Search, Camera,
@@ -14,6 +14,8 @@ import { PRODUCT_CATS } from '../../config/constants'
 import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
 import { findAllDuplicateGroups, createDuplicateIndex } from '../../lib/productMatches'
 import { intentKey } from '../../lib/intentKey'
+import { findProductByBarcode } from '../../lib/barcodeScanner'
+import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { upsertProducts, removeProducts, toRows } from './productListState'
 import { CatalogStatusBanner, CatalogSkeleton } from './components/CatalogStatus'
 import { theme } from '../../styles/theme'
@@ -91,7 +93,8 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     const pCat = p.cat || p.category || ''
     const pGeneric = p.generic_name || p.genericName || ''
     if (catFilter !== 'All' && pCat !== catFilter) return false
-    if (!(p.name.toLowerCase().includes(search.toLowerCase()) || pGeneric.toLowerCase().includes(search.toLowerCase()))) return false
+    const q = search.toLowerCase()
+    if (!(p.name.toLowerCase().includes(q) || pGeneric.toLowerCase().includes(q) || (q.trim() && String(p.barcode || '').toLowerCase().includes(q.trim())))) return false
     const isService = pCat === 'Services'
     if (stockFilter === 'low' && (isService || !(p.stock > 0 && p.stock <= (p.reorder_level || 5)))) return false
     if (stockFilter === 'out' && (isService || p.stock > 0)) return false
@@ -506,9 +509,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               stream.getTracks().forEach(t => t.stop())
               setScanning(false)
               const code = codes[0].rawValue
-              const match = products.find(p => p.barcode === code)
-              if (match) { setEditItem(match); showToast('Found: ' + match.name, { type: 'success' }) }
-              else { setSearch(code); showToast('Barcode: ' + code, { type: 'info' }) }
+              openScanned(code)
             }
           } catch (e) {}
         }, 300)
@@ -516,14 +517,41 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       }).catch(() => { setScanning(false); showToast('Camera access denied. Check your browser permissions and try again.', { type: 'error' }) })
     } else {
       const code = prompt('Enter barcode:')
-      if (code) { const m = products.find(p => p.barcode === code); if (m) setEditItem(m); else setSearch(code) }
+      if (code) openScanned(code)
     }
   }
+
+  // Every way a barcode reaches the list (camera, the fallback prompt, a USB
+  // scanner) does the same: open the product it belongs to, or search for it.
+  function openScanned(code) {
+    const match = findProductByBarcode(products, code)
+    if (match) { setEditItem(match); showToast('Found: ' + match.name, { type: 'success' }); return }
+    setSearch(String(code).trim())
+    showToast('No product has the barcode ' + String(code).trim() + '.', { type: 'info' })
+  }
+
+  // A USB scanner types into whichever field has focus and presses Enter. On
+  // the list (no dialog open) a scan opens its product wherever focus is,
+  // instead of piling digits into the search box or pressing a focused button.
+  // The dialogs handle their own scans (ProductModal, RestockModal); fields
+  // outside Inventory are left alone.
+  const inventoryRoot = useRef(null)
+  const dialogOpen = showAdd || !!editItem || !!showRestock || showUpload || showCleanup || !!duplicateWarning || !!deleteTarget
+  useKeyboardScanner({
+    ignore: (e) => {
+      const t = e.target
+      if (!inventoryRoot.current || !t || t.tagName === 'TEXTAREA' || t.isContentEditable) return true
+      if (t.closest?.('[role="dialog"], [aria-modal="true"]')) return true
+      return (t.tagName === 'INPUT' || t.tagName === 'SELECT') && !inventoryRoot.current.contains(t)
+    },
+    snapshot: () => ({ search }),
+    onScan: (code, snap) => { setSearch(snap.search); openScanned(code) },
+  }, { window: true, enabled: catalogReady && !scanning && !dialogOpen })
 
   return (
     <>
     <style>{`.spin{animation:spin 0.8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    <div>
+    <div ref={inventoryRoot}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <div><div style={{ fontSize: '20px', fontWeight: '900', color: navy }}>Inventory</div><div style={{ fontSize: '13px', color: gray500, marginTop: '3px' }}>Manage products, stock and CareFind listings</div></div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -578,7 +606,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
           <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search name or generic name...'
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search name, generic name or barcode...' aria-label='Search products'
             style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
         </div>
         <button onClick={startScan} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}><Camera size={15} /> Scan</button>
@@ -736,6 +764,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       {(showAdd || editItem) && (
         <ProductModal
           product={editItem}
+          products={products}
           perms={perms}
           showToast={showToast}
           onSave={async (data) => { await saveProduct(data, !!editItem); setShowAdd(false); setEditItem(null) }}
@@ -914,11 +943,41 @@ function keeperOf(group) {
   })[0]
 }
 
-function ProductModal({ product, perms, onSave, onClose, showToast }) {
+// Scans while one of this module's dialogs is open belong to that dialog: keys
+// typed anywhere inside it (its footer buttons too) or with nothing focused.
+// `area` is an element inside the dialog's content.
+function useScansInDialog(area, { snapshot, onScan, ignore }) {
+  useKeyboardScanner({
+    ignore: (e) => {
+      const dialog = area.current?.closest('[role="dialog"]')
+      const t = e.target
+      if (!dialog || !t || t.tagName === 'TEXTAREA' || t.isContentEditable) return true
+      if (!(dialog.contains(t) || t === document.body)) return true
+      return !!ignore?.(e)
+    },
+    snapshot,
+    onScan,
+  }, { window: true })
+}
+
+function ProductModal({ product, products = [], perms, onSave, onClose, showToast }) {
   const [form, setForm] = useState(product ? { ...product, cat: product.cat || product.category, expiry_date: product.expiry_date } : { emoji: '💊', cat: 'Medicines', list_on_carefind: true, show_price: true, sale_type: 'retail', price_unit: 'piece', min_purchase: '', expiry_date: '' })
   const [saving, setSaving] = useState(false)
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isEdit = !!product
+  // A USB scan anywhere in this dialog is the product's barcode: whatever it
+  // typed into Stock, a price or any other field is undone, the code goes into
+  // Barcode, and the scanner's Enter does not press Save.
+  const scanArea = useRef(null)
+  useScansInDialog(scanArea, {
+    snapshot: () => form,
+    onScan: (code, before) => {
+      setForm(() => ({ ...before, barcode: code }))
+      const owner = findProductByBarcode(products, code)
+      if (owner && owner.id !== product?.id) showToast('Barcode ' + code + ' already belongs to ' + owner.name + '.', { type: 'warning' })
+      else showToast('Scanned ' + code + ' into Barcode.', { type: 'info' })
+    },
+  })
   const canEditPrice = !isEdit || perms?.canEditPrice
 
   const isService = (form.cat || form.category) === 'Services'
@@ -964,7 +1023,7 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
   return (
     <Modal show title={isEdit ? 'Edit Product' : 'Add New Product'} onClose={onClose}
       footer={<><GhostBtn onClick={onClose} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Add Product'}</TealBtn></>}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div ref={scanArea} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <Inp label='Product Name *' value={form.name} onChange={v => f('name', v)} placeholder='e.g. Amoxicillin 500mg' required />
         <Inp label='Generic / Common Name' value={form.generic_name} onChange={v => f('generic_name', v)} placeholder='e.g. Amoxicillin' />
         <Sel label='Category' value={form.cat} onChange={v => f('cat', v)} options={PRODUCT_CATS} />
@@ -1036,6 +1095,19 @@ function RestockModal({ product, onRestock, onClose, showToast }) {
   const [expiry, setExpiry] = useState('')
   const [saving, setSaving] = useState(false)
   const [key] = useState(() => intentKey('restock:' + product.id))
+  // This dialog has no barcode field: a scan into Units (or onto a button) is
+  // undone, never added as stock. Batch numbers may be scanned from a label,
+  // so the Batch field is left alone.
+  const scanArea = useRef(null)
+  useScansInDialog(scanArea, {
+    ignore: (e) => e.target?.id === 'restock-batch',
+    snapshot: () => ({ qty, expiry }),
+    onScan: (code, before) => {
+      setQty(before.qty)
+      setExpiry(before.expiry)
+      showToast('Scanned ' + code + ' was not added. Type the number of units to add.', { type: 'warning' })
+    },
+  })
   // A product tracked by batch must be received into a named batch (and an
   // expiry when tracked by expiry); the stock ledger refuses it otherwise.
   const tracking = product.tracking_mode || 'none'
@@ -1057,7 +1129,7 @@ function RestockModal({ product, onRestock, onClose, showToast }) {
   return (
     <Modal show title='Restock Product' onClose={onClose}
       footer={<><GhostBtn onClick={onClose} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handle} disabled={saving} aria-busy={saving} style={{ flex: 1, padding: '12px', opacity: saving ? 0.7 : 1, cursor: saving ? 'wait' : 'pointer' }}>{saving ? 'Saving...' : '+ Add Stock'}</TealBtn></>}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div ref={scanArea} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div style={{ padding: '12px', borderRadius: '10px', background: bg, display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
           <span style={{ color: gray500 }}>Current stock</span><span style={{ fontWeight: '700' }}>{product.stock} units</span>
         </div>
