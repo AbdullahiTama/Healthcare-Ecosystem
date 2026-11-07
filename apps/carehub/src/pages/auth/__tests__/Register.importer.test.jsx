@@ -67,9 +67,15 @@ describe('Register: Manufacturer / Importer', () => {
     }))
   })
 
-  it('does not ask other business types about representatives', async () => {
+  it('does not ask other business types about representatives, Wholesale / Distributor included', async () => {
     await act(async () => { root.render(<MemoryRouter><Register /></MemoryRouter>) })
     await click(btn(/^Pharmacies$/))
+    expect(text()).not.toContain('How do your representatives work?')
+    await act(async () => root.unmount())
+    root = createRoot(host)
+    await act(async () => { root.render(<MemoryRouter><Register /></MemoryRouter>) })
+    await click(btn(/^Wholesale \/ Distributor$/))
+    expect(text()).toContain('Business Information')
     expect(text()).not.toContain('How do your representatives work?')
   })
 })

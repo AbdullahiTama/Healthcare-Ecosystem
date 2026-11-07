@@ -313,5 +313,6 @@ manufacturer (`owner.manufacturer@carehub.test`, password unknown and left alone
 landing page redesign of 2026-09-02, so spec section 2 was unreachable from the form. On 2026-11-07 the owner had it
 restored: `BUSINESS_TYPES` lists Manufacturer / Importer again (the landing page lists it too, with its own note), the
 sign-up taxonomy test allows it the enterprise modules, and `Register.importer.test.jsx` drives the form through the
-operating-model choice. Wholesale stays off the form.
+operating-model choice. Wholesale / Distributor was restored the same day, without the operating-model question
+(the models are for importers and manufacturers).
 

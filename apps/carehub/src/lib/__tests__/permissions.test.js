@@ -290,6 +290,13 @@ describe('signup taxonomy (config/constants.js BUSINESS_TYPES)', () => {
     expect(ids('manufacturer_importer')).toEqual(expect.arrayContaining([...ENTERPRISE, 'representatives', 'company-account']))
   })
 
+  it('offers Wholesale / Distributor at sign-up, with the enterprise modules but not the representative pages', () => {
+    expect(BUSINESS_TYPES.map((t) => t.id)).toContain('wholesale')
+    expect(ids('wholesale')).toEqual(expect.arrayContaining(ENTERPRISE))
+    expect(ids('wholesale')).not.toContain('representatives')
+    expect(ids('wholesale')).not.toContain('company-account')
+  })
+
   it('never leaks clinical or enterprise modules into the signup taxonomy', () => {
     for (const { id } of BUSINESS_TYPES) {
       if (id === 'hospital') continue
@@ -297,8 +304,9 @@ describe('signup taxonomy (config/constants.js BUSINESS_TYPES)', () => {
         if (id === 'laboratory' && moduleId === 'lab') continue
         expect(ids(id), `${id} must not see ${moduleId}`).not.toContain(moduleId)
       }
-      // Manufacturer / Importer is the one enterprise type on the sign-up list; it never gets clinical modules either.
-      if (id === 'manufacturer_importer') continue
+      // Manufacturer / Importer and Wholesale / Distributor are the enterprise types on the sign-up list; they never get
+      // clinical modules either.
+      if (id === 'manufacturer_importer' || id === 'wholesale') continue
       for (const moduleId of ENTERPRISE) {
         expect(ids(id), `${id} must not see ${moduleId}`).not.toContain(moduleId)
       }

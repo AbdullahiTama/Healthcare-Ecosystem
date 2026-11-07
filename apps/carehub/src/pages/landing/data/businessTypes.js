@@ -14,6 +14,8 @@ import { BUSINESS_TYPES } from '../../../config/constants'
 //     get the appointments and consultation modules.
 //   - Manufacturer / Importer genuinely gets the operating models, the
 //     representative ledger and statements, Field, Orders & LPO and Stock & Batches.
+//   - Wholesale / Distributor genuinely gets Orders & LPO, Warehouses, Stock & Batches,
+//     Field and Territories, plus POS and inventory (no operating models).
 // Where a type has no distinct note, it gets the general operating note rather
 // than an invented specialty.
 const NOTES = {
@@ -26,6 +28,7 @@ const NOTES = {
   cosmetics: 'Product catalogue, stock levels, counter sales, staff and customer history.',
   haircare: 'Appointments, service menus, stylist assignments and the product stock behind the chair.',
   manufacturer_importer: 'Your sales representatives run centrally on the company POS or each with their own account, with credit supplies, payments, returns and statements per representative, field visits, orders and stock by batch.',
+  wholesale: 'Orders and LPOs, warehouses and stock by batch, field visits by your sales team, and point of sale with cost prices.',
   other: 'Sales, stock, staff, locations and reporting, shaped around the business you actually run.',
 }
 

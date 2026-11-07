@@ -15,9 +15,10 @@ CareHub carries two business-type taxonomies at once:
 1. **Legacy types** on rows created before the Sep 2026 Register redesign:
    `skincare, pharmacy, dental, optical, wellness, hospital, manufacturer_importer, wholesale`.
 2. **Signup taxonomy** in `src/config/constants.js` (`BUSINESS_TYPES`, the Register wizard and landing-page list):
-   `pharmacy, hospital, clinic, laboratory, aesthetic, spa, cosmetics, haircare, manufacturer_importer, other`.
+   `pharmacy, hospital, clinic, laboratory, aesthetic, spa, cosmetics, haircare, manufacturer_importer, wholesale, other`.
    `manufacturer_importer` was dropped in the Sep 2026 redesign and restored on 2026-11-07 (owner's decision): importers
-   choose an operating model on the form (see Importer-Operating-Models.md). `wholesale` is still legacy-only.
+   choose an operating model on the form (see Importer-Operating-Models.md). `wholesale` was restored the same day; it
+   gets the enterprise modules but no operating-model choice.
 
 Both must resolve in the registry. `getModulesForType` / `rolesForType` normalise any value the registry doesn't know (a typo, an empty string, `null`, a future addition) to `other`, so an unmapped business type can never produce an empty app.
 
@@ -35,6 +36,7 @@ Universal set (the `ALL_TYPES` gate, 18 modules):
 | haircare | appointments, consultations | Clients | skincare | Owner, Manager, Therapist, Receptionist, Cashier |
 | cosmetics | — | Clients | skincare | Owner, Manager, Receptionist, Cashier |
 | manufacturer_importer | the enterprise set, representatives (owner and ledger roles), my company account (representatives) | Clients | industry (with PV Tracker) | none (custom role names) |
+| wholesale | the enterprise set (no representatives pages) | Clients | industry (with PV Tracker) | none (custom role names) |
 | other | — | Clients | community_pharmacy (fallback) | Owner, Manager, Receptionist, Cashier |
 
 These follow the product notes in `src/pages/landing/data/businessTypes.js` (which are written against this registry). Clinical modules (`reception, triage, doctor, rx_inbox, lab, imaging`) stay with `hospital` — plus `lab` for stand-alone laboratories. Enterprise modules (`activity, discovery, orders, warehouses, stock, territories, messages, pv-tracker`) stay with `manufacturer_importer` / `wholesale`.
@@ -68,7 +70,7 @@ Checklist:
 4. `labelByType` if a module presents differently (e.g. `clients` → `Patients`).
 5. `ROLES_FOR_TYPE` — preset roles whose nav the type's modules can actually show (a neutralised role is worse than no role).
 6. ADR — add it to `getModuleTypeFromBusinessType` only.
-7. Tests — the `signup taxonomy (config/constants.js BUSINESS_TYPES)` block in `src/lib/__tests__/permissions.test.js` iterates `BUSINESS_TYPES` directly, so a new type is automatically held to: non-empty owner nav, wallet reachable, no clinical/enterprise leaks (`manufacturer_importer` is the one sign-up type allowed the enterprise set; it is still held to no clinical modules).
+7. Tests — the `signup taxonomy (config/constants.js BUSINESS_TYPES)` block in `src/lib/__tests__/permissions.test.js` iterates `BUSINESS_TYPES` directly, so a new type is automatically held to: non-empty owner nav, wallet reachable, no clinical/enterprise leaks (`manufacturer_importer` and `wholesale` are the sign-up types allowed the enterprise set; both are still held to no clinical modules).
 
 ## Test map
 
