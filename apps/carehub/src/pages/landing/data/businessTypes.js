@@ -12,6 +12,8 @@ import { BUSINESS_TYPES } from '../../../config/constants'
 //     inventory, cost prices and the ecommerce path to CareFind.
 //   - Appointment-driven types (clinic, spa, aesthetic, haircare) genuinely
 //     get the appointments and consultation modules.
+//   - Manufacturer / Importer genuinely gets the operating models, the
+//     representative ledger and statements, Field, Orders & LPO and Stock & Batches.
 // Where a type has no distinct note, it gets the general operating note rather
 // than an invented specialty.
 const NOTES = {
@@ -23,6 +25,7 @@ const NOTES = {
   spa: 'Appointments, service menus, therapist assignments and product sales in one place.',
   cosmetics: 'Product catalogue, stock levels, counter sales, staff and customer history.',
   haircare: 'Appointments, service menus, stylist assignments and the product stock behind the chair.',
+  manufacturer_importer: 'Your sales representatives run centrally on the company POS or each with their own account, with credit supplies, payments, returns and statements per representative, field visits, orders and stock by batch.',
   other: 'Sales, stock, staff, locations and reporting, shaped around the business you actually run.',
 }
 

@@ -202,9 +202,8 @@ the plan's locations or mix into the company's Locations figures (5.5).
 during the run (staff of an unlisted business could not sign in, applied as `carehub_20270104_staff_read_own_business`;
 two refused requests on a rep account's dashboard; Facility Discovery's blank filters) and a privacy leak the last
 fix exposed (Facility Discovery listed representative accounts; applied as
-`carehub_20270105_discovery_excludes_rep_accounts`). One new owner decision: the
-sign-up form no longer offers Manufacturer / Importer (removed 2026-09-02), so spec section 2 is unreachable from the
-form.
+`carehub_20270105_discovery_excludes_rep_accounts`). The sign-up form had stopped offering Manufacturer / Importer
+(removed 2026-09-02), leaving spec section 2 unreachable from the form; restored 2026-11-07 on the owner's decision.
 
 **To close:** owner decisions still open (§2):
 whether a Centralised supply should take stock out of the company count; whether POS sales should reduce a rep's

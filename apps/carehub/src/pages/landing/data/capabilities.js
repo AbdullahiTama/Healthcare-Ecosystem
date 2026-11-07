@@ -1,3 +1,5 @@
+import { BUSINESS_TYPES } from '../../../config/constants'
+
 // Capability figures for the marketing page.
 //
 // Every number here is a structural fact read out of the product source, not a
@@ -21,7 +23,7 @@ export const CAPABILITIES = [
     source: 'src/lib/permissions.js, MODULES',
   },
   {
-    value: '9',
+    value: String(BUSINESS_TYPES.length),
     label: 'Business types',
     detail: 'Each one gets its own navigation, dashboard and vocabulary.',
     source: 'src/config/constants.js, BUSINESS_TYPES',

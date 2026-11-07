@@ -10,6 +10,10 @@ export const BUSINESS_TYPES = [
   { id: 'spa',           icon: '🌿', name: 'Spas & Wellness Centres' },
   { id: 'cosmetics',     icon: '💄', name: 'Cosmetics & Beauty' },
   { id: 'haircare',      icon: '💇', name: 'Hair-Care & Salons' },
+  // Pharmaceutical importers and manufacturers choose an operating model (Centralised or Decentralised) on the form;
+  // see docs/architecture/Importer-Operating-Models.md. Back on the sign-up list since 2026-11-07 (it was dropped in
+  // the 2026-09-02 landing redesign, which left importers no way to register).
+  { id: 'manufacturer_importer', icon: '🏭', name: 'Manufacturer / Importer' },
   { id: 'other',         icon: '🏥', name: 'Other Healthcare' },
 ]
 

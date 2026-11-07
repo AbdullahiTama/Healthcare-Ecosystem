@@ -187,7 +187,7 @@ its products are forced to `list_on_carefind = false`, and it cannot list on the
 
 | Spec | Where |
 |---|---|
-| 2 Model chosen at registration | `/api/register-business` → `set_registration_operating_model` (verified live). **The sign-up form no longer offers Manufacturer / Importer** (removed from `BUSINESS_TYPES` on 2026-09-02); owner decision open, §11 |
+| 2 Model chosen at registration | Register form (Manufacturer / Importer, restored 2026-11-07) → `/api/register-business` → `set_registration_operating_model` (server verified live) |
 | 3.1 Company prices, central POS and stock, rep attribution | Reps are company staff; `canEditPrice` per role; sales carry `cashier_staff_id` |
 | 3.2 Individual ledger: supply, payment, return, transfer, all details | `record_rep_*`, `rep_ledger_entries/lines` (§3) |
 | 3.3 Account statement (opening, running, closing, company/rep details, position) | `rep_statement`, Representatives > Statement |
@@ -309,7 +309,9 @@ manufacturer (`owner.manufacturer@carehub.test`, password unknown and left alone
    refused requests on a rep account's dashboard, "Places to confirm" hidden there, Lagos search returns results and
    no rep account.
 
-**Owner decision found:** the sign-up form has not offered Manufacturer / Importer (or Wholesale) since the landing
-page redesign of 2026-09-02, and a test keeps enterprise modules out of the sign-up list. Spec section 2 needs it back
-on the form, or another onboarding route (for example the admin console).
+**Owner decision found, then taken:** the sign-up form had not offered Manufacturer / Importer (or Wholesale) since the
+landing page redesign of 2026-09-02, so spec section 2 was unreachable from the form. On 2026-11-07 the owner had it
+restored: `BUSINESS_TYPES` lists Manufacturer / Importer again (the landing page lists it too, with its own note), the
+sign-up taxonomy test allows it the enterprise modules, and `Register.importer.test.jsx` drives the form through the
+operating-model choice. Wholesale stays off the form.
 
