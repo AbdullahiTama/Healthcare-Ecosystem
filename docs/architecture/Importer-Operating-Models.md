@@ -187,7 +187,7 @@ its products are forced to `list_on_carefind = false`, and it cannot list on the
 
 | Spec | Where |
 |---|---|
-| 2 Model chosen at registration | Register form → `/api/register-business` → `set_registration_operating_model` |
+| 2 Model chosen at registration | `/api/register-business` → `set_registration_operating_model` (verified live). **The sign-up form no longer offers Manufacturer / Importer** (removed from `BUSINESS_TYPES` on 2026-09-02); owner decision open, §11 |
 | 3.1 Company prices, central POS and stock, rep attribution | Reps are company staff; `canEditPrice` per role; sales carry `cashier_staff_id` |
 | 3.2 Individual ledger: supply, payment, return, transfer, all details | `record_rep_*`, `rep_ledger_entries/lines` (§3) |
 | 3.3 Account statement (opening, running, closing, company/rep details, position) | `rep_statement`, Representatives > Statement |
@@ -262,3 +262,47 @@ Verification after applying:
 | Rep account | `rep_account`, off CareFind, no shop; the rep's login moved into it |
 | As the representative | sees only their own account; company catalogue readable; own statement ₦150; company products visible only as the public CareFind listing (existing public policy) |
 | Switch back to Centralised | 1 converted; reconciled; rep back in the company with their previous role; company stock 999 again; custody 2; balance ₦150; 2 history rows |
+
+## 11. Live end-to-end check (2026-11-06 to 2026-11-07)
+
+Driven through the live app at carefindhub.com with Playwright (a real browser), against production, on a dedicated QA
+company. Scripts are not in the repository; the evidence is below.
+
+**Test data.** "QA Importer E2E Ltd" (`owner.importer-e2e@carehub.test`), created through `/api/register-business`;
+three QA staff (`rep1`, `rep2`, `manager` `.manufacturer@carehub.test`, created with
+`mint_confirmed_auth_user` and the QA seed's password); three master-catalogue products. The email-verification and
+admin-approval steps were done in SQL (the `.test` inbox does not exist). Three QA products and the original QA
+manufacturer (`owner.manufacturer@carehub.test`, password unknown and left alone) are untouched apart from those products.
+
+| Area | Result |
+|---|---|
+| Registration choosing Decentralised | **Form:** Manufacturer / Importer is not offered (see below). **Server:** the same request the form sends created the company pending, `manufacturer_importer`, Decentralised, with a "Chosen at registration" history row. |
+| Owner, Decentralised from the start | Settings shows the model and history; adding both reps gave each their own account at once (REP-001, REP-002, "Own account"). |
+| Reps signing in, Decentralised | Own POS, Stock Management, Purchases, Field, Facility Discovery, My company account with the catalogue (company products and prices); no company admin or public modules. |
+| Switch to Centralised | Summary, confirm, reconciled; reps back as company staff with their previous role. |
+| Reps signing in, Centralised | **Failed first** (defect 1); after the fix: company POS, no stock or purchase management, own statement only, no catalogue tab. |
+| Every entry type (Centralised) | Supply ₦10,000 (custody, company stock unchanged); return left pending, approved from Awaiting approval (₦1,800); damaged return (company stock 200 → 199); transfer Ada → Bayo ₦2,700 (both balances); adjustment refused without a reference, then recorded; payment by the owner; payment by the Sales Manager role; reversal from the statement. Final balances Ada ₦1,300, Bayo ₦2,700, matching the database; every action in `audit_log`. |
+| Statement | Detailed and Summary views; opening and closing rows; position "Owes the company"; print view with company, rep, period and running balance; spreadsheet (Summary and Transactions sheets, closing 5300); Transactions register; Consolidated summary totals. |
+| Switch to Decentralised with a custody plan | Owner moved 2 of Ada's 4 Amoxil: reconciled (₦4,000 owed, 9 entries, 599 units before and after); company 194, Ada 2 + 5, Bayo 3; rep products off CareFind. |
+| Decentralised work and isolation | Supply moved 10 units company → Ada (₦10,300 owed); each rep's Stock Management shows only their own products; no company figures. |
+| Switch back, then forward again | Back: stock and custody restored, accounts archived, balances kept. Forward: "Gets their previous account back", still 2 rep accounts, stock back in each. 5 history rows. |
+| Facility Discovery, Financial Reports, Field, Demand | Open without error for the owner, a Decentralised rep, a Centralised rep and the Sales Manager. Facility search found 0: OpenStreetMap is not reachable from the test environment, and defect 3. |
+
+**Defects found and fixed**
+
+1. **Staff of a business not listed on CareFind could not sign in** ("No CareHub business or staff account matches
+   this email"). They could not read their own business row. Fixed by
+   `carehub_20270104_staff_read_own_business` (applied with the owner's approval). Also affected any unlisted
+   pharmacy or clinic with staff.
+2. **A rep running their own account got two refused requests on their dashboard**: the field-team check-in overview
+   (the database's manager check does not accept staff with the Owner role) and the daily stock alerts written to
+   the owner's notifications. `DashboardHome` now skips the overview for staff with the Owner role and sends their
+   alerts to their own notifications; "Places to confirm" is hidden in representative accounts for the same reason.
+3. **Facility Discovery's CareHub search returned nothing whenever a filter was left blank** (pre-existing, every
+   business type): blank filters were sent as '' and the database dropped every business with no LGA or city
+   recorded (all 13 in Lagos). `discoverFacilitiesPath` now leaves blank filters out.
+
+**Owner decision found:** the sign-up form has not offered Manufacturer / Importer (or Wholesale) since the landing
+page redesign of 2026-09-02, and a test keeps enterprise modules out of the sign-up list. Spec section 2 needs it back
+on the form, or another onboarding route (for example the admin console).
+

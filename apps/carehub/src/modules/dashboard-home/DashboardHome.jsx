@@ -45,9 +45,15 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
   const bType = brand?.business_type || brand?.type || 'skincare'
   const isHospital = bType === 'hospital'
   // Field team today: manufacturers and wholesalers, for whoever manages the field team (owner, a manager
-  // role, or "Manage field team").
-  const showFieldTeam = (bType === 'manufacturer_importer' || bType === 'wholesale') &&
+  // role, or "Manage field team"). A staff member whose role is "Owner" (a representative running their own
+  // account) is not the owner here: the database's manager check (manager_checkin_overview) refuses them, and
+  // there is no team to show.
+  const staffOwner = role === 'Owner' && !!staffId
+  const showFieldTeam = (bType === 'manufacturer_importer' || bType === 'wholesale') && !staffOwner &&
     canSeeAllActivity({ isOwner: role === 'Owner', role, perms })
+  // Stock alerts go to the owner's bell; a staff member with the Owner role gets them in their own (the owner
+  // notifications of the business belong to its owner by email, and the database refuses anyone else writing them).
+  const alertTo = staffOwner ? [{ staffId }] : [{ staffId: null }]
   const canSeeAppts = !perms?.nav || perms.nav.includes('appointments')
 
   // "Sales today" is the Sales & Accounts report for Today: the same query, the
@@ -135,25 +141,25 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
     async function raiseAlerts() {
       try {
         if (outStock.length > 0 && !sentToday('out_of_stock')) {
-          await notificationRepository.notify(brand.id, [{ staffId: null }], 'out_of_stock',
+          await notificationRepository.notify(brand.id, alertTo, 'out_of_stock',
             outStock.length + ' product' + (outStock.length === 1 ? '' : 's') + ' out of stock',
             names(outStock), '/dashboard/inventory?stock=out')
           markSent('out_of_stock')
         }
         if (lowStock.length > 0 && !sentToday('low_stock')) {
-          await notificationRepository.notify(brand.id, [{ staffId: null }], 'low_stock',
+          await notificationRepository.notify(brand.id, alertTo, 'low_stock',
             lowStock.length + ' product' + (lowStock.length === 1 ? '' : 's') + ' running low',
             names(lowStock), '/dashboard/inventory?stock=low')
           markSent('low_stock')
         }
         if (expiringSoon.length > 0 && !sentToday('product_expiring_soon')) {
-          await notificationRepository.notify(brand.id, [{ staffId: null }], 'product_expiring_soon',
+          await notificationRepository.notify(brand.id, alertTo, 'product_expiring_soon',
             expiringSoon.length + ' product' + (expiringSoon.length === 1 ? '' : 's') + ' expire within 60 days',
             names(expiringSoon), '/dashboard/inventory?expiry=expiring')
           markSent('product_expiring_soon')
         }
         if (expiredProducts.length > 0 && !sentToday('product_expired')) {
-          await notificationRepository.notify(brand.id, [{ staffId: null }], 'product_expired',
+          await notificationRepository.notify(brand.id, alertTo, 'product_expired',
             expiredProducts.length + ' product' + (expiredProducts.length === 1 ? '' : 's') + ' have expired',
             names(expiredProducts), '/dashboard/inventory?expiry=expired')
           markSent('product_expired')
@@ -172,7 +178,7 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
           if (v.medium.length > 0) parts.push(v.medium.length + ' steady seller' + (v.medium.length === 1 ? '' : 's'))
           if (v.slow.length > 0) parts.push(v.slow.length + ' not moving')
           if (parts.length > 0) {
-            await notificationRepository.notify(brand.id, [{ staffId: null }], 'sales_velocity',
+            await notificationRepository.notify(brand.id, alertTo, 'sales_velocity',
               '30-day sales velocity: ' + parts.join(', '),
               v.fast.length > 0 ? 'Top mover: ' + v.fast[0].name : null,
               '/dashboard/reports')

@@ -303,12 +303,23 @@ export async function dismissRepAddedFacility(id) {
   return removed
 }
 
+// The request for discover_facilities_cursor. A filter left blank is left OUT, so the function sees NULL ("no
+// filter"). Sent as '' it filters instead: `lga ILIKE '%' || '' || '%'` is NULL for a business with no LGA recorded,
+// which drops it, and live on 2026-11-06 every Lagos business had none, so a Lagos search found nothing.
+export function discoverFacilitiesPath({ state, lga, city, category, keyword, limit = 50, offset = 0 } = {}) {
+  const params = [['p_state', state], ['p_lga', lga], ['p_city', city], ['p_category', category || 'all'], ['p_keyword', keyword]]
+    .map(([k, v]) => [k, String(v ?? '').trim()])
+    .filter(([, v]) => v !== '')
+    .map(([k, v]) => k + '=' + encodeURIComponent(v))
+  return 'rpc/discover_facilities_cursor?' + [...params, 'p_limit=' + limit, 'p_cursor=' + offset].join('&')
+}
+
 // Internal CareFind facilities fetch — paged (state,lga,city) with optional category/keyword
 // Uses sbFetch pagedQuery internally; called by facilityDiscovery engine.
 // Kept in places.js as transport layer (no ranking/dedupe), intelligence lives in facilityDiscovery.js.
 export async function fetchCareFindFacilities({ state, lga, city, category, keyword, limit = 50, offset = 0 } = {}) {
   try {
-    const rpcResult = await sbFetch('rpc/discover_facilities_cursor?p_state=' + encodeURIComponent(state || '') + '&p_lga=' + encodeURIComponent(lga || '') + '&p_city=' + encodeURIComponent(city || '') + '&p_category=' + encodeURIComponent(category || 'all') + '&p_keyword=' + encodeURIComponent(keyword || '') + '&p_limit=' + limit + '&p_cursor=' + offset)
+    const rpcResult = await sbFetch(discoverFacilitiesPath({ state, lga, city, category, keyword, limit, offset }))
     if (rpcResult && rpcResult.rows) {
       return (rpcResult.rows || []).map(function (r) {
         const lat = r.latitude != null ? Number(r.latitude) : (r.lat != null ? Number(r.lat) : null)

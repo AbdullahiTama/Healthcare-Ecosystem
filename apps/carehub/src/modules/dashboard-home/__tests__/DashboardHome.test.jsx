@@ -57,7 +57,7 @@ function LocationProbe() {
   return <div data-testid="loc">{loc.pathname}</div>
 }
 
-async function mountHome({ today, all, appts, products = [], perms = {}, role = 'Owner', brand = BRAND } = {}) {
+async function mountHome({ today, all, appts, products = [], perms = {}, role = 'Owner', brand = BRAND, staffId = null } = {}) {
   const t = today ?? query()
   useSalesReportData.mockReturnValue({ ...t, data: Array.isArray(t.data) ? reportData(t.data) : t.data })
   useOpenSales.mockReturnValue(all ?? query())
@@ -69,7 +69,7 @@ async function mountHome({ today, all, appts, products = [], perms = {}, role = 
   await act(async () => {
     root.render(
       <MemoryRouter>
-        <DashboardHome brand={brand} products={products} role={role} perms={perms} />
+        <DashboardHome brand={brand} products={products} role={role} perms={perms} staffId={staffId} />
         <LocationProbe />
       </MemoryRouter>
     )
@@ -354,5 +354,31 @@ describe('Field team today on the dashboard home', () => {
   it('a pharmacy does not (out of scope)', async () => {
     m = await mountHome({ brand: { ...BRAND, business_type: 'pharmacy' } })
     expect(panel()).toBeNull()
+  })
+  // A representative running their own account (Decentralised) is staff with the Owner role: the database's manager
+  // check refuses them, and they have no team (found in the live end-to-end check, 2026-11-06).
+  it("a representative running their own account (staff with the Owner role) does not", async () => {
+    m = await mountHome({ brand: { ...BRAND, business_type: 'manufacturer_importer' }, staffId: 'staff-ada' })
+    expect(panel()).toBeNull()
+  })
+})
+
+describe('automatic stock alerts', () => {
+  let m
+  afterEach(async () => { if (m) { await m.unmount(); m = null } })
+  const LOW = [{ id: 'p1', name: 'Amoxil', stock: 2, reorder_level: 10, category: 'Drugs', price: 5 }]
+
+  beforeEach(() => { vi.clearAllMocks(); localStorage.clear() })
+
+  it("go to the owner's bell for the owner", async () => {
+    const { notificationRepository } = await import('../../notifications/repositories')
+    m = await mountHome({ products: LOW })
+    expect(notificationRepository.notify).toHaveBeenCalledWith('biz-1', [{ staffId: null }], 'low_stock', expect.any(String), 'Amoxil', expect.any(String))
+  })
+
+  it("go to their own bell for a staff member with the Owner role (the database refuses them the owner's)", async () => {
+    const { notificationRepository } = await import('../../notifications/repositories')
+    m = await mountHome({ products: LOW, staffId: 'staff-ada' })
+    expect(notificationRepository.notify).toHaveBeenCalledWith('biz-1', [{ staffId: 'staff-ada' }], 'low_stock', expect.any(String), 'Amoxil', expect.any(String))
   })
 })

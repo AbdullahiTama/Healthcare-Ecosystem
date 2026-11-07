@@ -436,7 +436,9 @@ export function isRoleGrantable(id) {
 
 // A representative's independent account (Decentralised) is a private trading account under the company: it keeps
 // every operating module, but not the ones that would publish it, open branches under it, or administer the company.
-export const REP_ACCOUNT_HIDDEN = ['overview', 'locations', 'mastercatalog', 'carefind', 'ecommerce', 'warehouses', 'staff', 'wallet', 'field-fields']
+// 'field-places' too: confirming places needs is_business_manager(), which a representative running their own account
+// (staff with role Owner, not the owner by email) does not pass, so the page could only fail for them.
+export const REP_ACCOUNT_HIDDEN = ['overview', 'locations', 'mastercatalog', 'carefind', 'ecommerce', 'warehouses', 'staff', 'wallet', 'field-fields', 'field-places']
 
 // context: { isMainAccount, accountKind, isRepresentative } from the signed-in account (BusinessDashboard). Omitted, it
 // changes nothing, so callers that do not know it (role editor, eligibility checks) keep today's answer.
