@@ -17,8 +17,8 @@ const TITLES = {
 }
 const HELP = {
   centralised: {
-    supply: 'The goods are recorded as in the representative\'s custody. They stay in the company stock, because the representative sells through the company POS.',
-    return: 'Good goods simply leave the representative\'s custody. Damaged or expired goods are also written off the company stock.',
+    supply: 'The goods leave the company stock and are recorded in the representative\'s custody until they sell them or return them.',
+    return: 'The goods leave the representative\'s custody when the return is accepted. Good goods go back into the company stock; damaged or expired goods do not.',
     transfer: 'Custody moves from one representative to the other. The company stock does not change.',
   },
   decentralised: {

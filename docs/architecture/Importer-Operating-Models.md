@@ -33,19 +33,19 @@ A representative account is **not a location**: it does not count against the pl
 (`guard_business_insert`, `business_billing_overview`), and the Locations page lists it separately ("Representative
 account", "Open this account") and leaves its sales out of the company's combined figures.
 
-## 2. Decisions taken (review these)
+## 2. Decisions taken
 
 1. **Existing importers start Centralised.** That is how they work today (reps are company staff). A new importer is
    created Centralised by the database and the registration form records the owner's choice.
-2. **Stock under Centralised stays in the company's count.** The spec has reps selling "through the company's central
-   POS and inventory". If a supply took stock out of the company, the rep's sale on the central POS would take it out a
-   second time. So a Centralised supply records the goods in the rep's **custody** (`rep_custody`) and the company stock
-   is reduced when the sale is rung up. A good return reduces custody; a damaged or expired return reduces custody and
-   writes the goods off company stock. Under Decentralised the stock really moves (company → rep account and back).
-   *Open question for the owner:* if reps in Centralised take goods away and sell them **without** ringing them on the
-   company POS, supplies should take stock out instead; that is a small change in `rep_entry_apply_stock`.
-3. **Sales on the central POS do not reduce a rep's balance automatically.** They are company sales; when the company
-   counts the money against the rep it records a payment. Automating this needs a rule for which sales count.
+2. **Under Centralised a supply takes the goods out of company stock** (owner's decision, 2026-11-07;
+   `carehub_20270106_centralised_supply_takes_stock`). Representatives carry goods to customers and sell them in the
+   field, so the goods leave the company's stock when they are handed over and are held in the rep's **custody**
+   (`rep_custody`) until sold or returned. A good return goes back into company stock; a damaged or expired return only
+   leaves custody. Transfers move custody between reps. Under Decentralised the stock moves into the rep's own account.
+   (Until 2026-11-07 a Centralised supply left company stock untouched; entries recorded under that rule carry
+   `stock_effect = 'custody'` and are corrected with an adjustment rather than reversed.)
+3. **Sales on the central POS do not reduce a rep's balance** (owner's decision, 2026-11-07). The money is taken by the
+   company at the till; the company records a payment when the rep actually remits money.
 4. **Products move between accounts by master catalogue item** (`products.master_product_id`), as branch transfers do.
    An unlinked company product can be supplied under Centralised but not moved to a rep account; the database says so.
 5. **Facility Discovery is in both models** (spec 5.1, decided 2026-11-04). It is now in the Owner preset (so the
@@ -54,16 +54,16 @@ account", "Open this account") and leaves its sales out of the company's combine
    still limits it to manufacturers and wholesalers. Custom roles a company already saved keep their own menu.
 6. **Representative accounts are not locations** (spec 5.5, decided 2026-11-04). Counting them would let a switch to
    Decentralised use up the plan's branch allowance. Both counting functions skip `account_kind = 'rep_account'`.
-   *Revisit* if the owner wants to bill per representative account; that is a pricing change, not a code one.
+   No charge per representative account for now (owner's decision, 2026-11-07); revisit once importers use
+   Decentralised. That would be a pricing change, not a code one.
 7. **Open field orders in a rep account block a switch to Centralised**: the rep loses access to the account, so
    nobody who knows the order could finish it, and it would likely be raised again centrally (spec 9.3: never lost or
    double-processed). Open company orders a rep raised (switch to Decentralised) stay company orders and are listed.
 8. **Customers' unpaid credit in a rep account** stays in the archived account on a switch to Centralised. Nothing is
    moved or written off; the preview lists it and the owner can collect from that account (Locations).
-9. **Company field managers do not see activity inside representative accounts** under Decentralised. The owner does
-   (open the account from Locations). *Proposal, not built:* let a company role with "Manage field team" read field
-   activity of the company's own rep accounts. It widens row level security across businesses, so it needs the owner's
-   and the privacy lead's sign-off first.
+9. **Company field managers do not see activity inside representative accounts** under Decentralised (owner's
+   decision, 2026-11-07: keep representatives' accounts private). The owner does (open the account from Locations).
+   Letting a role with "Manage field team" read it would widen row level security across businesses; not built.
 
 ## 3. The ledger
 
@@ -150,14 +150,15 @@ Settings > Operating model (importer's main account, Owner). Two steps:
 and after: ledger entries, pending entries, every representative's balance, stock units by master item across the
 company and every rep account it has had, and stock value at company cost. Any difference raises, which rolls the whole
 switch back ("nothing changed"). The figures are stored with the change (`result.reconciliation`) and shown to the
-owner after the switch. Custody is reported but not compared (it becomes account stock and back by design).
+owner after the switch. Stock units include goods in custody (outside company stock under Centralised); the custody
+figure itself is reported but not compared (it becomes account stock and back by design).
 
 **To Decentralised:** each active rep gets their account (their previous one if it exists), their staff row moves into
-it with role `Owner` (their company role is remembered), and their custody moves from company stock into the account
-(the owner may lower the quantities; it is capped at company stock, with a note).
+it with role `Owner` (their company role is remembered), and their custody becomes stock in the account without touching
+company stock (the owner may lower the quantities; what is not moved goes back into company stock).
 **To Centralised:** every rep's staff row returns to the company with their remembered role (or a created
-`Representative` role), stock in their account that the company carries returns to company stock and is recorded as
-their custody, and the account is kept as history (`account_dormant_since`).
+`Representative` role), stock in their account that the company carries becomes their custody (outside company stock),
+and the account is kept as history (`account_dormant_since`).
 
 Balances and ledger history are never touched. `operating_model_changes` (append-only) records who switched, when,
 from and to, the reviewed summary, the result (with the reconciliation) and exceptions; `audit_log` records it too.

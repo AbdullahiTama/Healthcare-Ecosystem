@@ -12,26 +12,9 @@
 // plan), independent-account work and privacy, a switch back, and a second switch forward that must reuse the
 // representative accounts. The tests share state and run in order.
 import { describe, it, expect, beforeAll, vi } from 'vitest'
-import { PGlite } from '@electric-sql/pglite'
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { bootOperatingModels, CO, OTHER, PHARM, M, P, S, USERS, OWNER, T } from './operatingModelsFixture.js'
 
 vi.setConfig({ testTimeout: 60000, hookTimeout: 120000 })
-const repoFile = (rel) => readFileSync(fileURLToPath(new URL('../../../../../' + rel, import.meta.url)), 'utf8')
-const MIGRATION = repoFile('supabase/migrations/carehub_20270102_importer_operating_models.sql')
-const LEDGER_LIVE = repoFile('docs/architecture/stock-ledger-live-snapshot.sql')
-
-const CO = 'a0000000-0000-4000-8000-000000000001'
-const OTHER = 'b0000000-0000-4000-8000-000000000001'
-const PHARM = 'b0000000-0000-4000-8000-000000000002'
-const M = { amox: 'c0000000-0000-4000-8000-000000000001', para: 'c0000000-0000-4000-8000-000000000002' }
-const P = { amox: 'd0000000-0000-4000-8000-000000000001', para: 'd0000000-0000-4000-8000-000000000002', loose: 'd0000000-0000-4000-8000-000000000003' }
-const S = { mgr: 'e0000000-0000-4000-8000-000000000001', viewer: 'e0000000-0000-4000-8000-000000000002', ada: 'e0000000-0000-4000-8000-000000000003',
-  bayo: 'e0000000-0000-4000-8000-000000000004', clerk: 'e0000000-0000-4000-8000-000000000005', chi: 'e0000000-0000-4000-8000-000000000006' }
-const USERS = { 'owner@co.com': 1, 'mgr@co.com': 2, 'viewer@co.com': 3, 'ada@co.com': 4, 'bayo@co.com': 5, 'clerk@co.com': 6,
-  'other@x.com': 7, 'chi@co.com': 8, 'admin@carehub.ng': 9 }
-const OWNER = 'owner@co.com'
-const T = { lagos: 'f0000000-0000-4000-8000-000000000001', ibadan: 'f0000000-0000-4000-8000-000000000002', foreign: 'f0000000-0000-4000-8000-000000000003' }
 let db
 
 async function as(email, fn) {
@@ -55,132 +38,7 @@ const TODAY = new Date(Date.now() + 3600e3).toISOString().slice(0, 10) // Africa
 const rep = {}
 
 beforeAll(async () => {
-  db = new PGlite()
-  await db.exec(`
-    create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
-    create schema auth;
-    create function auth.uid() returns uuid language sql stable as $$ select nullif(nullif(current_setting('request.jwt.claims', true),'')::jsonb ->> 'sub','')::uuid $$;
-    create function auth.email() returns text language sql stable as $$ select nullif(current_setting('request.jwt.claims', true),'')::jsonb ->> 'email' $$;
-    grant usage on schema public, auth to anon, authenticated, service_role;
-    grant execute on all functions in schema auth to anon, authenticated, service_role;
-
-    create table businesses (id uuid primary key default gen_random_uuid(), name text not null, owner text not null default '', branch_name text, email text,
-      parent_business_id uuid references businesses(id), branch_depth_limit integer default 3, is_platform_admin boolean default false,
-      business_type text, status text default 'active', plan text default 'growth', plan_expires_at timestamptz, state text, city text, lga text, area text,
-      address text, phone text, visible_on_carefind boolean default true, ecommerce_enabled boolean not null default false, booking_enabled boolean default false,
-      deleted_at timestamptz, created_at timestamptz default now(), referring_agent_id uuid,
-      constraint businesses_main_has_email check (parent_business_id is not null or email is not null));
-    create table staff (id uuid primary key default gen_random_uuid(), business_id uuid references businesses(id), full_name text not null, email text not null,
-      role text, status text default 'active', auth_user_id uuid);
-    create unique index staff_email_lower_key on staff (lower(email));
-    create table roles (id uuid primary key default gen_random_uuid(), business_id uuid, name text, permissions jsonb, created_at timestamptz default now());
-    create table master_products (id uuid primary key, business_id uuid references businesses(id), name text not null, category text default '', default_price integer default 0,
-      generic_name text, barcode text, rx_status text default 'pharmacy_only', default_cost numeric default 0, reorder_level integer default 5);
-    create table products (id uuid primary key default gen_random_uuid(), business_id uuid references businesses(id), name text not null, generic_name text, category text,
-      price numeric default 0, cost_price numeric default 0, stock integer default 0, reorder_level integer default 5, barcode text, sale_type text, list_on_carefind boolean default true,
-      emoji text, master_product_id uuid references master_products(id), rx_status text, price_source text default 'master' check (price_source in ('master','branch')),
-      price_unit text, sales_unit text, tracking_mode text not null default 'none');
-    create table stock_batches (id uuid primary key default gen_random_uuid(), business_id uuid, product_id uuid, product_name text not null default '',
-      batch_number text, quantity integer not null default 0, expiry_date date, status text not null default 'available', created_at timestamptz default now());
-    create table stock_movements (id uuid primary key default gen_random_uuid(), business_id uuid, batch_id uuid, from_location_id uuid, to_location_id uuid, movement_type text,
-      quantity integer, reason text, moved_by text, created_at timestamptz default now(), product_id uuid, source_type text, source_id text, source_line_id text,
-      idempotency_key text, actor_id uuid, qty_before integer, qty_after integer,
-      constraint stock_movements_type_check check (movement_type in ('opening','purchase_receipt','sale','sale_reversal','return_restock','return_writeoff','adjustment','write_off','transfer','tracking_change','correction')));
-    create unique index stock_movements_idem_uniq on stock_movements (business_id, idempotency_key) where idempotency_key is not null;
-    create table staff_notifications (id uuid primary key default gen_random_uuid(), business_id uuid, staff_id uuid, is_owner boolean, kind text not null, title text not null,
-      body text, link text, read_at timestamptz, created_at timestamptz default now());
-    create table audit_log (id uuid primary key default gen_random_uuid(), actor_id uuid not null, actor_type text not null, branch_id uuid not null references businesses(id),
-      action text not null, target_type text, target_id uuid, metadata jsonb, created_at timestamptz not null default now());
-    create table sales (id uuid primary key default gen_random_uuid(), business_id uuid, txn_no text not null default 'T', is_on_hold boolean, status text,
-      cashier_staff_id uuid, deleted_at timestamptz, is_credit boolean default false, balance numeric default 0);
-    create table territories (id uuid primary key default gen_random_uuid(), business_id uuid references businesses(id), name text not null, level text,
-      parent_territory_id uuid, created_at timestamptz default now());
-    create table orders (id uuid primary key default gen_random_uuid(), business_id uuid, order_ref text, customer_name text, status text not null default 'submitted',
-      total_value numeric default 0, created_by_staff_id uuid, created_by_name text, created_at timestamptz default now());
-    create function plan_limit(p_plan text, p_what text) returns integer language sql immutable as $$
-      select case coalesce(p_plan, 'basic') when 'growth' then case p_what when 'locations' then 5 end
-        when 'custom' then null else case p_what when 'staff' then 5 when 'locations' then 2 when 'products' then 5000 end end $$;
-    create function plan_state(p_expires_at timestamptz) returns text language sql stable as $$ select 'active'::text $$;
-    create table stock_transfers (id uuid primary key default gen_random_uuid(), from_branch_id uuid, to_branch_id uuid, status text not null default 'in_transit');
-    create table ecommerce_products (id uuid primary key default gen_random_uuid(), business_id uuid not null, product_id uuid not null, status text not null default 'draft');
-
-    -- live definitions
-    create function current_business_ids() returns setof uuid language sql stable security definer set search_path = public as $$
-      with recursive visible as (
-        select b.id, b.parent_business_id, b.branch_depth_limit, 0 as depth from businesses b where lower(b.email) = lower(auth.email())
-        union all
-        select child.id, child.parent_business_id, child.branch_depth_limit, visible.depth + 1 from businesses child join visible on child.parent_business_id = visible.id
-         where visible.depth < visible.branch_depth_limit)
-      select id from visible
-      union
-      select b.id from businesses b join staff s on s.business_id = b.id where lower(s.email) = lower(auth.email()) and s.status = 'active' $$;
-    create function is_platform_admin() returns boolean language sql stable security definer set search_path = public as $$
-      select coalesce((select is_platform_admin from businesses where lower(email) = lower(auth.email())), false) $$;
-    create function is_business_owner_email(p_email text, p_business_id uuid) returns boolean language sql stable security definer set search_path = public, pg_temp as $$
-      with recursive chain as (
-        select b.id, b.parent_business_id, b.email, 0 as depth from public.businesses b where b.id = p_business_id
-        union all select p.id, p.parent_business_id, p.email, c.depth + 1 from public.businesses p join chain c on p.id = c.parent_business_id where c.depth < 10)
-      select coalesce(p_email, '') <> '' and exists (select 1 from chain where lower(email) = lower(trim(p_email))) $$;
-    create function caller_owns_business(bid uuid) returns boolean language sql stable security definer set search_path = public, pg_temp as $$
-      with recursive up(id, parent_business_id, email, depth) as (
-        select b.id, b.parent_business_id, b.email, 0 from public.businesses b where b.id = bid
-        union select p.id, p.parent_business_id, p.email, up.depth + 1 from public.businesses p join up on p.id = up.parent_business_id where up.depth < 10)
-      select auth.email() is not null and exists (select 1 from up where lower(up.email) = lower(auth.email())) $$;
-    -- The live guard refuses any browser change of a member's business (and much more); server code is trusted.
-    create function guard_staff_writes() returns trigger language plpgsql as $$
-      begin
-        if current_user in ('authenticated', 'anon') and (tg_op <> 'UPDATE' or new.business_id is distinct from old.business_id) then
-          raise exception 'A staff member''s business, email and login cannot be edited.' using errcode = '42501';
-        end if;
-        return coalesce(new, old);
-      end $$;
-    create trigger guard_staff_writes before insert or update or delete on staff for each row execute function guard_staff_writes();
-    create function enforce_product_stock_floor() returns trigger language plpgsql as $$
-      begin if new.stock < 0 and (tg_op = 'INSERT' or new.stock < coalesce(old.stock, 0)) then
-        raise exception 'INSUFFICIENT_STOCK: product stock cannot be reduced below zero (would be %).', new.stock using errcode = 'check_violation'; end if; return new; end $$;
-    create trigger enforce_product_stock_floor before insert or update of stock on products for each row execute function enforce_product_stock_floor();
-
-    do $$ declare t text; begin foreach t in array array['businesses','staff','roles','products','master_products','stock_movements','staff_notifications','audit_log',
-      'sales','stock_transfers','ecommerce_products','territories','orders'] loop
-      execute format('alter table %I enable row level security', t);
-      execute format('grant select, insert, update, delete on %I to authenticated', t);
-      execute format('grant all on %I to service_role', t);
-    end loop; end $$;
-    create policy "products of own business" on products for all to authenticated
-      using (business_id in (select current_business_ids()) or is_platform_admin()) with check (business_id in (select current_business_ids()) or is_platform_admin());
-    create policy "own business row" on businesses for all to authenticated
-      using (lower(email) = lower(auth.email()) or is_platform_admin()) with check (lower(email) = lower(auth.email()) or is_platform_admin());
-    create policy "owner manages own branches" on businesses for all to authenticated
-      using (parent_business_id is not null and caller_owns_business(parent_business_id)) with check (parent_business_id is not null and caller_owns_business(parent_business_id));
-    create policy "public can view active visible businesses" on businesses for select using (status = 'active' and visible_on_carefind = true);
-    create policy "staff of own business" on staff for all to authenticated using (business_id in (select current_business_ids()));
-    create policy "own ecommerce" on ecommerce_products for all to authenticated using (business_id in (select current_business_ids())) with check (business_id in (select current_business_ids()));
-    create policy "own sales" on sales for all to authenticated using (business_id in (select current_business_ids())) with check (business_id in (select current_business_ids()));
-
-    insert into businesses (id, name, owner, email, business_type, state, city) values
-      ('${CO}', 'Zenith Pharma Ltd', 'Mrs Owner', 'owner@co.com', 'manufacturer_importer', 'Lagos', 'Ikeja'),
-      ('${OTHER}', 'Other Importer', 'Other', 'other@x.com', 'manufacturer_importer', 'Oyo', 'Ibadan'),
-      ('${PHARM}', 'A Pharmacy', 'P', 'pharm@x.com', 'pharmacy', 'Lagos', 'Yaba');
-    insert into businesses (name, owner, email, is_platform_admin, business_type) values ('CareHub', 'Admin', 'admin@carehub.ng', true, 'other');
-    insert into staff (id, business_id, full_name, email, role) values
-      ('${S.mgr}', '${CO}', 'Musa Manager', 'mgr@co.com', 'Sales Manager'), ('${S.viewer}', '${CO}', 'Vera Viewer', 'viewer@co.com', 'Accounts'),
-      ('${S.ada}', '${CO}', 'Ada Obi', 'ada@co.com', 'Medical sales rep'), ('${S.bayo}', '${CO}', 'Bayo Ade', 'bayo@co.com', 'Medical sales rep'),
-      ('${S.clerk}', '${CO}', 'Clara Clerk', 'clerk@co.com', 'Cashier');
-    insert into staff (id, business_id, full_name, email, role, status) values ('${S.chi}', '${CO}', 'Chi Eze', 'chi@co.com', 'Medical sales rep', 'invited');
-    insert into roles (business_id, name, permissions) values
-      ('${CO}', 'Sales Manager', '{"canManageRepLedger": true}'), ('${CO}', 'Accounts', '{"canViewRepLedger": true}'),
-      ('${CO}', 'Medical sales rep', '{"nav": ["activity", "pos"]}');
-    insert into master_products (id, business_id, name) values ('${M.amox}', '${CO}', 'Amoxil 500'), ('${M.para}', '${CO}', 'Paracetamol');
-    insert into products (id, business_id, name, price, cost_price, stock, master_product_id, list_on_carefind) values
-      ('${P.amox}', '${CO}', 'Amoxil 500', 1200, 900, 100, '${M.amox}', true), ('${P.para}', '${CO}', 'Paracetamol', 300, 200, 50, '${M.para}', true),
-      ('${P.loose}', '${CO}', 'Unlinked Syrup', 500, 300, 10, null, true);
-  `)
-  await db.exec(LEDGER_LIVE)
-  await db.exec(MIGRATION)
-  // Live: guard_business_insert runs before every insert into businesses.
-  await db.exec('create trigger guard_business_insert before insert on businesses for each row execute function guard_business_insert()')
-  await db.exec(`insert into territories (id, business_id, name, level) values
-    ('${T.lagos}', '${CO}', 'Lagos Mainland', 'area'), ('${T.ibadan}', '${CO}', 'Ibadan', 'area'), ('${T.foreign}', '${OTHER}', 'Abuja', 'area')`)
+  db = await bootOperatingModels()
 })
 
 describe('the operating model column', () => {
@@ -223,16 +81,17 @@ describe('Centralised: representatives and their ledger', () => {
     await expect(call('other@x.com', 'select add_company_representative($1, $2)', [CO, S.clerk])).rejects.toThrow(/do not have permission/)
   })
 
-  it('a supply on credit raises what the rep owes and records custody; company stock stays (they sell through the central POS)', async () => {
+  it('a supply on credit raises what the rep owes, takes the goods out of company stock and records them in custody', async () => {
     const r = await call('mgr@co.com', 'select record_rep_supply($1, $2, $3::jsonb, null, $4, null, $5)',
       [CO, rep.ada, j([{ product_id: P.amox, qty: 10, unit_value: 900 }, { product_id: P.para, qty: 5, unit_value: 200 }]), 'INV-001', 'supply-1'])
     expect(r).toMatchObject({ status: 'posted', value: 10000, balance: 10000 })
     expect(r.entry_no).toMatch(/^RL-\d{6}-[0-9A-F]{6}$/)
     expect(await custody(rep.ada, P.amox)).toBe(10)
-    expect(await stock(P.amox)).toBe(100)
+    expect(await stock(P.amox)).toBe(90)
+    expect(await stock(P.para)).toBe(45)
     const e = await one('select * from rep_ledger_entries where id = $1', [r.id])
     expect(e).toMatchObject({ entry_type: 'supply', debit: '10000.00', credit: '0.00', reference: 'INV-001', operating_model: 'centralised',
-      stock_effect: 'custody', created_by_name: 'Musa Manager' })
+      stock_effect: 'custody_out', created_by_name: 'Musa Manager' })
     expect((await one(`select count(*)::int n from audit_log where action = 'rep_ledger.supply' and target_id = $1`, [r.id])).n).toBe(1)
   })
 
@@ -270,19 +129,18 @@ describe('Centralised: representatives and their ledger', () => {
     const d = await call('mgr@co.com', `select decide_rep_entry($1, 'approve', 'Two cartons slightly dented', $2::jsonb)`, [r.id, j([{ line_id: line.id, unit_value: 800 }])])
     expect(d).toMatchObject({ status: 'posted', value: 1600, balance: 4400 })
     expect(await custody(rep.ada, P.amox)).toBe(8)
-    expect(await stock(P.amox)).toBe(100) // good goods never left the company's count
+    expect(await stock(P.amox)).toBe(92) // good goods go back into company stock
     expect(await one('select decided_by_name, decision_note from rep_ledger_entries where id = $1', [r.id]))
       .toEqual({ decided_by_name: 'Musa Manager', decision_note: 'Two cartons slightly dented' })
     await expect(call('mgr@co.com', `select decide_rep_entry($1, 'reject')`, [r.id])).rejects.toThrow(/already posted/)
   })
 
-  it('a damaged return reduces custody and writes the goods off the company stock', async () => {
+  it('a damaged return only reduces custody: the goods never come back into company stock', async () => {
     const r = await call(OWNER, 'select record_rep_return($1, $2, $3::jsonb, $4)', [CO, rep.ada, j([{ product_id: P.amox, qty: 1, unit_value: 0 }]), 'damaged'])
     expect(r.balance).toBe(4400)
     expect(await custody(rep.ada, P.amox)).toBe(7)
-    expect(await stock(P.amox)).toBe(99)
-    expect(await one(`select movement_type, quantity, source_type from stock_movements where source_id = $1`, [r.id]))
-      .toEqual({ movement_type: 'write_off', quantity: -1, source_type: 'rep_return' })
+    expect(await stock(P.amox)).toBe(92)
+    expect((await one(`select count(*)::int n from stock_movements where source_id = $1`, [r.id])).n).toBe(0)
   })
 
   it('a rep cannot return more than is in their custody', async () => {
@@ -446,7 +304,7 @@ describe('switching Centralised → Decentralised', () => {
     expect(preview.warnings[1]).toMatchObject({ representative_id: rep.ada, count: 1 })
     const ada = preview.representatives.find((r) => r.id === rep.ada)
     expect(ada).toMatchObject({ balance: 1500, converts: true, reuses_account: false })
-    expect(ada.stock.find((s) => s.company_product_id === P.amox)).toMatchObject({ custody: 4, company_stock: 99, carry: 4 })
+    expect(ada.stock.find((s) => s.company_product_id === P.amox)).toMatchObject({ custody: 4, company_stock: 92, carry: 4 })
     await expect(call(OWNER, `select switch_operating_model($1, 'decentralised', $2)`, [CO, preview.token])).rejects.toThrow(/Resolve the items/)
     await call(OWNER, `select decide_rep_entry($1, 'reject', 'Wrong rep')`, [pend.id])
     await call(OWNER, 'select set_representative_status($1, $2)', [rep.chi, 'inactive'])
@@ -497,11 +355,12 @@ describe('switching Centralised → Decentralised', () => {
     expect(ada.company_role).toBe('Medical sales rep')
     expect(await one('select business_id from staff where id = $1', [S.chi])).toEqual({ business_id: CO }) // inactive: stays
 
-    // Ada's plan: 2 of 4 Amoxil; Paracetamol (5) moves in full. Bayo's 3 Amoxil move in full.
+    // Ada's plan: 2 of 4 Amoxil; Paracetamol (5) moves in full. Bayo's 3 Amoxil move in full. Custody was already out
+    // of company stock, so it moves into the accounts without touching it; Ada's 2 Amoxil not moved go back to it.
     expect(await accountStock(ada.rep_account_id, M.amox)).toBe(2)
     expect(await accountStock(ada.rep_account_id, M.para)).toBe(5)
-    expect(await stock(P.amox)).toBe(99 - 2 - 3)
-    expect(await stock(P.para)).toBe(50 - 5 - 2)
+    expect(await stock(P.amox)).toBe(92 + 2)
+    expect(await stock(P.para)).toBe(45 - 2)
     expect(await custody(rep.ada, P.amox)).toBe(0)
     expect((await one('select list_on_carefind, price, price_source from products where business_id = $1 and master_product_id = $2', [ada.rep_account_id, M.amox])))
       .toEqual({ list_on_carefind: false, price: '1200', price_source: 'branch' })
@@ -642,8 +501,9 @@ describe('switching Decentralised → Centralised, and forward again', () => {
 
     expect(await one('select business_id, role from staff where id = $1', [S.ada])).toEqual({ business_id: CO, role: 'Medical sales rep' })
     expect(await one('select business_id, role from staff where id = $1', [S.clerk])).toEqual({ business_id: CO, role: 'Cashier' })
-    expect(await stock(P.amox)).toBe(before.co + before.ada + before.bayo) // both reps' Amoxil comes back
+    expect(await stock(P.amox)).toBe(before.co) // the reps keep the goods, now as custody outside company stock
     expect(await custody(rep.ada, P.amox)).toBe(before.ada)
+    expect(await custody(rep.bayo, P.amox)).toBe(before.bayo)
     expect(await accountStock(adaAcct, M.amox)).toBe(0)
     expect((await one(`select stock from products where business_id = $1 and name = 'Ada own brand'`, [adaAcct])).stock).toBe(4)
     expect([await balance(rep.ada), await balance(rep.bayo)]).toEqual(before.balances)

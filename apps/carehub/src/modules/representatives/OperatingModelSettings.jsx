@@ -218,7 +218,7 @@ function Reconciliation({ r }) {
           ))}</tbody>
         </table>
       </div>
-      <div style={{ fontSize: '12px', color: gray500, marginTop: 4 }}>Custody changes by design: goods in custody become stock in each representative's account, and back.</div>
+      <div style={{ fontSize: '12px', color: gray500, marginTop: 4 }}>Custody changes by design: goods in custody become stock in each representative's account, and back. Stock units include goods in custody.</div>
     </section>
   )
 }

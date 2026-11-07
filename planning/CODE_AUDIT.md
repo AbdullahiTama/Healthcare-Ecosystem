@@ -205,10 +205,12 @@ fix exposed (Facility Discovery listed representative accounts; applied as
 `carehub_20270105_discovery_excludes_rep_accounts`). The sign-up form had stopped offering Manufacturer / Importer
 (removed 2026-09-02), leaving spec section 2 unreachable from the form; restored 2026-11-07 on the owner's decision.
 
-**To close:** owner decisions still open (§2):
-whether a Centralised supply should take stock out of the company count; whether POS sales should reduce a rep's
-balance automatically. Proposal awaiting owner and privacy sign-off: let company field managers read field activity
-inside the company's own rep accounts under Decentralised (today only the owner can, by opening the account).
+**Owner decisions taken 2026-11-07** (§2): a Centralised supply takes the goods out of company stock
+(`carehub_20270106_centralised_supply_takes_stock`); POS sales do not reduce a rep's balance; company field managers do
+not see activity inside rep accounts; no charge per rep account for now; Wholesale / Distributor back on the sign-up form.
+
+`carehub_20270106_centralised_supply_takes_stock` applied 2026-11-07 and probed live. Nothing left to close here;
+A13 stays open only for the owner to review the QA test data it left in production.
 
 ### A14. Reported ~1% reduction in amounts; Paystack fee not stored (Medium)
 
