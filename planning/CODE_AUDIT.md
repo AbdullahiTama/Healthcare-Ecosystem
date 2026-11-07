@@ -200,7 +200,9 @@ the plan's locations or mix into the company's Locations figures (5.5).
 
 **Live end-to-end check 2026-11-06/07** (§11 of the note): every flow passed on the live app after three fixes made
 during the run (staff of an unlisted business could not sign in, applied as `carehub_20270104_staff_read_own_business`;
-two refused requests on a rep account's dashboard; Facility Discovery's blank filters). One new owner decision: the
+two refused requests on a rep account's dashboard; Facility Discovery's blank filters) and a privacy leak the last
+fix exposed (Facility Discovery listed representative accounts; applied as
+`carehub_20270105_discovery_excludes_rep_accounts`). One new owner decision: the
 sign-up form no longer offers Manufacturer / Importer (removed 2026-09-02), so spec section 2 is unreachable from the
 form.
 

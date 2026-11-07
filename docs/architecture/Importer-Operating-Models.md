@@ -286,7 +286,7 @@ manufacturer (`owner.manufacturer@carehub.test`, password unknown and left alone
 | Switch to Decentralised with a custody plan | Owner moved 2 of Ada's 4 Amoxil: reconciled (₦4,000 owed, 9 entries, 599 units before and after); company 194, Ada 2 + 5, Bayo 3; rep products off CareFind. |
 | Decentralised work and isolation | Supply moved 10 units company → Ada (₦10,300 owed); each rep's Stock Management shows only their own products; no company figures. |
 | Switch back, then forward again | Back: stock and custody restored, accounts archived, balances kept. Forward: "Gets their previous account back", still 2 rep accounts, stock back in each. 5 history rows. |
-| Facility Discovery, Financial Reports, Field, Demand | Open without error for the owner, a Decentralised rep, a Centralised rep and the Sales Manager. Facility search found 0: OpenStreetMap is not reachable from the test environment, and defect 3. |
+| Facility Discovery, Financial Reports, Field, Demand | Open without error for the owner, a Decentralised rep, a Centralised rep and the Sales Manager. Facility search first found 0 (defect 3; OpenStreetMap is not reachable from the test environment); after the fixes a Lagos search returns CareHub's own businesses and no rep account (defect 4). |
 
 **Defects found and fixed**
 
@@ -301,6 +301,13 @@ manufacturer (`owner.manufacturer@carehub.test`, password unknown and left alone
 3. **Facility Discovery's CareHub search returned nothing whenever a filter was left blank** (pre-existing, every
    business type): blank filters were sent as '' and the database dropped every business with no LGA or city
    recorded (all 13 in Lagos). `discoverFacilitiesPath` now leaves blank filters out.
+
+4. **Facility Discovery listed representative accounts.** Its database search (`discover_facilities_cursor`) reads
+   every businesses row, so with defect 3 fixed any company searching an area saw representatives' private accounts
+   (name, city, phone). Fixed by `carehub_20270105_discovery_excludes_rep_accounts` (applied with the owner's
+   approval): representative accounts and deleted businesses are skipped. Re-checked live after deploying: no
+   refused requests on a rep account's dashboard, "Places to confirm" hidden there, Lagos search returns results and
+   no rep account.
 
 **Owner decision found:** the sign-up form has not offered Manufacturer / Importer (or Wholesale) since the landing
 page redesign of 2026-09-02, and a test keeps enterprise modules out of the sign-up list. Spec section 2 needs it back
