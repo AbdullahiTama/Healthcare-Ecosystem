@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Activity, AlertTriangle, ShieldAlert } from 'lucide-react'
 import { staffActivityRepository, ACTIVITY_LIMIT } from './repositories'
-import { PERIODS, periodRange, filterActivity, summarisePeople, filterChoices, kindLabel, SENSITIVE, personKey } from './staffActivity'
+import { PERIODS, periodRange, filterActivity, summarisePeople, filterChoices, kindLabel, SENSITIVE, personKey, expenseRowStatus } from './staffActivity'
+
+const EXPENSE_STATUS = { paid: ['Paid', 'green'], partial: ['Partially paid', 'blue'], unpaid: ['Unpaid', 'amber'] }
 import { fmt, todayDate } from '../../lib/utils'
 import { BUSINESS_TZ, parseDbTime } from '../../lib/businessDay'
 import { theme } from '../../styles/theme'
@@ -92,6 +94,7 @@ export default function StaffActivity({ brand }) {
                       {p.counts.sale > 0 && <span><strong style={{ color: navy }}>{p.counts.sale}</strong> sales · {fmt(p.salesValue)}</span>}
                       {p.counts.refund > 0 && <span style={{ color: danger }}><strong>{p.counts.refund}</strong> refunds · {fmt(p.refundValue)}</span>}
                       {p.sensitive > 0 && p.counts.refund === undefined && <span>{p.sensitive} to review</span>}
+                      {p.expensesOpen > 0 && <span style={{ color: warning }}><strong>{fmt(p.expensesOwed)}</strong> of expenses still to pay ({p.expensesOpen})</span>}
                     </div>
                   </button>
                 )
@@ -123,6 +126,7 @@ export default function StaffActivity({ brand }) {
                         <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>{r.actor_name}</span>
                         {r.actor_role && <span style={{ fontSize: 11.5, color: gray500 }}>{r.actor_role}</span>}
                         <Pill label={kindLabel(r.kind)} type={SENSITIVE.has(r.kind) ? 'amber' : 'gray'} />
+                        {expenseRowStatus(r) && <Pill label={EXPENSE_STATUS[expenseRowStatus(r)][0]} type={EXPENSE_STATUS[expenseRowStatus(r)][1]} />}
                       </div>
                       <div style={{ fontSize: 12.5, color: gray600, marginTop: 2, overflowWrap: 'anywhere' }}>{r.summary}</div>
                       <div style={{ fontSize: 11, color: gray400, marginTop: 2 }}>{when(r.occurred_at)}</div>

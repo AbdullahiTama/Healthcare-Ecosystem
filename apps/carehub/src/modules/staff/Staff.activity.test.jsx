@@ -80,3 +80,23 @@ describe('Staff ▸ Activity tab', () => {
     expect(text()).toContain('Could not load staff activity')
   })
 })
+
+describe('Staff activity: expense payment status', () => {
+  afterEach(async () => { await act(async () => root.unmount()); host.remove() })
+  it('marks each expense Paid / Partially paid / Unpaid, totals what is still to pay per person, and lists later payments', async () => {
+    h.get.mockReset().mockResolvedValue([
+      row({ kind: 'expense', summary: 'Utilities · Water · ₦2,000 still to pay', amount: 3000, ref: 'e1', still_owed: 2000 }),
+      row({ kind: 'expense', summary: 'Maintenance · Generator · ₦15,000 still to pay', amount: 15000, ref: 'e2', still_owed: 15000 }),
+      row({ kind: 'expense', summary: 'Rent · Shop rent · paid', amount: 50000, ref: 'e3', still_owed: 0 }),
+      row({ kind: 'expense_payment', summary: 'Utilities · Water · Transfer · ₦2,000 still to pay', amount: 1000, ref: 'e1', still_owed: null }),
+    ])
+    await mount('Owner')
+    await open()
+    expect(text()).toContain('₦17,000 of expenses still to pay (2)')
+    expect(text()).toContain('Unpaid')
+    expect(text()).toContain('Partially paid')
+    expect(text()).toContain('Paid')
+    expect(text()).toContain('Expense payment')
+  })
+})
+

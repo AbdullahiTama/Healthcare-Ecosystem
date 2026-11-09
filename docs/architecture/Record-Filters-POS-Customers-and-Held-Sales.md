@@ -123,6 +123,13 @@ how it was paid (Cash, Transfer, POS, Cheque, Other), and paid off later.
   It is a fifth card, only for whoever can open Expenses, so the row wraps 5 / 4+1 / 3+2 / 2+2+1 at
   1280 / 1024 / 768 / 375 instead of the recorded 4/4/3/2 (human decision B); without Expenses access it is unchanged. Tests in
   `dashboard-home/__tests__/DashboardHome.test.jsx` (8), plus repository, filter and deep-link tests.
+- **Staff › Activity** (Owner only, added 2026-11-09): each expense a staff member logged carries a Paid / Partially
+  paid / Unpaid pill and its summary ends "· paid" or "· ₦X still to pay" (status now); each person's card shows
+  "₦X of expenses still to pay (N)"; payments recorded later on expenses appear as **Expense payment** activity under
+  whoever recorded them. Database: `carehub_20270108_staff_activity_expense_status` re-creates `staff_activity()`
+  (body confirmed identical to live before the change) with a `still_owed` column and the `expense_payment` rows; the
+  Owner check, SECURITY DEFINER and grants are unchanged. Tests: `apps/carefind/src/test/expenses/staffActivityExpenseStatus.db.test.js`
+  (4), `staff/staffActivity.test.js`, `staff/Staff.activity.test.jsx`.
 - **Unpaid expenses are not debts**: they are not added to the Debts page's "We owe others", so nothing is counted
   twice. They are tracked on the Expenses page.
 
@@ -176,7 +183,7 @@ location in use.
 
 ## 6. Test plan
 
-**Automated** (CareHub, `npm test`: 3,492 tests pass; lint 0 errors; build passes):
+**Automated** (CareHub, `npm test`: 3,495 tests pass; lint 0 errors; build passes):
 
 - `lib`/filters: `debts/debtFilters.test.js`, `debts/debtTotals.test.js`, `clients/clientFilters.test.js`,
   `expenses/expenseFilters.test.js`: every filter alone and combined, periods by day/month/year/range, ranges (open,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { periodRange, filterActivity, summarisePeople, filterChoices, personKey, kindLabel } from './staffActivity'
+import { periodRange, filterActivity, summarisePeople, filterChoices, personKey, kindLabel, expenseRowStatus } from './staffActivity'
 import { createStaffActivityRepository } from './repositories'
 
 const row = (o) => ({ occurred_at: '2026-10-27T09:00:00Z', kind: 'sale', staff_id: null, actor_name: 'Rep One', actor_role: 'Cashier', summary: 'T1 · Ada · Cash', amount: 1000, ref: 'T1', ...o })
@@ -77,3 +77,17 @@ describe('staff activity helpers', () => {
     expect(await createStaffActivityRepository({ request: async () => null }).get('b1', 'F', 'T')).toEqual([])
   })
 })
+
+describe('expense payment status in staff activity', () => {
+  const E = (o) => ({ kind: 'expense', staff_id: 's1', actor_name: 'Bisi', occurred_at: '2026-11-09T10:00:00Z', amount: 1000, ...o })
+  it('reads paid, partially paid and unpaid from still_owed; nothing for other rows or older databases', () => {
+    expect([E({ still_owed: 0 }), E({ still_owed: 400 }), E({ still_owed: 1000 }), E({}), { kind: 'sale', still_owed: null }].map(expenseRowStatus))
+      .toEqual(['paid', 'partial', 'unpaid', null, null])
+    expect(kindLabel('expense_payment')).toBe('Expense payment')
+  })
+  it('totals per person what is still to pay on the expenses they logged', () => {
+    const [p] = summarisePeople([E({ still_owed: 0 }), E({ still_owed: 400 }), E({ still_owed: 1000.5 }), { kind: 'expense_payment', staff_id: 's1', actor_name: 'Bisi', amount: 600, occurred_at: '2026-11-09T11:00:00Z' }])
+    expect(p).toMatchObject({ expensesOwed: 1400.5, expensesOpen: 2 })
+  })
+})
+

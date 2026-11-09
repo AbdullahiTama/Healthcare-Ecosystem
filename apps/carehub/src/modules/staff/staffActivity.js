@@ -8,7 +8,7 @@ import { businessPeriod } from '../../lib/businessDay'
 export const KINDS = {
   sale: 'Sale', credit_sale: 'Credit sale', held: 'Held sale', refund: 'Refund', repayment: 'Repayment',
   purchase: 'Purchase', supplier_payment: 'Supplier payment', debt: 'Debt recorded',
-  sale_edited: 'Sale edited', sale_deleted: 'Sale deleted', expense: 'Expense',
+  sale_edited: 'Sale edited', sale_deleted: 'Sale deleted', expense: 'Expense', expense_payment: 'Expense payment',
   stock: 'Stock change', checkin: 'Attendance', field_visit: 'Field visit',
   shift_open: 'Shift opened', shift_close: 'Shift closed',
 }
@@ -36,6 +36,15 @@ export const personKey = (r) => r.staff_id || 'name:' + String(r.actor_name || '
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 const money = (v) => Math.round(num(v) * 100) / 100
 
+// An expense row's payment status from still_owed (carehub_20270108): 'paid' | 'partial' | 'unpaid', or null for any
+// other row and for a database without the column (the summary text still says it).
+export function expenseRowStatus(r) {
+  if (r?.kind !== 'expense' || r.still_owed === undefined || r.still_owed === null) return null
+  const owed = num(r.still_owed)
+  if (owed <= 0) return 'paid'
+  return owed < num(r.amount) ? 'partial' : 'unpaid'
+}
+
 export function filterActivity(rows, { person = '', role = '', kind = '', query = '' } = {}) {
   const q = String(query || '').trim().toLowerCase()
   return (rows || []).filter((r) =>
@@ -52,16 +61,18 @@ export function summarisePeople(rows) {
   const by = new Map()
   for (const r of rows || []) {
     const k = personKey(r)
-    if (!by.has(k)) by.set(k, { key: k, name: r.actor_name || 'Owner or unlinked', role: r.actor_role || null, counts: {}, total: 0, salesValue: 0, refundValue: 0, last: null })
+    if (!by.has(k)) by.set(k, { key: k, name: r.actor_name || 'Owner or unlinked', role: r.actor_role || null, counts: {}, total: 0, salesValue: 0, refundValue: 0, expensesOwed: 0, expensesOpen: 0, last: null })
     const p = by.get(k)
     p.counts[r.kind] = (p.counts[r.kind] || 0) + 1
     p.total++
     if (r.kind === 'sale' || r.kind === 'credit_sale') p.salesValue += num(r.amount)
     if (r.kind === 'refund') p.refundValue += num(r.amount)
+    // Expenses this person logged that are still not fully paid (status now, from still_owed).
+    if (r.kind === 'expense' && num(r.still_owed) > 0) { p.expensesOwed += num(r.still_owed); p.expensesOpen++ }
     if (!p.last || new Date(r.occurred_at) > new Date(p.last)) p.last = r.occurred_at
   }
   return [...by.values()]
-    .map((p) => ({ ...p, salesValue: money(p.salesValue), refundValue: money(p.refundValue), sensitive: Object.entries(p.counts).filter(([k]) => SENSITIVE.has(k)).reduce((n, [, c]) => n + c, 0) }))
+    .map((p) => ({ ...p, salesValue: money(p.salesValue), refundValue: money(p.refundValue), expensesOwed: money(p.expensesOwed), sensitive: Object.entries(p.counts).filter(([k]) => SENSITIVE.has(k)).reduce((n, [, c]) => n + c, 0) }))
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
 }
 
