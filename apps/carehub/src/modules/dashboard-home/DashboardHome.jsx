@@ -91,7 +91,7 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
   // Held and unpaid credit sales only — not the whole sales history.
   const { data: openSales = [], isLoading: loadingAll, isError: errAll, refetch: refetchAll } = useOpenSales(brand?.id)
   const { data: appts = [], isLoading: loadingAppts, isError: errAppts, refetch: refetchAppts } = useAppointments(brand?.id, canSeeAppts)
-  const { data: unpaidExpenses = [], isError: errExpenses, refetch: refetchExpenses } = useUnpaidExpenses(brand?.id, canSeeExpenses)
+  const { data: unpaidExpenses = [], isLoading: loadingExpenses, isError: errExpenses, refetch: refetchExpenses } = useUnpaidExpenses(brand?.id, canSeeExpenses)
 
   const loading = loadingToday || loadingAll || (canSeeAppts && loadingAppts)
   // Whichever hooks failed — one aggregate error surface, one Retry that calls
@@ -245,11 +245,22 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
         )}
 
         {/* KPI row — minColumn 160 pins today's minmax(160px,1fr) floor so the
-            wrap sequence stays 4/4/3/2 at 1280/1024/768/375 (human decision B). */}
+            wrap sequence stays 4/4/3/2 at 1280/1024/768/375 (human decision B).
+            "Bills to pay" (owner request 2026-11-09) is a fifth card for whoever can open Expenses; with it the row
+            wraps to 5 / 4+1 / 3+2 / 2+2+1 at those widths. Without Expenses access the four cards are unchanged. */}
         <MetricGrid label="Key metrics" minColumn={160}>
           <StatCard icon={<BarChart2 />} label='Sales today' value={fmt(todayTotal)} sub={`${todaySales.length} transaction${todaySales.length === 1 ? '' : 's'}${todayRefunds > 0 ? ` · ${fmt(todayRefunds)} refunded` : ''}`} onClick={() => navigate('/dashboard/pos/report')} />
           <StatCard icon={<Pause />} label='Held sales' value={heldSales.length} sub={heldSales.length > 0 ? 'waiting at counter' : 'none on hold'} onClick={() => navigate('/dashboard/pos')} />
           <StatCard icon={<CreditCard />} label='Owed to you' value={fmt(creditTotal)} sub={`${creditSales.length} open credit sale${creditSales.length === 1 ? '' : 's'} · all dates`} tone={creditSales.length > 0 ? 'warning' : 'default'} onClick={() => navigate('/dashboard/debts')} />
+          {canSeeExpenses && (
+            // Expenses not fully paid, any date: the same total as the Expenses page's "Still to pay" for all dates.
+            // A failed or pending read shows a dash, never ₦0.
+            <StatCard icon={<Banknote />} label='Bills to pay'
+              value={errExpenses || loadingExpenses ? '—' : fmt(billsTotals.outstanding)}
+              sub={errExpenses ? "Couldn't load" : loadingExpenses ? 'Loading…' : `${billsTotals.count} expense${billsTotals.count === 1 ? '' : 's'} not fully paid · all dates`}
+              tone={!errExpenses && billsTotals.count > 0 ? 'warning' : 'default'}
+              onClick={() => navigate('/dashboard/expenses?payment=open')} />
+          )}
           {catalogLoading ? (
             <StatCard icon={<AlertTriangle />} label='Stock alerts' value='…' sub={catalog?.loadedCount > 0 ? `Loading products… ${catalog.loadedCount.toLocaleString()}` : 'Loading products…'} onClick={() => navigate('/dashboard/inventory')} />
           ) : (

@@ -429,7 +429,8 @@ describe('DashboardHome: bills to pay (expense payment status)', () => {
 
   it('nothing owed: no bills group, and an all-clear can still show', async () => {
     m = await mountHome({ bills: query({ data: [] }) })
-    expect(m.host.textContent).not.toContain('Bills to pay')
+    expect(m.host.textContent).not.toContain('Bills to pay:')
+    expect(m.host.textContent).not.toContain('still to pay')
     expect(m.host.textContent).toContain('Nothing needs your attention right now.')
   })
 
@@ -440,5 +441,36 @@ describe('DashboardHome: bills to pay (expense payment status)', () => {
     click([...m.host.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Retry'))
     expect(refetch).toHaveBeenCalled()
   })
-})
 
+  const kpi = (host, label) => [...host.querySelector('[role="group"][aria-label="Key metrics"]').children].find((c) => c.textContent.includes(label))
+
+  it('the top row has a "Bills to pay" card with the total still owed, all dates, opening Expenses filtered to it', async () => {
+    m = await mountHome({ bills: query({ data: BILLS }) })
+    const card = kpi(m.host, 'Bills to pay')
+    expect(card.textContent).toContain('₦58,700')
+    expect(card.textContent).toContain('4 expenses not fully paid · all dates')
+    click(card.querySelector('button') || card)
+    await act(async () => {})
+    expect(m.host.querySelector('[data-testid="loc"]').textContent).toBe('/dashboard/expenses')
+    expect(m.host.querySelector('[role="group"][aria-label="Key metrics"]').children).toHaveLength(5)
+  })
+
+  it('the card says ₦0 when nothing is owed, and a dash (never ₦0) while loading or after a failed read', async () => {
+    m = await mountHome({ bills: query({ data: [] }) })
+    expect(kpi(m.host, 'Bills to pay').textContent).toContain('0 expenses not fully paid')
+    await m.unmount()
+    m = await mountHome({ bills: query({ isLoading: true }) })
+    expect(kpi(m.host, 'Bills to pay').textContent).toContain('—')
+    expect(kpi(m.host, 'Bills to pay').textContent).not.toContain('₦0')
+    await m.unmount()
+    m = await mountHome({ bills: query({ isError: true }) })
+    expect(kpi(m.host, 'Bills to pay').textContent).toContain("Couldn't load")
+    expect(kpi(m.host, 'Bills to pay').textContent).not.toContain('₦0')
+  })
+
+  it('without access to Expenses the top row keeps its four cards', async () => {
+    m = await mountHome({ bills: query({ data: BILLS }), role: 'Cashier', perms: { nav: ['dashboard', 'pos'] } })
+    expect(m.host.querySelector('[role="group"][aria-label="Key metrics"]').children).toHaveLength(4)
+    expect(m.host.textContent).not.toContain('Bills to pay')
+  })
+})

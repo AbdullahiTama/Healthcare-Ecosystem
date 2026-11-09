@@ -118,8 +118,11 @@ how it was paid (Cash, Transfer, POS, Cheque, Other), and paid off later.
   attention total. Shown to the Owner and anyone who can open Expenses; others do not load it. The read
   (`expenseRepository.getUnpaid`, `useUnpaidExpenses`) takes only the needed columns, is re-read whenever the
   dashboard opens, and joins the dashboard's error banner with Retry if it fails (never a false all-clear). The KPI
-  row is unchanged (its 4-card layout is a recorded design decision). Tests in
-  `dashboard-home/__tests__/DashboardHome.test.jsx` (5), plus repository, filter and deep-link tests.
+  row also has a **Bills to pay** card (owner request): the total still owed on every expense not fully paid, any
+  date, with how many, opening the same filtered Expenses view; a dash while loading or after a failed read, never ₦0.
+  It is a fifth card, only for whoever can open Expenses, so the row wraps 5 / 4+1 / 3+2 / 2+2+1 at
+  1280 / 1024 / 768 / 375 instead of the recorded 4/4/3/2 (human decision B); without Expenses access it is unchanged. Tests in
+  `dashboard-home/__tests__/DashboardHome.test.jsx` (8), plus repository, filter and deep-link tests.
 - **Unpaid expenses are not debts**: they are not added to the Debts page's "We owe others", so nothing is counted
   twice. They are tracked on the Expenses page.
 
@@ -173,7 +176,7 @@ location in use.
 
 ## 6. Test plan
 
-**Automated** (CareHub, `npm test`: 3,489 tests pass; lint 0 errors; build passes):
+**Automated** (CareHub, `npm test`: 3,492 tests pass; lint 0 errors; build passes):
 
 - `lib`/filters: `debts/debtFilters.test.js`, `debts/debtTotals.test.js`, `clients/clientFilters.test.js`,
   `expenses/expenseFilters.test.js`: every filter alone and combined, periods by day/month/year/range, ranges (open,
