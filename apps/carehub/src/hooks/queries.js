@@ -4,6 +4,7 @@ import { appointmentRepository } from '../modules/appointments/repositories'
 import { clientRepository } from '../modules/clients/repositories'
 import { settingsRepository } from '../modules/settings/repositories'
 import { purchaseRepository } from '../modules/purchases/repositories'
+import { debtRepository } from '../modules/debts/repositories'
 
 // ── Query Keys ───────────────────────────────────────────────────────────────
 export const keys = {
@@ -11,6 +12,7 @@ export const keys = {
   recentSales: (brandId) => ['sales', 'recent', brandId],
   appointments: (brandId) => ['appointments', brandId],
   clients: (brandId) => ['clients', brandId],
+  openDebts: (brandId) => ['debts', 'open', brandId],
   settings: (brandId) => ['settings', brandId],
   products: (brandId) => ['products', brandId],
   salePayments: (saleId) => ['sales', 'payments', saleId],
@@ -34,12 +36,32 @@ export const keys = {
 // Held sales and credit sales with a balance owed — the sales that still need
 // action. Replaces an "all sales" download that grew with every sale and was
 // silently capped at 1000 rows.
+//
+// Read again every time the POS mounts (the cached list shows at once meanwhile), so returning to the till always
+// shows held sales made since on another device.
 export function useOpenSales(brandId) {
   return useQuery({
     queryKey: keys.openSales(brandId),
     queryFn: () => saleRepository.getOpen(brandId),
     enabled: !!brandId,
     staleTime: 30_000,
+    refetchOnMount: 'always',
+  })
+}
+
+// The till's handle on upsertOpenSale for its business: (sale) => void.
+export function useUpsertOpenSale(brandId) {
+  const qc = useQueryClient()
+  return (sale) => upsertOpenSale(qc, brandId, sale)
+}
+
+// Puts a held sale the till has just saved into the cached open-sales list at once, so it is in Held Sales without
+// waiting for (or depending on) the re-read that follows. Matched by id, so the re-read replaces it, never doubles it.
+export function upsertOpenSale(qc, brandId, sale) {
+  if (!sale?.id) return
+  qc.setQueryData(keys.openSales(brandId), (prev) => {
+    const list = Array.isArray(prev) ? prev.filter((s) => String(s.id) !== String(sale.id)) : []
+    return [sale, ...list].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
   })
 }
 
@@ -70,6 +92,16 @@ export function useClients(brandId) {
     queryFn: () => clientRepository.getAll(brandId),
     enabled: !!brandId,
     staleTime: 60_000,
+  })
+}
+
+// Open debts (unpaid, something left), for what each client still owes on the Clients page.
+export function useOpenDebts(brandId, enabled = true) {
+  return useQuery({
+    queryKey: keys.openDebts(brandId),
+    queryFn: () => debtRepository.getOpen(brandId),
+    enabled: !!brandId && enabled,
+    staleTime: 30_000,
   })
 }
 
@@ -129,7 +161,17 @@ export function useCreateClient(brandId) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (client) => clientRepository.create(brandId, client),
-    onSuccess: () => {
+    // The saved client goes into the shared list at once (POS, Clients, Debts and every picker read it), then the
+    // list is re-read from the database.
+    onSuccess: (rows) => {
+      const created = Array.isArray(rows) ? rows[0] : rows
+      if (created?.id) {
+        qc.setQueryData(keys.clients(brandId), (prev) => {
+          if (!Array.isArray(prev)) return prev
+          if (prev.some((c) => String(c.id) === String(created.id))) return prev
+          return [...prev, created].sort((a, b) => String(a.full_name || '').localeCompare(String(b.full_name || '')))
+        })
+      }
       qc.invalidateQueries({ queryKey: keys.clients(brandId) })
     },
   })
@@ -176,8 +218,10 @@ export function useInvalidateSales(brandId) {
   const qc = useQueryClient()
   return () => {
     invalidateSalesFigures(qc)
-    // A sale changes its client's visits and total spent (kept by the database).
+    // A sale changes its client's visits and total spent (kept by the database), and a credit sale or repayment
+    // changes what they owe.
     qc.invalidateQueries({ queryKey: keys.clients(brandId) })
+    qc.invalidateQueries({ queryKey: ['debts'] })
   }
 }
 

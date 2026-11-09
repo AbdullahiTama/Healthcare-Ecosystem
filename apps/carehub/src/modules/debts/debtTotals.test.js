@@ -10,11 +10,16 @@ describe('debtTotals', () => {
       { direction: 'we_owe', balance: 4000 },
       { direction: 'we_owe', balance: -10 },
     ])
-    expect(t).toEqual({ owedToUs: 4000.5, weOwe: 4000, openOwedToUs: 2, openWeOwe: 1, count: 5 })
+    expect(t).toEqual({ owedToUs: 4000.5, weOwe: 4000, outstanding: 8000.5, openOwedToUs: 2, openWeOwe: 1, count: 5 })
+  })
+
+  it('adds in whole kobo, so many small balances never drift', () => {
+    const t = debtTotals(Array.from({ length: 10 }, () => ({ direction: 'owes_us', balance: 0.1 })))
+    expect(t.owedToUs).toBe(1)
   })
 
   it('is zero for no debts', () => {
-    expect(debtTotals([])).toEqual({ owedToUs: 0, weOwe: 0, openOwedToUs: 0, openWeOwe: 0, count: 0 })
+    expect(debtTotals([])).toEqual({ owedToUs: 0, weOwe: 0, outstanding: 0, openOwedToUs: 0, openWeOwe: 0, count: 0 })
   })
 })
 

@@ -12,7 +12,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 vi.mock('./repositories', () => ({
   expenseRepository: {
-    getPage: vi.fn(), getTotals: vi.fn(), getCategories: vi.fn(), create: vi.fn(), delete: vi.fn(), getById: vi.fn(),
+    getAll: vi.fn(), create: vi.fn(), delete: vi.fn(), getById: vi.fn(),
     getBudget: vi.fn(), getBudgetMonths: vi.fn(), setBudget: vi.fn(),
   },
 }))
@@ -56,9 +56,7 @@ const countEnter = (el) => { const n = { v: 0 }; el.addEventListener('keydown', 
 beforeEach(() => {
   vi.clearAllMocks()
   localStorage.clear()
-  repo.getPage.mockResolvedValue([{ id: 'e1', category: 'Rent', description: 'Shop', amount: 1000, date: '2026-11-02', staff_name: '' }])
-  repo.getTotals.mockResolvedValue([{ total_amount: 1000, transaction_count: 1 }])
-  repo.getCategories.mockResolvedValue([{ category: 'Rent', category_amount: 1000 }])
+  repo.getAll.mockResolvedValue([{ id: 'e1', category: 'Rent', description: 'Shop', amount: 1000, date: '2026-11-02', staff_name: '' }])
   repo.create.mockResolvedValue({ id: 'x' })
   repo.delete.mockResolvedValue(null)
   repo.getBudget.mockResolvedValue({ month: '2026-11', amount: 50000 })

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Search, UserCheck, UserPlus, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { findClientMatches } from './customerPick'
+import NewCustomerForm from './NewCustomerForm'
 
 const { navy, gray400, gray500, gray600, border, bg, danger, tealDeep, tealMist } = theme
 
@@ -11,11 +12,8 @@ const { navy, gray400, gray500, gray600, border, bg, danger, tealDeep, tealMist 
 // or adds a new customer here without leaving the sale (the cart is kept).
 export default function CustomerPicker({ clients, loading, error, onRetry, selected, onSelect, onCreate }) {
   const [query, setQuery] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [addError, setAddError] = useState('')
+  // null, or the name / phone to start the new-customer form with (from what was searched).
+  const [adding, setAdding] = useState(null)
 
   if (selected) {
     return (
@@ -35,37 +33,13 @@ export default function CustomerPicker({ clients, loading, error, onRetry, selec
 
   const matches = findClientMatches(clients, query)
 
-  async function create(e) {
-    e.preventDefault()
-    const fullName = name.trim().replace(/\s+/g, ' ')
-    if (fullName.length < 2) { setAddError('Enter the customer\'s full name.'); return }
-    setSaving(true); setAddError('')
-    try {
-      const client = await onCreate({ full_name: fullName, phone: phone.trim() || null })
-      setAdding(false); setQuery(''); setName(''); setPhone('')
-      onSelect(client)
-    } catch (err) {
-      setAddError(err?.message || 'We couldn\'t add the customer. Try again.')
-    } finally { setSaving(false) }
-  }
-
   const label = { display: 'block', fontSize: 11.5, fontWeight: 800, color: navy, marginBottom: 6 }
-  const input = { width: '100%', padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 12.5, outline: 'none', boxSizing: 'border-box', background: bg, color: navy }
 
   if (adding) {
     return (
-      <form onSubmit={create} aria-label='Add a new customer' style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white' }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: navy }}>New customer</div>
-        <label htmlFor='credit-new-name' style={{ ...label, marginBottom: 0 }}>Full name</label>
-        <input id='credit-new-name' value={name} onChange={(e) => setName(e.target.value)} autoComplete='off' style={input} aria-invalid={!!addError} aria-describedby={addError ? 'credit-new-error' : undefined} />
-        <label htmlFor='credit-new-phone' style={{ ...label, marginBottom: 0 }}>Phone (recommended)</label>
-        <input id='credit-new-phone' type='tel' value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete='off' style={input} />
-        {addError && <div id='credit-new-error' role='alert' style={{ fontSize: 11.5, color: danger, fontWeight: 700 }}>{addError}</div>}
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button type='button' onClick={() => { setAdding(false); setAddError('') }} style={{ flex: 1, padding: '8px 0', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: 700, fontSize: 12, cursor: 'pointer', minHeight: 36 }}>Cancel</button>
-          <button type='submit' disabled={saving} style={{ flex: 1, padding: '8px 0', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: 800, fontSize: 12, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1, minHeight: 36 }}>{saving ? 'Saving…' : 'Add and select'}</button>
-        </div>
-      </form>
+      <NewCustomerForm idPrefix='credit-new' initialName={adding.name} initialPhone={adding.phone} onCreate={onCreate}
+        onCancel={() => setAdding(null)}
+        onCreated={(client) => { setAdding(null); setQuery(''); onSelect(client) }} />
     )
   }
 
@@ -102,14 +76,14 @@ export default function CustomerPicker({ clients, loading, error, onRetry, selec
           ))}
           {matches.length === 0 && <li style={{ fontSize: 12, color: gray500, padding: '4px 2px' }}>No customer matches “{query.trim()}”.</li>}
           <li>
-            <button type='button' onClick={() => { setAdding(true); setName(/\d/.test(query) ? '' : query.trim()); setPhone(/\d/.test(query) ? query.trim() : '') }}
+            <button type='button' onClick={() => setAdding(/\d/.test(query) ? { name: '', phone: query.trim() } : { name: query.trim(), phone: '' })}
               style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '8px 10px', borderRadius: theme.radius.md, border: `1px dashed ${tealDeep}`, background: 'white', color: tealDeep, fontWeight: 700, fontSize: 12, cursor: 'pointer', minHeight: 36 }}>
               <UserPlus size={14} aria-hidden='true' /> Add a new customer
             </button>
           </li>
         </ul>
       ) : (clients || []).length === 0 ? (
-        <button type='button' onClick={() => setAdding(true)}
+        <button type='button' onClick={() => setAdding({ name: '', phone: '' })}
           style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, width: '100%', padding: '8px 10px', borderRadius: theme.radius.md, border: `1px dashed ${tealDeep}`, background: 'white', color: tealDeep, fontWeight: 700, fontSize: 12, cursor: 'pointer', minHeight: 36 }}>
           <UserPlus size={14} aria-hidden='true' /> No customers yet. Add the first one
         </button>

@@ -7,8 +7,12 @@ import { PHARMACY_TYPE_LABEL } from '../consultation/PharmacyForm'
 import { fmt, todayDate } from '../../lib/utils'
 import { getModulesForType } from '../../lib/permissions'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
-import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients } from '../../hooks/queries'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
+import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients, useOpenDebts } from '../../hooks/queries'
+import PeriodFilter from '../../components/PeriodFilter'
+import { FilterPanel, FilterSelect, AmountRangeFilter } from '../../components/RecordFilters'
+import { yearsOf } from '../../lib/recordFilters'
+import { DEFAULT_CLIENT_FILTERS, CLIENT_PAYMENT_STATUSES, CLIENT_ACTIVITY, GENDERS, clientBalances, filterClients, clientTotals, activeClientFilterCount, describeClientFilters } from './clientFilters'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, bg, danger, dangerBg, warning, warningBg, success } = theme
 
@@ -101,7 +105,10 @@ export default function Clients({ brand, role, perms }) {
   // consultation-enabled type — including the signup taxonomy's clinic,
   // aesthetic, spa and haircare — gets the client-detail shortcut.
   const canConsult = getModulesForType(brand?.business_type).some(([id]) => id === 'consultation')
-  const [search, setSearch] = useState('')
+  // The list filters (clientFilters.js); `filters` below is the client-detail history filter.
+  const [listFilters, setListFilters] = useState(DEFAULT_CLIENT_FILTERS)
+  const setLF = (k, v) => setListFilters(p => ({ ...p, [k]: v }))
+  const search = listFilters.search
   const [page, setPage] = useState(0)
   const [saving, setSaving] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
@@ -119,12 +126,18 @@ export default function Clients({ brand, role, perms }) {
   const [uploadError, setUploadError] = useState('')
 
   // React Query hooks
-  const { data: clients = [], isLoading: loading } = useClients(brand?.id)
+  const clientsQuery = useClients(brand?.id)
+  const { data: clients = [], isLoading: loading, isError: loadFailed } = clientsQuery
+  // What each client still owes, from the open debts. If they cannot be read, the page says so and the
+  // payment-status filter and the "Owed to you" total are not offered rather than showing ₦0.
+  const openDebts = useOpenDebts(brand?.id)
+  const balances = useMemo(() => clientBalances(clients, openDebts.data || []), [clients, openDebts.data])
+  const balancesKnown = openDebts.isSuccess
   const createClient = useCreateClient(brand?.id)
   const createManyClients = useCreateManyClients(brand?.id)
   const importing = createManyClients.isPending
 
-  useEffect(() => { setPage(0) }, [search, clients.length])
+  useEffect(() => { setPage(0) }, [listFilters, clients.length])
 
   // React Query hooks for client detail
   const { data: clientSales = [] } = useClientSales(selected?.id, brand?.id)
@@ -154,17 +167,18 @@ export default function Clients({ brand, role, perms }) {
     finally { setSaving(false) }
   }
 
+  // Exports the clients shown: with filters on, only the ones that match.
   function exportCsv() {
-    const rows = [['Name', 'Phone', 'Email', 'Gender', 'Date of Birth', 'Address', 'Total Spend', 'Visits', 'Joined']]
-    clients.forEach(c => {
-      rows.push([c.full_name || '', c.phone || '', c.email || '', c.gender || '', c.date_of_birth || '', c.address || '', c.total_spend || 0, c.visit_count || 0, c.created_at?.split('T')[0] || ''])
+    const rows = [['Name', 'Phone', 'Email', 'Gender', 'Date of Birth', 'Address', 'Total Spend', 'Visits', 'Owes', 'Joined']]
+    filtered.forEach(c => {
+      rows.push([c.full_name || '', c.phone || '', c.email || '', c.gender || '', c.date_of_birth || '', c.address || '', c.total_spend || 0, c.visit_count || 0, balancesKnown ? (balances.get(c.id) || 0) : '', c.created_at?.split('T')[0] || ''])
     })
     const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url; a.download = 'CareHub_Clients.csv'; a.click()
     URL.revokeObjectURL(url)
-    showToast('Clients exported as CSV!', { type: 'success' })
+    showToast((isFiltered ? filtered.length + ' matching clients' : 'Clients') + ' exported as CSV!', { type: 'success' })
   }
 
   // ── Bulk upload (CSV) ───────────────────────────────────────────────────────
@@ -314,11 +328,14 @@ export default function Clients({ brand, role, perms }) {
     showToast('History exported as CSV!', { type: 'success' })
   }
 
-  const filtered = clients.filter(c =>
-    c.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.phone && c.phone.includes(search)) ||
-    (c.email && c.email.toLowerCase().includes(search.toLowerCase()))
-  )
+  const filtered = useMemo(() => filterClients(clients, balancesKnown ? listFilters : { ...listFilters, paymentStatus: '' }, balances),
+    [clients, listFilters, balances, balancesKnown])
+  const activeCount = activeClientFilterCount(listFilters)
+  const isFiltered = activeCount > 0
+  const shownTotals = clientTotals(filtered, balances)
+  const filterLabel = describeClientFilters(listFilters, { fmt })
+  const years = useMemo(() => yearsOf(clients.map(c => c.created_at), todayDate()), [clients])
+  const clearListFilters = () => setListFilters(DEFAULT_CLIENT_FILTERS)
 
   const matchesFilters = (entry) => {
     const date = entry.kind === 'consultation' ? (entry.consultation_date || '') : (entry.created_at?.slice(0, 10) || '')
@@ -369,9 +386,6 @@ export default function Clients({ brand, role, perms }) {
     return [...map.values()].slice(0, 12)
   }, [clientSales, clientConsults])
 
-  const thisMonth = new Date().toISOString().slice(0, 7)
-  const newThisMonth = clients.filter(c => c.created_at?.startsWith(thisMonth)).length
-  const totalSpend = clients.reduce((s, c) => s + (c.total_spend || 0), 0)
 
   // A USB barcode scanner types the code into whichever field has focus, then
   // presses Enter. Clients has no barcode field, so a scan is never meant here:
@@ -405,18 +419,42 @@ export default function Clients({ brand, role, perms }) {
           { label: 'Export CSV', icon: <Download size={14} />, onClick: exportCsv },
         ]} />
 
+      {/* Totals for the clients shown: every filter recalculates them. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
-        <StatCard icon={<Users />} label='Total Clients' value={clients.length} />
-        <StatCard icon={<UserPlus />} label='New This Month' value={newThisMonth} />
-        <StatCard icon={<DollarSign />} label='Total Lifetime Spend' value={fmt(totalSpend)} />
+        <StatCard icon={<Users />} label={isFiltered ? 'Matching clients' : 'Total clients'} value={loadFailed ? '—' : shownTotals.count} sub={isFiltered && !loadFailed ? 'of ' + clients.length : undefined} />
+        <StatCard icon={<DollarSign />} label='Lifetime spend' value={loadFailed ? '—' : fmt(shownTotals.spend)} sub={loadFailed ? undefined : 'Average ' + fmt(shownTotals.averageSpend)} />
+        <StatCard icon={<Landmark />} label='Owed to you' value={loadFailed || !balancesKnown ? '—' : fmt(shownTotals.owed)}
+          sub={openDebts.isError ? "Couldn't load debts" : balancesKnown ? shownTotals.owing + ' client' + (shownTotals.owing !== 1 ? 's' : '') + ' owing' : 'Loading…'} />
+        <StatCard icon={<ShoppingCart />} label='Visits' value={loadFailed ? '—' : shownTotals.visits} />
       </div>
 
-      <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
+      <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
         <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search by name, phone or email...'
+        <input value={search} onChange={e => setLF('search', e.target.value)} placeholder='Search by name, phone, email or address...' aria-label='Search clients'
           style={{ flex: 1, padding: '12px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
       </div>
 
+      <FilterPanel title='Client filters' activeCount={activeCount} onClear={clearListFilters}>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <PeriodFilter value={listFilters.period} onChange={v => setLF('period', v)} years={years} label='Date joined' />
+        </div>
+        <FilterSelect label='Payment status' value={balancesKnown ? listFilters.paymentStatus : ''} onChange={v => setLF('paymentStatus', v)} options={balancesKnown ? CLIENT_PAYMENT_STATUSES : []}
+          allLabel={openDebts.isError ? 'Unavailable: debts did not load' : balancesKnown ? 'All' : 'Loading…'} />
+        <FilterSelect label='Purchase activity' value={listFilters.activity} onChange={v => setLF('activity', v)} options={CLIENT_ACTIVITY} />
+        <FilterSelect label='Gender' value={listFilters.gender} onChange={v => setLF('gender', v)} options={GENDERS} />
+        <AmountRangeFilter label='Lifetime spend (₦)' value={listFilters.spend} onChange={v => setLF('spend', v)} />
+        <AmountRangeFilter label='Number of visits' value={listFilters.visits} onChange={v => setLF('visits', v)} minPlaceholder='0' />
+      </FilterPanel>
+
+      {isFiltered && !loading && !loadFailed && (
+        <div role='status' aria-live='polite' style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 18px', padding: '12px 16px', marginBottom: '14px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}` }}>
+          <span style={{ fontSize: '12.5px', color: gray600 }}>{shownTotals.count} client{shownTotals.count !== 1 ? 's' : ''} for {filterLabel}</span>
+          <span style={{ fontSize: '13px', color: gray600 }}>Spent: <strong style={{ color: navy }}>{fmt(shownTotals.spend)}</strong></span>
+          {balancesKnown && <span style={{ fontSize: '13px', color: gray600 }}>Owe you: <strong style={{ color: shownTotals.owed > 0 ? danger : success }}>{fmt(shownTotals.owed)}</strong></span>}
+        </div>
+      )}
+
+      {loadFailed ? <ErrorState message="We couldn't load your clients. Check your connection and try again." onRetry={() => clientsQuery.refetch()} /> : (
       <DataTable
         variant="cards"
         rows={filtered}
@@ -426,7 +464,7 @@ export default function Clients({ brand, role, perms }) {
         total={filtered.length}
         loading={loading}
         onRowClick={c => setSelected(c)}
-        empty={<Empty icon={<Users size={40} />} message={search ? 'No clients match your search' : 'No clients yet. Add your first client!'} action='+ Add Client' onAction={() => setShowAdd(true)} cause={search ? 'filtered' : 'none'} />}
+        empty={<Empty icon={<Users size={40} />} message={isFiltered ? 'No clients match ' + filterLabel : 'No clients yet. Add your first client!'} action={isFiltered ? 'Clear filters' : '+ Add Client'} onAction={isFiltered ? clearListFilters : () => setShowAdd(true)} cause={isFiltered ? 'filtered' : 'none'} />}
         count={`${filtered.length} client${filtered.length !== 1 ? 's' : ''}`}
         renderCard={c => (
           <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
@@ -441,10 +479,12 @@ export default function Clients({ brand, role, perms }) {
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
               <div style={{ fontSize: '16px', fontWeight: '900', color: navy }}>{fmt(c.total_spend || 0)}</div>
               <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{c.visit_count || 0} visit(s)</div>
+              {(balances.get(c.id) || 0) > 0 && <div style={{ fontSize: '11px', fontWeight: '700', color: danger, marginTop: '2px' }}>Owes {fmt(balances.get(c.id))}</div>}
             </div>
           </div>
         )}
       />
+      )}
 
       {/* Add Client Modal */}
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({}) }} title='Add New Client'

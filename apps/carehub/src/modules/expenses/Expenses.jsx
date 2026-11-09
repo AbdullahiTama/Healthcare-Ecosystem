@@ -1,11 +1,15 @@
 import { businessDateOf, businessDateTime } from '../../lib/businessDay'
-import { useState, useEffect, useRef } from 'react'
-import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus, ChevronDown } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus, ChevronDown, Search } from 'lucide-react'
 import { expenseRepository } from './repositories'
 import { useQueryParamAction } from '../../hooks/useQueryParamAction'
-import { validateExpense, newExpenseId, budgetSummary } from './expenseRules'
+import { validateExpense, newExpenseId, budgetSummary, expenseDate, inMonth, sumExpenses } from './expenseRules'
 import { useExpenseBudget } from './useExpenseBudget'
 import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
+import { defaultExpenseFilters, filterExpenses, sortExpenses, expenseTotals, expenseRecorders, expenseRecorder, activeExpenseFilterCount, describeExpenseFilters } from './expenseFilters'
+import PeriodFilter from '../../components/PeriodFilter'
+import { FilterPanel, FilterSelect, AmountRangeFilter } from '../../components/RecordFilters'
+import { yearsOf } from '../../lib/recordFilters'
 import { fmt, todayDate, currentMonth } from '../../lib/utils'
 import { EXPENSE_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
@@ -16,13 +20,18 @@ const { tealDeep, tealBright, tealMist, navy, gray600, gray500, gray400, gray100
 const PAGE_SIZE = 50
 
 export default function Expenses({ brand, role, perms }) {
+  // Every expense of the business is read once (paged past the server's row cap) and filtered here, so any
+  // combination of filters totals exactly the rows on screen. Volumes are small (tens to hundreds per business);
+  // a server-side filter is the next step if a business records many thousands.
   const [expenses, setExpenses] = useState([])
   const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [hasMore, setHasMore] = useState(true)
-  const [filterMonth, setFilterMonth] = useState(currentMonth())
-  const [totals, setTotals] = useState({ total_amount: 0, transaction_count: 0 })
-  const [categories, setCategories] = useState([])
+  const [shownCount, setShownCount] = useState(PAGE_SIZE)
+  const thisMonth = currentMonth()
+  const [filters, setFilters] = useState(() => defaultExpenseFilters(thisMonth))
+  const setFilter = (k, v) => setFilters(p => ({ ...p, [k]: v }))
+  const clearFilters = () => setFilters(defaultExpenseFilters(thisMonth))
+  // The budget is monthly: the month filtered on, otherwise the current month.
+  const budgetMonth = filters.period?.mode === 'month' && /^\d{4}-\d{2}$/.test(filters.period.month || '') ? filters.period.month : thisMonth
   const [showAdd, setShowAdd] = useState(false)
   const [showBudget, setShowBudget] = useState(false)
   const [form, setForm] = useState({ date: todayDate() })
@@ -49,58 +58,41 @@ export default function Expenses({ brand, role, perms }) {
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isOwner = role === 'Owner'
   // The monthly budget, stored in the database (it used to live only in this browser and vanished).
-  const budgetState = useExpenseBudget(brand?.id, filterMonth, { isOwner })
+  const budgetState = useExpenseBudget(brand?.id, budgetMonth, { isOwner })
   const budget = budgetState.status === 'ready' ? budgetState.amount : 0
-  const carriedFrom = budget > 0 && budgetState.fromMonth && budgetState.fromMonth !== filterMonth ? budgetState.fromMonth : null
+  const carriedFrom = budget > 0 && budgetState.fromMonth && budgetState.fromMonth !== budgetMonth ? budgetState.fromMonth : null
 
-  useEffect(() => { load() }, [brand?.id, filterMonth])
-  useEffect(() => { setBudgetInput(budget > 0 ? String(budget) : '') }, [budget, filterMonth])
+  useEffect(() => { load() }, [brand?.id])
+  useEffect(() => { setShownCount(PAGE_SIZE) }, [filters])
+  useEffect(() => { setBudgetInput(budget > 0 ? String(budget) : '') }, [budget, budgetMonth])
 
   async function load() {
     const seq = ++loadSeq.current
     setLoading(true)
     setLoadError(null)
-    setExpenses([])
-    setHasMore(true)
     try {
-      const [page, totalData, catData] = await Promise.all([
-        expenseRepository.getPage(brand.id, { month: filterMonth || null, offset: 0, limit: PAGE_SIZE }),
-        expenseRepository.getTotals(brand.id, filterMonth || null),
-        expenseRepository.getCategories(brand.id, filterMonth || null),
-      ])
-      if (seq !== loadSeq.current) return // a newer load (month change, save) owns the screen
-      setExpenses(page || [])
-      setTotals(totalData?.[0] || { total_amount: 0, transaction_count: 0 })
-      // Aggregate categories from summary rows
-      const catMap = {}
-      ;(catData || []).forEach(r => {
-        if (!catMap[r.category]) catMap[r.category] = { category: r.category, total: 0, count: 0 }
-        catMap[r.category].total += Number(r.category_amount) || 0
-        catMap[r.category].count += 1
-      })
-      setCategories(Object.values(catMap).sort((a, b) => b.total - a.total))
-      setHasMore((page || []).length === PAGE_SIZE)
+      const rows = await expenseRepository.getAll(brand.id)
+      if (seq !== loadSeq.current) return // a newer load (save, delete) owns the screen
+      setExpenses(rows || [])
     } catch (e) {
       if (seq !== loadSeq.current) return
       // A failed read must never look like "no spending": say so and offer a retry.
       console.error('[Expenses] load failed:', e?.message)
       setLoadError(e?.message || 'Could not load expenses.')
-      setTotals({ total_amount: 0, transaction_count: 0 })
-      setCategories([])
+      setExpenses([])
     }
     if (seq === loadSeq.current) setLoading(false)
   }
 
-  async function loadMore() {
-    if (loadingMore || !hasMore) return
-    setLoadingMore(true)
-    try {
-      const more = await expenseRepository.getPage(brand.id, { month: filterMonth || null, offset: expenses.length, limit: PAGE_SIZE })
-      setExpenses(p => [...p, ...(more || [])])
-      setHasMore((more || []).length === PAGE_SIZE)
-    } catch (e) { showToast('Could not load more expenses. Please try again.', { type: 'error' }) }
-    setLoadingMore(false)
-  }
+  const filtered = useMemo(() => sortExpenses(filterExpenses(expenses, filters)), [expenses, filters])
+  const shownTotals = useMemo(() => expenseTotals(filtered), [filtered])
+  const recorders = useMemo(() => expenseRecorders(expenses), [expenses])
+  const categoryOptions = useMemo(() => [...new Set([...EXPENSE_CATS, ...expenses.map(e => e.category).filter(Boolean)])].map(c => [c, c]), [expenses])
+  const years = useMemo(() => yearsOf(expenses.map(expenseDate), todayDate()), [expenses])
+  const activeCount = activeExpenseFilterCount(filters, thisMonth)
+  const filterLabel = describeExpenseFilters(filters, { fmt })
+  // Budget spending is the whole month, whatever else is filtered.
+  const monthSpent = useMemo(() => sumExpenses(expenses.filter(e => inMonth(e, budgetMonth))), [expenses, budgetMonth])
 
   async function save() {
     if (saveInFlight.current) return
@@ -143,7 +135,7 @@ export default function Expenses({ brand, role, perms }) {
       // Resolves only once the budget is stored; the modal stays open otherwise.
       await budgetState.save(Math.round(amount * 100) / 100)
       setShowBudget(false)
-      showToast(amount > 0 ? 'Budget set to ' + fmt(amount) + ' from ' + filterMonth + '.' : 'Budget removed from ' + filterMonth + '.', { type: 'success' })
+      showToast(amount > 0 ? 'Budget set to ' + fmt(amount) + ' from ' + budgetMonth + '.' : 'Budget removed from ' + budgetMonth + '.', { type: 'success' })
     } catch (e) {
       console.error('[Expenses] budget save failed:', e?.message)
       showToast(/Only the Owner/.test(e?.message || '') ? 'Only the Owner can set the expense budget.' : 'Could not save the budget. Nothing was changed; please try again.', { type: 'error' })
@@ -151,7 +143,8 @@ export default function Expenses({ brand, role, perms }) {
     setSavingBudget(false)
   }
 
-  const total = Number(totals.total_amount) || 0
+  // Budget spending is the whole budget month, whatever else is filtered.
+  const total = monthSpent
   // Spending that could not be read (or is still loading) must not show as "nothing spent, all remaining".
   const spendingKnown = !loading && !loadError
   const summary = budgetSummary(budget, total)
@@ -162,7 +155,7 @@ export default function Expenses({ brand, role, perms }) {
   const money = (n) => (spendingKnown ? fmt(n) : '—')
 
   const byCategory = {}
-  categories.forEach(c => { byCategory[c.category] = c.total })
+  shownTotals.byCategory.forEach(c => { byCategory[c.category] = c.total })
 
   // A USB barcode scanner types the code into whichever field has focus, then
   // presses Enter. Expenses has no barcode field, so a scan is never meant
@@ -181,11 +174,11 @@ export default function Expenses({ brand, role, perms }) {
       if (t.id === 'expense-description' || t.id === 'expense-recorded-by') return true
       return (t.tagName === 'INPUT' || t.tagName === 'SELECT') && !root.contains(t)
     },
-    snapshot: () => ({ form, budgetInput, filterMonth }),
+    snapshot: () => ({ form, budgetInput, filters }),
     onScan: (code, snap) => {
       setForm(snap.form)
       setBudgetInput(snap.budgetInput)
-      setFilterMonth(snap.filterMonth)
+      setFilters(snap.filters)
       showToast('Scan ignored (' + code + '): Expenses has no barcode field, so nothing was changed.', { type: 'warning' })
     },
   }, { window: true })
@@ -209,18 +202,18 @@ export default function Expenses({ brand, role, perms }) {
       </div>
 
       {/* Budget could not be read: never shown as "no budget" */}
-      {budgetState.status === 'error' && filterMonth && (
+      {budgetState.status === 'error' && (
         <div role='alert' style={{ padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', borderRadius: theme.radius.lg, background: 'white', border: `1px solid ${warning}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: navy }}><AlertTriangle size={15} color={warning} aria-hidden='true' /> The budget could not be loaded. It has not been lost.</div>
           <TealBtn onClick={budgetState.reload} style={{ padding: '8px 16px', fontSize: '12px' }}>Try again</TealBtn>
         </div>
       )}
-      {budgetState.status === 'loading' && filterMonth && (
+      {budgetState.status === 'loading' && (
         <div role='status' style={{ marginBottom: '20px', fontSize: '12px', color: gray500 }}>Loading the budget…</div>
       )}
 
       {/* Budget Tracker */}
-      {budget > 0 && filterMonth && (
+      {budget > 0 && (
         <Card style={{ padding: '20px', marginBottom: '20px', border: overBudget ? `2px solid ${danger}` : nearLimit ? `2px solid ${warning}` : `1px solid ${border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
             <div>
@@ -228,7 +221,7 @@ export default function Expenses({ brand, role, perms }) {
                 {overBudget ? <><AlertCircle size={15} color={danger} /> Over budget!</> : nearLimit ? <><AlertTriangle size={15} color={warning} /> Approaching limit</> : <><CheckCircle size={15} color={success} /> Budget tracker</>}
               </div>
               <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>
-                {filterMonth} · {carriedFrom ? 'Carried over from ' + carriedFrom + ' budget' : 'Set by Owner'}
+                {budgetMonth} · {carriedFrom ? 'Carried over from ' + carriedFrom + ' budget' : 'Set by Owner'}
                 {budgetState.onDevice && ' · saved on this device only'}
               </div>
             </div>
@@ -284,7 +277,7 @@ export default function Expenses({ brand, role, perms }) {
       )}
 
       {/* No budget set — prompt owner */}
-      {budget === 0 && isOwner && budgetState.status === 'ready' && filterMonth && (
+      {budget === 0 && isOwner && budgetState.status === 'ready' && (
         <div style={{ marginBottom: '20px', padding: '14px 18px', borderRadius: theme.radius.lg, background: tealMist, border: `1px dashed ${tealBright}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: tealDeep, fontSize: '14px' }}><Target size={15} /> Set a monthly expense budget</div>
@@ -294,10 +287,11 @@ export default function Expenses({ brand, role, perms }) {
         </div>
       )}
 
+      {/* Totals for the expenses shown: every filter recalculates them. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
-        <StatCard icon={<Receipt />} label={filterMonth ? `Total for ${filterMonth}` : 'Total (all time)'} value={loadError ? '—' : fmt(total)} />
-        <StatCard icon={<BarChart2 />} label='Categories' value={loadError ? '—' : Object.keys(byCategory).length} />
-        <StatCard icon={<Clipboard />} label='Transactions' value={loadError ? '—' : (totals.transaction_count || 0)} />
+        <StatCard icon={<Receipt />} label='Total spent' value={loadError ? '—' : fmt(shownTotals.total)} sub={loadError ? undefined : describeExpenseFilters({ period: filters.period })} />
+        <StatCard icon={<BarChart2 />} label='Categories' value={loadError ? '—' : shownTotals.byCategory.length} />
+        <StatCard icon={<Clipboard />} label='Transactions' value={loadError ? '—' : shownTotals.count} />
       </div>
 
       {/* Category breakdown */}
@@ -308,7 +302,7 @@ export default function Expenses({ brand, role, perms }) {
             <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
               <span style={{ fontSize: '12px', color: gray600, width: '120px', fontWeight: '600', flexShrink: 0 }}>{cat}</span>
               <div style={{ flex: 1, height: '8px', background: gray100, borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: (total > 0 ? (amt / total) * 100 : 0) + '%', background: tealDeep, borderRadius: '4px' }} />
+                <div style={{ height: '100%', width: (shownTotals.total > 0 ? (amt / shownTotals.total) * 100 : 0) + '%', background: tealDeep, borderRadius: '4px' }} />
               </div>
               <span style={{ fontSize: '13px', fontWeight: '700', width: '100px', textAlign: 'right', flexShrink: 0, color: navy }}>{fmt(amt)}</span>
             </div>
@@ -316,11 +310,27 @@ export default function Expenses({ brand, role, perms }) {
         </Card>
       )}
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <input type='month' value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
-          style={{ padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
-        <button onClick={() => setFilterMonth('')} style={{ padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontSize: '13px', cursor: 'pointer', fontWeight: '700' }}>All time</button>
+      <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
+        <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
+        <input value={filters.search} onChange={e => setFilter('search', e.target.value)} placeholder='Search description, category or staff...' aria-label='Search expenses'
+          style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
       </div>
+
+      <FilterPanel title='Expense filters' activeCount={activeCount} onClear={clearFilters} defaultOpen>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <PeriodFilter value={filters.period} onChange={v => setFilter('period', v)} years={years} label='Expense date' />
+        </div>
+        <FilterSelect label='Category' value={filters.category} onChange={v => setFilter('category', v)} options={categoryOptions} />
+        <FilterSelect label='Recorded by' value={filters.recordedBy} onChange={v => setFilter('recordedBy', v)} options={recorders.map(r => [r, r])} allLabel='Anyone' />
+        <AmountRangeFilter label='Amount (₦)' value={filters.amount} onChange={v => setFilter('amount', v)} />
+      </FilterPanel>
+
+      {activeCount > 0 && !loading && !loadError && (
+        <div role='status' aria-live='polite' style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 18px', padding: '12px 16px', marginBottom: '14px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}` }}>
+          <span style={{ fontSize: '12.5px', color: gray600 }}>{shownTotals.count} expense{shownTotals.count !== 1 ? 's' : ''} for {filterLabel}</span>
+          <span style={{ fontSize: '13px', color: gray600 }}>Total: <strong style={{ color: danger, fontSize: '15px' }}>{fmt(shownTotals.total)}</strong></span>
+        </div>
+      )}
 
       {loading ? <Loading /> : loadError ? (
         <Card style={{ padding: '24px', textAlign: 'center' }} role='alert'>
@@ -329,8 +339,10 @@ export default function Expenses({ brand, role, perms }) {
           <div style={{ fontSize: '13px', color: gray500, marginBottom: '14px' }}>Your totals are not shown because they could not be read. Nothing has been lost.</div>
           <TealBtn onClick={load}>Try again</TealBtn>
         </Card>
-      ) : expenses.length === 0 ? (
-        <Empty icon={<Receipt size={40} />} message={filterMonth ? 'No expenses recorded for ' + filterMonth : 'No expenses recorded yet'} action='+ Log Expense' onAction={() => setShowAdd(true)} />
+      ) : filtered.length === 0 ? (
+        expenses.length > 0 && activeCount > 0
+          ? <Empty icon={<Search size={40} />} message={'No expenses match ' + filterLabel} cause='filtered' action='Clear filters' onAction={clearFilters} />
+          : <Empty icon={<Receipt size={40} />} message={expenses.length > 0 ? 'No expenses recorded for ' + filterLabel : 'No expenses recorded yet'} action='+ Log Expense' onAction={() => setShowAdd(true)} />
       ) : (
         <Card>
           <div style={{ overflowX: 'auto' }}>
@@ -343,13 +355,13 @@ export default function Expenses({ brand, role, perms }) {
                 </tr>
               </thead>
               <tbody>
-                {expenses.map(e => (
+                {filtered.slice(0, shownCount).map(e => (
                   <tr key={e.id} style={{ borderBottom: `1px solid ${gray100}` }}>
                     <td style={{ padding: '12px 16px' }}><Pill label={e.category} type='teal' /></td>
                     <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>{e.description || 'Not set'}</td>
                     <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '900', color: danger }}>{fmt(e.amount)}</td>
                     <td style={{ padding: '12px 16px', fontSize: '12px', color: gray400 }}>{businessDateOf(e.date || e.created_at)}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', color: gray500 }}>{e.staff_name || 'Not set'}</td>
+                    <td style={{ padding: '12px 16px', fontSize: '13px', color: gray500 }}>{expenseRecorder(e) || 'Not set'}</td>
                     <td style={{ padding: '12px 16px' }}>
                       {perms?.canDelete && <RedBtn onClick={() => askDelete(e)} style={{ padding: '4px 9px', fontSize: '11px' }}>Delete</RedBtn>}
                     </td>
@@ -358,11 +370,11 @@ export default function Expenses({ brand, role, perms }) {
               </tbody>
             </table>
           </div>
-          {hasMore && (
+          {filtered.length > shownCount && (
             <div style={{ padding: '16px', textAlign: 'center' }}>
-              <button onClick={loadMore} disabled={loadingMore}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '13px', cursor: loadingMore ? 'wait' : 'pointer' }}>
-                {loadingMore ? 'Loading...' : <><ChevronDown size={14} /> Load more</>}
+              <button onClick={() => setShownCount(n => n + PAGE_SIZE)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+                <ChevronDown size={14} /> Show more ({filtered.length - shownCount} left)
               </button>
             </div>
           )}
@@ -370,13 +382,13 @@ export default function Expenses({ brand, role, perms }) {
       )}
 
       {/* Set Budget Modal */}
-      <Modal show={showBudget} onClose={() => setShowBudget(false)} title={'Set Expense Budget: ' + filterMonth}
+      <Modal show={showBudget} onClose={() => setShowBudget(false)} title={'Set Expense Budget: ' + budgetMonth}
         footer={<><GhostBtn onClick={() => setShowBudget(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveBudgetAmount} disabled={savingBudget} aria-busy={savingBudget || undefined} style={{ flex: 1, padding: '12px' }}>{savingBudget ? 'Saving…' : 'Save Budget'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ padding: '14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealMist}`, fontSize: '13px', color: tealDeep, lineHeight: '1.7' }}>
-            Set a spending limit from <strong>{filterMonth}</strong>. It carries over to the following months until you change it; enter 0 to have no budget from this month on. {budgetState.onDevice ? 'Until CareHub finishes updating, it is saved on this device only.' : 'It is saved to your business, so everyone working here sees it on any device.'} You will be alerted when 80% is used and when the budget is exceeded.
+            Set a spending limit from <strong>{budgetMonth}</strong>. It carries over to the following months until you change it; enter 0 to have no budget from this month on. {budgetState.onDevice ? 'Until CareHub finishes updating, it is saved on this device only.' : 'It is saved to your business, so everyone working here sees it on any device.'} You will be alerted when 80% is used and when the budget is exceeded.
           </div>
-          <Inp id='expense-budget-amount' label={'Monthly Budget for ' + filterMonth + ' (₦)'} value={budgetInput} onChange={setBudgetInput} type='number' placeholder='e.g. 100000' />
+          <Inp id='expense-budget-amount' label={'Monthly Budget for ' + budgetMonth + ' (₦)'} value={budgetInput} onChange={setBudgetInput} type='number' placeholder='e.g. 100000' />
           {budgetInput && parseFloat(budgetInput) > 0 && (
             <div style={{ padding: '12px 16px', borderRadius: theme.radius.md, background: bg, border: `1px solid ${border}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
@@ -384,7 +396,7 @@ export default function Expenses({ brand, role, perms }) {
                 <span style={{ fontWeight: '700', color: navy }}>{fmt(parseFloat(budgetInput))}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                <span style={{ color: gray500 }}>Already spent ({filterMonth})</span>
+                <span style={{ color: gray500 }}>Already spent ({budgetMonth})</span>
                 <span style={{ fontWeight: '700', color: danger }}>{money(total)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', borderTop: `1px solid ${border}`, paddingTop: '8px', marginTop: '4px' }}>

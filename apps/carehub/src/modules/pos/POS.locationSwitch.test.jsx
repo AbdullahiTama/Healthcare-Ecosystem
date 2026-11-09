@@ -15,6 +15,7 @@ vi.mock('../../hooks/queries', () => ({
   useClients: vi.fn(() => ({ data: [] })),
   useCreateClient: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useInvalidateSales: vi.fn(() => vi.fn()),
+  useUpsertOpenSale: vi.fn(() => vi.fn()),
 }))
 
 import POS from './POS.jsx'

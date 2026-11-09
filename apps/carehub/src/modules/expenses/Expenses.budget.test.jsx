@@ -11,7 +11,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 vi.mock('./repositories', () => ({
   expenseRepository: {
-    getPage: vi.fn(), getTotals: vi.fn(), getCategories: vi.fn(), create: vi.fn(), delete: vi.fn(), getById: vi.fn(),
+    getAll: vi.fn(), create: vi.fn(), delete: vi.fn(), getById: vi.fn(),
     getBudget: vi.fn(), getBudgetMonths: vi.fn(), setBudget: vi.fn(),
   },
 }))
@@ -49,9 +49,11 @@ beforeEach(() => {
   vi.clearAllMocks()
   localStorage.clear()
   stored = {} // the database: { 'YYYY-MM': amount }
-  repo.getPage.mockResolvedValue([])
-  repo.getCategories.mockResolvedValue([])
-  repo.getTotals.mockImplementation(async (_b, month) => [{ total_amount: month === '2026-11' ? 12000 : month === '2026-10' ? 30000 : 0, transaction_count: 1 }])
+  // The page reads every expense and totals the month on the device: ₦12,000 in November, ₦30,000 in October.
+  repo.getAll.mockResolvedValue([
+    { id: 'n1', category: 'Rent', amount: 12000, date: '2026-11-02', created_at: '2026-11-02T09:00:00' },
+    { id: 'o1', category: 'Rent', amount: 30000, date: '2026-10-02', created_at: '2026-10-02T09:00:00' },
+  ])
   repo.getBudget.mockImplementation(async (_b, month) => {
     const m = Object.keys(stored).filter((k) => k <= month).sort().pop()
     return m ? { month: m, amount: stored[m] } : null
@@ -142,7 +144,7 @@ describe('Expense budget', () => {
 
   it('when spending cannot be loaded, the tracker does not claim the whole budget remains', async () => {
     stored = { '2026-11': 50000 }
-    repo.getTotals.mockRejectedValue(new Error('Failed to fetch'))
+    repo.getAll.mockRejectedValue(new Error('Failed to fetch'))
     vi.spyOn(console, 'error').mockImplementation(() => {})
     await mount()
     expect(text()).toContain('Budget tracker')

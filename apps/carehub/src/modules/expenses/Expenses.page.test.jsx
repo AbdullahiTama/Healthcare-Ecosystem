@@ -7,9 +7,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 vi.mock('./repositories', () => ({
   expenseRepository: {
-    getPage: vi.fn(),
-    getTotals: vi.fn(),
-    getCategories: vi.fn(),
+    getAll: vi.fn(),
     create: vi.fn(),
     delete: vi.fn(),
     getById: vi.fn(),
@@ -45,7 +43,7 @@ const setValue = async (el, value) => {
 }
 async function fillAndSave({ category = 'Rent', amount = '1500.50' } = {}) {
   await click('Log expense')
-  const modal = document.body
+  const modal = document.querySelector('[role="dialog"]')
   const sel = modal.querySelector('select')
   if (category) await setValue(sel, category)
   const amountInput = [...modal.querySelectorAll('input[type=number]')].find((i) => i.min === '0')
@@ -56,9 +54,8 @@ async function fillAndSave({ category = 'Rent', amount = '1500.50' } = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   localStorage.clear()
-  repo.getPage.mockResolvedValue([{ id: 'e1', category: 'Rent', description: 'Shop', amount: 1000, date: '2026-10-05', staff_name: '' }])
-  repo.getTotals.mockResolvedValue([{ total_amount: 1000, transaction_count: 1 }])
-  repo.getCategories.mockResolvedValue([{ category: 'Rent', category_amount: 1000 }])
+  // Dated this month: the page opens on the current month.
+  repo.getAll.mockResolvedValue([{ id: 'e1', category: 'Rent', description: 'Shop', amount: 1000, date: new Date().toISOString().slice(0, 7) + '-05', staff_name: '' }])
   repo.create.mockResolvedValue({ id: 'x' })
   repo.getBudget.mockResolvedValue(null)
   repo.getBudgetMonths.mockResolvedValue([])
@@ -78,19 +75,19 @@ describe('Expenses page', () => {
   })
 
   it('a failed read shows an error with retry, not a zero total', async () => {
-    repo.getPage.mockRejectedValue(new Error('structure of query does not match function result type'))
+    repo.getAll.mockRejectedValue(new Error('structure of query does not match function result type'))
     await mount()
     expect(text()).toContain('Expenses could not be loaded')
     expect(text()).not.toContain('₦0')
     expect(text()).not.toContain('No expenses recorded')
-    repo.getPage.mockResolvedValue([])
+    repo.getAll.mockResolvedValue([])
     await click('Try again')
-    expect(repo.getPage.mock.calls.length).toBeGreaterThan(1)
+    expect(repo.getAll.mock.calls.length).toBeGreaterThan(1)
   })
 
   it('saves a valid expense once, with an id, a numeric amount and the business, then reloads', async () => {
     await mount()
-    const loads = repo.getPage.mock.calls.length
+    const loads = repo.getAll.mock.calls.length
     await fillAndSave()
     expect(repo.create).toHaveBeenCalledTimes(1)
     const [biz, payload] = repo.create.mock.calls[0]
@@ -98,7 +95,7 @@ describe('Expenses page', () => {
     expect(payload).toMatchObject({ category: 'Rent', amount: 1500.5 })
     expect(payload.id).toMatch(/^[0-9a-f-]{36}$/)
     expect(text()).toContain('Expense logged!')
-    expect(repo.getPage.mock.calls.length).toBeGreaterThan(loads)
+    expect(repo.getAll.mock.calls.length).toBeGreaterThan(loads)
   })
 
   it('a failed insert shows an error and never a success message', async () => {
@@ -127,8 +124,9 @@ describe('Expenses page', () => {
     repo.create.mockImplementation(() => new Promise((r) => { release = r }))
     await mount()
     await click('Log expense')
-    await setValue(document.body.querySelector('select'), 'Rent')
-    await setValue([...document.body.querySelectorAll('input[type=number]')].find((i) => i.min === '0'), '40')
+    const dialog = document.querySelector('[role="dialog"]')
+    await setValue(dialog.querySelector('select'), 'Rent')
+    await setValue([...dialog.querySelectorAll('input[type=number]')].find((i) => i.min === '0'), '40')
     const save = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Save Expense'))
     await act(async () => { save.click(); save.click() })
     expect(repo.create).toHaveBeenCalledTimes(1)
@@ -153,5 +151,37 @@ describe('opened from the Owner\'s business activity', () => {
     expect(dialog.textContent).toContain('Rep Two')
     expect(dialog.textContent).toContain('Typed On Form')
     expect(dialog.textContent).toContain('2026-10-30 10:15')
+  })
+})
+
+describe('Expenses: filters and totals', () => {
+  const month = new Date().toISOString().slice(0, 7)
+  const ROWS = [
+    { id: 'a', category: 'Rent', description: 'Shop', amount: 50000, date: month + '-01', staff_name: 'Ada' },
+    { id: 'b', category: 'Transport', description: 'Fuel', amount: 3000, date: month + '-02', staff_name: 'Musa' },
+    { id: 'c', category: 'Transport', description: 'Old fuel', amount: 9999, date: '2024-01-02', staff_name: 'Musa' },
+  ]
+  const choose = async (label, value) => {
+    const id = [...host.querySelectorAll('label')].find((l) => l.textContent.trim() === label).htmlFor
+    await setValue(document.getElementById(id), value)
+  }
+
+  it('opens on this month and totals only what is shown; a category filter recalculates', async () => {
+    repo.getAll.mockResolvedValue(ROWS)
+    await mount()
+    expect(text()).toContain('₦53,000')
+    expect(text()).not.toContain('Old fuel')
+    await choose('Category', 'Transport')
+    expect(text()).toContain('1 expense for')
+    expect(host.querySelector('[role="status"][aria-live="polite"]').textContent).toContain('₦3,000')
+    expect(text()).not.toContain('Shop')
+  })
+
+  it('"All time" brings in older expenses and the total follows', async () => {
+    repo.getAll.mockResolvedValue(ROWS)
+    await mount()
+    await choose('Expense date', 'all')
+    expect(text()).toContain('Old fuel')
+    expect(text()).toContain('₦62,999')
   })
 })

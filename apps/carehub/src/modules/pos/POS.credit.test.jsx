@@ -23,6 +23,7 @@ vi.mock('../../hooks/queries', () => ({
   useClients: vi.fn(() => ({ data: h.clients, isLoading: false, isError: false, refetch: vi.fn() })),
   useCreateClient: vi.fn(() => ({ mutateAsync: h.createClient })),
   useInvalidateSales: vi.fn(() => vi.fn()),
+  useUpsertOpenSale: vi.fn(() => vi.fn()),
 }))
 vi.mock('./repositories', async (orig) => {
   const real = await orig()

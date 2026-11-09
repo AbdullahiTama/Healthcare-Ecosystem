@@ -27,6 +27,9 @@ Status: built 2026-10-28. Database part: `supabase/migrations/carehub_20261220_c
 
 ## 2. Debt totals for a filter
 
+> Superseded 2026-11-09 by the full Debts filters (date, location, payment status, source, direction, amount); see
+> [Record-Filters-POS-Customers-and-Held-Sales.md](Record-Filters-POS-Customers-and-Held-Sales.md). The summary below still applies.
+
 When a search or month filter is active, the Debts page shows a summary for the matching debts:
 - how many debts match;
 - the outstanding amount owed to the business, with how many of those are still open;

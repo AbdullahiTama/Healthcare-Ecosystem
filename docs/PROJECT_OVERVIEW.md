@@ -134,6 +134,7 @@ and database migrations on PGlite. On 2026-11-02 CareHub had 304 test files and 
 | Stock and inventory | [architecture/Stock-Ledger.md](architecture/Stock-Ledger.md), [architecture/Inventory-Large-Catalogs.md](architecture/Inventory-Large-Catalogs.md) |
 | ADR / pharmacovigilance | [architecture/ADR-Routing-Foundation.md](architecture/ADR-Routing-Foundation.md), [architecture/ADR-Privacy-Security-Audit.md](architecture/ADR-Privacy-Security-Audit.md), [audits/carefind-carehub-pv-routing-audit.md](audits/carefind-carehub-pv-routing-audit.md) |
 | Importer / manufacturer operating models, representative ledgers, transaction register | [architecture/Importer-Operating-Models.md](architecture/Importer-Operating-Models.md) |
+| Debts, Clients and Expenses filters; adding customers at the POS; held sales shown at once | [architecture/Record-Filters-POS-Customers-and-Held-Sales.md](architecture/Record-Filters-POS-Customers-and-Held-Sales.md) |
 | Business directory and discovery | [architecture/CareHub-Business-Directory-and-Discovery.md](architecture/CareHub-Business-Directory-and-Discovery.md) |
 | Production readiness, performance | [architecture/Production-Readiness.md](architecture/Production-Readiness.md), [architecture/Performance-and-Resilience.md](architecture/Performance-and-Resilience.md) |
 | Linting | [architecture/Linting.md](architecture/Linting.md) |

@@ -6,6 +6,7 @@ import { saleRepository } from '../pos/repositories'
 import { purchaseRepository } from '../purchases/repositories'
 import { fmt, fmtDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
+import { PAYMENT_STATUSES, debtPaymentStatus } from './debtFilters'
 
 const { navy, gray400, gray500, gray600, danger, success, bg } = theme
 
@@ -53,7 +54,8 @@ export default function DebtDetail({ debt, brand, settings, canRefund, showToast
   return <DebtSummary debt={debt} notFound={notFound} onClose={onClose} onMarkPaid={onMarkPaid} />
 }
 
-function DebtSummary({ debt, notFound, onClose, onMarkPaid }) {
+// The debt as recorded. `note` explains why only the summary is shown (e.g. it belongs to another location).
+export function DebtSummary({ debt, notFound, note, onClose, onMarkPaid }) {
   const bal = Number(debt.balance) || 0
   const footer = (
     <>
@@ -64,6 +66,7 @@ function DebtSummary({ debt, notFound, onClose, onMarkPaid }) {
   return (
     <Modal show onClose={onClose} title={debt.party_name || 'Debt'} footer={footer}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {note && <div role='status' style={{ padding: 12, borderRadius: theme.radius.md, background: bg, fontSize: 12.5, color: gray600 }}>{note}</div>}
         {notFound && (
           <div role='status' style={{ padding: 12, borderRadius: theme.radius.md, background: bg, fontSize: 12.5, color: gray600 }}>
             The original {debt.source === 'purchase' ? 'purchase' : 'sale'} ({debt.source_ref}) could not be found, so this shows the debt as recorded.
@@ -71,7 +74,7 @@ function DebtSummary({ debt, notFound, onClose, onMarkPaid }) {
         )}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <Pill label={debt.direction === 'owes_us' ? 'Owed to us' : 'We owe'} type={debt.direction === 'owes_us' ? 'green' : 'red'} />
-          <Pill label={debt.status || 'pending'} type={debt.status === 'paid' ? 'green' : 'amber'} />
+          <Pill label={PAYMENT_STATUSES.find(([k]) => k === debtPaymentStatus(debt))[1]} type={debtPaymentStatus(debt) === 'paid' ? 'green' : 'amber'} />
         </div>
         {debt.description && <div style={{ fontSize: 13, color: navy, overflowWrap: 'anywhere' }}>{debt.description}</div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>

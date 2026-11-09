@@ -23,6 +23,16 @@ export function createDebtRepository(request = sbFetch) {
       return pagedQuery(request, `debts?business_id=eq.${businessId}&order=created_at.desc,id.asc&select=*`)
     },
 
+    // Every debt of several locations (an owner's main business and its branches), for the Debts page's location
+    // filter. Each row keeps its business_id. The database decides what is visible: an owner reads their own
+    // locations; a staff member reads only their one business, so another id simply returns nothing.
+    async getForBusinesses(businessIds) {
+      const ids = [...new Set((businessIds || []).filter((id) => /^[0-9a-f-]{36}$/i.test(String(id))))]
+      if (ids.length === 0) return []
+      if (ids.length === 1) return repo.getAll(ids[0])
+      return pagedQuery(request, `debts?business_id=in.(${ids.join(',')})&order=created_at.desc,id.asc&select=*`)
+    },
+
     // Debts still open (not paid, something left to pay), for the Owner's
     // follow-ups: only what needs chasing, not the whole history.
     async getOpen(businessId) {

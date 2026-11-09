@@ -102,7 +102,7 @@ describe('Clients — a USB scan is never recorded', () => {
 
   it('a scan into the search box is undone', async () => {
     await mount()
-    const search = host.querySelector('input[placeholder="Search by name, phone or email..."]')
+    const search = host.querySelector('input[aria-label="Search clients"]')
     await act(async () => { setValue(search, 'Ad') })
     await scan(search, UPC, 'Tab')
     expect(search.value).toBe('Ad')

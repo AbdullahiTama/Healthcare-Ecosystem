@@ -28,6 +28,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A13 | Medium | Importer operating models | Every spec section implemented (gap review 2026-11-04); applied to production 2026-11-04 and probed; two owner decisions and one proposal open | Open: owner decisions |
 | A14 | Medium | Payments | Reported ~1% reduction in amounts: not reproduced in code or live data; Paystack's fee was not stored, so bank deposits could not be matched to payments | Open: migration applied 2026-11-04; confirm backfill, then match deposits |
 | A15 | Medium | Expenses | The expense budget lived only in the browser, per month: it vanished at each new month, on another device and for staff | Open: migration applied 2026-11-04; the reporting Owner opens Expenses once on the original device |
+| A16 | Low | Expenses (data model) | Expenses have no payment status (every expense is recorded as already paid), so the Expenses filters cannot offer Paid / Unpaid | Open: owner decision |
 
 ## 2. Items
 
@@ -262,6 +263,17 @@ staff and other businesses refused, carry-over, no direct writes, anon refused);
 one intended `set_expense_budget` finding. **To close:** the reporting Owner opens Expenses once on the device where the
 budget was set (that moves it to the database), and it shows there and to staff.
 
+### A16. Expenses have no payment status (Low, owner decision)
+
+**What (verified 2026-11-09, live columns):** `expenses` holds category, description, amount, date, staff and who
+recorded it; there is no paid/unpaid state. The new Expenses filters (date, category, recorded by, amount, search;
+[Record-Filters-POS-Customers-and-Held-Sales.md](../docs/architecture/Record-Filters-POS-Customers-and-Held-Sales.md))
+therefore cannot filter by payment status. Money the business still owes is recorded as a purchase or a "We owe" debt,
+which the Debts filters cover.
+
+**Close by (decide one):** keep expenses as paid-only and record unpaid bills as debts (document it in the app), or add
+a payment status and amount paid to `expenses` (migration, form, totals and reports).
+
 ## 3. Open items recorded in other audits
 
 Not re-verified in this review; see each document for evidence and status.
@@ -278,6 +290,8 @@ Not re-verified in this review; see each document for evidence and status.
 
 | Item | Closed in |
 |---|---|
+| POS: a hold saved offline (or after a failed request) was missing from Held Sales until it synced; a sync did not refresh the list; a failed read showed "No held sales" | Record-Filters-POS-Customers-and-Held-Sales.md §4 (2026-11-09) |
+| Clients: a failed load showed "No clients yet" | Record-Filters-POS-Customers-and-Held-Sales.md §2.2 (2026-11-09) |
 | A1: PV routing write guard verified live (no code change needed) | live probe 2026-11-02; result in `carehub_20261113_adr_route_write_guard` |
 | A2: `export_logs` append-only, actor stamped by the database | `carehub_20261231_export_logs_append_only` (live 2026-11-02) |
 | Stored XSS in ADR print documents (concomitant medication fields from the public form) | PR #39 (`e171e47`) |

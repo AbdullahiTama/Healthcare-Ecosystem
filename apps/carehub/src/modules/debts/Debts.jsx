@@ -1,8 +1,15 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useKeyboardScanner, fieldSnapshot, restoreField } from '../../hooks/useKeyboardScanner'
-import { debtTotals, matchesParty } from './debtTotals'
-import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck } from 'lucide-react'
+import { debtTotals } from './debtTotals'
+import { DEFAULT_DEBT_FILTERS, PAYMENT_STATUSES, DEBT_SOURCES, DIRECTIONS, AMOUNT_BASES, filterDebts, debtPaymentStatus, activeDebtFilterCount, describeDebtFilters } from './debtFilters'
+import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck, MapPin } from 'lucide-react'
 import { debtRepository } from './repositories'
+// Owners read every location's debts (the database allows it: current_business_ids()); the list of locations comes
+// from the locations module's own repository.
+import { locationsRepository } from '../locations/repositories'
+import PeriodFilter from '../../components/PeriodFilter'
+import { FilterPanel, FilterSelect, AmountRangeFilter } from '../../components/RecordFilters'
+import { yearsOf } from '../../lib/recordFilters'
 import { useQueryParamAction } from '../../hooks/useQueryParamAction'
 import { settleDebt } from './settleDebt'
 import { paymentErrorMessage } from '../../lib/dbErrors'
@@ -15,7 +22,7 @@ import ClientsLoadNote from '../clients/components/ClientsLoadNote'
 // A debt raised by a credit sale is settled against that sale, through the
 // sales aggregate's own collection function, so the two never disagree.
 import { saleRepository, paymentRepository, isMissingObject } from '../pos/repositories'
-import DebtDetail from './DebtDetail'
+import DebtDetail, { DebtSummary } from './DebtDetail'
 import { PurchasePaymentModal } from '../purchases/SupplierPayments'
 import { isManagerRole } from '../../lib/permissions'
 import { fmt, todayDate } from '../../lib/utils'
@@ -42,10 +49,16 @@ export default function Debts({ brand, role, perms, staffName }) {
   const clients = clientsQuery.data || []
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const [search, setSearch] = useState('')
-  const [filterMonth, setFilterMonth] = useState('')
+  // Every filter in one object (debtFilters.js). With several locations loaded the default view is the location in
+  // use, as before; "All locations" and the other branches are a choice away.
+  const [locations, setLocations] = useState([])
+  const multiLocation = locations.length > 1
+  const defaultLocation = multiLocation ? String(brand?.id) : ''
+  const [filters, setFilters] = useState(DEFAULT_DEBT_FILTERS)
+  const setFilter = (k, v) => setFilters(p => ({ ...p, [k]: v }))
+  const clearFilters = () => setFilters({ ...DEFAULT_DEBT_FILTERS, location: defaultLocation })
   const [page, setPage] = useState(0)
-  useEffect(() => { setPage(0) }, [search, filterMonth, debts.length])
+  useEffect(() => { setPage(0) }, [filters, debts.length])
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ direction: 'owes_us' })
   const [saving, setSaving] = useState(false)
@@ -70,11 +83,29 @@ export default function Debts({ brand, role, perms, staffName }) {
     setForm(p => ({ ...p, party: name, client_id: c?.id || null }))
   }
 
+  // An owner with branches gets every location's debts in one read, so the location filter and the totals switch
+  // instantly. If the locations cannot be listed, the page falls back to this location alone (as before).
+  async function loadLocations() {
+    if (role !== 'Owner') return []
+    try {
+      const all = await locationsRepository.getAll(brand.id)
+      return (all || []).filter(l => l && l.id && !l.deleted_at)
+    } catch (e) {
+      console.warn('[debts] could not list locations; showing this location only:', e?.message)
+      return []
+    }
+  }
+
   async function load() {
     setLoading(true)
     setLoadError('')
     try {
-      const d = await debtRepository.getAll(brand.id)
+      const locs = await loadLocations()
+      const many = locs.length > 1
+      const d = many ? await debtRepository.getForBusinesses(locs.map(l => l.id)) : await debtRepository.getAll(brand.id)
+      setLocations(many ? locs : [])
+      // First load (or the locations changed): the default view is the location in use.
+      setFilters(p => ({ ...p, location: many ? (p.location && (p.location === 'all' || locs.some(l => String(l.id) === p.location)) ? p.location : String(brand.id)) : '' }))
       setDebts(d || [])
     } catch (e) {
       // Shown in place of the list: a failed load must not read as "no debts".
@@ -173,50 +204,93 @@ export default function Debts({ brand, role, perms, staffName }) {
     },
   }, { window: true })
 
-  const filtered = debts.filter(d => matchesParty(d, search) && (!filterMonth || d.created_at?.startsWith(filterMonth)))
-  const isFiltered = !!search.trim() || !!filterMonth
-  const { owedToUs, weOwe } = debtTotals(debts)
-  // The outstanding amount of the debts the filter shows (e.g. everything one customer owes).
+
+  const locationName = (id) => {
+    const l = locations.find(x => String(x.id) === String(id))
+    return l ? (l.branch_name || l.location_label || l.name || 'Location') : ''
+  }
+  // A debt of another location is shown and counted, but settled from that location (switch to it first): its
+  // sale, purchase, receipt settings and staff attribution all belong there.
+  const isHere = (d) => !d.business_id || String(d.business_id) === String(brand?.id)
+  const filtered = useMemo(() => filterDebts(debts, filters), [debts, filters])
+  const activeCount = activeDebtFilterCount(filters, defaultLocation)
+  const isFiltered = activeCount > 0
+  // The cards always total the rows on screen: every filter (including location) recalculates them.
   const shown = debtTotals(filtered)
-  const filterLabel = [search.trim() && `"${search.trim()}"`, filterMonth && new Date(filterMonth + '-01T00:00:00').toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })].filter(Boolean).join(' · ')
+  const statusCounts = useMemo(() => {
+    const c = { paid: 0, partial: 0, unpaid: 0 }
+    filtered.forEach(d => { c[debtPaymentStatus(d)]++ })
+    return c
+  }, [filtered])
+  const filterLabel = describeDebtFilters(filters, { fmt, locationName, defaultLocation })
+  const years = useMemo(() => yearsOf(debts.map(d => d.created_at), todayDate()), [debts])
 
   return (
     <div ref={rootRef}>
       <SectionHead title='Debts' sub='Track money owed to you and money you owe' btn='+ Record Debt' onBtn={() => setShowAdd(true)} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
+      {/* Totals for the debts on screen: every filter recalculates them. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: '14px', marginBottom: '20px' }}>
+        <Card style={{ padding: '18px', borderLeft: `4px solid ${navy}` }}>
+          <div style={{ fontSize: '12px', color: gray500, fontWeight: '600' }}>Total outstanding</div>
+          <div style={{ fontSize: '24px', fontWeight: '900', color: navy, marginTop: '6px' }}>{loadError ? '—' : fmt(shown.outstanding)}</div>
+          <div style={{ fontSize: '11.5px', color: gray500, marginTop: '4px' }}>{shown.openOwedToUs + shown.openWeOwe} open debt{shown.openOwedToUs + shown.openWeOwe !== 1 ? 's' : ''}</div>
+        </Card>
         <Card style={{ padding: '18px', borderLeft: `4px solid ${success}` }}>
-          <div style={{ fontSize: '12px', color: gray500, fontWeight: '600' }}>Clients owe you</div>
-          <div style={{ fontSize: '24px', fontWeight: '900', color: success, marginTop: '6px' }}>{fmt(owedToUs)}</div>
+          <div style={{ fontSize: '12px', color: gray500, fontWeight: '600' }}>Owed to us</div>
+          <div style={{ fontSize: '24px', fontWeight: '900', color: success, marginTop: '6px' }}>{loadError ? '—' : fmt(shown.owedToUs)}</div>
+          <div style={{ fontSize: '11.5px', color: gray500, marginTop: '4px' }}>{shown.openOwedToUs} open</div>
         </Card>
         <Card style={{ padding: '18px', borderLeft: `4px solid ${danger}` }}>
-          <div style={{ fontSize: '12px', color: gray500, fontWeight: '600' }}>You owe others</div>
-          <div style={{ fontSize: '24px', fontWeight: '900', color: danger, marginTop: '6px' }}>{fmt(weOwe)}</div>
+          <div style={{ fontSize: '12px', color: gray500, fontWeight: '600' }}>We owe others</div>
+          <div style={{ fontSize: '24px', fontWeight: '900', color: danger, marginTop: '6px' }}>{loadError ? '—' : fmt(shown.weOwe)}</div>
+          <div style={{ fontSize: '11.5px', color: gray500, marginTop: '4px' }}>{shown.openWeOwe} open</div>
         </Card>
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '180px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
           <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search party name...' aria-label='Search debts by customer or party name'
+          <input value={filters.search} onChange={e => setFilter('search', e.target.value)} placeholder='Search customer, supplier or party name...' aria-label='Search debts by customer or party name'
             style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
         </div>
-        <input type='month' aria-label='Filter debts by month' value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
-          style={{ padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
-        {filterMonth && <button onClick={() => setFilterMonth('')} style={{ padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>Clear</button>}
       </div>
+
+      <FilterPanel title='Debt filters' activeCount={activeCount} onClear={clearFilters}>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <PeriodFilter value={filters.period} onChange={v => setFilter('period', v)} years={years} label='Date recorded' />
+        </div>
+        {multiLocation && (
+          <FilterSelect label='Location' value={filters.location === 'all' ? '' : filters.location} allLabel='All locations'
+            onChange={v => setFilter('location', v || 'all')}
+            options={locations.map(l => [String(l.id), locationName(l.id) + (String(l.id) === String(brand?.id) ? ' (this location)' : '')])} />
+        )}
+        <FilterSelect label='Payment status' value={filters.status} onChange={v => setFilter('status', v)} options={PAYMENT_STATUSES} />
+        <FilterSelect label='Direction' value={filters.direction} onChange={v => setFilter('direction', v)} options={DIRECTIONS} />
+        <FilterSelect label='Transaction type / source' value={filters.source} onChange={v => setFilter('source', v)} options={DEBT_SOURCES} />
+        <AmountRangeFilter label='Amount range (₦)' value={filters.amount} onChange={v => setFilter('amount', v)}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: gray600, marginBottom: 6 }}>
+            <span>Compare</span>
+            <select aria-label='Amount to compare' value={filters.amountBasis} onChange={e => setFilter('amountBasis', e.target.value)}
+              style={{ flex: 1, minHeight: 34, padding: '4px 8px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 12.5, color: navy, background: 'white' }}>
+              {AMOUNT_BASES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+        </AmountRangeFilter>
+      </FilterPanel>
 
       {isFiltered && !loading && !loadError && (
         <div role='status' aria-live='polite' style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 18px', padding: '12px 16px', marginBottom: '14px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}` }}>
           <span style={{ fontSize: '12.5px', color: gray600 }}>{shown.count} debt{shown.count !== 1 ? 's' : ''} for {filterLabel}</span>
           <span style={{ fontSize: '13px', color: gray600 }}>Outstanding, owed to you: <strong style={{ color: success, fontSize: '15px' }}>{fmt(shown.owedToUs)}</strong>{shown.openOwedToUs > 0 && <span style={{ color: gray500 }}> ({shown.openOwedToUs} open)</span>}</span>
           {shown.weOwe > 0 && <span style={{ fontSize: '13px', color: gray600 }}>You owe: <strong style={{ color: danger, fontSize: '15px' }}>{fmt(shown.weOwe)}</strong></span>}
+          {shown.count > 0 && <span style={{ fontSize: '12px', color: gray500 }}>{statusCounts.unpaid} unpaid · {statusCounts.partial} partially paid · {statusCounts.paid} paid</span>}
         </div>
       )}
 
       {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : filtered.length === 0 ? (
         isFiltered
-          ? <Empty icon={<Search size={40} />} message={`No debts match ${filterLabel}`} cause='filtered' action='Clear filters' onAction={() => { setSearch(''); setFilterMonth('') }} />
+          ? <Empty icon={<Search size={40} />} message={`No debts match ${filterLabel}`} cause='filtered' action='Clear filters' onAction={clearFilters} />
           : <Empty icon={<Landmark size={40} />} message='No debts recorded' action='+ Record Debt' onAction={() => setShowAdd(true)} />
       ) : (
         <DataTable
@@ -250,6 +324,11 @@ export default function Debts({ brand, role, perms, staffName }) {
                 </>
               ),
             },
+            ...(multiLocation ? [{
+              key: 'business_id', label: 'Location', sortable: true,
+              sortValue: d => locationName(d.business_id),
+              render: d => <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '12px', color: gray600 }}><MapPin size={11} aria-hidden='true' />{locationName(d.business_id) || 'Unknown'}</span>,
+            }] : []),
             {
               key: 'description', label: 'Details', sortable: true,
               render: d => (
@@ -277,12 +356,18 @@ export default function Debts({ brand, role, perms, staffName }) {
             },
             {
               key: 'status', label: 'Status', sortable: true,
-              render: d => <Pill label={d.status} type={d.status === 'paid' ? 'green' : 'amber'} />,
+              sortValue: d => debtPaymentStatus(d),
+              render: d => {
+                const st = debtPaymentStatus(d)
+                return <Pill label={PAYMENT_STATUSES.find(([k]) => k === st)[1]} type={st === 'paid' ? 'green' : st === 'partial' ? 'blue' : 'amber'} />
+              },
             },
           ]}
           onRowClick={d => setDetail(d)}
           actions={d => (
-            d.status !== 'paid' && <button onClick={(e) => { e.stopPropagation(); markPaid(d) }} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Mark paid</button>
+            d.status !== 'paid' && (isHere(d)
+              ? <button onClick={(e) => { e.stopPropagation(); markPaid(d) }} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Mark paid</button>
+              : <span style={{ fontSize: '11px', color: gray500, whiteSpace: 'nowrap' }}>Settle at {locationName(d.business_id) || 'its location'}</span>)
           )}
         />
       )}
@@ -340,7 +425,10 @@ export default function Debts({ brand, role, perms, staffName }) {
         </div>
       </Modal>
 
-      {detail && (
+      {detail && !isHere(detail) && (
+        <OtherLocationDebt debt={detail} locationName={locationName(detail.business_id)} onClose={() => setDetail(null)} />
+      )}
+      {detail && isHere(detail) && (
         <DebtDetail debt={detail} brand={brand} settings={settings} canRefund={role === 'Owner' || isManagerRole(role)} showToast={showToast}
           onClose={() => setDetail(null)} onChanged={load} onMarkPaid={markPaid}
           onPay={(purchase) => { setDetail(null); setPayingPurchase(purchase) }} />
@@ -353,4 +441,9 @@ export default function Debts({ brand, role, perms, staffName }) {
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
     </div>
   )
+}
+
+// A debt of another location opened from the "All locations" view: what it is, and where to settle it.
+function OtherLocationDebt({ debt, locationName, onClose }) {
+  return <DebtSummary debt={debt} onClose={onClose} note={`This debt belongs to ${locationName || 'another location'}. Switch to that location to open its sale or purchase, or to record a payment.`} />
 }

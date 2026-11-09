@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Pause, Clock, CreditCard, Camera, ShoppingCart,
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
-  DollarSign, Repeat, Divide, Search, Package, PackageX, Clipboard, ReceiptText, ChevronRight,
+  DollarSign, Repeat, Divide, Search, Package, PackageX, Clipboard, ReceiptText, ChevronRight, UserPlus, CloudOff,
 } from 'lucide-react'
 import { saleRepository, HeldSaleClosedError } from './repositories'
 import { usePersistentDraft } from '../../hooks/usePersistentDraft'
@@ -28,13 +28,14 @@ import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel,
 import { CatalogStatusBanner, loadingLabel } from '../inventory/components/CatalogStatus'
 import CreditCollections from './CreditCollections'
 import CustomerPicker from './CustomerPicker'
+import NewCustomerForm from './NewCustomerForm'
 import SaleDetailModal from './SaleDetailModal'
 import { creditCustomerFor } from './customerPick'
 import { isDuplicateError } from '../../lib/dbErrors'
 import { startCameraScan } from '../../lib/barcodeScanner'
 import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useOpenSales, useRecentSales, useSettings, useClients, useCreateClient, useInvalidateSales } from '../../hooks/queries'
+import { useOpenSales, useRecentSales, useSettings, useClients, useCreateClient, useInvalidateSales, useUpsertOpenSale } from '../../hooks/queries'
 
 const { tealDeep, tealMist, bg, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, warning, warningBg, success } = theme
 
@@ -221,6 +222,26 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
 
   const heldSales = openSales.filter(s => s.is_on_hold)
   const creditSales = openSales.filter(s => s.is_credit && s.balance > 0)
+  const showHeldNow = useUpsertOpenSale(brand?.id)
+  // Held sales saved on this device but not yet in the database (offline, or the connection failed): they are in the
+  // offline queue, not the server's list, so they are shown from the queue until they sync. Without this a hold made
+  // offline vanished from Held Sales until it synced. Re-read after every hold, when the server list changes and
+  // when the connection returns.
+  const [queueTick, setQueueTick] = useState(0)
+  useEffect(() => {
+    const bump = () => setQueueTick(t => t + 1)
+    window.addEventListener('online', bump)
+    return () => window.removeEventListener('online', bump)
+  }, [])
+  const queuedHeld = useMemo(() => {
+    const onServer = new Set(heldSales.map(s => String(s.id)))
+    return saleRepository.queuedSales()
+      .filter(q => q.is_on_hold && String(q.business_id || brand?.id) === String(brand?.id) && !onServer.has(String(q.id)))
+      .map(q => ({ ...q, _queued: true, created_at: q.created_at || null }))
+  }, [queueTick, openSales, brand?.id])
+  const allHeld = [...queuedHeld, ...heldSales]
+  // "Add customer" beside the sale's customer box, for any sale (not only credit).
+  const [showAddCustomer, setShowAddCustomer] = useState(false)
 
   // A restored draft can point at a held sale that was charged since (on this
   // or another till). Holding would then find nothing to save onto, and
@@ -600,11 +621,15 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     try {
       if (editing) {
         // Editing a held sale: save the changes onto the same held row.
+        const notes = holdNote || editing.notes || ''
         await saleRepository.updateHeld(editing.id, brand.id, {
           items: cart, subtotal: sub, discount: discAmt, total,
-          clientId, clientName, notes: holdNote || editing.notes || '',
+          clientId, clientName, notes,
         })
-      } else await saveSale({
+        const before = heldSales.find(s => String(s.id) === String(editing.id)) || editing
+        showHeldNow({ ...before, items: JSON.stringify(cart), subtotal: sub, discount: discAmt, total, balance: total, client_id: clientId, client_name: clientName, notes })
+      } else {
+        const result = await saveSale({
         txn_no: txnNo,
         client_id: clientId,
         client_name: clientName,
@@ -619,6 +644,11 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         is_on_hold: true,
         notes: holdNote,
       })
+        // In Held Sales at once: the saved row from the database, or (offline) the queued copy.
+        if (result?.sale) showHeldNow(result.sale)
+        else if (result?.queued) console.info('[pos] held sale queued on this device', { txn_no: txnNo, reason: result.reason })
+        setQueueTick(t => t + 1)
+      }
     } catch (e) {
       invoiceWindow?.close()
       if (editing) reportHeldSaveFailure(e, editing)
@@ -779,7 +809,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   // (the dashboard template's tabbed treatment). A plain function, not a
   // component, so it never remounts.
   const tabBar = (active) => {
-    const tabs = [['pos', 'Sell', null], ['held', 'Held', heldSales.length], ['recent', 'Recent', null], ['credit', 'Credit', creditSales.length]]
+    const tabs = [['pos', 'Sell', null], ['held', 'Held', allHeld.length], ['recent', 'Recent', null], ['credit', 'Credit', creditSales.length]]
     return (
       <div role="tablist" aria-label="POS views" style={{ display: 'flex', gap: 24, borderBottom: `1px solid ${border}` }}>
         {tabs.map(([v, label, count]) => {
@@ -851,26 +881,39 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: bg }}>
       <div style={{ background: 'white', padding: isMobile ? '6px 16px 0' : '8px 24px 0', flexShrink: 0 }}>{tabBar('held')}</div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-        {loadingSales ? (
+        {openError && (
+          // A failed read must never read as "no held sales": the held sales are still saved.
+          <div style={{ marginBottom: 12 }}>
+            <ErrorState message="We couldn't load held sales. They are still saved; check your connection and try again." onRetry={() => refetchOpen()} />
+          </div>
+        )}
+        {loadingSales && allHeld.length === 0 ? (
           <Loading text="Loading held sales…" />
-        ) : heldSales.length === 0 ? (
-          <Empty icon={<Pause size={40} strokeWidth={1.5} />} message="No held sales" />
-        ) : heldSales.map(s => {
+        ) : allHeld.length === 0 ? (
+          !openError && <Empty icon={<Pause size={40} strokeWidth={1.5} />} message="No held sales" />
+        ) : allHeld.map(s => {
           let items = []; try { items = JSON.parse(s.items || '[]') } catch (e) {}
           return (
-            <Card key={s.id} style={{ padding: '16px', marginBottom: '12px' }}>
+            <Card key={s.id || s._offline_id} style={{ padding: '16px', marginBottom: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
                 <div>
                   <div style={{ fontWeight: '800', fontSize: '15px' }}>{s.client_name || 'Walk-in'}</div>
                   <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{items.length} item(s) · {fmt(s.total)}</div>
-                  <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{businessDateTime(s.created_at)}</div>
+                  <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{s._queued ? s.txn_no : businessDateTime(s.created_at)}</div>
+                  {s._queued && (
+                    <div role='status' style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, fontSize: '11.5px', fontWeight: 700, color: theme.warning, background: theme.warningBg, borderRadius: theme.radius.sm, padding: '3px 8px' }}>
+                      <CloudOff size={12} aria-hidden='true' /> Saved on this device. It will sync when you are back online.
+                    </div>
+                  )}
                   {s.notes && <div style={{ fontSize: '12px', color: gray600, marginTop: '4px', fontStyle: 'italic' }}>Note: {s.notes}</div>}
                   <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                     {items.map((it, i) => <span key={i} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: theme.radius.sm, background: tealMist, color: tealDeep, fontWeight: '600' }}>{it.name} ×{it.qty}</span>)}
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
-                  <TealBtn onClick={() => resumeHeld(s)} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }}><Play size={13} /> Open &amp; edit</TealBtn>
+                  {s._queued
+                    ? <span style={{ fontSize: '11.5px', color: gray500, maxWidth: 180, textAlign: 'right' }}>Can be opened once it has synced.</span>
+                    : <TealBtn onClick={() => resumeHeld(s)} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }}><Play size={13} /> Open &amp; edit</TealBtn>}
                   <GhostBtn onClick={() => printInvoice(heldSaleToInvoice(s))} aria-label={'Print invoice for ' + (s.client_name || 'Walk-in') + ', ' + fmt(s.total)}
                     style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6 }}><Printer size={13} aria-hidden='true' /> Print invoice</GhostBtn>
                 </div>
@@ -1101,12 +1144,16 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
               </span>
             )}
           </div>
-          <div style={{ position: 'relative' }}>
-            <input list='pos-clients' value={client} onChange={e => setClient(e.target.value)} placeholder='Walk-in'
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input list='pos-clients' value={client} onChange={e => setClient(e.target.value)} placeholder='Walk-in' aria-label='Customer for this sale'
               style={{ width: 140, padding: '8px 12px', borderRadius: theme.radius.full, border: `1px solid ${border}`, fontSize: 12.5, outline: 'none', boxSizing: 'border-box', background: bg, color: navy }} />
             <datalist id='pos-clients'>
               {clients.map(c => <option key={c.id} value={c.full_name} />)}
             </datalist>
+          <button type='button' onClick={() => setShowAddCustomer(true)} aria-label='New customer for this sale' title='New customer for this sale'
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, flexShrink: 0, borderRadius: theme.radius.full, border: `1px solid ${border}`, background: 'white', color: tealDeep, cursor: 'pointer' }}>
+            <UserPlus size={16} aria-hidden='true' />
+          </button>
           </div>
         </div>
 
@@ -1261,6 +1308,16 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
           </div>
         </div>
       </div>
+
+      {/* Add a customer without leaving the sale: saved to the Client List and selected for this sale. */}
+      <Modal show={showAddCustomer} onClose={() => setShowAddCustomer(false)} title='Add customer'>
+        {showAddCustomer && (
+          <NewCustomerForm compact={false} title={null}
+            initialName={client && client !== 'Walk-in' && !creditCustomerFor(pickedClient, client, clients) ? client : ''}
+            onCreate={addCustomer} onCancel={() => setShowAddCustomer(false)}
+            onCreated={(c) => { pickCustomer(c); setShowAddCustomer(false); showToast(c.full_name + ' added to your clients and selected for this sale.', { type: 'success' }) }} />
+        )}
+      </Modal>
 
       {/* Hold modal */}
       <Modal show={showHoldModal} onClose={() => { if (!holding) setShowHoldModal(false) }} title={resumedSale ? 'Save held sale' : 'Hold sale'}

@@ -15,6 +15,8 @@ import { useProductCatalog } from '../../modules/inventory/hooks/useProductCatal
 // owned by the staff module.
 import { staffRepository } from '../../modules/staff/repositories'
 import { saleRepository } from '../../modules/pos/repositories'
+import { useQueryClient } from '@tanstack/react-query'
+import { invalidateSalesFigures } from '../../hooks/queries'
 import { getNavItems, getPerms, getReportTabs, landingRoute, ROLES } from '../../lib/permissions'
 import { businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
@@ -166,6 +168,7 @@ function BusinessDashboardContent() {
   const reportHubGuard = (element) => (reportTabs.length > 0 ? (isMobile ? <div style={{ paddingTop: MOBILE_MENU_CLEAR }}>{element}</div> : element) : <Navigate to={'/dashboard/' + landing} replace />)
   // Sidebar.jsx's own nav handler closes this after a route change on mobile.
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     if (!brand?.id) return
@@ -178,8 +181,11 @@ function BusinessDashboardContent() {
     if (brand?.id) await syncOfflineSales()
   })
 
+  // Sales (including held sales) that reached the database leave the device's queue: every sales list is re-read so
+  // they show in Held Sales, Recent and the reports straight away.
   async function syncOfflineSales() {
     const r = await saleRepository.syncQueued(brand.id)
+    if (r.synced > 0) invalidateSalesFigures(queryClient)
     if (r.synced > 0) showToast(r.synced + ' offline sale(s) synced!')
     if (r.rejected.length > 0) showToast(r.rejected.length + ' queued sale(s) were blocked by the server: ' + shortReason(r.rejected[0].error), { type: 'warning' })
   }
@@ -187,6 +193,7 @@ function BusinessDashboardContent() {
   const handleSync = async () => {
     setSyncing(true)
     const r = await saleRepository.syncQueued(brand?.id)
+    if (r.synced > 0) invalidateSalesFigures(queryClient)
     if (r.rejected.length > 0) {
       showToast((r.synced > 0 ? r.synced + ' sale(s) synced. ' : '') + r.rejected.length + ' sale(s) blocked by the server: ' + shortReason(r.rejected[0].error), { type: 'warning' })
     } else {
