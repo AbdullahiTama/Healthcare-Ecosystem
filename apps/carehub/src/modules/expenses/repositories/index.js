@@ -1,5 +1,6 @@
 import { sbFetch } from '../../../services/supabase'
 import { isMissingColumn } from '../../../lib/dbErrors'
+import { expensePaymentStatus } from '../expenseRules'
 
 // ── Expense repository ────────────────────────────────────────────────────────
 // A deep module over the `expenses` table. The interface is small
@@ -35,6 +36,26 @@ export function createExpenseRepository(request = sbFetch) {
         rows.push(...page)
         if (page.length < ALL_PAGE) return rows
       }
+    },
+
+    // Expenses not fully paid, any date, oldest first: the bills still to pay (dashboard). Only the columns needed are
+    // read; the paid / owed test is the shared rule (the table cannot compare two columns in a filter). Before
+    // carehub_20270107_expense_payments there is no amount_paid column and nothing is unpaid, so the answer is [].
+    async getUnpaid(businessId) {
+      const rows = []
+      try {
+        for (let offset = 0; ; offset += ALL_PAGE) {
+          const page = await request(
+            `expenses?business_id=eq.${businessId}&select=id,category,description,amount,amount_paid,date,created_at&order=created_at.asc,id.asc&limit=${ALL_PAGE}&offset=${offset}`
+          )
+          rows.push(...page)
+          if (page.length < ALL_PAGE) break
+        }
+      } catch (e) {
+        if (/amount_paid/.test(String(e?.message || '')) && /does not exist|Could not find/i.test(String(e?.message || ''))) return []
+        throw e
+      }
+      return rows.filter((e) => expensePaymentStatus(e) !== 'paid')
     },
 
     // One expense, tenant-scoped, for opening it from the Owner's activity feed.

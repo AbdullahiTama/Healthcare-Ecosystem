@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import {
   BarChart2, Pause, CreditCard, AlertTriangle, Package, Pill, Calendar,
-  Plus, FileText, Receipt, CheckCircle, ArrowRight, ShoppingCart,
+  Plus, FileText, Receipt, CheckCircle, ArrowRight, ShoppingCart, Banknote,
 } from 'lucide-react'
 // The dashboard owns no table of its own — it is a projection over two
 // aggregates other modules own, so it composes their repositories rather than
@@ -23,7 +23,10 @@ import { canSeeAllActivity, isManagerRole } from '../../lib/permissions'
 import FieldTeamToday from './FieldTeamToday.jsx'
 import OwnerActivity from './OwnerActivity.jsx'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useOpenSales, useAppointments, useSettings, useInvalidateSales } from '../../hooks/queries'
+import { useOpenSales, useAppointments, useSettings, useInvalidateSales, useUnpaidExpenses } from '../../hooks/queries'
+// Bills to pay: the Expenses module's own rules and totals, so the dashboard and the Expenses page agree.
+import { expenseDate, expenseBalance, expensePaymentStatus } from '../expenses/expenseRules'
+import { expenseTotals, EXPENSE_PAYMENT_STATUSES } from '../expenses/expenseFilters'
 
 const { tealDeep, tealMist, navy, gray500, gray400, border, success, bg } = theme
 
@@ -55,6 +58,8 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
   // notifications of the business belong to its owner by email, and the database refuses anyone else writing them).
   const alertTo = staffOwner ? [{ staffId }] : [{ staffId: null }]
   const canSeeAppts = !perms?.nav || perms.nav.includes('appointments')
+  // Expenses still to pay: for the Owner and anyone who can open Expenses (they see the same figures there).
+  const canSeeExpenses = !perms?.nav || perms.nav.includes('expenses')
 
   // "Sales today" is the Sales & Accounts report for Today: the same query, the
   // same rows and the same arithmetic (salesReport.reportView), so the two
@@ -86,6 +91,7 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
   // Held and unpaid credit sales only — not the whole sales history.
   const { data: openSales = [], isLoading: loadingAll, isError: errAll, refetch: refetchAll } = useOpenSales(brand?.id)
   const { data: appts = [], isLoading: loadingAppts, isError: errAppts, refetch: refetchAppts } = useAppointments(brand?.id, canSeeAppts)
+  const { data: unpaidExpenses = [], isError: errExpenses, refetch: refetchExpenses } = useUnpaidExpenses(brand?.id, canSeeExpenses)
 
   const loading = loadingToday || loadingAll || (canSeeAppts && loadingAppts)
   // Whichever hooks failed — one aggregate error surface, one Retry that calls
@@ -94,6 +100,7 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
     errToday && refetchToday,
     errAll && refetchAll,
     canSeeAppts && errAppts && refetchAppts,
+    canSeeExpenses && errExpenses && refetchExpenses,
   ].filter(Boolean)
 
   const todayTotal = todayView?.summary.totalSales || 0
@@ -192,7 +199,10 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
     raiseAlerts()
   }, [role, brand?.id, loading, products, catalogFresh])
 
-  const attentionCount = outCount + lowCount + creditSales.length + (showApptItem ? 1 : 0)
+  // Oldest bill first: the one that has waited longest. Same totals as the Expenses page (expenseTotals).
+  const billsToPay = canSeeExpenses ? [...unpaidExpenses].sort((a, b) => expenseDate(a).localeCompare(expenseDate(b))) : []
+  const billsTotals = expenseTotals(billsToPay)
+  const attentionCount = outCount + lowCount + creditSales.length + (showApptItem ? 1 : 0) + billsToPay.length
   const worklistEmpty = attentionCount === 0 && !catalogLoading
 
   const today = new Date().toLocaleDateString('en-NG', { timeZone: BUSINESS_TZ, weekday: 'long', day: 'numeric', month: 'long' })
@@ -312,6 +322,14 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
                       meta: `Credit sale · ${s.txn_no || 'unpaid'}`,
                       badge: <button type="button" onClick={() => navigate('/dashboard/debts')} style={badgeBtn}>Follow up</button>,
                     })),
+                    ...billsToPay.slice(0, 3).map(e => ({
+                      id: 'bill-' + e.id,
+                      tone: 'warning',
+                      icon: <Banknote size={17} />,
+                      title: `${fmt(expenseBalance(e))} still to pay: ${e.description || e.category || 'Expense'}`,
+                      meta: `${e.category || 'Expense'} · ${expenseDate(e)} · ${EXPENSE_PAYMENT_STATUSES.find(([k]) => k === expensePaymentStatus(e))[1]}`,
+                      badge: <button type="button" onClick={() => navigate('/dashboard/expenses?expense=' + encodeURIComponent(e.id))} style={badgeBtn} aria-label={`Pay ${e.description || e.category || 'expense'}`}>Pay</button>,
+                    })),
                     ...(showApptItem ? [{
                       id: 'appt',
                       tone: 'brand',
@@ -322,6 +340,12 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
                     }] : []),
                   ]}
                 />
+                {billsToPay.length > 0 && (
+                  <button type="button" onClick={() => navigate('/dashboard/expenses?payment=open')}
+                    style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: tealDeep, fontWeight: 700, fontSize: 12, cursor: 'pointer', padding: '2px 0' }}>
+                    Bills to pay: {fmt(billsTotals.outstanding)} on {billsTotals.count} expense{billsTotals.count === 1 ? '' : 's'} · View all
+                  </button>
+                )}
               </div>
             )}
           </SectionCard>

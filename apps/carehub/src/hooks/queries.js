@@ -5,6 +5,7 @@ import { clientRepository } from '../modules/clients/repositories'
 import { settingsRepository } from '../modules/settings/repositories'
 import { purchaseRepository } from '../modules/purchases/repositories'
 import { debtRepository } from '../modules/debts/repositories'
+import { expenseRepository } from '../modules/expenses/repositories'
 
 // ── Query Keys ───────────────────────────────────────────────────────────────
 export const keys = {
@@ -13,6 +14,7 @@ export const keys = {
   appointments: (brandId) => ['appointments', brandId],
   clients: (brandId) => ['clients', brandId],
   openDebts: (brandId) => ['debts', 'open', brandId],
+  unpaidExpenses: (brandId) => ['expenses', 'unpaid', brandId],
   settings: (brandId) => ['settings', brandId],
   products: (brandId) => ['products', brandId],
   salePayments: (saleId) => ['sales', 'payments', saleId],
@@ -102,6 +104,18 @@ export function useOpenDebts(brandId, enabled = true) {
     queryFn: () => debtRepository.getOpen(brandId),
     enabled: !!brandId && enabled,
     staleTime: 30_000,
+  })
+}
+
+// Expenses not fully paid, any date (the dashboard's "Bills to pay"). Read again whenever the dashboard opens, so a
+// payment just recorded on the Expenses page is never shown as still owed.
+export function useUnpaidExpenses(brandId, enabled = true) {
+  return useQuery({
+    queryKey: keys.unpaidExpenses(brandId),
+    queryFn: () => expenseRepository.getUnpaid(brandId),
+    enabled: !!brandId && enabled,
+    staleTime: 60_000,
+    refetchOnMount: 'always',
   })
 }
 

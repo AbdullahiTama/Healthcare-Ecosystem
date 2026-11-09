@@ -7,7 +7,7 @@ import { validateExpense, newExpenseId, budgetSummary, expenseDate, inMonth, sum
 import { useExpenseBudget } from './useExpenseBudget'
 import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { ExpensePaymentFields, RecordExpensePaymentModal, ExpensePaymentSummary, ExpenseStatusPill } from './components/ExpensePayment'
-import { EXPENSE_PAYMENT_STATUSES, defaultExpenseFilters, filterExpenses, sortExpenses, expenseTotals, expenseRecorders, expenseRecorder, activeExpenseFilterCount, describeExpenseFilters } from './expenseFilters'
+import { EXPENSE_PAYMENT_FILTERS, defaultExpenseFilters, filterExpenses, sortExpenses, expenseTotals, expenseRecorders, expenseRecorder, activeExpenseFilterCount, describeExpenseFilters } from './expenseFilters'
 import PeriodFilter from '../../components/PeriodFilter'
 import { FilterPanel, FilterSelect, AmountRangeFilter } from '../../components/RecordFilters'
 import { yearsOf } from '../../lib/recordFilters'
@@ -48,6 +48,10 @@ export default function Expenses({ brand, role, perms, staffName }) {
   const [deleteTarget, setDeleteTarget] = useState(null)
   // One expense opened in full: from the Owner's activity feed (?expense=<id>).
   const [viewing, setViewing] = useState(null)
+  // From the dashboard's "Bills to pay": ?payment=open shows every expense still to pay, whatever its date.
+  useQueryParamAction('payment', (v) => {
+    if (EXPENSE_PAYMENT_FILTERS.some(([k]) => k === v)) setFilters({ ...defaultExpenseFilters(thisMonth), period: { mode: 'all' }, paymentStatus: v })
+  })
   // The expense being paid off (Record payment).
   const [paying, setPaying] = useState(null)
   useQueryParamAction('expense', async (id) => {
@@ -332,7 +336,7 @@ export default function Expenses({ brand, role, perms, staffName }) {
           <PeriodFilter value={filters.period} onChange={v => setFilter('period', v)} years={years} label='Expense date' />
         </div>
         <FilterSelect label='Category' value={filters.category} onChange={v => setFilter('category', v)} options={categoryOptions} />
-        {paymentsAvailable && <FilterSelect label='Payment status' value={filters.paymentStatus} onChange={v => setFilter('paymentStatus', v)} options={EXPENSE_PAYMENT_STATUSES} />}
+        {paymentsAvailable && <FilterSelect label='Payment status' value={filters.paymentStatus} onChange={v => setFilter('paymentStatus', v)} options={EXPENSE_PAYMENT_FILTERS} />}
         <FilterSelect label='Recorded by' value={filters.recordedBy} onChange={v => setFilter('recordedBy', v)} options={recorders.map(r => [r, r])} allLabel='Anyone' />
         <AmountRangeFilter label='Amount (₦)' value={filters.amount} onChange={v => setFilter('amount', v)} />
       </FilterPanel>

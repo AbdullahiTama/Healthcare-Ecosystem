@@ -6,6 +6,8 @@ import { normText, matchesText, inAmountRange, inPeriod, isAmountRangeSet, amoun
 import { expenseDate, sumExpenses, sumByCategory, expensePaid, expensePaymentStatus } from './expenseRules'
 
 export const EXPENSE_PAYMENT_STATUSES = [['unpaid', 'Unpaid'], ['partial', 'Partially paid'], ['paid', 'Paid']]
+// Filter choices: the three statuses plus 'open' (unpaid or partially paid: every bill still to pay).
+export const EXPENSE_PAYMENT_FILTERS = [['open', 'Not fully paid'], ...EXPENSE_PAYMENT_STATUSES]
 
 export function defaultExpenseFilters(month) {
   return { search: '', period: { mode: 'month', month }, category: '', recordedBy: '', paymentStatus: '', amount: { min: '', max: '' } }
@@ -22,7 +24,7 @@ export function filterExpenses(expenses, filters) {
     inPeriod(expenseDate(e), bounds) &&
     (!f.category || e.category === f.category) &&
     (!f.recordedBy || normText(expenseRecorder(e)) === normText(f.recordedBy)) &&
-    (!f.paymentStatus || expensePaymentStatus(e) === f.paymentStatus) &&
+    (!f.paymentStatus || (f.paymentStatus === 'open' ? expensePaymentStatus(e) !== 'paid' : expensePaymentStatus(e) === f.paymentStatus)) &&
     inAmountRange(e.amount, f.amount))
 }
 
@@ -70,7 +72,7 @@ export function describeExpenseFilters(filters, { fmt } = {}) {
     b.label,
     f.category,
     f.recordedBy && `recorded by ${f.recordedBy}`,
-    (EXPENSE_PAYMENT_STATUSES.find(([k]) => k === f.paymentStatus) || [])[1],
+    (EXPENSE_PAYMENT_FILTERS.find(([k]) => k === f.paymentStatus) || [])[1],
     amount && `amount ${amount}`,
   ].filter(Boolean).join(' · ')
 }

@@ -111,6 +111,15 @@ how it was paid (Cash, Transfer, POS, Cheque, Other), and paid off later.
   Pay (this period) and Unpaid Expenses (any date) to the summary, and Paid, Still To Pay and Status to each expense.
   Totals come from the same `expenseTotals()` as the Expenses page. Net profit is unchanged (expenses count when
   incurred). Tests: `reports/Reports.expensePayments.test.jsx`.
+- **Owner dashboard** (added 2026-11-09): "Needs your attention" gains **Bills to pay**: the three oldest expenses
+  still to pay (amount left, category, date, status) with **Pay** (opens that expense, which offers Record payment),
+  and a "Bills to pay: ₦… on N expenses · View all" link that opens Expenses filtered to **Not fully paid** over all
+  dates (`?payment=open`; "Not fully paid" is also a choice in the Payment status filter). Each bill counts in the
+  attention total. Shown to the Owner and anyone who can open Expenses; others do not load it. The read
+  (`expenseRepository.getUnpaid`, `useUnpaidExpenses`) takes only the needed columns, is re-read whenever the
+  dashboard opens, and joins the dashboard's error banner with Retry if it fails (never a false all-clear). The KPI
+  row is unchanged (its 4-card layout is a recorded design decision). Tests in
+  `dashboard-home/__tests__/DashboardHome.test.jsx` (5), plus repository, filter and deep-link tests.
 - **Unpaid expenses are not debts**: they are not added to the Debts page's "We owe others", so nothing is counted
   twice. They are tracked on the Expenses page.
 
@@ -164,7 +173,7 @@ location in use.
 
 ## 6. Test plan
 
-**Automated** (CareHub, `npm test`: 3,480 tests pass; lint 0 errors; build passes):
+**Automated** (CareHub, `npm test`: 3,489 tests pass; lint 0 errors; build passes):
 
 - `lib`/filters: `debts/debtFilters.test.js`, `debts/debtTotals.test.js`, `clients/clientFilters.test.js`,
   `expenses/expenseFilters.test.js`: every filter alone and combined, periods by day/month/year/range, ranges (open,

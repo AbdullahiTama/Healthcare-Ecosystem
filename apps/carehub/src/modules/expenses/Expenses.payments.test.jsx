@@ -139,3 +139,18 @@ describe('Expenses: payment status', () => {
     expect(text()).not.toContain('Not paid yet')
   })
 })
+
+describe('Expenses: opened from the dashboard\'s "Bills to pay"', () => {
+  it('?payment=open shows every expense still to pay, whatever its date', async () => {
+    repo.getAll.mockResolvedValue([...ROWS, { id: 'old', category: 'Rent', description: 'Old rent', amount: 8000, amount_paid: 0, date: '2020-05-01', created_at: '2020-05-01T09:00:00' }])
+    host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host)
+    await act(async () => { root.render(<MemoryRouter initialEntries={['/dashboard/expenses?payment=open']}><Expenses brand={{ id: 'biz-A' }} role='Owner' perms={{}} staffName='Bisi' /></MemoryRouter>) })
+    await flush()
+    expect(text()).toContain('Old rent')
+    expect(text()).toContain('Generator repair')
+    expect(text()).not.toContain('Shop rent')
+    expect(stat('Still to pay').textContent).toContain('₦26,000')
+    expect(byLabel('Payment status').value).toBe('open')
+  })
+})
+

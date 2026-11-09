@@ -15,6 +15,7 @@ vi.mock('../../../hooks/queries', () => ({
   useAppointments: vi.fn(),
   useSettings: vi.fn(() => ({ data: {} })),
   useInvalidateSales: vi.fn(() => vi.fn()),
+  useUnpaidExpenses: vi.fn(),
 }))
 // "Sales today" reads the Sales & Accounts report data for Today.
 vi.mock('../../pos/useSalesReportData', () => ({ useSalesReportData: vi.fn() }))
@@ -33,7 +34,7 @@ vi.mock('../../notifications/repositories', () => ({
 }))
 
 import DashboardHome from '../DashboardHome'
-import { useOpenSales, useAppointments } from '../../../hooks/queries'
+import { useOpenSales, useAppointments, useUnpaidExpenses } from '../../../hooks/queries'
 import { useSalesReportData } from '../../pos/useSalesReportData'
 import { periodRange, reportView } from '../../pos/salesReport'
 import { fmt } from '../../../lib/utils'
@@ -57,11 +58,12 @@ function LocationProbe() {
   return <div data-testid="loc">{loc.pathname}</div>
 }
 
-async function mountHome({ today, all, appts, products = [], perms = {}, role = 'Owner', brand = BRAND, staffId = null } = {}) {
+async function mountHome({ today, all, appts, bills, products = [], perms = {}, role = 'Owner', brand = BRAND, staffId = null } = {}) {
   const t = today ?? query()
   useSalesReportData.mockReturnValue({ ...t, data: Array.isArray(t.data) ? reportData(t.data) : t.data })
   useOpenSales.mockReturnValue(all ?? query())
   useAppointments.mockReturnValue(appts ?? query())
+  useUnpaidExpenses.mockReturnValue(bills ?? query())
 
   const host = document.createElement('div')
   document.body.appendChild(host)
@@ -382,3 +384,61 @@ describe('automatic stock alerts', () => {
     expect(notificationRepository.notify).toHaveBeenCalledWith('biz-1', [{ staffId: 'staff-ada' }], 'low_stock', expect.any(String), 'Amoxil', expect.any(String))
   })
 })
+
+describe('DashboardHome: bills to pay (expense payment status)', () => {
+  let m
+  beforeEach(() => { vi.clearAllMocks(); localStorage.clear() })
+  afterEach(async () => { if (m) { await m.unmount(); m = null } })
+  const BILLS = [
+    { id: 'e2', category: 'Utilities', description: 'Water bill', amount: 3000, amount_paid: 0, date: '2026-11-04' },
+    { id: 'e1', category: 'Maintenance', description: 'Generator repair', amount: 20000, amount_paid: 5000, date: '2026-10-02' },
+    { id: 'e3', category: 'Rent', description: 'Shop rent', amount: 50000, amount_paid: 10000, date: '2026-11-01' },
+    { id: 'e4', category: 'Transport', description: '', amount: 700, amount_paid: 0, date: '2026-11-06' },
+  ]
+
+  it('lists the oldest bills still to pay with the total, and counts them as needing attention', async () => {
+    m = await mountHome({ bills: query({ data: BILLS }) })
+    const text = m.host.textContent
+    expect(text).toContain('₦15,000 still to pay: Generator repair')
+    expect(text).toContain('Maintenance · 2026-10-02 · Partially paid')
+    expect(text).toContain('₦40,000 still to pay: Shop rent')
+    expect(text).toContain('₦3,000 still to pay: Water bill')
+    expect(text).not.toContain('still to pay: Transport') // only the three oldest are listed
+    expect(text).toContain('Bills to pay: ₦58,700 on 4 expenses · View all')
+    expect(text).toContain('4 items')
+    expect(useUnpaidExpenses).toHaveBeenCalledWith('biz-1', true)
+  })
+
+  it('Pay opens that expense; View all opens Expenses filtered to bills still to pay', async () => {
+    m = await mountHome({ bills: query({ data: BILLS }) })
+    click([...m.host.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === 'Pay Generator repair'))
+    await act(async () => {})
+    expect(m.host.querySelector('[data-testid="loc"]').textContent).toBe('/dashboard/expenses')
+    await m.unmount()
+    m = await mountHome({ bills: query({ data: BILLS }) })
+    click([...m.host.querySelectorAll('button')].find((b) => b.textContent.startsWith('Bills to pay:')))
+    await act(async () => {})
+    expect(m.host.querySelector('[data-testid="loc"]').textContent).toBe('/dashboard/expenses')
+  })
+
+  it('staff without access to Expenses neither load nor see bills', async () => {
+    m = await mountHome({ bills: query({ data: BILLS }), role: 'Cashier', perms: { nav: ['dashboard', 'pos'] } })
+    expect(useUnpaidExpenses).toHaveBeenCalledWith('biz-1', false)
+    expect(m.host.textContent).not.toContain('still to pay')
+  })
+
+  it('nothing owed: no bills group, and an all-clear can still show', async () => {
+    m = await mountHome({ bills: query({ data: [] }) })
+    expect(m.host.textContent).not.toContain('Bills to pay')
+    expect(m.host.textContent).toContain('Nothing needs your attention right now.')
+  })
+
+  it('a failed read joins the error banner with Retry instead of reading as "nothing to pay"', async () => {
+    const refetch = vi.fn()
+    m = await mountHome({ bills: query({ isError: true, refetch }) })
+    expect(m.host.textContent).not.toContain('Nothing needs your attention right now.')
+    click([...m.host.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Retry'))
+    expect(refetch).toHaveBeenCalled()
+  })
+})
+

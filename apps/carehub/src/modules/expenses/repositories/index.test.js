@@ -186,3 +186,27 @@ describe('expenseRepository: payment status', () => {
     expect(calls[1].path).toBe(`expense_payments?business_id=eq.${A}&expense_id=eq.e1&order=created_at.asc,id.asc&select=*`)
   })
 })
+
+describe('expenseRepository.getUnpaid', () => {
+  it('returns only expenses not fully paid, for this business, reading just the needed columns', async () => {
+    const calls = []
+    const repo = createExpenseRepository(async (path) => {
+      calls.push(path)
+      return [
+        { id: 'a', amount: 100, amount_paid: 100 },
+        { id: 'b', amount: 100, amount_paid: 40 },
+        { id: 'c', amount: 100, amount_paid: 0 },
+        { id: 'd', amount: 100 },
+      ]
+    })
+    expect((await repo.getUnpaid(A)).map((e) => e.id)).toEqual(['b', 'c'])
+    expect(calls[0]).toContain(`business_id=eq.${A}`)
+    expect(calls[0]).toContain('select=id,category,description,amount,amount_paid,date,created_at')
+  })
+  it('before the payment columns exist there is nothing unpaid; other errors still surface', async () => {
+    const missing = createExpenseRepository(async () => { throw new Error('Supabase error (400): column expenses.amount_paid does not exist') })
+    expect(await missing.getUnpaid(A)).toEqual([])
+    const down = createExpenseRepository(async () => { throw new Error('Failed to fetch') })
+    await expect(down.getUnpaid(A)).rejects.toThrow('Failed to fetch')
+  })
+})

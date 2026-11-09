@@ -69,3 +69,11 @@ describe('payment status', () => {
     expect(describeExpenseFilters(filters, { fmt })).toBe('Oct 2026 · Unpaid')
   })
 })
+
+describe('"Not fully paid" filter', () => {
+  it('keeps unpaid and partially paid expenses together', () => {
+    const P = [{ id: 'p', amount: 10, amount_paid: 10 }, { id: 'h', amount: 10, amount_paid: 4 }, { id: 'u', amount: 10, amount_paid: 0 }]
+    expect(ids(filterExpenses(P, f({ period: { mode: 'all' }, paymentStatus: 'open' })))).toEqual(['h', 'u'])
+    expect(describeExpenseFilters(f({ period: { mode: 'all' }, paymentStatus: 'open' }), { fmt })).toBe('All time · Not fully paid')
+  })
+})
