@@ -105,6 +105,12 @@ how it was paid (Cash, Transfer, POS, Cheque, Other), and paid off later.
 - **If the migration were absent** (another environment) the app keeps working as before: rows have no `amount_paid`, so everything reads
   as paid, the form offers no payment choice and nothing offers Record payment. If an unpaid expense is attempted
   anyway, it is refused with an explanation, never stored as paid.
+- **Financial Reports** (added 2026-11-09): the Expense breakdown shows the period's expenses as Total, Paid and Still
+  to pay (with how many); a new **Expenses still to pay** card shows every expense not fully paid, any date (like
+  "Credit outstanding"), with how much of it is from the period; the CSV export adds Expenses Paid, Expenses Still To
+  Pay (this period) and Unpaid Expenses (any date) to the summary, and Paid, Still To Pay and Status to each expense.
+  Totals come from the same `expenseTotals()` as the Expenses page. Net profit is unchanged (expenses count when
+  incurred). Tests: `reports/Reports.expensePayments.test.jsx`.
 - **Unpaid expenses are not debts**: they are not added to the Debts page's "We owe others", so nothing is counted
   twice. They are tracked on the Expenses page.
 
@@ -158,7 +164,7 @@ location in use.
 
 ## 6. Test plan
 
-**Automated** (CareHub, `npm test`: 3,476 tests pass; lint 0 errors; build passes):
+**Automated** (CareHub, `npm test`: 3,480 tests pass; lint 0 errors; build passes):
 
 - `lib`/filters: `debts/debtFilters.test.js`, `debts/debtTotals.test.js`, `clients/clientFilters.test.js`,
   `expenses/expenseFilters.test.js`: every filter alone and combined, periods by day/month/year/range, ranges (open,

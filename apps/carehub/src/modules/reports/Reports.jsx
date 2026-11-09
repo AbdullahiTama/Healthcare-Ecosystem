@@ -8,7 +8,9 @@ import { Download, CheckCircle, AlertTriangle, Search, X, ChevronRight } from 'l
 // the codebase.
 import { saleRepository } from '../pos/repositories'
 import { expenseRepository } from '../expenses/repositories'
-import { expenseDate, sumExpenses, sumByCategory } from '../expenses/expenseRules'
+import { expenseDate, sumByCategory, expensePaid, expenseBalance, expensePaymentStatus } from '../expenses/expenseRules'
+// Paid / still-to-pay totals: the same function the Expenses page uses, so the two pages always agree.
+import { expenseTotals, EXPENSE_PAYMENT_STATUSES } from '../expenses/expenseFilters'
 import { purchaseRepository } from '../purchases/repositories'
 import { adrReportRepository } from '../adr/repositories'
 import { inPeriod, periodRange } from './periodFilter'
@@ -93,7 +95,12 @@ export default function Reports({ brand, role, perms, embedded = false }) {
   // Revenue is net of refunds, so a refund or an Owner edit shows here at once.
   const totalRevenue = fSales.reduce((s, x) => s + saleNet(x), 0)
   const totalRefunded = fSales.reduce((s, x) => s + saleRefunded(x), 0)
-  const totalExpenses = sumExpenses(fExpenses)
+  // Expenses count when they are incurred (logged), paid or not, so profit is unchanged by payment status. What has
+  // been paid and what is still owed are shown alongside.
+  const periodExpenses = expenseTotals(fExpenses)
+  const totalExpenses = periodExpenses.total
+  // Like credit outstanding, the bills still to pay are every open expense, whatever its date.
+  const unpaidExpenses = expenseTotals(expenses.filter(e => expensePaymentStatus(e) !== 'paid'))
   const totalPurchases = fPurchases.reduce((s, x) => s + (x.total_cost || 0), 0)
   const netProfit = totalRevenue - totalExpenses - totalPurchases
   const creditBalance = openSales.filter(s => s.is_credit && (s.balance || 0) > 0).reduce((s, x) => s + (x.balance || 0), 0)
@@ -118,17 +125,21 @@ export default function Reports({ brand, role, perms, embedded = false }) {
       ['SUMMARY'],
       ['Total Revenue', totalRevenue],
       ['Total Expenses', totalExpenses],
+      ['Expenses Paid', periodExpenses.paid],
+      ['Expenses Still To Pay (this period)', periodExpenses.outstanding],
       ['Total Purchases', totalPurchases],
       ['Net Profit', netProfit],
       ['Credit Outstanding', creditBalance],
+      ['Unpaid Expenses (any date)', unpaidExpenses.outstanding],
       [],
       ['SALES DETAIL'],
       ['Date', 'Transaction No', 'Client', 'Total', 'Refunded', 'Net', 'Payment Method', 'Credit?'],
       ...searched.map(s => [businessDateOf(s.created_at), s.txn_no || '', s.client_name || 'Walk-in', s.total || 0, saleRefunded(s), saleNet(s), s.payment_method || '', s.is_credit ? 'Yes' : 'No']),
       [],
       ['EXPENSES DETAIL'],
-      ['Date', 'Category', 'Description', 'Amount', 'Staff'],
-      ...fExpenses.map(e => [businessDateOf(e.date || e.created_at), e.category || '', e.description || '', e.amount || 0, e.staff_name || '']),
+      ['Date', 'Category', 'Description', 'Amount', 'Paid', 'Still To Pay', 'Status', 'Staff'],
+      ...fExpenses.map(e => [businessDateOf(e.date || e.created_at), e.category || '', e.description || '', e.amount || 0, expensePaid(e), expenseBalance(e),
+        EXPENSE_PAYMENT_STATUSES.find(([k]) => k === expensePaymentStatus(e))[1], e.staff_name || '']),
       [],
       ['PURCHASES DETAIL'],
       ['Date', 'Supplier', 'Product', 'Total Cost', 'Paid', 'Balance', 'Status'],
@@ -219,6 +230,13 @@ export default function Reports({ brand, role, perms, embedded = false }) {
               <div style={{ fontSize: '28px', fontWeight: '900', color: warning }}>{fmt(creditBalance)}</div>
               <div style={{ fontSize: '12px', color: gray400, marginTop: '4px' }}>All open credit sales, any date</div>
             </Card>
+            <Card style={{ padding: '20px', borderLeft: `4px solid ${danger}` }}>
+              <div style={{ fontSize: '12px', color: gray500, fontWeight: '600', marginBottom: '4px' }}>Expenses still to pay</div>
+              <div style={{ fontSize: '28px', fontWeight: '900', color: unpaidExpenses.outstanding > 0 ? danger : gray500 }}>{fmt(unpaidExpenses.outstanding)}</div>
+              <div style={{ fontSize: '12px', color: gray400, marginTop: '4px' }}>
+                {unpaidExpenses.count} expense{unpaidExpenses.count !== 1 ? 's' : ''} not fully paid, any date{periodExpenses.outstanding > 0 ? ` · ${fmt(periodExpenses.outstanding)} from this period` : ''}
+              </div>
+            </Card>
             <Card style={{ padding: '20px', borderLeft: `4px solid ${warning}` }}>
               <div style={{ fontSize: '12px', color: gray500, fontWeight: '600', marginBottom: '4px' }}>Total ADR Reports</div>
               <div style={{ fontSize: '28px', fontWeight: '900', color: warning }}>{fAdrReports.length} reports</div>
@@ -245,7 +263,13 @@ export default function Reports({ brand, role, perms, embedded = false }) {
           {/* Expense breakdown */}
           {Object.keys(byExpCat).length > 0 && (
             <Card style={{ padding: '20px', marginBottom: '20px' }}>
-              <div style={{ fontWeight: '800', fontSize: '15px', marginBottom: '14px', color: navy }}>Expense breakdown</div>
+              <div style={{ fontWeight: '800', fontSize: '15px', marginBottom: '4px', color: navy }}>Expense breakdown</div>
+              {/* What the period's expenses cost, how much of it is paid and how much is still owed. */}
+              <div role='group' aria-label='Expense payment status for this period' style={{ display: 'flex', gap: '6px 18px', flexWrap: 'wrap', fontSize: '12.5px', color: gray600, marginBottom: '14px' }}>
+                <span>Total <strong style={{ color: navy }}>{fmt(periodExpenses.total)}</strong></span>
+                <span>Paid <strong style={{ color: success }}>{fmt(periodExpenses.paid)}</strong></span>
+                <span>Still to pay <strong style={{ color: periodExpenses.outstanding > 0 ? danger : gray500 }}>{fmt(periodExpenses.outstanding)}</strong>{periodExpenses.open > 0 ? ` (${periodExpenses.open} expense${periodExpenses.open !== 1 ? 's' : ''})` : ''}</span>
+              </div>
               {Object.entries(byExpCat).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => (
                 <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
                   <span style={{ fontSize: '12px', color: gray600, width: '110px', fontWeight: '600', flexShrink: 0 }}>{cat}</span>
