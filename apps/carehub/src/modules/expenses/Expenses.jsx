@@ -3,10 +3,11 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus, ChevronDown, Search } from 'lucide-react'
 import { expenseRepository } from './repositories'
 import { useQueryParamAction } from '../../hooks/useQueryParamAction'
-import { validateExpense, newExpenseId, budgetSummary, expenseDate, inMonth, sumExpenses } from './expenseRules'
+import { validateExpense, newExpenseId, budgetSummary, expenseDate, inMonth, sumExpenses, expensePaymentStatus, expenseBalance } from './expenseRules'
 import { useExpenseBudget } from './useExpenseBudget'
 import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
-import { defaultExpenseFilters, filterExpenses, sortExpenses, expenseTotals, expenseRecorders, expenseRecorder, activeExpenseFilterCount, describeExpenseFilters } from './expenseFilters'
+import { ExpensePaymentFields, RecordExpensePaymentModal, ExpensePaymentSummary, ExpenseStatusPill } from './components/ExpensePayment'
+import { EXPENSE_PAYMENT_STATUSES, defaultExpenseFilters, filterExpenses, sortExpenses, expenseTotals, expenseRecorders, expenseRecorder, activeExpenseFilterCount, describeExpenseFilters } from './expenseFilters'
 import PeriodFilter from '../../components/PeriodFilter'
 import { FilterPanel, FilterSelect, AmountRangeFilter } from '../../components/RecordFilters'
 import { yearsOf } from '../../lib/recordFilters'
@@ -19,7 +20,7 @@ const { tealDeep, tealBright, tealMist, navy, gray600, gray500, gray400, gray100
 
 const PAGE_SIZE = 50
 
-export default function Expenses({ brand, role, perms }) {
+export default function Expenses({ brand, role, perms, staffName }) {
   // Every expense of the business is read once (paged past the server's row cap) and filtered here, so any
   // combination of filters totals exactly the rows on screen. Volumes are small (tens to hundreds per business);
   // a server-side filter is the next step if a business records many thousands.
@@ -47,6 +48,8 @@ export default function Expenses({ brand, role, perms }) {
   const [deleteTarget, setDeleteTarget] = useState(null)
   // One expense opened in full: from the Owner's activity feed (?expense=<id>).
   const [viewing, setViewing] = useState(null)
+  // The expense being paid off (Record payment).
+  const [paying, setPaying] = useState(null)
   useQueryParamAction('expense', async (id) => {
     try {
       const e = await expenseRepository.getById(brand.id, id)
@@ -92,6 +95,9 @@ export default function Expenses({ brand, role, perms }) {
   const activeCount = activeExpenseFilterCount(filters, thisMonth)
   const filterLabel = describeExpenseFilters(filters, { fmt })
   // Budget spending is the whole month, whatever else is filtered.
+  // Payment status needs carehub_20270107_expense_payments. Until it is applied the rows have no amount_paid: every
+  // expense reads as paid, the form records paid expenses only and nothing offers Record payment.
+  const paymentsAvailable = expenses.length === 0 || expenses.some(e => e.amount_paid !== undefined)
   const monthSpent = useMemo(() => sumExpenses(expenses.filter(e => inMonth(e, budgetMonth))), [expenses, budgetMonth])
 
   async function save() {
@@ -110,7 +116,9 @@ export default function Expenses({ brand, role, perms }) {
       setForm({ date: todayDate() }); setFormErrors({}); setShowAdd(false); load()
     } catch (e) {
       console.error('[Expenses] save failed:', e?.message)
-      showToast('Could not save the expense. Nothing was recorded; please try again.', { type: 'error' })
+      // ExpensePaymentsUnavailable (repositories): an unpaid expense before the payment update is installed.
+      const notYet = e?.name === 'ExpensePaymentsUnavailable'
+      showToast(notYet ? e.message : 'Could not save the expense. Nothing was recorded; please try again.', { type: notYet ? 'warning' : 'error' })
     }
     saveInFlight.current = false
     setSaving(false)
@@ -290,6 +298,9 @@ export default function Expenses({ brand, role, perms }) {
       {/* Totals for the expenses shown: every filter recalculates them. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Receipt />} label='Total spent' value={loadError ? '—' : fmt(shownTotals.total)} sub={loadError ? undefined : describeExpenseFilters({ period: filters.period })} />
+        <StatCard icon={<CheckCircle />} label='Paid' value={loadError ? '—' : fmt(shownTotals.paid)} />
+        <StatCard icon={<AlertCircle />} label='Still to pay' value={loadError ? '—' : fmt(shownTotals.outstanding)} tone={shownTotals.outstanding > 0 ? 'danger' : undefined}
+          sub={loadError ? undefined : shownTotals.open + ' expense' + (shownTotals.open !== 1 ? 's' : '') + ' not fully paid'} />
         <StatCard icon={<BarChart2 />} label='Categories' value={loadError ? '—' : shownTotals.byCategory.length} />
         <StatCard icon={<Clipboard />} label='Transactions' value={loadError ? '—' : shownTotals.count} />
       </div>
@@ -321,6 +332,7 @@ export default function Expenses({ brand, role, perms }) {
           <PeriodFilter value={filters.period} onChange={v => setFilter('period', v)} years={years} label='Expense date' />
         </div>
         <FilterSelect label='Category' value={filters.category} onChange={v => setFilter('category', v)} options={categoryOptions} />
+        {paymentsAvailable && <FilterSelect label='Payment status' value={filters.paymentStatus} onChange={v => setFilter('paymentStatus', v)} options={EXPENSE_PAYMENT_STATUSES} />}
         <FilterSelect label='Recorded by' value={filters.recordedBy} onChange={v => setFilter('recordedBy', v)} options={recorders.map(r => [r, r])} allLabel='Anyone' />
         <AmountRangeFilter label='Amount (₦)' value={filters.amount} onChange={v => setFilter('amount', v)} />
       </FilterPanel>
@@ -329,6 +341,7 @@ export default function Expenses({ brand, role, perms }) {
         <div role='status' aria-live='polite' style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 18px', padding: '12px 16px', marginBottom: '14px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}` }}>
           <span style={{ fontSize: '12.5px', color: gray600 }}>{shownTotals.count} expense{shownTotals.count !== 1 ? 's' : ''} for {filterLabel}</span>
           <span style={{ fontSize: '13px', color: gray600 }}>Total: <strong style={{ color: danger, fontSize: '15px' }}>{fmt(shownTotals.total)}</strong></span>
+          <span style={{ fontSize: '13px', color: gray600 }}>Paid: <strong style={{ color: success }}>{fmt(shownTotals.paid)}</strong> · Still to pay: <strong style={{ color: shownTotals.outstanding > 0 ? danger : gray500 }}>{fmt(shownTotals.outstanding)}</strong></span>
         </div>
       )}
 
@@ -349,7 +362,7 @@ export default function Expenses({ brand, role, perms }) {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${border}`, background: gray50 }}>
-                  {['Category', 'Description', 'Amount', 'Date', 'Staff', 'Action'].map(h => (
+                  {['Category', 'Description', 'Amount', 'Status', 'Date', 'Staff', 'Action'].map(h => (
                     <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: gray400, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
@@ -358,12 +371,27 @@ export default function Expenses({ brand, role, perms }) {
                 {filtered.slice(0, shownCount).map(e => (
                   <tr key={e.id} style={{ borderBottom: `1px solid ${gray100}` }}>
                     <td style={{ padding: '12px 16px' }}><Pill label={e.category} type='teal' /></td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>{e.description || 'Not set'}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '900', color: danger }}>{fmt(e.amount)}</td>
+                    <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>
+                      {/* Opens the expense in full: payment, history and who recorded it. */}
+                      <button type='button' onClick={() => setViewing(e)} aria-label={'View expense: ' + (e.description || e.category) + ', ' + fmt(e.amount)}
+                        style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: navy, cursor: 'pointer', textAlign: 'left', textDecoration: 'underline', textDecorationColor: gray100, textUnderlineOffset: 3 }}>
+                        {e.description || 'Not set'}
+                      </button>
+                    </td>
+                    <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: '900', color: danger }}>
+                      {fmt(e.amount)}
+                      {expensePaymentStatus(e) !== 'paid' && <div style={{ fontSize: '11px', fontWeight: '700', color: gray500, marginTop: 2 }}>{fmt(expenseBalance(e))} to pay</div>}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}><ExpenseStatusPill expense={e} /></td>
                     <td style={{ padding: '12px 16px', fontSize: '12px', color: gray400 }}>{businessDateOf(e.date || e.created_at)}</td>
                     <td style={{ padding: '12px 16px', fontSize: '13px', color: gray500 }}>{expenseRecorder(e) || 'Not set'}</td>
                     <td style={{ padding: '12px 16px' }}>
-                      {perms?.canDelete && <RedBtn onClick={() => askDelete(e)} style={{ padding: '4px 9px', fontSize: '11px' }}>Delete</RedBtn>}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {paymentsAvailable && expensePaymentStatus(e) !== 'paid' && (
+                          <TealBtn onClick={() => setPaying(e)} aria-label={'Record payment: ' + (e.description || e.category)} style={{ padding: '4px 10px', fontSize: '11px', whiteSpace: 'nowrap' }}>Record payment</TealBtn>
+                        )}
+                        {perms?.canDelete && <RedBtn onClick={() => askDelete(e)} style={{ padding: '4px 9px', fontSize: '11px' }}>Delete</RedBtn>}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -425,6 +453,7 @@ export default function Expenses({ brand, role, perms }) {
             <Inp id='expense-amount' label='Amount (₦) *' value={form.amount} onChange={v => f('amount', v)} type='number' min='0' placeholder='0' required error={formErrors.amount} />
             <Inp label='Date' value={form.date} onChange={v => f('date', v)} type='date' error={formErrors.date} />
           </div>
+          {paymentsAvailable && <ExpensePaymentFields form={form} setField={f} errors={formErrors} />}
           <Inp id='expense-recorded-by' label='Recorded By' value={form.staffName} onChange={v => f('staffName', v)} placeholder='Your name' />
           {form.amount && budget > 0 && spendingKnown && (
             <div style={{ padding: '10px', borderRadius: theme.radius.md, background: bg, fontSize: '12px', color: gray600 }}>
@@ -437,7 +466,8 @@ export default function Expenses({ brand, role, perms }) {
       </Modal>
 
       <Modal show={!!viewing} onClose={() => setViewing(null)} title='Expense'
-        footer={<GhostBtn onClick={() => setViewing(null)} style={{ flex: 1, padding: '12px' }}>Close</GhostBtn>}>
+        footer={<><GhostBtn onClick={() => setViewing(null)} style={{ flex: 1, padding: '12px' }}>Close</GhostBtn>
+          {viewing && paymentsAvailable && expensePaymentStatus(viewing) !== 'paid' && <TealBtn onClick={() => { setPaying(viewing); setViewing(null) }} style={{ flex: 1, padding: '12px' }}>Record payment</TealBtn>}</>}>
         {viewing && (
           <dl style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '10px 16px', margin: 0, fontSize: '13px' }}>
             {[
@@ -456,7 +486,13 @@ export default function Expenses({ brand, role, perms }) {
             ))}
           </dl>
         )}
+        {viewing && <ExpensePaymentSummary businessId={brand?.id} expense={viewing} available={paymentsAvailable && viewing.amount_paid !== undefined} />}
       </Modal>
+
+      {paying && (
+        <RecordExpensePaymentModal expense={paying} staffName={staffName} showToast={showToast}
+          onClose={() => setPaying(null)} onPaid={() => { setPaying(null); load() }} />
+      )}
 
       <ConfirmDialog show={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete}
         title='Delete this expense?'

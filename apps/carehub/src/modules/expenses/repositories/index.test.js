@@ -141,3 +141,48 @@ describe('expenseRepository', () => {
     await expect(silent.setBudget(A, '2026-11', 50000)).rejects.toThrow('could not be confirmed')
   })
 })
+
+describe('expenseRepository: payment status', () => {
+  // A recording transport: answers each call from `reply(path, opts)` and keeps every call.
+  function recording(reply) {
+    const calls = []
+    const request = async (path, opts = {}) => { calls.push({ path, ...opts, body: opts.body ? JSON.parse(opts.body) : undefined }); return reply(path, opts, calls.length) }
+    return { calls, repo: createExpenseRepository(request) }
+  }
+  const missing = new Error("Supabase error (400): Could not find the 'amount_paid' column of 'expenses' in the schema cache")
+
+  it('create sends amount_paid and payment_method with the expense', async () => {
+    const { calls, repo } = recording(async () => [{ id: 'x' }])
+    await repo.create(A, { id: 'x', category: 'Rent', amount: 1000, amount_paid: 0, payment_method: null })
+    expect(calls[0].body).toMatchObject({ id: 'x', business_id: A, amount_paid: 0, payment_method: null })
+  })
+
+  it('before the update is installed, a paid expense is saved without the new columns', async () => {
+    const { calls, repo } = recording(async (_p, _o, n) => { if (n === 1) throw missing; return [{ id: 'x' }] })
+    await repo.create(A, { id: 'x', category: 'Rent', amount: 1000, amount_paid: 1000, payment_method: 'Cash' })
+    expect(calls).toHaveLength(2)
+    expect(calls[1].body).not.toHaveProperty('amount_paid')
+    expect(calls[1].body).not.toHaveProperty('payment_method')
+  })
+
+  it('before the update is installed, an unpaid expense is refused, never stored as paid', async () => {
+    const { calls, repo } = recording(async () => { throw missing })
+    await expect(repo.create(A, { id: 'x', category: 'Rent', amount: 1000, amount_paid: 0 })).rejects.toMatchObject({ name: 'ExpensePaymentsUnavailable' })
+    expect(calls).toHaveLength(1)
+  })
+
+  it('other errors are not swallowed by the fallback', async () => {
+    const { calls, repo } = recording(async () => { throw new Error('Supabase error (403): row-level security') })
+    await expect(repo.create(A, { id: 'x', amount: 1, amount_paid: 1 })).rejects.toThrow(/row-level/)
+    expect(calls).toHaveLength(1)
+  })
+
+  it('recordPayment calls record_expense_payment; getPayments is scoped to the business and expense', async () => {
+    const { calls, repo } = recording(async () => [])
+    await repo.recordPayment('e1', { amount: 400, method: 'Transfer', paidOn: '2026-11-08', note: 'rcpt 9', staffName: 'Bisi' })
+    expect(calls[0]).toMatchObject({ path: 'rpc/record_expense_payment', method: 'POST',
+      body: { p_expense_id: 'e1', p_amount: 400, p_method: 'Transfer', p_paid_on: '2026-11-08', p_note: 'rcpt 9', p_staff_name: 'Bisi' } })
+    await repo.getPayments(A, 'e1')
+    expect(calls[1].path).toBe(`expense_payments?business_id=eq.${A}&expense_id=eq.e1&order=created_at.asc,id.asc&select=*`)
+  })
+})

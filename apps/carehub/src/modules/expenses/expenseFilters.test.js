@@ -32,7 +32,7 @@ describe('filterExpenses', () => {
 
 describe('totals, sort, recorders, count and words', () => {
   it('totals in whole kobo with the category breakdown largest first', () => {
-    expect(expenseTotals(E.slice(1, 3))).toEqual({ total: 0.3, count: 2, byCategory: [{ category: 'Transport', total: 0.3 }] })
+    expect(expenseTotals(E.slice(1, 3))).toEqual({ total: 0.3, paid: 0.3, outstanding: 0, open: 0, count: 2, byCategory: [{ category: 'Transport', total: 0.3 }] })
     expect(expenseTotals(E).byCategory.map((c) => c.category)).toEqual(['Rent', 'Utilities', 'Transport'])
   })
   it('sorts newest first and lists recorders once', () => {
@@ -44,5 +44,28 @@ describe('totals, sort, recorders, count and words', () => {
     const filters = f({ category: 'Rent', amount: { min: '', max: '60000' } })
     expect(activeExpenseFilterCount(filters, '2026-10')).toBe(2)
     expect(describeExpenseFilters(filters, { fmt })).toBe('Oct 2026 · Rent · amount up to ₦60,000')
+  })
+})
+
+describe('payment status', () => {
+  const P = [
+    { id: 'p', category: 'Rent', amount: 1000, amount_paid: 1000, date: '2026-10-01' },
+    { id: 'h', category: 'Rent', amount: 1000, amount_paid: 250.5, date: '2026-10-02' },
+    { id: 'u', category: 'Rent', amount: 500, amount_paid: 0, date: '2026-10-03' },
+    { id: 'l', category: 'Rent', amount: 200, date: '2026-10-04' }, // before payment status: paid
+  ]
+  const all = { period: { mode: 'all' } }
+  it('filters paid, partially paid and unpaid', () => {
+    expect(ids(filterExpenses(P, f({ ...all, paymentStatus: 'paid' })))).toEqual(['p', 'l'])
+    expect(ids(filterExpenses(P, f({ ...all, paymentStatus: 'partial' })))).toEqual(['h'])
+    expect(ids(filterExpenses(P, f({ ...all, paymentStatus: 'unpaid' })))).toEqual(['u'])
+  })
+  it('totals what was spent, paid and is still owed', () => {
+    expect(expenseTotals(P)).toMatchObject({ total: 2700, paid: 1450.5, outstanding: 1249.5, open: 2 })
+  })
+  it('counts and describes the status filter', () => {
+    const filters = f({ paymentStatus: 'unpaid' })
+    expect(activeExpenseFilterCount(filters, '2026-10')).toBe(1)
+    expect(describeExpenseFilters(filters, { fmt })).toBe('Oct 2026 · Unpaid')
   })
 })

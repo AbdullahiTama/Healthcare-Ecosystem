@@ -1,8 +1,9 @@
 import { sbFetch } from '../../../services/supabase'
+import { isMissingColumn } from '../../../lib/dbErrors'
 
 // ── Expense repository ────────────────────────────────────────────────────────
 // A deep module over the `expenses` table. The interface is small
-// (getAll/create/delete/getPage/getTotals/getCategories); the implementation
+// (getAll/create/delete/recordPayment/getPayments/getPage/getTotals/getCategories); the implementation
 // owns the PostgREST query shape and tenant scoping — every read and write is
 // filtered by business_id so one organisation can never touch another's rows.
 //
@@ -14,6 +15,14 @@ import { sbFetch } from '../../../services/supabase'
 // PostgREST silently caps a plain GET at 1000 rows. A report that reads
 // "everything" must page, or its totals quietly stop at the cap.
 const ALL_PAGE = 1000
+
+// A part-paid or unpaid expense cannot be stored until the database has the payment columns.
+export class ExpensePaymentsUnavailable extends Error {
+  constructor() {
+    super('Recording an unpaid or part-paid expense needs the latest CareHub update, which is not installed yet. Record it as paid, or try again later.')
+    this.name = 'ExpensePaymentsUnavailable'
+  }
+}
 
 export function createExpenseRepository(request = sbFetch) {
   return {
@@ -61,13 +70,27 @@ export function createExpenseRepository(request = sbFetch) {
     // on the primary key and is ignored instead of creating a duplicate. When the
     // insert was ignored the row is read back by id, so success is only reported
     // for a row that really exists for this business.
+    //
+    // Payment status (carehub_20270107_expense_payments): `amount_paid` and `payment_method` are sent with the
+    // expense. Before that migration is applied the table has neither column: a fully paid expense is then saved
+    // without them (it means the same thing), and a part-paid or unpaid one is refused with ExpensePaymentsUnavailable
+    // rather than silently recorded as paid.
     async create(businessId, expense) {
       if (!expense?.id) throw new Error('An expense needs an id before it can be saved.')
-      const inserted = await request('expenses?on_conflict=id', {
+      const insert = (row) => request('expenses?on_conflict=id', {
         method: 'POST',
         prefer: 'resolution=ignore-duplicates,return=representation',
-        body: JSON.stringify({ ...expense, business_id: businessId }),
+        body: JSON.stringify({ ...row, business_id: businessId }),
       })
+      let inserted
+      try {
+        inserted = await insert(expense)
+      } catch (e) {
+        if (!(isMissingColumn(e, 'amount_paid') || isMissingColumn(e, 'payment_method'))) throw e
+        const { amount_paid: paid, payment_method: _method, ...legacy } = expense
+        if (paid != null && Number(paid) < Number(expense.amount)) throw new ExpensePaymentsUnavailable()
+        inserted = await insert(legacy)
+      }
       if (inserted?.length) return inserted[0]
       const existing = await request(`expenses?id=eq.${expense.id}&business_id=eq.${businessId}&select=*`)
       if (!existing?.length) throw new Error('The expense could not be confirmed as saved.')
@@ -99,6 +122,20 @@ export function createExpenseRepository(request = sbFetch) {
       const row = Array.isArray(rows) ? rows[0] : rows
       if (!row || row.month !== month) throw new Error('The budget could not be confirmed as saved.')
       return { month: row.month, amount: Number(row.amount) || 0, updatedAt: row.updated_at || null }
+    },
+
+    // Pays some or all of what is still owed on an expense (record_expense_payment: checks the caller's business,
+    // the amount and the method, and writes the history row in the same transaction). Returns the new totals.
+    async recordPayment(expenseId, { amount, method = 'Cash', paidOn = null, note = null, staffName = null }) {
+      return request('rpc/record_expense_payment', {
+        method: 'POST',
+        body: JSON.stringify({ p_expense_id: expenseId, p_amount: amount, p_method: method, p_paid_on: paidOn || null, p_note: note || null, p_staff_name: staffName || null }),
+      })
+    },
+
+    // An expense's payment history, oldest first (it reads as a running balance).
+    async getPayments(businessId, expenseId) {
+      return request(`expense_payments?business_id=eq.${businessId}&expense_id=eq.${expenseId}&order=created_at.asc,id.asc&select=*`)
     },
 
     async delete(expenseId, businessId) {

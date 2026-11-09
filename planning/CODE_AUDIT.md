@@ -28,7 +28,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A13 | Medium | Importer operating models | Every spec section implemented (gap review 2026-11-04); applied to production 2026-11-04 and probed; two owner decisions and one proposal open | Open: owner decisions |
 | A14 | Medium | Payments | Reported ~1% reduction in amounts: not reproduced in code or live data; Paystack's fee was not stored, so bank deposits could not be matched to payments | Open: migration applied 2026-11-04; confirm backfill, then match deposits |
 | A15 | Medium | Expenses | The expense budget lived only in the browser, per month: it vanished at each new month, on another device and for staff | Open: migration applied 2026-11-04; the reporting Owner opens Expenses once on the original device |
-| A16 | Low | Expenses (data model) | Expenses have no payment status (every expense is recorded as already paid), so the Expenses filters cannot offer Paid / Unpaid | Open: owner decision |
+| A16 | Low | Expenses (data model) | Expenses had no payment status (every expense recorded as already paid) | Code complete 2026-11-09: payment status, history and Record payment; migration not applied |
 
 ## 2. Items
 
@@ -263,7 +263,7 @@ staff and other businesses refused, carry-over, no direct writes, anon refused);
 one intended `set_expense_budget` finding. **To close:** the reporting Owner opens Expenses once on the device where the
 budget was set (that moves it to the database), and it shows there and to staff.
 
-### A16. Expenses have no payment status (Low, owner decision)
+### A16. Expenses had no payment status (Low): code complete, migration not applied
 
 **What (verified 2026-11-09, live columns):** `expenses` holds category, description, amount, date, staff and who
 recorded it; there is no paid/unpaid state. The new Expenses filters (date, category, recorded by, amount, search;
@@ -271,8 +271,14 @@ recorded it; there is no paid/unpaid state. The new Expenses filters (date, cate
 therefore cannot filter by payment status. Money the business still owes is recorded as a purchase or a "We owe" debt,
 which the Debts filters cover.
 
-**Close by (decide one):** keep expenses as paid-only and record unpaid bills as debts (document it in the app), or add
-a payment status and amount paid to `expenses` (migration, form, totals and reports).
+**Decided 2026-11-09 (owner request):** add payment status to expenses. **Built:** migration
+`carehub_20270107_expense_payments` (amount paid, method, append-only `expense_payments` history,
+`record_expense_payment`, a guard on direct edits) and the app (Payment choice when logging, Paid / Still to pay
+totals, status filter, Record payment, history). Verified by 14 PGlite tests and the CareHub suite. The app works
+unchanged until the migration is applied.
+
+**To close:** apply the migration with the owner's approval, run the probe in its header, record the result there and
+here.
 
 ## 3. Open items recorded in other audits
 

@@ -44,8 +44,29 @@ export function parseAmount(raw) {
   return Number(s)
 }
 
+export const PAYMENT_METHODS = ['Cash', 'Transfer', 'POS', 'Cheque', 'Other']
+// How the expense stands when it is recorded: paid in full, part paid (a deposit), or not paid yet (a bill to pay).
+export const EXPENSE_PAYMENT_CHOICES = [['paid', 'Paid in full'], ['partial', 'Part paid'], ['unpaid', 'Not paid yet']]
+
+// What has been paid on an expense. An expense from before payment status existed (no amount_paid) was paid in full.
+export function expensePaid(e) {
+  const amount = Number(e?.amount) || 0
+  if (e?.amount_paid === undefined || e?.amount_paid === null || e?.amount_paid === '') return amount
+  return Math.min(Math.max(Number(e.amount_paid) || 0, 0), amount)
+}
+export function expenseBalance(e) {
+  return Math.round(((Number(e?.amount) || 0) - expensePaid(e)) * 100) / 100
+}
+// 'paid' | 'partial' | 'unpaid', the same words as debts.
+export function expensePaymentStatus(e) {
+  const paid = expensePaid(e)
+  if (expenseBalance(e) <= 0) return 'paid'
+  return paid > 0 ? 'partial' : 'unpaid'
+}
+
 // Returns { ok, errors: { field: message }, value } — `value` is the payload to
-// persist, only meaningful when ok.
+// persist, only meaningful when ok. Payment: form.payment is 'paid' (default), 'partial' (form.amountPaid now) or
+// 'unpaid'; form.paymentMethod says how anything paid now was paid.
 export function validateExpense(form, categories) {
   const errors = {}
   const category = (form?.category || '').trim()
@@ -65,11 +86,28 @@ export function validateExpense(form, categories) {
   const description = (form?.description || '').trim()
   if (description.length > 500) errors.description = 'Keep the description under 500 characters.'
 
+  const payment = form?.payment || 'paid'
+  let amountPaid = Number.isFinite(amount) ? amount : 0
+  if (payment === 'unpaid') amountPaid = 0
+  else if (payment === 'partial') {
+    const part = parseAmount(form?.amountPaid)
+    if (form?.amountPaid === undefined || String(form.amountPaid).trim() === '') errors.amountPaid = 'Enter how much was paid now.'
+    else if (!Number.isFinite(part)) errors.amountPaid = 'Enter a valid amount with at most 2 decimal places.'
+    else if (part <= 0) errors.amountPaid = 'A part payment must be more than zero. Choose "Not paid yet" if nothing was paid.'
+    else if (Number.isFinite(amount) && part >= amount) errors.amountPaid = 'That covers the whole expense. Choose "Paid in full" instead.'
+    else amountPaid = part
+  } else if (payment !== 'paid') errors.payment = 'Choose whether the expense has been paid.'
+  const method = form?.paymentMethod || 'Cash'
+  if (amountPaid > 0 && !PAYMENT_METHODS.includes(method)) errors.paymentMethod = 'Choose how it was paid.'
+
   const ok = Object.keys(errors).length === 0
   return {
     ok,
     errors,
-    value: ok ? { category, description, amount, date, staff_name: (form?.staffName || '').trim() } : null,
+    value: ok ? {
+      category, description, amount, date, staff_name: (form?.staffName || '').trim(),
+      amount_paid: amountPaid, payment_method: amountPaid > 0 ? method : null,
+    } : null,
   }
 }
 

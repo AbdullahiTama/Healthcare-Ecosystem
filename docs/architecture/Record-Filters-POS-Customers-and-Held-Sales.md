@@ -1,6 +1,7 @@
 # Record filters (Debts, Clients, Expenses), adding customers at the POS, and held sales that appear at once
 
-Status: built 2026-11-09. App only: no database change, no migration, no permission change.
+Status: built 2026-11-09. The filters, POS and held-sale changes are app only. Expense payment status (§2.3.1) adds
+the migration `carehub_20270107_expense_payments` (not applied yet).
 
 Related: [Client-Totals-Debts-and-Held-Sales.md](Client-Totals-Debts-and-Held-Sales.md) (the first debt filter
 summary), [POS-Drafts-and-Held-Sale-Reliability.md](POS-Drafts-and-Held-Sale-Reliability.md) (held-sale writes),
@@ -82,9 +83,30 @@ device, so any combination totals exactly. Live volumes on 2026-11-09: at most 4
 per business. If a business reaches many thousands, move the filter to a database function; the existing
 `get_expenses_page` / `get_expense_totals` / `get_expense_summary` reads are kept in the repository for that.
 
-**Payment status for expenses** is not offered: the `expenses` table has no such column, because every expense is
-recorded as money already spent. Unpaid bills to suppliers are purchases or "We owe" debts, which the Debts filters
-cover. Tracking unpaid expenses would be a data-model change (see audit A16).
+### 2.3.1 Expense payment status (added 2026-11-09, audit A16)
+
+An expense can now be logged as **Paid in full**, **Part paid** (with the amount paid now) or **Not paid yet**, with
+how it was paid (Cash, Transfer, POS, Cheque, Other), and paid off later.
+
+- **Database** (`supabase/migrations/carehub_20270107_expense_payments.sql`): `expenses.amount_paid` (0 .. amount)
+  and `payment_method`; every existing expense is set paid in full, which is what it meant. Status and balance are
+  derived (balance = amount - amount_paid), never stored. `expense_payments` is an append-only history (the same design
+  as `purchase_payments`): the amount paid when logged, every later payment, and one "before payment history" row per
+  existing expense, so an expense's history adds up to what was paid. `record_expense_payment()` is the only way to
+  pay: it checks the caller belongs to the business, that 0 < amount <= still owed, and writes the history in the same
+  transaction. A trigger refuses any other change to `amount_paid` and any lowering of an expense below what was paid.
+  An app build that sends no `amount_paid` still records paid expenses (insert trigger default).
+- **App**: the Log Expense form has a Payment choice; the page shows **Paid** and **Still to pay** cards (with how
+  many expenses are not fully paid) next to Total spent; a **Payment status** filter (Unpaid, Partially paid, Paid);
+  a Status column with what is left to pay; **Record payment** on each expense not fully paid (amount defaults to what
+  is owed, method, date, note); and the expense detail shows paid, still to pay and the payment history.
+- **Totals and budget**: Total spent, the category breakdown, the budget and Reports still count the full expense
+  amount (spending is incurred when the bill is logged, paid or not). Paid and Still to pay are shown alongside.
+- **Before the migration is applied** the app keeps working as today: rows have no `amount_paid`, so everything reads
+  as paid, the form offers no payment choice and nothing offers Record payment. If an unpaid expense is attempted
+  anyway, it is refused with an explanation, never stored as paid.
+- **Unpaid expenses are not debts**: they are not added to the Debts page's "We owe others", so nothing is counted
+  twice. They are tracked on the Expenses page.
 
 ### 2.4 Locations (Debts)
 
@@ -136,7 +158,7 @@ location in use.
 
 ## 6. Test plan
 
-**Automated** (CareHub, `npm test`: 3,453 tests pass; lint 0 errors; build passes):
+**Automated** (CareHub, `npm test`: 3,476 tests pass; lint 0 errors; build passes):
 
 - `lib`/filters: `debts/debtFilters.test.js`, `debts/debtTotals.test.js`, `clients/clientFilters.test.js`,
   `expenses/expenseFilters.test.js`: every filter alone and combined, periods by day/month/year/range, ranges (open,
@@ -151,6 +173,13 @@ location in use.
 - POS: `pos/POS.heldAndCustomers.test.jsx` (held sale shown at once, edited held sale updated, offline hold listed and
   not openable, other location's queue hidden, no duplicates, read error with Retry, add customer for any sale with
   cart kept, name prefilled, duplicate phone, name required); existing credit, held, draft and invoice suites.
+- Expense payments: `apps/carefind/src/test/expenses/expensePayments.db.test.js` (14, PGlite with the live table,
+  policy, grants and helper functions: backfill and its history, re-run safe, logging paid / part paid / unpaid,
+  payments in parts, over-payment and bad input refused, staff allowed, another business / missing / anon refused
+  without leaking, direct edits of the paid amount and of the history refused, cascade on delete);
+  `expenses/Expenses.payments.test.jsx` (cards, status filter, logging unpaid and part paid, Record payment, refusals,
+  detail history, behaviour before the migration); repository fallback and request shapes; rules
+  (`expenseRules.test.js`, `expenseFilters.test.js`).
 - Cache: `hooks/__tests__/queries.cache.test.jsx` (held-sale upsert dedupe and order; new client in the shared list).
 
 **Manual, after deploy:**
@@ -162,3 +191,6 @@ location in use.
 4. POS: put an item in the cart, tap the person-plus button, add a customer: they are selected and appear on the
    Clients page without a refresh. Hold a sale: it is under Held at once. Turn the network off, hold another: it is
    listed as saved on this device; turn the network on: it syncs and becomes a normal held sale.
+5. After `carehub_20270107_expense_payments` is applied: log an expense as Not paid yet; it shows Unpaid with the full
+   amount to pay, and Still to pay rises by it. Record part of it, then the rest: the status moves to Partially paid,
+   then Paid, and the detail lists both payments.

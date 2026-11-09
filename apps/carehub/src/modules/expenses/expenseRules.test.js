@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateExpense, parseAmount, expenseDate, inMonth, sumExpenses, sumByCategory } from './expenseRules.js'
+import { validateExpense, parseAmount, expenseDate, inMonth, sumExpenses, sumByCategory, expensePaymentStatus, expensePaid, expenseBalance } from './expenseRules.js'
 import { EXPENSE_CATS } from '../../config/constants.js'
 
 const good = { category: 'Rent', amount: '1,250.50', date: '2026-10-05', description: ' Shop rent ', staffName: ' Ada ' }
@@ -8,7 +8,34 @@ describe('validateExpense', () => {
   it('accepts a valid expense and returns the payload to persist', () => {
     const r = validateExpense(good, EXPENSE_CATS)
     expect(r.ok).toBe(true)
-    expect(r.value).toEqual({ category: 'Rent', description: 'Shop rent', amount: 1250.5, date: '2026-10-05', staff_name: 'Ada' })
+    expect(r.value).toEqual({ category: 'Rent', description: 'Shop rent', amount: 1250.5, date: '2026-10-05', staff_name: 'Ada', amount_paid: 1250.5, payment_method: 'Cash' })
+  })
+
+  it('payment: part paid keeps the deposit and its method; not paid yet stores nothing paid', () => {
+    expect(validateExpense({ ...good, payment: 'partial', amountPaid: '250', paymentMethod: 'Transfer' }, EXPENSE_CATS).value)
+      .toMatchObject({ amount: 1250.5, amount_paid: 250, payment_method: 'Transfer' })
+    expect(validateExpense({ ...good, payment: 'unpaid', paymentMethod: 'Transfer' }, EXPENSE_CATS).value)
+      .toMatchObject({ amount_paid: 0, payment_method: null })
+  })
+
+  it.each([
+    [{ payment: 'partial' }, 'amountPaid', /how much was paid/],
+    [{ payment: 'partial', amountPaid: '0' }, 'amountPaid', /more than zero/],
+    [{ payment: 'partial', amountPaid: '1250.5' }, 'amountPaid', /Paid in full/],
+    [{ payment: 'partial', amountPaid: '9.999' }, 'amountPaid', /valid amount/],
+    [{ payment: 'later' }, 'payment', /whether/],
+    [{ paymentMethod: 'Bitcoin' }, 'paymentMethod', /how it was paid/],
+  ])('payment errors %j', (patch, field, message) => {
+    const r = validateExpense({ ...good, ...patch }, EXPENSE_CATS)
+    expect(r.ok).toBe(false)
+    expect(r.errors[field]).toMatch(message)
+  })
+
+  it('status, paid and balance; an expense from before payment status is paid in full', () => {
+    expect([{ amount: 100 }, { amount: 100, amount_paid: 40 }, { amount: 100, amount_paid: 0 }, { amount: 100, amount_paid: '100' }].map(expensePaymentStatus))
+      .toEqual(['paid', 'partial', 'unpaid', 'paid'])
+    expect(expensePaid({ amount: 100 })).toBe(100)
+    expect(expenseBalance({ amount: 100.3, amount_paid: 0.1 })).toBe(100.2)
   })
 
   it.each([['0'], ['-5'], ['abc'], ['1.234'], ['1e3'], ['']])('rejects the amount %j', (amount) => {
