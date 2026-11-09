@@ -127,7 +127,8 @@ how it was paid (Cash, Transfer, POS, Cheque, Other), and paid off later.
   paid / Unpaid pill and its summary ends "· paid" or "· ₦X still to pay" (status now); each person's card shows
   "₦X of expenses still to pay (N)"; payments recorded later on expenses appear as **Expense payment** activity under
   whoever recorded them. Database: `carehub_20270108_staff_activity_expense_status` re-creates `staff_activity()`
-  (body confirmed identical to live before the change) with a `still_owed` column and the `expense_payment` rows; the
+  (body confirmed identical to live before the change) with a `still_owed` column and the `expense_payment` rows,
+  applied to production 2026-11-09 and probed (results in its header); the
   Owner check, SECURITY DEFINER and grants are unchanged. Tests: `apps/carefind/src/test/expenses/staffActivityExpenseStatus.db.test.js`
   (4), `staff/staffActivity.test.js`, `staff/Staff.activity.test.jsx`.
 - **Unpaid expenses are not debts**: they are not added to the Debts page's "We owe others", so nothing is counted

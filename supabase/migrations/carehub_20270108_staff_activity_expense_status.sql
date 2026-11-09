@@ -1,9 +1,19 @@
 -- carehub_20270108_staff_activity_expense_status
 --
--- Status: NOT APPLIED. Tested on PGlite (apps/carefind/src/test/expenses/staffActivityExpenseStatus.db.test.js).
--- The function body is carehub_20261229_owner_financial_activity's staff_activity(), which was confirmed identical to
--- the live definition on 2026-11-09 (md5 of the whitespace-normalised source: 51a4846a778d58dc1180b4d2541d687d), with
--- only the changes below. Apply only with the owner's approval and record the result here.
+-- Status: APPLIED TO PRODUCTION 2026-11-09 with the owner's approval (Supabase migration version 20261109110447),
+-- applied verbatim from this file (statements only). Tested first on PGlite
+-- (apps/carefind/src/test/expenses/staffActivityExpenseStatus.db.test.js).
+-- The function body is carehub_20261229_owner_financial_activity's staff_activity(), confirmed identical to the live
+-- definition on 2026-11-09 immediately before applying (md5 of the whitespace-normalised source:
+-- 51a4846a778d58dc1180b4d2541d687d; no dependent objects), with only the changes below.
+-- After: result ends in still_owed numeric; SECURITY DEFINER; search_path public, pg_temp; EXECUTE: authenticated only.
+-- Live probe (DO block that raised at the end; 0 probe rows remained), with the carehub.test Owner and cashier:
+--   cashier calls staff_activity():                refused "Only the Owner can view staff activity"
+--   Owner, unpaid 3,000 bill with 1,000 paid:       expense row "Utilities · PROBE water · ₦2,000 still to pay",
+--                                                   still_owed 2000.00; expense_payment row
+--                                                   "Utilities · PROBE water · Transfer · ₦2,000 still to pay · probe"
+--   rows other than expenses with still_owed:       0
+--   anon calls staff_activity():                   refused, permission denied for function
 --
 -- PROBLEM
 -- -------
