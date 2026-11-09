@@ -1,9 +1,26 @@
 -- carehub_20270107_expense_payments
 --
--- Status: NOT APPLIED. Tested on PGlite (apps/carefind/src/test/expenses/expensePayments.db.test.js) with the live
--- current_business_ids(), is_platform_admin(), expense_effective_date() and the live expenses columns, read
--- 2026-11-09. Apply only with the
--- owner's approval, then run the rolled-back probe at the end of this header and record the result here.
+-- Status: APPLIED TO PRODUCTION 2026-11-09 with the owner's approval (Supabase migration version 20261109100502),
+-- applied verbatim from this file (statements only). Tested first on PGlite
+-- (apps/carefind/src/test/expenses/expensePayments.db.test.js) with the live current_business_ids(),
+-- is_platform_admin(), expense_effective_date() and the live expenses columns, read 2026-11-09.
+-- Before: 55 expenses, total 277,259, none with a missing or negative amount. After: 55 expenses, all amount_paid =
+-- amount; 55 'before_history' rows totalling 277,259.00; expense_payments: authenticated SELECT only, anon nothing;
+-- record_expense_payment EXECUTE: authenticated only; expense_payment_history EXECUTE: nobody.
+-- Live probe (DO block that raised at the end, so nothing remained; 0 rows left afterwards), as the Owner and active
+-- cashier of a business and the owner of another business (carehub.test accounts):
+--   1 unpaid insert (10,000, amount_paid 0):     paid 0, no history rows
+--   2 Owner pays 4,000 (Cash):                   paid 4,000; one 'payment' row, balance_after 6,000
+--   3 Owner pays 7,000:                          refused "That is more than the 6,000.00 still owed on this expense."
+--   4 cashier pays 6,000 (Transfer):             paid 10,000
+--   5 Owner sets amount_paid directly:           refused (guard)
+--   6 Owner lowers amount to 3,000:              refused "cannot be less than what has already been paid (4000.00)"
+--   7 insert without amount_paid (500):          paid 500; one 'at_recording' row
+--     direct insert into expense_payments:       refused, permission denied
+--   8 other business pays / reads history:       refused "That expense was not found." / 0 rows
+--   9 anon pays / reads history:                 refused, permission denied (function / table)
+-- Security advisor afterwards: one new item in authenticated_security_definer_function_executable,
+-- record_expense_payment, which is intended (the app's way to pay an expense; it checks the caller's business first).
 --
 -- PROBLEM
 -- -------

@@ -1,7 +1,7 @@
 # Record filters (Debts, Clients, Expenses), adding customers at the POS, and held sales that appear at once
 
 Status: built 2026-11-09. The filters, POS and held-sale changes are app only. Expense payment status (§2.3.1) adds
-the migration `carehub_20270107_expense_payments` (not applied yet).
+the migration `carehub_20270107_expense_payments`, applied to production 2026-11-09 and probed (results in its header).
 
 Related: [Client-Totals-Debts-and-Held-Sales.md](Client-Totals-Debts-and-Held-Sales.md) (the first debt filter
 summary), [POS-Drafts-and-Held-Sale-Reliability.md](POS-Drafts-and-Held-Sale-Reliability.md) (held-sale writes),
@@ -102,7 +102,7 @@ how it was paid (Cash, Transfer, POS, Cheque, Other), and paid off later.
   is owed, method, date, note); and the expense detail shows paid, still to pay and the payment history.
 - **Totals and budget**: Total spent, the category breakdown, the budget and Reports still count the full expense
   amount (spending is incurred when the bill is logged, paid or not). Paid and Still to pay are shown alongside.
-- **Before the migration is applied** the app keeps working as today: rows have no `amount_paid`, so everything reads
+- **If the migration were absent** (another environment) the app keeps working as before: rows have no `amount_paid`, so everything reads
   as paid, the form offers no payment choice and nothing offers Record payment. If an unpaid expense is attempted
   anyway, it is refused with an explanation, never stored as paid.
 - **Unpaid expenses are not debts**: they are not added to the Debts page's "We owe others", so nothing is counted
@@ -191,6 +191,6 @@ location in use.
 4. POS: put an item in the cart, tap the person-plus button, add a customer: they are selected and appear on the
    Clients page without a refresh. Hold a sale: it is under Held at once. Turn the network off, hold another: it is
    listed as saved on this device; turn the network on: it syncs and becomes a normal held sale.
-5. After `carehub_20270107_expense_payments` is applied: log an expense as Not paid yet; it shows Unpaid with the full
+5. Log an expense as Not paid yet; it shows Unpaid with the full
    amount to pay, and Still to pay rises by it. Record part of it, then the rest: the status moves to Partially paid,
    then Paid, and the detail lists both payments.
