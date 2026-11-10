@@ -29,6 +29,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A14 | Medium | Payments | Reported ~1% reduction in amounts: not reproduced in code or live data; Paystack's fee was not stored, so bank deposits could not be matched to payments | Open: migration applied 2026-11-04; confirm backfill, then match deposits |
 | A15 | Medium | Expenses | The expense budget lived only in the browser, per month: it vanished at each new month, on another device and for staff | Open: migration applied 2026-11-04; the reporting Owner opens Expenses once on the original device |
 | A16 | Low | Expenses (data model) | Expenses had no payment status (every expense recorded as already paid) | **Closed 2026-11-09**: payment status, history and Record payment; migration applied and probed |
+| A17 | Medium | Inventory (bulk delete) | Bulk edit is live in the app; bulk delete / delete all and re-upload / restore need `carehub_20270109_inventory_bulk_delete` | Open: apply with owner approval |
 
 ## 2. Items
 
@@ -281,6 +282,19 @@ unchanged until the migration is applied.
 paid in full with matching history; the rolled-back live probe passed (unpaid and part-paid expenses, payments in parts
 by the Owner and a cashier, over-payment, direct edits, history writes, another business and anon all behave as
 intended). Results in the migration header.
+
+### A17. Inventory bulk delete and restore: migration not applied (Medium)
+
+**What:** a plain product delete cascades away customer reviews, shop listings and stock-count lines, is refused for
+products in orders or with batches, and leaves stock out of the ledger (live foreign keys, 2026-11-10). Bulk delete,
+"Delete all & re-upload" and restore therefore go through `delete_products()` / `restore_deleted_products()` in
+`supabase/migrations/carehub_20270109_inventory_bulk_delete.sql`, which keep linked products with the reason, write
+stock off, keep a restorable copy and audit. Verified by 9 PGlite tests; see
+[Inventory-Bulk-Edit-and-Delete.md](../docs/architecture/Inventory-Bulk-Edit-and-Delete.md). Until applied, bulk
+delete says the update is needed and single delete works as before.
+
+**To close:** apply with the owner's approval, run a rolled-back live probe (owner / delete role / cashier / other
+business / anon; kept reasons; restore), record it in the migration header and here.
 
 ## 3. Open items recorded in other audits
 

@@ -1,3 +1,4 @@
+import { createProductRepository as createProductRepositoryForBulk, translateDeleteError } from './index.js'
 import { describe, it, expect } from 'vitest'
 import { createProductRepository, productRepository } from './index.js'
 import { createInMemoryClient } from '../../../test/inMemoryClient.js'
@@ -247,5 +248,55 @@ describe('productRepository', () => {
     expect(typeof productRepository.getAll).toBe('function')
     expect(typeof productRepository.mergeDuplicates).toBe('function')
     expect(typeof productRepository.receiveStock).toBe('function')
+  })
+})
+
+describe('productRepository: bulk edit, delete and restore', () => {
+  const make = createProductRepositoryForBulk
+  function recording(reply = async () => []) {
+    const calls = []
+    const repo = make(async (path, opts = {}) => { calls.push({ path, ...opts, body: opts.body ? JSON.parse(opts.body) : undefined }); return reply(path, opts, calls.length) })
+    return { calls, repo }
+  }
+
+  it('updateMany sends one tenant-scoped PATCH per 100 products and returns the saved rows', async () => {
+    const ids = Array.from({ length: 150 }, (_, i) => 'p' + i)
+    const { calls, repo } = recording(async (path) => [{ id: path.length }])
+    const rows = await repo.updateMany('B1', ids, { shelf_label: 'A1' })
+    expect(calls).toHaveLength(2)
+    expect(calls[0]).toMatchObject({ method: 'PATCH', body: { shelf_label: 'A1' }, prefer: 'return=representation' })
+    expect(calls[0].path).toMatch(/^products\?business_id=eq\.B1&id=in\.\(p0,p1,/)
+    expect(calls[1].path).toContain('p149')
+    expect(rows).toHaveLength(2)
+  })
+
+  it('deleteProducts calls delete_products for selected or all products', async () => {
+    const { calls, repo } = recording(async () => ({ deleted: 1, kept: [] }))
+    await repo.deleteProducts('B1', { ids: ['p1'] })
+    await repo.deleteProducts('B1', { all: true, confirm: 'DELETE ALL PRODUCTS' })
+    expect(calls[0]).toMatchObject({ path: 'rpc/delete_products', method: 'POST', body: { p_business_id: 'B1', p_product_ids: ['p1'], p_all: false, p_confirm: null } })
+    expect(calls[1].body).toEqual({ p_business_id: 'B1', p_product_ids: null, p_all: true, p_confirm: 'DELETE ALL PRODUCTS' })
+  })
+
+  it('restoreDeleted calls restore_deleted_products; getDeletions groups copies by deletion, newest first', async () => {
+    const { calls, repo } = recording(async (path) => path.startsWith('deleted_products') ? [
+      { deletion_id: 'd2', product_name: 'A', deleted_at: '2026-11-10T10:00:00Z', deleted_by_name: 'Ada', deleted_all: true, restored_at: null },
+      { deletion_id: 'd2', product_name: 'B', deleted_at: '2026-11-10T10:00:00Z', deleted_by_name: 'Ada', deleted_all: true, restored_at: '2026-11-10T11:00:00Z' },
+      { deletion_id: 'd1', product_name: 'C', deleted_at: '2026-11-09T10:00:00Z', deleted_by_name: null, deleted_all: false, restored_at: null },
+    ] : { restored: 1 })
+    await repo.restoreDeleted('B1', 'd1')
+    expect(calls[0]).toMatchObject({ path: 'rpc/restore_deleted_products', body: { p_business_id: 'B1', p_deletion_id: 'd1' } })
+    expect(await repo.getDeletions('B1')).toEqual([
+      { deletion_id: 'd2', deleted_at: '2026-11-10T10:00:00Z', by: 'Ada', all: true, count: 2, restored: 1, names: ['A', 'B'] },
+      { deletion_id: 'd1', deleted_at: '2026-11-09T10:00:00Z', by: null, all: false, count: 1, restored: 0, names: ['C'] },
+    ])
+    expect(calls[1].path).toContain('deleted_products?business_id=eq.B1')
+  })
+
+  it('refusals become sentences; a missing function says the update is not installed; other errors pass through', async () => {
+    expect(translateDeleteError(new Error('Supabase error (400): DELETE_ALL_CONFIRM: type it'))).toMatchObject({ code: 'DELETE_ALL_CONFIRM', message: 'Type DELETE ALL PRODUCTS exactly to confirm.' })
+    expect(translateDeleteError(new Error('Supabase error (404): Could not find the function public.delete_products'))).toMatchObject({ code: 'DELETE_UNAVAILABLE' })
+    const net = new Error('Failed to fetch')
+    expect(translateDeleteError(net)).toBe(net)
   })
 })

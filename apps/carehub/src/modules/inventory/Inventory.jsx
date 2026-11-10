@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Download, Upload, AlertTriangle, Package, DollarSign, Search, Camera,
-  FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2, TrendingUp, Percent,
+  FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2, TrendingUp, Percent, Trash2, RotateCcw, Pencil,
 } from 'lucide-react'
 import { productRepository } from './repositories'
 import { parseInventoryCsv } from './csvImport'
@@ -18,6 +18,10 @@ import { findProductByBarcode } from '../../lib/barcodeScanner'
 import { useKeyboardScanner, useDialogKeyboardScanner as useScansInDialog } from '../../hooks/useKeyboardScanner'
 import { upsertProducts, removeProducts, toRows } from './productListState'
 import { CatalogStatusBanner, CatalogSkeleton } from './components/CatalogStatus'
+import BulkEditModal from './components/BulkEditModal'
+import DeleteProductsModal from './components/DeleteProductsModal'
+import RecentlyDeletedModal from './components/RecentlyDeletedModal'
+import { runBulkUpdates, keptReasonText } from './bulkEdit'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, Toggle, GhostBtn, TealBtn, RedBtn, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
@@ -55,6 +59,11 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   const [cleaningUp, setCleaningUp] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [exporting, setExporting] = useState(false)
+  // Bulk actions: the marked products (ids), and which bulk dialog is open.
+  const [selected, setSelected] = useState(() => new Set())
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
+  const [deleteMode, setDeleteMode] = useState(null) // 'selected' | 'all' | null
+  const [showDeleted, setShowDeleted] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const plan = usePlanGate(showToast)
 
@@ -126,17 +135,21 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   // The export is recorded in the audit log before the file is saved. A refusal
   // from the database (the role may not export) cancels the download; a missing
   // record for any other reason still delivers the file but says so.
-  async function exportExcel() {
-    if (filtered.length === 0) { showToast('There are no products to export.', { type: 'warning' }); return }
-    if (!plan.allow('exporting')) return
+  // `list` defaults to the filtered list; the delete dialog passes the products about to be deleted (a backup in the
+  // upload template's column order). Resolves to true when the file was saved.
+  async function exportExcel(list = filtered) {
+    const rowsToExport = Array.isArray(list) ? list : filtered
+    if (rowsToExport.length === 0) { showToast('There are no products to export.', { type: 'warning' }); return false }
+    if (!plan.allow('exporting')) return false
     setExporting(true)
+    let saved = false
     try {
       let audit = { status: 'failed' }
-      const saved = await exportInventoryXlsx(filtered, {
+      saved = await exportInventoryXlsx(rowsToExport, {
         beforeDownload: async () => {
           audit = await auditRepository.recordExport(brand.id, {
             exportType: 'inventory.xlsx',
-            rowCount: filtered.length,
+            rowCount: rowsToExport.length,
             // The search term itself is not stored, only that one was applied.
             filters: { category: catFilter === 'All' ? null : catFilter, stock: stockFilter || null, expiry: expiryFilter || null, search_applied: !!search.trim() },
           })
@@ -146,16 +159,18 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       if (!saved) {
         showToast('Your role is not allowed to export data.', { type: 'error' })
       } else if (audit.status === 'recorded') {
-        showToast(`Exported ${filtered.length} product${filtered.length !== 1 ? 's' : ''} to Excel.`, { type: 'success' })
+        showToast(`Exported ${rowsToExport.length} product${rowsToExport.length !== 1 ? 's' : ''} to Excel.`, { type: 'success' })
       } else {
         console.warn('[inventory] export audit record not saved:', audit.status)
-        showToast(`Exported ${filtered.length} product${filtered.length !== 1 ? 's' : ''}, but the audit record could not be saved.`, { type: 'warning' })
+        showToast(`Exported ${rowsToExport.length} product${rowsToExport.length !== 1 ? 's' : ''}, but the audit record could not be saved.`, { type: 'warning' })
       }
     } catch (e) {
       console.error('inventory export failed:', e)
       showToast('Could not export: ' + e.message, { type: 'error' })
+      saved = false
     }
     setExporting(false)
+    return !!saved
   }
 
   // After a save the page applies the row the server returned to the list it
@@ -320,16 +335,85 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   }
 
   function askDelete(product) { setDeleteTarget(product) }
+  // One product goes through delete_products too, so a product linked to orders, batches, reviews, a shop listing
+  // or stock counts is kept with the reason (a plain delete would silently remove reviews and listings, or fail),
+  // and the deletion can be undone. Before that update is installed, the previous plain delete is used.
   async function handleDelete() {
-    const id = deleteTarget?.id
+    const target = deleteTarget
     setDeleteTarget(null)
+    if (!target) return
     try {
-      await productRepository.delete(id, brand.id)
-      applyRemoved([id])
-      showToast('Product deleted.', { type: 'success' })
+      const r = await productRepository.deleteProducts(brand.id, { ids: [target.id] })
+      if (r.deleted > 0) {
+        applyRemoved([target.id])
+        setSelected(prev => { const n = new Set(prev); n.delete(target.id); return n })
+        showToast('Product deleted.', { type: 'success', actionLabel: 'Undo', onAction: () => restoreDeletion(r.deletion_id) })
+      } else if (r.kept?.length) {
+        showToast(`"${target.name}" was kept: it is ${keptReasonText(r.kept[0].reasons)}.`, { type: 'warning' })
+      } else {
+        applyRemoved([target.id])
+        showToast('That product was already deleted.', { type: 'info' })
+      }
     } catch (e) {
+      if (e?.code === 'DELETE_UNAVAILABLE') {
+        try {
+          await productRepository.delete(target.id, brand.id)
+          applyRemoved([target.id])
+          showToast('Product deleted.', { type: 'success' })
+        } catch (err) {
+          console.error('handleDelete error:', err)
+          showToast('Could not delete product. Please try again.', { type: 'error' })
+        }
+        return
+      }
       console.error('handleDelete error:', e)
-      showToast('Could not delete product. Please try again.', { type: 'error' })
+      showToast(e?.code ? e.message : 'Could not delete product. Please try again.', { type: 'error' })
+    }
+  }
+
+  // ── Bulk actions ────────────────────────────────────────────────────────────
+  const canBulkEdit = !!(perms?.canEditStock || perms?.canEditPrice)
+  const canBulkDelete = !!perms?.canDelete
+  const canSelect = catalogReady && (canBulkEdit || canBulkDelete)
+  const isOwner = role === 'Owner'
+  const selectedProducts = useMemo(() => products.filter(p => selected.has(p.id)), [products, selected])
+  const allShownSelected = filtered.length > 0 && filtered.every(p => selected.has(p.id))
+  function toggleSelected(id) {
+    setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  }
+  function selectAllShown() { setSelected(prev => new Set([...prev, ...filtered.map(p => p.id)])) }
+  function clearSelection() { setSelected(new Set()) }
+
+  async function runUpdates(groups, onProgress) {
+    const r = await runBulkUpdates(groups, (ids, updates) => productRepository.updateMany(brand.id, ids, updates), { onProgress })
+    if (r.saved.length) applySaved(r.saved)
+    if (r.failed.length) console.error('[inventory] bulk edit: some updates failed', r.failed.map(f => f.message))
+    else console.info('[inventory] bulk edit saved', { products: r.saved.length })
+    return r
+  }
+
+  // Deletes the marked products, or all of them; the local list drops exactly what the database deleted.
+  async function runDelete(mode) {
+    const all = mode === 'all'
+    const ids = all ? products.map(p => p.id) : selectedProducts.map(p => p.id)
+    const r = await productRepository.deleteProducts(brand.id, all ? { all: true, confirm: 'DELETE ALL PRODUCTS' } : { ids })
+    const keptIds = new Set((r.kept || []).map(k => String(k.id)))
+    applyRemoved(ids.filter(id => !keptIds.has(String(id))))
+    clearSelection()
+    console.info('[inventory] products deleted', { mode, deleted: r.deleted, kept: r.kept?.length || 0 })
+    return r
+  }
+
+  // Restores a deletion, then reloads the list so the restored products (with their saved ids) appear.
+  async function restoreDeletion(deletionId) {
+    try {
+      const r = await productRepository.restoreDeleted(brand.id, deletionId)
+      await (catalogState.reload || loadProducts)?.()
+      showToast(`${r.restored} product${r.restored === 1 ? '' : 's'} restored.` + (r.skipped_name_taken ? ` ${r.skipped_name_taken} skipped: the name is in use now.` : ''), { type: 'success' })
+      return r
+    } catch (e) {
+      showToast(e?.message || 'Could not restore. Please try again.', { type: 'error' })
+      throw e
     }
   }
 
@@ -536,7 +620,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   // The dialogs handle their own scans (ProductModal, RestockModal); fields
   // outside Inventory are left alone.
   const inventoryRoot = useRef(null)
-  const dialogOpen = showAdd || !!editItem || !!showRestock || showUpload || showCleanup || !!duplicateWarning || !!deleteTarget
+  const dialogOpen = showAdd || !!editItem || !!showRestock || showUpload || showCleanup || !!duplicateWarning || !!deleteTarget || showBulkEdit || !!deleteMode || showDeleted
   useKeyboardScanner({
     ignore: (e) => {
       const t = e.target
@@ -558,7 +642,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
           <button onClick={downloadTemplate} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}><Download size={14} /> Template</button>
           <button onClick={() => setShowUpload(true)} disabled={!catalogReady} title={waitTitle} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: catalogReady ? 'pointer' : 'not-allowed', opacity: catalogReady ? 1 : 0.6 }}><Upload size={14} /> Upload CSV</button>
           {perms?.canExportReports && (
-            <button onClick={exportExcel} disabled={exporting || !catalogReady} title={waitTitle} aria-busy={exporting} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: exporting ? 'wait' : catalogReady ? 'pointer' : 'not-allowed', opacity: exporting || !catalogReady ? 0.6 : 1 }}>
+            <button onClick={() => exportExcel()} disabled={exporting || !catalogReady} title={waitTitle} aria-busy={exporting} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: exporting ? 'wait' : catalogReady ? 'pointer' : 'not-allowed', opacity: exporting || !catalogReady ? 0.6 : 1 }}>
               {exporting ? <Loader2 size={14} className="spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />} {exporting ? 'Exporting…' : 'Export Excel'}
             </button>
           )}
@@ -566,6 +650,12 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             <button onClick={() => setShowCleanup(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${warning}`, background: warningBg, color: warning, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
               <AlertTriangle size={14} /> Clean up {totalDuplicateItems} duplicate{totalDuplicateItems > 1 ? 's' : ''}
             </button>
+          )}
+          {canBulkDelete && (
+            <button onClick={() => setShowDeleted(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}><RotateCcw size={14} aria-hidden='true' /> Recently deleted</button>
+          )}
+          {isOwner && canBulkDelete && catalogReady && products.length > 0 && (
+            <button onClick={() => setDeleteMode('all')} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${danger}`, background: 'white', color: danger, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}><Trash2 size={14} aria-hidden='true' /> Delete all &amp; re-upload</button>
           )}
           {perms?.canEditStock && <TealBtn onClick={() => plan.allow('adding products') && setShowAdd(true)} disabled={!catalogReady} title={waitTitle} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Add product</TealBtn>}
         </div>
@@ -644,6 +734,24 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       ) : filtered.length === 0 ? (
         <Empty icon={<Search size={48} strokeWidth={1.5} />} cause='filtered' title='No products match' description='Try a different search, or clear the filters.' action='Clear filters' onAction={clearFilters} />
       ) : (
+        <>
+        {canSelect && (
+          <div role='toolbar' aria-label='Bulk actions' style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10, padding: selected.size ? '10px 12px' : 0, borderRadius: theme.radius.md, background: selected.size ? tealMist : 'transparent' }}>
+            {selected.size > 0 && <span aria-live='polite' style={{ fontWeight: 800, fontSize: 13, color: tealDeep }}>{selected.size} selected</span>}
+            {!allShownSelected && (
+              <button onClick={selectAllShown} style={{ padding: '7px 12px', minHeight: 36, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                Select all {filtered.length} shown
+              </button>
+            )}
+            {selected.size > 0 && (
+              <>
+                <button onClick={clearSelection} style={{ padding: '7px 12px', minHeight: 36, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Clear</button>
+                {canBulkEdit && <TealBtn onClick={() => setShowBulkEdit(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Pencil size={13} aria-hidden='true' /> Edit selected</TealBtn>}
+                {canBulkDelete && <RedBtn onClick={() => setDeleteMode('selected')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Trash2 size={13} aria-hidden='true' /> Delete selected</RedBtn>}
+              </>
+            )}
+          </div>
+        )}
         <DataTable
           rows={filtered}
           page={page}
@@ -653,6 +761,13 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
           count={`${filtered.length} product${filtered.length !== 1 ? 's' : ''}`}
           onRetry={loadProducts}
           columns={[
+            ...(canSelect ? [{
+              key: 'select', label: 'Select',
+              render: p => (
+                <input type='checkbox' checked={selected.has(p.id)} onChange={() => toggleSelected(p.id)} onClick={e => e.stopPropagation()}
+                  aria-label={'Select ' + p.name} style={{ width: 18, height: 18, cursor: 'pointer', accentColor: tealDeep }} />
+              ),
+            }] : []),
             {
               key: 'name', label: 'Product', sortable: true,
               render: p => {
@@ -757,8 +872,26 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             </div>
           )}
         />
+        </>
       )}
       </>)}
+
+      {showBulkEdit && (
+        <BulkEditModal products={selectedProducts} perms={perms} categories={[...new Set([...PRODUCT_CATS, ...cats.filter(c => c && c !== 'All')])]}
+          runUpdates={runUpdates} onClose={() => setShowBulkEdit(false)} />
+      )}
+      {deleteMode && (
+        <DeleteProductsModal mode={deleteMode} count={deleteMode === 'all' ? products.length : selectedProducts.length}
+          canBackup={!!perms?.canExportReports}
+          onBackup={() => exportExcel(deleteMode === 'all' ? products : selectedProducts)}
+          onDelete={() => runDelete(deleteMode)}
+          onRestore={restoreDeletion}
+          onUpload={() => { setDeleteMode(null); setShowUpload(true) }}
+          onClose={() => setDeleteMode(null)} />
+      )}
+      {showDeleted && (
+        <RecentlyDeletedModal loadDeletions={() => productRepository.getDeletions(brand.id)} onRestore={restoreDeletion} onClose={() => setShowDeleted(false)} />
+      )}
 
       {/* Add/Edit Product Modal */}
       {(showAdd || editItem) && (

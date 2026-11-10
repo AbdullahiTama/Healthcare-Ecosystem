@@ -47,6 +47,31 @@ export function translateReceiveError(error) {
   return friendly
 }
 
+const DELETE_REFUSALS = {
+  DELETE_NOT_ALLOWED: 'Only the owner, or a role allowed to delete products, can do this.',
+  DELETE_ALL_OWNER_ONLY: 'Only the owner can delete every product.',
+  DELETE_ALL_CONFIRM: 'Type DELETE ALL PRODUCTS exactly to confirm.',
+  DELETE_NONE: 'Choose at least one product.',
+  DELETE_TOO_MANY: 'Delete at most 5,000 products at a time.',
+  RESTORE_NOT_FOUND: 'That deletion was not found. It may have been restored already.',
+}
+
+// Same contract as translateMergeError. A missing function (the update is not installed yet) gets its own code so
+// the page can say so instead of a raw error.
+export function translateDeleteError(error) {
+  const msg = String(error?.message || '')
+  if (/PGRST20[25]|Could not find the function/i.test(msg)) {
+    const e = new Error('Bulk delete needs the latest CareHub update, which is not installed yet.')
+    e.code = 'DELETE_UNAVAILABLE'
+    return e
+  }
+  const code = Object.keys(DELETE_REFUSALS).find((c) => msg.includes(c))
+  if (!code) return error
+  const friendly = new Error(DELETE_REFUSALS[code])
+  friendly.code = code
+  return friendly
+}
+
 export function createProductRepository(request = sbFetch) {
   return {
     // PostgREST clamps every response to db-max-rows (1000 on this project —
@@ -108,6 +133,70 @@ export function createProductRepository(request = sbFetch) {
         prefer: 'return=representation',
       })
       return Array.isArray(rows) ? rows[0] || null : rows || null
+    },
+
+    // The same changes for many products in one request per 100 (bulk edit). Tenant-scoped like update(); returns
+    // the saved rows so the page applies what the database stored.
+    async updateMany(businessId, productIds, updates) {
+      const ids = [...new Set((productIds || []).map(String))]
+      const rows = []
+      for (let i = 0; i < ids.length; i += 100) {
+        const chunk = ids.slice(i, i + 100)
+        const saved = await request(`products?business_id=eq.${businessId}&id=in.(${chunk.join(',')})`, {
+          method: 'PATCH',
+          body: JSON.stringify(updates),
+          prefer: 'return=representation',
+        })
+        rows.push(...(Array.isArray(saved) ? saved : []))
+      }
+      return rows
+    },
+
+    // Deletes products through delete_products (carehub_20270109): the named products, or every product with
+    // `all` (Owner only, `confirm` = 'DELETE ALL PRODUCTS'). Products tied to orders, batches, reviews, a shop
+    // listing or stock counts are kept and returned with their reasons; stock on hand is written off in the ledger;
+    // a copy of each deleted product is kept for restore. Returns { deletion_id, deleted, kept: [{ id, name,
+    // reasons }], not_found }. Refusal codes become sentences (with `.code`); anything else is rethrown as is.
+    async deleteProducts(businessId, { ids = null, all = false, confirm = null } = {}) {
+      try {
+        const result = await request('rpc/delete_products', {
+          method: 'POST',
+          body: JSON.stringify({ p_business_id: businessId, p_product_ids: all ? null : ids, p_all: !!all, p_confirm: confirm }),
+        })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateDeleteError(e)
+      }
+    },
+
+    // Puts a deletion's products back (restore_deleted_products). Returns { restored, skipped_already_back,
+    // skipped_name_taken }.
+    async restoreDeleted(businessId, deletionId) {
+      try {
+        const result = await request('rpc/restore_deleted_products', {
+          method: 'POST',
+          body: JSON.stringify({ p_business_id: businessId, p_deletion_id: deletionId }),
+        })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateDeleteError(e)
+      }
+    },
+
+    // Bulk deletions of this business, newest first, one entry per deletion: { deletion_id, deleted_at, by, all,
+    // count, restored, names (first few) }.
+    async getDeletions(businessId) {
+      const rows = await pagedQuery(request,
+        `deleted_products?business_id=eq.${businessId}&order=deleted_at.desc,id.asc&select=id,deletion_id,product_name,deleted_at,deleted_by_name,deleted_all,restored_at`)
+      const by = new Map()
+      for (const r of rows || []) {
+        if (!by.has(r.deletion_id)) by.set(r.deletion_id, { deletion_id: r.deletion_id, deleted_at: r.deleted_at, by: r.deleted_by_name || null, all: !!r.deleted_all, count: 0, restored: 0, names: [] })
+        const d = by.get(r.deletion_id)
+        d.count++
+        if (r.restored_at) d.restored++
+        if (d.names.length < 3 && r.product_name) d.names.push(r.product_name)
+      }
+      return [...by.values()]
     },
 
     async delete(productId, businessId) {
