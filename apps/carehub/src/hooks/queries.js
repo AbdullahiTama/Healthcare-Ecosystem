@@ -6,6 +6,7 @@ import { settingsRepository } from '../modules/settings/repositories'
 import { purchaseRepository } from '../modules/purchases/repositories'
 import { debtRepository } from '../modules/debts/repositories'
 import { expenseRepository } from '../modules/expenses/repositories'
+import { runBulkUpdates } from '../lib/bulkUpdates'
 
 // ── Query Keys ───────────────────────────────────────────────────────────────
 export const keys = {
@@ -189,6 +190,21 @@ export function useCreateClient(brandId) {
       qc.invalidateQueries({ queryKey: keys.clients(brandId) })
     },
   })
+}
+
+// Saves bulk-edit groups ({ ids, updates }) for clients and puts the saved rows into the shared client list at once
+// (Clients, POS, Debts and every picker read it), then re-reads it. Resolves to runBulkUpdates' { saved, failed }.
+export function useUpdateManyClients(brandId) {
+  const qc = useQueryClient()
+  return async (groups, onProgress) => {
+    const r = await runBulkUpdates(groups, (ids, updates) => clientRepository.updateMany(brandId, ids, updates), { onProgress })
+    if (r.saved.length) {
+      const byId = new Map(r.saved.map((c) => [String(c.id), c]))
+      qc.setQueryData(keys.clients(brandId), (prev) => (Array.isArray(prev) ? prev.map((c) => (byId.has(String(c.id)) ? { ...c, ...byId.get(String(c.id)) } : c)) : prev))
+    }
+    qc.invalidateQueries({ queryKey: keys.clients(brandId) })
+    return r
+  }
 }
 
 export function useCreateManyClients(brandId) {

@@ -19,6 +19,7 @@ import { useKeyboardScanner, useDialogKeyboardScanner as useScansInDialog } from
 import { upsertProducts, removeProducts, toRows } from './productListState'
 import { CatalogStatusBanner, CatalogSkeleton } from './components/CatalogStatus'
 import BulkEditModal from './components/BulkEditModal'
+import SelectionBar from '../../components/SelectionBar'
 import DeleteProductsModal from './components/DeleteProductsModal'
 import RecentlyDeletedModal from './components/RecentlyDeletedModal'
 import { runBulkUpdates, keptReasonText } from './bulkEdit'
@@ -737,21 +738,10 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       ) : (
         <>
         {canSelect && (
-          <div role='toolbar' aria-label='Bulk actions' style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10, padding: selected.size ? '10px 12px' : 0, borderRadius: theme.radius.md, background: selected.size ? tealMist : 'transparent' }}>
-            {selected.size > 0 && <span aria-live='polite' style={{ fontWeight: 800, fontSize: 13, color: tealDeep }}>{selected.size} selected</span>}
-            {!allShownSelected && (
-              <button onClick={selectAllShown} style={{ padding: '7px 12px', minHeight: 36, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                Select all {filtered.length} shown
-              </button>
-            )}
-            {selected.size > 0 && (
-              <>
-                <button onClick={clearSelection} style={{ padding: '7px 12px', minHeight: 36, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Clear</button>
-                {canBulkEdit && <TealBtn onClick={() => setShowBulkEdit(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Pencil size={13} aria-hidden='true' /> Edit selected</TealBtn>}
-                {canBulkDelete && <RedBtn onClick={() => setDeleteMode('selected')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Trash2 size={13} aria-hidden='true' /> Delete selected</RedBtn>}
-              </>
-            )}
-          </div>
+          <SelectionBar count={selected.size} shownCount={filtered.length} allShownSelected={allShownSelected} onSelectAll={selectAllShown} onClear={clearSelection}>
+            {canBulkEdit && <TealBtn onClick={() => setShowBulkEdit(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Pencil size={13} aria-hidden='true' /> Edit selected</TealBtn>}
+            {canBulkDelete && <RedBtn onClick={() => setDeleteMode('selected')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Trash2 size={13} aria-hidden='true' /> Delete selected</RedBtn>}
+          </SelectionBar>
         )}
         <DataTable
           rows={filtered}

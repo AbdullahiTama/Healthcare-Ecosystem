@@ -86,42 +86,9 @@ export function planBulkEdit(products, changes, opts = {}) {
   return plan
 }
 
-// Products that get exactly the same updates go in one request (category, shelf, reorder level and a fixed price are
-// usually the same for all; a percentage gives each product its own price).
-export function groupBulkUpdates(plan) {
-  const groups = new Map()
-  for (const item of plan || []) {
-    const key = JSON.stringify(Object.keys(item.updates).sort().map((k) => [k, item.updates[k]]))
-    if (!groups.has(key)) groups.set(key, { updates: item.updates, ids: [] })
-    groups.get(key).ids.push(item.id)
-  }
-  return [...groups.values()]
-}
-
-// Sends the groups through `updateMany(ids, updates)` (which resolves to the saved rows), a few at a time. Never
-// throws: returns the saved rows and the failures ({ ids, message }) so the page can apply what worked and offer to
-// retry the rest. `onProgress(done, total)` counts products.
-export async function runBulkUpdates(groups, updateMany, { concurrency = 4, onProgress } = {}) {
-  const queue = [...(groups || [])]
-  const total = queue.reduce((n, g) => n + g.ids.length, 0)
-  const saved = []
-  const failed = []
-  let done = 0
-  async function worker() {
-    for (let g = queue.shift(); g; g = queue.shift()) {
-      try {
-        const rows = await updateMany(g.ids, g.updates)
-        saved.push(...(Array.isArray(rows) ? rows : []))
-      } catch (e) {
-        failed.push({ ids: g.ids, updates: g.updates, message: e?.message || 'Could not save' })
-      }
-      done += g.ids.length
-      onProgress?.(done, total)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, queue.length || 1)) }, worker))
-  return { saved, failed, total }
-}
+// Grouping and sending are shared with Clients (lib/bulkUpdates.js); re-exported so Inventory's callers and tests
+// keep one import.
+export { groupBulkUpdates, runBulkUpdates } from '../../lib/bulkUpdates'
 
 // What each "kept" reason from delete_products means, for the result screen.
 export const KEPT_REASONS = {

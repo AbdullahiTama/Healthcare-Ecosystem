@@ -179,3 +179,15 @@ describe('clientRepository.getSales counts purchases only', () => {
     expect((await repo.getSales('c1', A)).map((r) => r.id).sort()).toEqual(['ok', 'ok2'])
   })
 })
+
+describe('clientRepository.updateMany', () => {
+  it('sends one tenant-scoped PATCH per 100 clients and returns the saved rows', async () => {
+    const calls = []
+    const repo = createClientRepository(async (path, opts) => { calls.push({ path, ...opts }); return [{ id: calls.length }] })
+    const rows = await repo.updateMany('biz-A', Array.from({ length: 120 }, (_, i) => 'c' + i), { gender: 'Male' })
+    expect(calls).toHaveLength(2)
+    expect(calls[0]).toMatchObject({ method: 'PATCH', prefer: 'return=representation', body: JSON.stringify({ gender: 'Male' }) })
+    expect(calls[0].path).toMatch(/^clients\?business_id=eq\.biz-A&id=in\.\(c0,c1,/)
+    expect(rows).toHaveLength(2)
+  })
+})

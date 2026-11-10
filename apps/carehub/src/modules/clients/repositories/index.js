@@ -90,6 +90,23 @@ export function createClientRepository(request = sbFetch) {
       })
     },
 
+    // The same changes for many clients, one request per 100 (bulk edit on the Clients page). Tenant-scoped like
+    // update(); returns the saved rows.
+    async updateMany(businessId, clientIds, updates) {
+      const ids = [...new Set((clientIds || []).map(String))]
+      const rows = []
+      for (let i = 0; i < ids.length; i += 100) {
+        const chunk = ids.slice(i, i + 100)
+        const saved = await request(`clients?business_id=eq.${businessId}&id=in.(${chunk.join(',')})`, {
+          method: 'PATCH',
+          body: JSON.stringify(updates),
+          prefer: 'return=representation',
+        })
+        rows.push(...(Array.isArray(saved) ? saved : []))
+      }
+      return rows
+    },
+
     // ── Per-client history ────────────────────────────────────────────────────
     // Linked via the client_id columns added in
     // 20260801_customer_and_requisition_modules.sql. Each of these four tables

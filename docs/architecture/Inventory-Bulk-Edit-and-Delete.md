@@ -93,3 +93,25 @@ Manual after applying:
    with its reason; Undo brings the first back.
 3. As the Owner, Delete all & re-upload on a test branch: download the copy, type the phrase, delete, upload the CSV;
    then Recently deleted shows the deletion (restore skips the names re-uploaded).
+
+## 6. Clients: mark and edit (added 2026-11-10, app only)
+
+The same marking as Inventory (shared `components/SelectionBar.jsx`; grouping and sending shared in
+`lib/bulkUpdates.js`, which Inventory's `bulkEdit.js` re-exports): a tick box on each client card, "Select all N
+shown" (follows search and filters), **Edit selected**.
+
+- Fields: **gender**, **address**, and **Add a note**, which is added to the end of each client's notes with
+  today's date (`2026-11-10: …`), so existing notes are never overwritten; notes are capped at 2,000 characters,
+  keeping the newest text. Empty fields stay as they are; clients already matching are not counted or sent.
+- Not editable in bulk on purpose: name, phone (also the duplicate check, unique per business) and email are each
+  client's own; visits and total spent are kept by the database from sales.
+- Saving: identical changes go in one request per 100 (`clientRepository.updateMany`), each client's note in its own;
+  saved rows go straight into the shared client cache (`useUpdateManyClients`), so POS, Debts and every client picker
+  see them at once; failures are listed and can be retried.
+- Who: anyone who can open Clients (the same people who can add clients; RLS: members of the business).
+- No bulk delete for clients: a client with sales, appointments or consultations cannot be deleted (live foreign keys,
+  2026-11-10), and deleting one would unlink their debts. It would need the same server-side safeguards as products.
+- Rules `modules/clients/clientBulkEdit.js`; dialog `modules/clients/components/ClientBulkEditModal.jsx`.
+- Tests: `clients/clientBulkEdit.test.js`, `clients/repositories/index.test.js` (updateMany),
+  `clients/Clients.bulkEdit.test.jsx` (mark and edit, select all with one request, per-client notes, retry, ticking
+  does not open details). CareHub suite: 3,533 tests pass; lint 0 errors; build passes.

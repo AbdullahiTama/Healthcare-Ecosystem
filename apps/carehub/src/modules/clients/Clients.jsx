@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useKeyboardScanner, fieldSnapshot, restoreField } from '../../hooks/useKeyboardScanner'
-import { Users, UserPlus, DollarSign, Search, Download, Upload, ShoppingCart, Calendar, Landmark, Clipboard, History, FileUp, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react'
+import { Users, UserPlus, DollarSign, Search, Download, Upload, ShoppingCart, Calendar, Landmark, Clipboard, History, FileUp, CheckCircle, AlertTriangle, Loader2, Pencil } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { clientRepository, isDuplicateError } from './repositories'
 import { PHARMACY_TYPE_LABEL } from '../consultation/PharmacyForm'
@@ -8,7 +8,9 @@ import { fmt, todayDate } from '../../lib/utils'
 import { getModulesForType } from '../../lib/permissions'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
-import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients, useOpenDebts } from '../../hooks/queries'
+import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients, useOpenDebts, useUpdateManyClients } from '../../hooks/queries'
+import SelectionBar from '../../components/SelectionBar'
+import ClientBulkEditModal from './components/ClientBulkEditModal'
 import PeriodFilter from '../../components/PeriodFilter'
 import { FilterPanel, FilterSelect, AmountRangeFilter } from '../../components/RecordFilters'
 import { yearsOf } from '../../lib/recordFilters'
@@ -135,6 +137,11 @@ export default function Clients({ brand, role, perms }) {
   const balancesKnown = openDebts.isSuccess
   const createClient = useCreateClient(brand?.id)
   const createManyClients = useCreateManyClients(brand?.id)
+  // Bulk edit: the clients marked in the list (ids), and the edit dialog. Anyone who can add clients can edit them.
+  const updateManyClients = useUpdateManyClients(brand?.id)
+  const [marked, setMarked] = useState(() => new Set())
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
+  const toggleMarked = (id) => setMarked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const importing = createManyClients.isPending
 
   useEffect(() => { setPage(0) }, [listFilters, clients.length])
@@ -336,6 +343,14 @@ export default function Clients({ brand, role, perms }) {
   const filterLabel = describeClientFilters(listFilters, { fmt })
   const years = useMemo(() => yearsOf(clients.map(c => c.created_at), todayDate()), [clients])
   const clearListFilters = () => setListFilters(DEFAULT_CLIENT_FILTERS)
+  const markedClients = clients.filter(c => marked.has(c.id))
+  const allShownMarked = filtered.length > 0 && filtered.every(c => marked.has(c.id))
+  async function runClientUpdates(groups, onProgress) {
+    const r = await updateManyClients(groups, onProgress)
+    if (r.failed.length) console.error('[clients] bulk edit: some updates failed', r.failed.map(f => f.message))
+    else console.info('[clients] bulk edit saved', { clients: r.saved.length })
+    return r
+  }
 
   const matchesFilters = (entry) => {
     const date = entry.kind === 'consultation' ? (entry.consultation_date || '') : (entry.created_at?.slice(0, 10) || '')
@@ -455,6 +470,13 @@ export default function Clients({ brand, role, perms }) {
       )}
 
       {loadFailed ? <ErrorState message="We couldn't load your clients. Check your connection and try again." onRetry={() => clientsQuery.refetch()} /> : (
+      <>
+      {!loading && clients.length > 0 && (
+        <SelectionBar count={marked.size} shownCount={filtered.length} allShownSelected={allShownMarked}
+          onSelectAll={() => setMarked(prev => new Set([...prev, ...filtered.map(c => c.id)]))} onClear={() => setMarked(new Set())}>
+          <TealBtn onClick={() => setShowBulkEdit(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Pencil size={13} aria-hidden='true' /> Edit selected</TealBtn>
+        </SelectionBar>
+      )}
       <DataTable
         variant="cards"
         rows={filtered}
@@ -469,6 +491,8 @@ export default function Clients({ brand, role, perms }) {
         renderCard={c => (
           <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+              <input type='checkbox' checked={marked.has(c.id)} onChange={() => toggleMarked(c.id)} onClick={e => e.stopPropagation()}
+                aria-label={'Select ' + c.full_name} style={{ width: 18, height: 18, flexShrink: 0, cursor: 'pointer', accentColor: tealDeep }} />
               <Avatar name={c.full_name} size={44} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{c.full_name}</div>
@@ -484,7 +508,10 @@ export default function Clients({ brand, role, perms }) {
           </div>
         )}
       />
+      </>
       )}
+
+      {showBulkEdit && <ClientBulkEditModal clients={markedClients} runUpdates={runClientUpdates} onClose={() => setShowBulkEdit(false)} />}
 
       {/* Add Client Modal */}
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({}) }} title='Add New Client'
