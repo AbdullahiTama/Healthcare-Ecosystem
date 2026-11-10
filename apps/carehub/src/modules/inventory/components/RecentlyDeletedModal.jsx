@@ -28,7 +28,8 @@ export default function RecentlyDeletedModal({ loadDeletions, onRestore, onClose
     try {
       const r = await onRestore(d.deletion_id)
       setMessage(`${r.restored} product${r.restored === 1 ? '' : 's'} restored` +
-        (r.skipped_name_taken ? `; ${r.skipped_name_taken} skipped because a product with the same name exists now` : '') + '.')
+        (r.skipped_name_taken ? `; ${r.skipped_name_taken} skipped because a product with the same name exists now` : '') +
+        (r.skipped_plan_limit ? `; ${r.skipped_plan_limit} not restored because your plan's product limit is reached` : '') + '.')
       await load()
     } catch (e) {
       setMessage(e?.message || 'Could not restore. Please try again.')

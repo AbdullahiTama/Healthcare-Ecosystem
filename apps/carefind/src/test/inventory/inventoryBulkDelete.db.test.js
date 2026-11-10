@@ -9,7 +9,9 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 vi.setConfig({ testTimeout: 60000, hookTimeout: 120000 })
-const MIGRATION = readFileSync(fileURLToPath(new URL('../../../../../supabase/migrations/carehub_20270109_inventory_bulk_delete.sql', import.meta.url)), 'utf8')
+const read = (name) => readFileSync(fileURLToPath(new URL('../../../../../supabase/migrations/' + name, import.meta.url)), 'utf8')
+const MIGRATION = read('carehub_20270109_inventory_bulk_delete.sql')
+const PLAN_LIMIT = read('carehub_20270110_restore_respects_plan_limit.sql')
 
 const BIZ = 'a0000000-0000-4000-8000-000000000001'
 const OTHER = 'b0000000-0000-4000-8000-000000000001'
@@ -62,7 +64,19 @@ beforeEach(async () => {
     create function auth.email() returns text language sql stable as $$ select nullif(current_setting('request.jwt.claims', true),'')::jsonb ->> 'email' $$;
     grant usage on schema public, auth to anon, authenticated, service_role;
     grant execute on all functions in schema auth to anon, authenticated, service_role;
-    create table businesses (id uuid primary key, name text, email text, parent_business_id uuid, branch_depth_limit integer default 3, is_platform_admin boolean default false);
+    create table businesses (id uuid primary key, name text, email text, parent_business_id uuid, branch_depth_limit integer default 3, is_platform_admin boolean default false, plan text default 'growth');
+    -- Live plan_limit() (2026-11-10), plus a 'tiny' test plan with a 7-product limit so the limit can be reached.
+    CREATE OR REPLACE FUNCTION public.plan_limit(p_plan text, p_what text) RETURNS integer LANGUAGE sql IMMUTABLE SET search_path TO 'public', 'pg_temp' AS $function$
+      select case coalesce(p_plan, 'basic')
+        when 'tiny'       then case p_what when 'products' then 7 end
+        when 'growth'     then case p_what when 'locations' then 5 end
+        when 'hospital'   then case p_what when 'locations' then 5 end
+        when 'premium'    then case p_what when 'locations' then 10 end
+        when 'enterprise' then case p_what when 'locations' then 30 end
+        when 'custom'     then null
+        else case p_what when 'staff' then 5 when 'locations' then 2 when 'products' then 5000 end
+      end
+    $function$;
     create table staff (id uuid primary key default gen_random_uuid(), business_id uuid, full_name text, email text, role text, status text default 'active', auth_user_id uuid);
     create table roles (id uuid primary key default gen_random_uuid(), business_id uuid, name text, permissions jsonb default '{}');
     insert into businesses (id, name, email) values ('${BIZ}', 'Pharm', '${OWNER}'), ('${OTHER}', 'Other', '${STRANGER}');
@@ -152,6 +166,7 @@ beforeEach(async () => {
     delete from stock_movements;
   `)
   await db.exec(MIGRATION)
+  await db.exec(PLAN_LIMIT)
 })
 
 describe('delete_products: selected', () => {
@@ -232,7 +247,7 @@ describe('restore_deleted_products', () => {
       `select action, metadata from audit_log order by created_at, action`,
     ])
     expect(r.error).toBeUndefined()
-    expect(r.out[1][0].r).toEqual({ restored: 2, skipped_already_back: 0, skipped_name_taken: 0 })
+    expect(r.out[1][0].r).toEqual({ restored: 2, skipped_already_back: 0, skipped_name_taken: 0, skipped_plan_limit: 0 })
     expect(r.seen[0]).toEqual([{ id: P(1), price: 500, stock: 12 }, { id: P(3), price: 300, stock: 0 }])
     expect(r.seen[1].map((m) => m.movement_type).sort()).toEqual(['opening', 'write_off'])
     expect(r.seen[2][0].n).toBe(2)
@@ -246,9 +261,25 @@ describe('restore_deleted_products', () => {
       `select restore_deleted_products('${BIZ}', (select deletion_id from deleted_products limit 1)) r`,
       `select restore_deleted_products('${BIZ}', (select deletion_id from deleted_products limit 1)) r`,
     ], [`select count(*)::int n from products where lower(btrim(name)) = 'paracetamol'`])
-    expect(r.out[2][0].r).toEqual({ restored: 1, skipped_already_back: 0, skipped_name_taken: 1 })
-    expect(r.out[3][0].r).toEqual({ restored: 0, skipped_already_back: 0, skipped_name_taken: 1 })
+    expect(r.out[2][0].r).toEqual({ restored: 1, skipped_already_back: 0, skipped_name_taken: 1, skipped_plan_limit: 0 })
+    expect(r.out[3][0].r).toEqual({ restored: 0, skipped_already_back: 0, skipped_name_taken: 1, skipped_plan_limit: 0 })
     expect(r.seen[0][0].n).toBe(1)
+  })
+
+  it('stops at the plan\'s product limit (the plan check does not run for the function\'s own inserts) and says how many', async () => {
+    await db.exec(`update businesses set plan = 'tiny' where id = '${BIZ}'`)
+    const r = await scenario(OWNER, [
+      del([P(1), P(2), P(3)]),
+      // 5 left; two new products uploaded since: 7, the limit.
+      `insert into products (business_id, name, category, price) values ('${BIZ}', 'New A', 'Medicines', 1), ('${BIZ}', 'New B', 'Medicines', 1)`,
+      `select restore_deleted_products('${BIZ}', (select deletion_id from deleted_products limit 1)) r`,
+    ], [`select count(*)::int n from products where business_id = '${BIZ}'`])
+    expect(r.error).toBeUndefined()
+    expect(r.out[2][0].r).toEqual({ restored: 0, skipped_already_back: 0, skipped_name_taken: 0, skipped_plan_limit: 3 })
+    expect(r.seen[0][0].n).toBe(7)
+    const one = await scenario(OWNER, [del([P(1), P(2), P(3)]), `insert into products (business_id, name, category, price) values ('${BIZ}', 'New A', 'Medicines', 1)`,
+      `select restore_deleted_products('${BIZ}', (select deletion_id from deleted_products limit 1)) r`])
+    expect(one.out[2][0].r).toMatchObject({ restored: 1, skipped_plan_limit: 2 })
   })
 
   it('same people as deleting; another business\'s deletion is not found', async () => {

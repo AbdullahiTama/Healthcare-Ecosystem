@@ -1,8 +1,24 @@
 -- carehub_20270109_inventory_bulk_delete
 --
--- Status: NOT APPLIED. Tested on PGlite (apps/carefind/src/test/inventory/inventoryBulkDelete.db.test.js) with the
--- live current_business_ids(), is_business_owner(), is_platform_admin(), the live products foreign keys and the live
--- stock_movements / audit_log columns, read 2026-11-10. Apply only with the owner's approval and record the result here.
+-- Status: APPLIED TO PRODUCTION 2026-11-10 with the owner's approval (Supabase migration version 20261110075244),
+-- applied verbatim from this file (statements only); restore was then tightened by
+-- carehub_20270110_restore_respects_plan_limit (version in that file). Tested first on PGlite
+-- (apps/carefind/src/test/inventory/inventoryBulkDelete.db.test.js) with the live current_business_ids(),
+-- is_business_owner(), is_platform_admin(), the live products foreign keys and the live stock_movements / audit_log
+-- columns, read 2026-11-10. After applying: 9,930 products, unchanged; deleted_products RLS on, authenticated SELECT
+-- only; both functions EXECUTE: authenticated only.
+-- Live probe (DO blocks that raised at the end; afterwards 9,930 products, 0 copies, 0 audit rows, 0 write-offs),
+-- on the carehub.test pharmacy (8 products, 2 linked; its plan has expired):
+--   cashier (no delete permission) deletes:          refused DELETE_NOT_ALLOWED
+--   owner of another business deletes:               refused DELETE_NOT_ALLOWED
+--   owner deletes 2 plain + 1 linked product:         2 deleted; kept "Amoxicillin 500mg (Pack of 10)" (shop_listing);
+--                                                    1 write-off movement (the other had no stock); 2 copies; 1 audit row
+--   owner restores that deletion (plan expired):      2 restored, products back to 8
+--   delete all with a wrong phrase:                  refused DELETE_ALL_CONFIRM
+--   delete all with DELETE ALL PRODUCTS:             6 deleted, 2 kept, 2 remaining
+--   other businesses' products before / after:       9,916 / 9,916 (the 6 others of 9,930 have no business_id at all;
+--                                                    pre-existing, untouched; see CODE_AUDIT A18)
+--   anon:                                            refused, permission denied for function delete_products
 --
 -- PROBLEM
 -- -------

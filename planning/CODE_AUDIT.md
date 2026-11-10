@@ -29,7 +29,8 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A14 | Medium | Payments | Reported ~1% reduction in amounts: not reproduced in code or live data; Paystack's fee was not stored, so bank deposits could not be matched to payments | Open: migration applied 2026-11-04; confirm backfill, then match deposits |
 | A15 | Medium | Expenses | The expense budget lived only in the browser, per month: it vanished at each new month, on another device and for staff | Open: migration applied 2026-11-04; the reporting Owner opens Expenses once on the original device |
 | A16 | Low | Expenses (data model) | Expenses had no payment status (every expense recorded as already paid) | **Closed 2026-11-09**: payment status, history and Record payment; migration applied and probed |
-| A17 | Medium | Inventory (bulk delete) | Bulk edit is live in the app; bulk delete / delete all and re-upload / restore need `carehub_20270109_inventory_bulk_delete` | Open: apply with owner approval |
+| A17 | Medium | Inventory (bulk delete) | Bulk delete / delete all and re-upload / restore through checked database functions | **Closed 2026-11-10**: applied with owner approval and probed |
+| A18 | Low | Data hygiene | 6 products have no `business_id` (visible to no business; untouched by any business action) | Open: review and remove or reassign |
 
 ## 2. Items
 
@@ -283,7 +284,7 @@ paid in full with matching history; the rolled-back live probe passed (unpaid an
 by the Owner and a cashier, over-payment, direct edits, history writes, another business and anon all behave as
 intended). Results in the migration header.
 
-### A17. Inventory bulk delete and restore: migration not applied (Medium)
+### A17. Inventory bulk delete and restore (Medium) — closed 2026-11-10
 
 **What:** a plain product delete cascades away customer reviews, shop listings and stock-count lines, is refused for
 products in orders or with batches, and leaves stock out of the ledger (live foreign keys, 2026-11-10). Bulk delete,
@@ -293,8 +294,17 @@ stock off, keep a restorable copy and audit. Verified by 9 PGlite tests; see
 [Inventory-Bulk-Edit-and-Delete.md](../docs/architecture/Inventory-Bulk-Edit-and-Delete.md). Until applied, bulk
 delete says the update is needed and single delete works as before.
 
-**To close:** apply with the owner's approval, run a rolled-back live probe (owner / delete role / cashier / other
-business / anon; kept reasons; restore), record it in the migration header and here.
+**Closed 2026-11-10:** applied with the owner's approval (`carehub_20270109_inventory_bulk_delete`, version
+`20261110075244`), plus `carehub_20270110_restore_respects_plan_limit` (restore now stops at the plan's product limit:
+the plan trigger does not see the function's own inserts). Rolled-back live probe passed (results in the migration
+header); live data unchanged afterwards.
+
+### A18. Six products with no business (Low)
+
+**What (live, 2026-11-10):** 6 of 9,930 `products` rows have `business_id` NULL. No business can see or act on them
+(every policy and function is scoped by business), so they are inert, but they are orphaned data.
+
+**Close by:** look at what created them (names and created_at), then delete them or attach them to their business.
 
 ## 3. Open items recorded in other audits
 

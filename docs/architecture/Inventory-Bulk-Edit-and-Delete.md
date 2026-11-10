@@ -1,7 +1,9 @@
 # Inventory: mark and edit in bulk, delete in bulk, delete all and re-upload, restore
 
-Status: built 2026-11-10. Database: `supabase/migrations/carehub_20270109_inventory_bulk_delete.sql` (not applied yet;
-the app works without it, with bulk delete unavailable and single delete as before).
+Status: built and live 2026-11-10. Database: `supabase/migrations/carehub_20270109_inventory_bulk_delete.sql` and
+`carehub_20270110_restore_respects_plan_limit.sql`, both applied with the owner's approval and probed (results in
+their headers). Without them (another environment) bulk delete says the update is needed and single delete works as
+before.
 
 Related: [Inventory-Large-Catalogs.md](Inventory-Large-Catalogs.md), [Inventory-Duplicate-Merge.md](Inventory-Duplicate-Merge.md),
 [Stock-Ledger.md](Stock-Ledger.md).
@@ -45,6 +47,9 @@ order, an internal order or has stock batches, leaves its stock out of the stock
 `restore_deleted_products(business, deletion)` puts a deletion back with the same ids, prices and stock (the opening
 stock trigger records the stock again). A product whose name is now taken (for example after a re-upload) or that is
 back already is skipped and counted, so restoring never duplicates. Audit-logged (`inventory.products_restored`).
+Restore stops at the plan's product limit (Basic: 5,000) and says how many it could not bring back; the plan trigger
+does not run for the function's own inserts, so the function checks the limit itself. An expired plan does not block
+a restore (undoing a deletion is not adding products).
 
 In the app (`components/DeleteProductsModal.jsx`, `components/RecentlyDeletedModal.jsx`):
 - **Delete selected** from the selection bar. The single **Del** button uses the same function (so a linked product
@@ -70,8 +75,8 @@ In the app (`components/DeleteProductsModal.jsx`, `components/RecentlyDeletedMod
 
 ## 5. Test plan
 
-Automated (CareHub 3,522 tests pass; lint 0 errors; build passes):
-- PGlite `apps/carefind/src/test/inventory/inventoryBulkDelete.db.test.js` (9), with the live foreign keys and ON
+Automated (CareHub 3,523 tests pass; lint 0 errors; build passes):
+- PGlite `apps/carefind/src/test/inventory/inventoryBulkDelete.db.test.js` (10, including the plan limit), with the live foreign keys and ON
   DELETE rules: selected delete keeps every linked kind with its reasons, writes stock off (not for services or zero
   stock), keeps copies, audits, nulls the SET NULL references; other business / unknown ids not touched; who may
   delete; delete all owner-only with the exact phrase and this business only; restore with ids, prices, stock and

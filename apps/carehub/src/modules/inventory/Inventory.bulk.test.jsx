@@ -178,3 +178,15 @@ describe('Inventory: single delete and Recently deleted', () => {
     expect(text()).toContain('118 products restored; 2 skipped because a product with the same name exists now.')
   })
 })
+
+describe('Inventory: restore at the plan limit', () => {
+  it('says how many could not be restored because the plan limit is reached', async () => {
+    h.getDeletions.mockResolvedValue([{ deletion_id: 'd1', deleted_at: '2026-11-10T09:00:00Z', by: 'Ada', all: false, count: 5, restored: 0, names: ['A'] }])
+    h.restoreDeleted.mockResolvedValue({ restored: 3, skipped_name_taken: 0, skipped_already_back: 0, skipped_plan_limit: 2 })
+    await render()
+    await click(btn((b) => b.textContent.includes('Recently deleted')))
+    await click(btn((b) => b.getAttribute('aria-label') === 'Restore 5 deleted products'))
+    expect(text()).toContain("3 products restored; 2 not restored because your plan's product limit is reached.")
+  })
+})
+

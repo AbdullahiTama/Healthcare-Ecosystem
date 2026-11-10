@@ -64,6 +64,7 @@ export default function DeleteProductsModal({ mode, count, onDelete, onBackup, c
             <div role='status' style={{ display: 'flex', gap: 8, alignItems: 'center', padding: 12, borderRadius: theme.radius.md, background: successBg, color: success, fontWeight: 700, fontSize: 13 }}>
               <CheckCircle size={16} aria-hidden='true' /> {restored.restored} product{restored.restored === 1 ? '' : 's'} restored.
               {restored.skipped_name_taken > 0 && <span style={{ fontWeight: 400 }}> {restored.skipped_name_taken} skipped because a product with the same name exists now.</span>}
+              {restored.skipped_plan_limit > 0 && <span style={{ fontWeight: 400 }}> {restored.skipped_plan_limit} not restored because your plan's product limit is reached.</span>}
             </div>
           ) : (
             <div role='status' style={{ display: 'flex', gap: 8, alignItems: 'center', padding: 12, borderRadius: theme.radius.md, background: result.deleted ? successBg : bg, color: result.deleted ? success : gray600, fontWeight: 700, fontSize: 13 }}>

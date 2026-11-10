@@ -409,7 +409,8 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     try {
       const r = await productRepository.restoreDeleted(brand.id, deletionId)
       await (catalogState.reload || loadProducts)?.()
-      showToast(`${r.restored} product${r.restored === 1 ? '' : 's'} restored.` + (r.skipped_name_taken ? ` ${r.skipped_name_taken} skipped: the name is in use now.` : ''), { type: 'success' })
+      showToast(`${r.restored} product${r.restored === 1 ? '' : 's'} restored.` + (r.skipped_name_taken ? ` ${r.skipped_name_taken} skipped: the name is in use now.` : '') +
+        (r.skipped_plan_limit ? ` ${r.skipped_plan_limit} not restored: your plan's product limit is reached.` : ''), { type: r.skipped_plan_limit ? 'warning' : 'success' })
       return r
     } catch (e) {
       showToast(e?.message || 'Could not restore. Please try again.', { type: 'error' })
