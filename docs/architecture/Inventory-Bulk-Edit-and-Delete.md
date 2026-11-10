@@ -179,7 +179,8 @@ owner's approval and probed (an exact restore was confirmed live; results in its
 
 ## 9. Debts: mark, edit, delete and restore (added 2026-11-10)
 
-Database: `supabase/migrations/carehub_20270113_debt_bulk_delete.sql` (status in its header).
+Database: `supabase/migrations/carehub_20270113_debt_bulk_delete.sql`, applied to production 2026-11-10 with the
+owner's approval and probed (sale debt kept, exact restore confirmed live; results in its header).
 
 Most debts are not free-standing (live, 2026-11-10: 36 from credit sales, 27 from purchases, 2 recorded by hand).
 `record_sale_payment`, `record_purchase_payment`, `edit_sale`, `edit_purchase` and `delete_sale` find a sale's or

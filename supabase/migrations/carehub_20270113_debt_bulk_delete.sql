@@ -1,9 +1,19 @@
 -- carehub_20270113_debt_bulk_delete
 --
--- Status: NOT APPLIED. Tested on PGlite (apps/carefind/src/test/debts/debtBulkDelete.db.test.js) with the live
--- stamp_recorded_by() / keep_recorded_by() / pos_actor() triggers, member_can_delete()
--- (carehub_20270112_expense_bulk_delete) and the live current_business_ids(), is_business_owner(),
--- is_platform_admin(), read 2026-11-10. Apply only with the owner's approval and record the result here.
+-- Status: APPLIED TO PRODUCTION 2026-11-10 with the owner's approval (Supabase migration version 20261110132511),
+-- applied verbatim from this file (statements only). Tested first on PGlite
+-- (apps/carefind/src/test/debts/debtBulkDelete.db.test.js) with the live stamp_recorded_by() / keep_recorded_by() /
+-- pos_actor() triggers, member_can_delete() (carehub_20270112_expense_bulk_delete) and the live
+-- current_business_ids(), is_business_owner(), is_platform_admin(), read 2026-11-10. After applying: 65 debts,
+-- unchanged; deleted_debts RLS on, authenticated SELECT only; delete/restore EXECUTE: authenticated only.
+-- Live probe (DO block that raised at the end; afterwards 65 debts, 0 copies, 0 debts.* audit rows), on the
+-- carehub.test pharmacy's 2 hand-recorded debts plus a temporary credit-sale debt:
+--   cashier (no delete permission):        refused DELETE_NOT_ALLOWED
+--   owner of another business:             refused DELETE_NOT_ALLOWED
+--   owner deletes all 3:                   2 deleted, the credit-sale debt kept (reason credit_sale, ref shown),
+--                                          1 left; audit {deleted 2, kept 1, requested 3, outstanding 0}
+--   owner restores:                        2 restored; every column of both debts identical to before
+--   anon:                                  refused, permission denied for function delete_debts
 --
 -- PROBLEM
 -- -------
