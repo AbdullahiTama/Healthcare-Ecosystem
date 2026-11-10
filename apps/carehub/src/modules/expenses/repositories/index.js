@@ -1,5 +1,6 @@
 import { sbFetch } from '../../../services/supabase'
 import { isMissingColumn } from '../../../lib/dbErrors'
+import { translateBulkDeleteError, groupDeletions } from '../../../lib/bulkDelete'
 import { expensePaymentStatus } from '../expenseRules'
 
 // ── Expense repository ────────────────────────────────────────────────────────
@@ -157,6 +158,56 @@ export function createExpenseRepository(request = sbFetch) {
     // An expense's payment history, oldest first (it reads as a running balance).
     async getPayments(businessId, expenseId) {
       return request(`expense_payments?business_id=eq.${businessId}&expense_id=eq.${expenseId}&order=created_at.asc,id.asc&select=*`)
+    },
+
+    // The same changes for many expenses, one request per 100 (bulk edit). Tenant-scoped; returns the saved rows.
+    async updateMany(businessId, expenseIds, updates) {
+      const ids = [...new Set((expenseIds || []).map(String))]
+      const rows = []
+      for (let i = 0; i < ids.length; i += 100) {
+        const chunk = ids.slice(i, i + 100)
+        const saved = await request(`expenses?business_id=eq.${businessId}&id=in.(${chunk.join(',')})`, {
+          method: 'PATCH', body: JSON.stringify(updates), prefer: 'return=representation',
+        })
+        rows.push(...(Array.isArray(saved) ? saved : []))
+      }
+      return rows
+    },
+
+    // Deletes expenses through delete_expenses (carehub_20270112): each expense and its payment history are kept in a
+    // copy for restore, and the deletion is audited. Returns { deletion_id, deleted, kept: [], not_found }.
+    async deleteMany(businessId, expenseIds) {
+      try {
+        const result = await request('rpc/delete_expenses', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_expense_ids: expenseIds }) })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateBulkDeleteError(e, 'expense')
+      }
+    },
+
+    // Puts a deletion's expenses back exactly (same ids, recorder, payments). Returns { restored, skipped_already_back }.
+    async restoreDeleted(businessId, deletionId) {
+      try {
+        const result = await request('rpc/restore_deleted_expenses', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_deletion_id: deletionId }) })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateBulkDeleteError(e, 'expense')
+      }
+    },
+
+    // Deletions of this business's expenses, newest first, one entry per deletion.
+    async getDeletions(businessId) {
+      try {
+        const rows = []
+        for (let offset = 0; ; offset += ALL_PAGE) {
+          const page = await request(`deleted_expenses?business_id=eq.${businessId}&order=deleted_at.desc,id.asc&select=id,deletion_id,label,deleted_at,deleted_by_name,restored_at&limit=${ALL_PAGE}&offset=${offset}`)
+          rows.push(...page)
+          if (page.length < ALL_PAGE) break
+        }
+        return groupDeletions(rows, 'label')
+      } catch (e) {
+        throw translateBulkDeleteError(e, 'expense')
+      }
     },
 
     async delete(expenseId, businessId) {

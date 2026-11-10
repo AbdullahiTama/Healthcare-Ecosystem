@@ -1,11 +1,11 @@
 import { useId, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle } from 'lucide-react'
-import { Modal, GhostBtn, TealBtn } from '../../../components/ui'
+import { AlertTriangle } from 'lucide-react'
+import BulkEditShell from '../../../components/BulkEditShell'
 import { fmt } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
-import { EMPTY_BULK_EDIT, PRICE_MODES, CAREFIND_CHOICES, validateBulkEdit, planBulkEdit, groupBulkUpdates } from '../bulkEdit'
+import { EMPTY_BULK_EDIT, PRICE_MODES, CAREFIND_CHOICES, validateBulkEdit, planBulkEdit } from '../bulkEdit'
 
-const { navy, gray500, gray600, border, danger, dangerBg, success, successBg, warning, warningBg, bg } = theme
+const { navy, gray500, gray600, border, danger, warning, warningBg, bg } = theme
 
 const field = { width: '100%', minHeight: 40, padding: '8px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 13, color: navy, background: 'white', boxSizing: 'border-box' }
 const label = { display: 'block', fontSize: 11.5, fontWeight: 700, color: gray600, marginBottom: 6 }
@@ -13,60 +13,18 @@ const FIELD_NAMES = { category: 'Category', price: 'Selling price', cost_price: 
 const show = (key, v) => (key === 'price' || key === 'cost_price' ? fmt(v || 0) : key === 'list_on_carefind' ? (v ? 'Listed' : 'Hidden') : v === null || v === '' ? 'Not set' : String(v))
 
 // Changes the same fields on every product the user marked. Each field is "leave as it is" unless filled in. Shows
-// how many products will really change and a few before → after lines, then saves (runUpdates does the requests and
-// returns { saved, failed }), and reports anything that failed so it can be tried again.
+// how many products will really change and a few before → after lines; saving, progress, the result and retrying
+// failures are the shared BulkEditShell's.
 export default function BulkEditModal({ products, perms, categories = [], runUpdates, onClose }) {
   const uid = useId()
   const canEditPrice = !!perms?.canEditPrice
   const [changes, setChanges] = useState(EMPTY_BULK_EDIT)
-  const [saving, setSaving] = useState(false)
-  const [progress, setProgress] = useState(null)
-  const [result, setResult] = useState(null)
   const set = (k, v) => setChanges((c) => ({ ...c, [k]: v }))
   const check = validateBulkEdit(changes, { canEditPrice })
   const plan = useMemo(() => planBulkEdit(products, changes, { canEditPrice }), [products, changes, canEditPrice])
 
-  async function apply(groups) {
-    setSaving(true); setProgress({ done: 0, total: groups.reduce((n, g) => n + g.ids.length, 0) })
-    try {
-      const r = await runUpdates(groups, (done, total) => setProgress({ done, total }))
-      setResult(r)
-    } finally { setSaving(false) }
-  }
-
-  const footer = result ? (
-    <>
-      {result.failed.length > 0 && <GhostBtn onClick={() => apply(result.failed.map(({ ids, updates }) => ({ ids, updates })))} disabled={saving} style={{ flex: 1, padding: 12 }}>Try the failed ones again</GhostBtn>}
-      <TealBtn onClick={onClose} style={{ flex: 1, padding: 12 }}>Done</TealBtn>
-    </>
-  ) : (
-    <>
-      <GhostBtn onClick={onClose} disabled={saving} style={{ flex: 1, padding: 12 }}>Cancel</GhostBtn>
-      <TealBtn onClick={() => apply(groupBulkUpdates(plan))} disabled={saving || !check.ok || plan.length === 0} aria-busy={saving || undefined} style={{ flex: 1, padding: 12 }}>
-        {saving ? `Saving ${progress?.done || 0} of ${progress?.total || plan.length}…` : `Update ${plan.length} product${plan.length === 1 ? '' : 's'}`}
-      </TealBtn>
-    </>
-  )
-
-  const savedCount = result ? result.saved.length : 0
-  const failedCount = result ? result.failed.reduce((n, f) => n + f.ids.length, 0) : 0
-
   return (
-    <Modal show onClose={() => { if (!saving) onClose() }} title={`Edit ${products.length} product${products.length === 1 ? '' : 's'}`} footer={footer}>
-      {result ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {savedCount > 0 && (
-            <div role='status' style={{ display: 'flex', gap: 8, alignItems: 'center', padding: 12, borderRadius: theme.radius.md, background: successBg, color: success, fontWeight: 700, fontSize: 13 }}>
-              <CheckCircle size={16} aria-hidden='true' /> {savedCount} product{savedCount === 1 ? '' : 's'} updated.
-            </div>
-          )}
-          {failedCount > 0 && (
-            <div role='alert' style={{ padding: 12, borderRadius: theme.radius.md, background: dangerBg, color: danger, fontSize: 13 }}>
-              <strong>{failedCount} could not be updated.</strong> {result.failed[0].message}
-            </div>
-          )}
-        </div>
-      ) : (
+    <BulkEditShell noun='product' count={products.length} plan={plan} valid={check.ok} runUpdates={runUpdates} onClose={onClose}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ fontSize: 12.5, color: gray600, padding: 10, borderRadius: theme.radius.md, background: bg }}>
             Fill in only what you want to change; empty fields stay as they are. Stock is not changed here: use Add stock or a stock count, so every change is recorded.
@@ -135,7 +93,6 @@ export default function BulkEditModal({ products, perms, categories = [], runUpd
             </div>
           )}
         </div>
-      )}
-    </Modal>
+    </BulkEditShell>
   )
 }

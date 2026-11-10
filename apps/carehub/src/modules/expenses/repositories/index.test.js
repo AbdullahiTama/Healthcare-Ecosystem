@@ -210,3 +210,32 @@ describe('expenseRepository.getUnpaid', () => {
     await expect(down.getUnpaid(A)).rejects.toThrow('Failed to fetch')
   })
 })
+
+describe('expenseRepository: bulk edit, delete and restore', () => {
+  function recording(reply) {
+    const calls = []
+    const repo = createExpenseRepository(async (path, opts = {}) => { calls.push({ path, ...opts, body: opts.body ? JSON.parse(opts.body) : undefined }); return reply(path) })
+    return { calls, repo }
+  }
+  it('updateMany sends one tenant-scoped PATCH per 100 expenses', async () => {
+    const { calls, repo } = recording(async () => [{ id: 'x' }])
+    await repo.updateMany(A, Array.from({ length: 101 }, (_, i) => 'e' + i), { category: 'Rent' })
+    expect(calls).toHaveLength(2)
+    expect(calls[0]).toMatchObject({ method: 'PATCH', body: { category: 'Rent' }, prefer: 'return=representation' })
+    expect(calls[0].path).toMatch(new RegExp(`^expenses\\?business_id=eq\\.${A}&id=in\\.\\(e0,e1,`))
+  })
+  it('deleteMany / restoreDeleted call the functions; getDeletions groups by deletion', async () => {
+    const { calls, repo } = recording(async (path) => path.startsWith('deleted_expenses')
+      ? [{ deletion_id: 'd1', label: 'Rent · Shop', deleted_at: 't', deleted_by_name: 'Ada', restored_at: null }]
+      : { deleted: 1, kept: [] })
+    await repo.deleteMany(A, ['e1'])
+    await repo.restoreDeleted(A, 'd1')
+    expect(calls[0]).toMatchObject({ path: 'rpc/delete_expenses', body: { p_business_id: A, p_expense_ids: ['e1'] } })
+    expect(calls[1]).toMatchObject({ path: 'rpc/restore_deleted_expenses', body: { p_business_id: A, p_deletion_id: 'd1' } })
+    expect(await repo.getDeletions(A)).toEqual([{ deletion_id: 'd1', deleted_at: 't', by: 'Ada', all: false, count: 1, restored: 0, names: ['Rent · Shop'] }])
+  })
+  it('before the update is installed, deleting says so (code DELETE_UNAVAILABLE)', async () => {
+    const { repo } = recording(async () => { throw new Error('Supabase error (404): Could not find the function public.delete_expenses') })
+    await expect(repo.deleteMany(A, ['e1'])).rejects.toMatchObject({ code: 'DELETE_UNAVAILABLE' })
+  })
+})

@@ -1,6 +1,6 @@
 import { businessDateOf, businessDateTime } from '../../lib/businessDay'
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus, ChevronDown, Search } from 'lucide-react'
+import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus, ChevronDown, Search, Pencil, Trash2, RotateCcw } from 'lucide-react'
 import { expenseRepository } from './repositories'
 import { useQueryParamAction } from '../../hooks/useQueryParamAction'
 import { validateExpense, newExpenseId, budgetSummary, expenseDate, inMonth, sumExpenses, expensePaymentStatus, expenseBalance } from './expenseRules'
@@ -9,6 +9,11 @@ import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { ExpensePaymentFields, RecordExpensePaymentModal, ExpensePaymentSummary, ExpenseStatusPill } from './components/ExpensePayment'
 import { EXPENSE_PAYMENT_FILTERS, defaultExpenseFilters, filterExpenses, sortExpenses, expenseTotals, expenseRecorders, expenseRecorder, activeExpenseFilterCount, describeExpenseFilters } from './expenseFilters'
 import PeriodFilter from '../../components/PeriodFilter'
+import SelectionBar from '../../components/SelectionBar'
+import BulkDeleteModal from '../../components/BulkDeleteModal'
+import RecentlyDeletedModal from '../../components/RecentlyDeletedModal'
+import ExpenseBulkEditModal from './components/ExpenseBulkEditModal'
+import { runBulkUpdates } from '../../lib/bulkUpdates'
 import { FilterPanel, FilterSelect, AmountRangeFilter } from '../../components/RecordFilters'
 import { yearsOf } from '../../lib/recordFilters'
 import { fmt, todayDate, currentMonth } from '../../lib/utils'
@@ -131,10 +136,60 @@ export default function Expenses({ brand, role, perms, staffName }) {
   function closeAdd() { setShowAdd(false); setForm({ date: todayDate() }); setFormErrors({}); draftId.current = null }
 
   function askDelete(e) { setDeleteTarget(e) }
+  // One expense goes through delete_expenses too, so its payment history is kept in a copy and the deletion can be
+  // undone. Before that update is installed, the previous plain delete is used.
   async function handleDelete() {
     const id = deleteTarget?.id
     setDeleteTarget(null)
-    try { await expenseRepository.delete(id, brand.id); load(); showToast('Expense deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete expense. Please try again.', { type: 'error' }) }
+    try {
+      const r = await expenseRepository.deleteMany(brand.id, [id])
+      load()
+      showToast('Expense deleted.', r.deletion_id ? { type: 'success', actionLabel: 'Undo', onAction: () => restoreDeletion(r.deletion_id) } : { type: 'success' })
+    } catch (e) {
+      if (e?.code === 'DELETE_UNAVAILABLE') {
+        try { await expenseRepository.delete(id, brand.id); load(); showToast('Expense deleted.', { type: 'success' }) } catch (err) { showToast('Could not delete expense. Please try again.', { type: 'error' }) }
+        return
+      }
+      showToast(e?.code ? e.message : 'Could not delete expense. Please try again.', { type: 'error' })
+    }
+  }
+
+  // ── Bulk actions: mark expenses, edit them together, delete them (restorable) ────────────────────────────────
+  const [marked, setMarked] = useState(() => new Set())
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
+  const [showBulkDelete, setShowBulkDelete] = useState(false)
+  const [showDeleted, setShowDeleted] = useState(false)
+  const canBulkDelete = !!perms?.canDelete
+  const markedExpenses = expenses.filter(e => marked.has(e.id))
+  const allShownMarked = filtered.length > 0 && filtered.every(e => marked.has(e.id))
+  const toggleMarked = (id) => setMarked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  async function runExpenseUpdates(groups, onProgress) {
+    const r = await runBulkUpdates(groups, (ids, updates) => expenseRepository.updateMany(brand.id, ids, updates), { onProgress })
+    if (r.saved.length) {
+      const byId = new Map(r.saved.map(x => [String(x.id), x]))
+      setExpenses(prev => prev.map(x => (byId.has(String(x.id)) ? { ...x, ...byId.get(String(x.id)) } : x)))
+    }
+    if (r.failed.length) console.error('[expenses] bulk edit: some updates failed', r.failed.map(f => f.message))
+    else console.info('[expenses] bulk edit saved', { expenses: r.saved.length })
+    return r
+  }
+  async function deleteMarked() {
+    const r = await expenseRepository.deleteMany(brand.id, markedExpenses.map(e => e.id))
+    console.info('[expenses] deleted', { deleted: r.deleted })
+    setMarked(new Set())
+    load()
+    return r
+  }
+  async function restoreDeletion(deletionId) {
+    try {
+      const r = await expenseRepository.restoreDeleted(brand.id, deletionId)
+      load()
+      showToast(`${r.restored} expense${r.restored === 1 ? '' : 's'} restored.`, { type: 'success' })
+      return r
+    } catch (e) {
+      showToast(e?.message || 'Could not restore. Please try again.', { type: 'error' })
+      throw e
+    }
   }
 
   async function saveBudgetAmount() {
@@ -207,6 +262,11 @@ export default function Expenses({ brand, role, perms, staffName }) {
             <button onClick={() => setShowBudget(true)}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
               <Target size={14} /> {budget > 0 ? 'Edit budget' : 'Set budget'}
+            </button>
+          )}
+          {canBulkDelete && (
+            <button onClick={() => setShowDeleted(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
+              <RotateCcw size={14} aria-hidden='true' /> Recently deleted
             </button>
           )}
           <TealBtn onClick={() => setShowAdd(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Log expense</TealBtn>
@@ -361,11 +421,18 @@ export default function Expenses({ brand, role, perms, staffName }) {
           ? <Empty icon={<Search size={40} />} message={'No expenses match ' + filterLabel} cause='filtered' action='Clear filters' onAction={clearFilters} />
           : <Empty icon={<Receipt size={40} />} message={expenses.length > 0 ? 'No expenses recorded for ' + filterLabel : 'No expenses recorded yet'} action='+ Log Expense' onAction={() => setShowAdd(true)} />
       ) : (
+        <>
+        <SelectionBar count={marked.size} shownCount={filtered.length} allShownSelected={allShownMarked}
+          onSelectAll={() => setMarked(prev => new Set([...prev, ...filtered.map(e => e.id)]))} onClear={() => setMarked(new Set())}>
+          <TealBtn onClick={() => setShowBulkEdit(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Pencil size={13} aria-hidden='true' /> Edit selected</TealBtn>
+          {canBulkDelete && <RedBtn onClick={() => setShowBulkDelete(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Trash2 size={13} aria-hidden='true' /> Delete selected</RedBtn>}
+        </SelectionBar>
         <Card>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${border}`, background: gray50 }}>
+                  <th style={{ padding: '12px 0 12px 16px', width: 34 }}><span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>Select</span></th>
                   {['Category', 'Description', 'Amount', 'Status', 'Date', 'Staff', 'Action'].map(h => (
                     <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: gray400, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
@@ -373,7 +440,11 @@ export default function Expenses({ brand, role, perms, staffName }) {
               </thead>
               <tbody>
                 {filtered.slice(0, shownCount).map(e => (
-                  <tr key={e.id} style={{ borderBottom: `1px solid ${gray100}` }}>
+                  <tr key={e.id} style={{ borderBottom: `1px solid ${gray100}`, background: marked.has(e.id) ? tealMist : undefined }}>
+                    <td style={{ padding: '12px 0 12px 16px' }}>
+                      <input type='checkbox' checked={marked.has(e.id)} onChange={() => toggleMarked(e.id)}
+                        aria-label={'Select ' + [e.category, e.description].filter(Boolean).join(': ') + ', ' + fmt(e.amount)} style={{ width: 18, height: 18, cursor: 'pointer', accentColor: tealDeep }} />
+                    </td>
                     <td style={{ padding: '12px 16px' }}><Pill label={e.category} type='teal' /></td>
                     <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>
                       {/* Opens the expense in full: payment, history and who recorded it. */}
@@ -411,6 +482,23 @@ export default function Expenses({ brand, role, perms, staffName }) {
             </div>
           )}
         </Card>
+        </>
+      )}
+
+      {showBulkEdit && (
+        <ExpenseBulkEditModal expenses={markedExpenses} categories={EXPENSE_CATS} runUpdates={runExpenseUpdates} onClose={() => setShowBulkEdit(false)} />
+      )}
+      {showBulkDelete && (
+        <BulkDeleteModal noun='expense' count={markedExpenses.length} names={markedExpenses.map(e => `${e.category}${e.description ? ': ' + e.description : ''} (${fmt(e.amount)})`)}
+          notes={[
+            <>Each expense is deleted with its payment history; spending totals and the budget drop by {fmt(markedExpenses.reduce((n, e) => n + (Number(e.amount) || 0), 0))}.</>,
+            <>You can <strong>restore</strong> them afterwards, payments and all, from Recently deleted.</>,
+          ]}
+          onDelete={deleteMarked} onRestore={restoreDeletion} onClose={() => setShowBulkDelete(false)} />
+      )}
+      {showDeleted && (
+        <RecentlyDeletedModal noun='expense' loadDeletions={() => expenseRepository.getDeletions(brand.id)}
+          onRestore={(id) => restoreDeletion(id)} describeSkips={() => ''} onClose={() => setShowDeleted(false)} />
       )}
 
       {/* Set Budget Modal */}
@@ -500,7 +588,7 @@ export default function Expenses({ brand, role, perms, staffName }) {
 
       <ConfirmDialog show={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete}
         title='Delete this expense?'
-        consequence={`This permanently removes the ${deleteTarget?.category || ''} expense of ${deleteTarget ? fmt(deleteTarget.amount) : ''} from your records. This cannot be undone.`}
+        consequence={`This removes the ${deleteTarget?.category || ''} expense of ${deleteTarget ? fmt(deleteTarget.amount) : ''} and its payments from your records. You can undo it, or restore it later from Recently deleted.`}
         confirmLabel='Delete' />
 
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />

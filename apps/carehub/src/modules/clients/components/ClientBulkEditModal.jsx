@@ -1,12 +1,10 @@
 import { useId, useMemo, useState } from 'react'
-import { CheckCircle } from 'lucide-react'
-import { Modal, GhostBtn, TealBtn } from '../../../components/ui'
+import BulkEditShell from '../../../components/BulkEditShell'
 import { theme } from '../../../styles/theme'
 import { todayDate } from '../../../lib/utils'
-import { groupBulkUpdates } from '../../../lib/bulkUpdates'
 import { CLIENT_GENDERS, EMPTY_CLIENT_BULK_EDIT, validateClientBulkEdit, planClientBulkEdit } from '../clientBulkEdit'
 
-const { navy, gray500, gray600, border, danger, dangerBg, success, successBg, bg } = theme
+const { navy, gray500, gray600, border, danger, bg } = theme
 const field = { width: '100%', minHeight: 40, padding: '8px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 13, color: navy, background: 'white', boxSizing: 'border-box', fontFamily: 'inherit' }
 const label = { display: 'block', fontSize: 11.5, fontWeight: 700, color: gray600, marginBottom: 6 }
 
@@ -15,52 +13,13 @@ const label = { display: 'block', fontSize: 11.5, fontWeight: 700, color: gray60
 export default function ClientBulkEditModal({ clients, runUpdates, onClose }) {
   const uid = useId()
   const [changes, setChanges] = useState(EMPTY_CLIENT_BULK_EDIT)
-  const [saving, setSaving] = useState(false)
-  const [progress, setProgress] = useState(null)
-  const [result, setResult] = useState(null)
   const set = (k, v) => setChanges((c) => ({ ...c, [k]: v }))
   const check = validateClientBulkEdit(changes)
   const today = todayDate()
   const plan = useMemo(() => planClientBulkEdit(clients, changes, { today }), [clients, changes, today])
 
-  async function apply(groups) {
-    setSaving(true); setProgress({ done: 0, total: groups.reduce((n, g) => n + g.ids.length, 0) })
-    try {
-      setResult(await runUpdates(groups, (done, total) => setProgress({ done, total })))
-    } finally { setSaving(false) }
-  }
-
-  const failedCount = result ? result.failed.reduce((n, f) => n + f.ids.length, 0) : 0
-  const footer = result ? (
-    <>
-      {failedCount > 0 && <GhostBtn onClick={() => apply(result.failed.map(({ ids, updates }) => ({ ids, updates })))} disabled={saving} style={{ flex: 1, padding: 12 }}>Try the failed ones again</GhostBtn>}
-      <TealBtn onClick={onClose} style={{ flex: 1, padding: 12 }}>Done</TealBtn>
-    </>
-  ) : (
-    <>
-      <GhostBtn onClick={onClose} disabled={saving} style={{ flex: 1, padding: 12 }}>Cancel</GhostBtn>
-      <TealBtn onClick={() => apply(groupBulkUpdates(plan))} disabled={saving || !check.ok || plan.length === 0} aria-busy={saving || undefined} style={{ flex: 1, padding: 12 }}>
-        {saving ? `Saving ${progress?.done || 0} of ${progress?.total || plan.length}…` : `Update ${plan.length} client${plan.length === 1 ? '' : 's'}`}
-      </TealBtn>
-    </>
-  )
-
   return (
-    <Modal show onClose={() => { if (!saving) onClose() }} title={`Edit ${clients.length} client${clients.length === 1 ? '' : 's'}`} footer={footer}>
-      {result ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {result.saved.length > 0 && (
-            <div role='status' style={{ display: 'flex', gap: 8, alignItems: 'center', padding: 12, borderRadius: theme.radius.md, background: successBg, color: success, fontWeight: 700, fontSize: 13 }}>
-              <CheckCircle size={16} aria-hidden='true' /> {result.saved.length} client{result.saved.length === 1 ? '' : 's'} updated.
-            </div>
-          )}
-          {failedCount > 0 && (
-            <div role='alert' style={{ padding: 12, borderRadius: theme.radius.md, background: dangerBg, color: danger, fontSize: 13 }}>
-              <strong>{failedCount} could not be updated.</strong> {result.failed[0].message}
-            </div>
-          )}
-        </div>
-      ) : (
+    <BulkEditShell noun='client' count={clients.length} plan={plan} valid={check.ok} runUpdates={runUpdates} onClose={onClose}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ fontSize: 12.5, color: gray600, padding: 10, borderRadius: theme.radius.md, background: bg }}>
             Fill in only what you want to change; empty fields stay as they are. Names, phone numbers and emails are each client's own and are not changed here. Visits and total spent come from sales.
@@ -104,7 +63,6 @@ export default function ClientBulkEditModal({ clients, runUpdates, onClose }) {
             </div>
           )}
         </div>
-      )}
-    </Modal>
+    </BulkEditShell>
   )
 }

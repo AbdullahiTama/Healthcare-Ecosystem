@@ -142,3 +142,36 @@ production 2026-11-10 with the owner's approval and probed (results in its heade
   table access); `lib/bulkDelete.test.js`; `clients/repositories/index.test.js`; `clients/Clients.bulkEdit.test.jsx`
   (delete with kept list and Undo, Recently deleted, a role without delete permission). CareHub suite: 3,541 tests pass.
 
+
+## 8. Expenses: mark, edit, delete and restore (added 2026-11-10)
+
+Database: `supabase/migrations/carehub_20270112_expense_bulk_delete.sql`.
+
+- **Mark and edit** (anyone who can log expenses): a tick box per row, "Select all N shown" (follows the filters),
+  **Edit selected**: **category**, **date** (not in the future) and the **staff name as entered**. Not here on
+  purpose: amounts and anything paid (payments go through Record payment; the database refuses a direct change to
+  the paid amount) and who recorded it (stamped by the database). Rules `modules/expenses/expenseBulkEdit.js`; dialog
+  `modules/expenses/components/ExpenseBulkEditModal.jsx`.
+- **Delete selected** and **Recently deleted** (Owner or a role allowed to delete, as the existing Delete button):
+  `delete_expenses()` copies each expense **with its payment history** into `deleted_expenses`, deletes it (the
+  history cascades as before, but is kept in the copy) and audits (`expenses.deleted`, with the total). No expense is
+  "kept back": nothing else depends on an expense. The single **Delete** button uses the same path (Undo in the
+  toast; plain delete before the migration).
+- **Restore** (`restore_deleted_expenses()`) puts each expense back exactly: same id, amount, date, original recorder
+  and its original payment rows, then the paid amount through the payment guard's own switch. To keep the original
+  recorder, the function clears the request identity for its own insert only (the recorded-by stamp skips when there
+  is no identity) and restores it straight after; the audit entry names who restored.
+- **Shared parts (one copy for all three pages):** `components/SelectionBar.jsx`, `components/BulkEditShell.jsx`
+  (Update button, progress, result, retry; Inventory's and Clients' bulk-edit dialogs now use it too),
+  `components/BulkDeleteModal.jsx` (Clients and Expenses; Inventory keeps its own dialog for the delete-all flow),
+  `components/RecentlyDeletedModal.jsx`, `lib/bulkUpdates.js`, `lib/bulkDelete.js`. New permission helper in the
+  database: `member_can_delete()` (the product and client functions carry the same rule inline; consolidating them
+  is a later clean-up).
+- **Security:** no access widened; SECURITY DEFINER, search_path pinned, caller checked first, one business; EXECUTE
+  authenticated only; `member_can_delete()` not callable by app users; `deleted_expenses` readable by members only.
+- **Tests:** PGlite `apps/carefind/src/test/expenses/expenseBulkDelete.db.test.js` (6: copies with payment history and
+  audit total; other business / unknown ids untouched; who may delete; exact restore of amount, paid amount,
+  recorder and payment rows with no invented payment; restoring twice; the restorer's identity is back afterwards;
+  table access); `expenses/expenseBulkEdit.test.js`; `expenses/repositories/index.test.js`;
+  `expenses/Expenses.bulk.test.jsx` (edit in one request, permissions, delete with Undo and restore, single Delete with
+  Undo and fallback, Recently deleted). CareHub suite: 3,551 tests pass.
