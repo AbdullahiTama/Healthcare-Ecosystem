@@ -1,9 +1,20 @@
 -- carehub_20270111_client_bulk_delete
 --
--- Status: NOT APPLIED. Tested on PGlite (apps/carefind/src/test/clients/clientBulkDelete.db.test.js) with the live
--- foreign keys to clients and their ON DELETE rules, the live phone uniqueness index and the live
--- current_business_ids(), is_business_owner(), is_platform_admin(), read 2026-11-10. Apply only with the owner's
--- approval and record the result here.
+-- Status: APPLIED TO PRODUCTION 2026-11-10 with the owner's approval (Supabase migration version 20261110091924),
+-- applied verbatim from this file (statements only). Tested first on PGlite
+-- (apps/carefind/src/test/clients/clientBulkDelete.db.test.js) with the live foreign keys to clients and their ON
+-- DELETE rules, the live phone uniqueness index and the live current_business_ids(), is_business_owner(),
+-- is_platform_admin(), read 2026-11-10. After applying: 25 clients, unchanged; deleted_clients RLS on, authenticated
+-- SELECT only; delete_clients / restore_deleted_clients EXECUTE: authenticated only; can_delete_clients: nobody.
+-- Live probe (DO blocks that raised at the end; afterwards 25 clients, 0 copies, 0 audit rows, 0 probe rows), on the
+-- carehub.test pharmacy (one plain client, plus a temporary client with a debt):
+--   cashier (no delete permission):            refused DELETE_NOT_ALLOWED
+--   can_delete_clients called directly:        refused
+--   owner of another business:                 refused DELETE_NOT_ALLOWED
+--   owner deletes the plain + the owing client: 1 deleted; kept "PROBE owing" (debts); the debt still linked;
+--                                               1 copy; audit {deleted 1, kept 1, requested 2}
+--   owner restores:                            1 restored, same id and name
+--   anon:                                      refused, permission denied for function delete_clients
 --
 -- PROBLEM
 -- -------

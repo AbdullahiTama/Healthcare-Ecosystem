@@ -117,7 +117,8 @@ shown" (follows search and filters), **Edit selected**.
 
 ## 7. Clients: delete selected and restore (added 2026-11-10)
 
-Database: `supabase/migrations/carehub_20270111_client_bulk_delete.sql` (same design as products).
+Database: `supabase/migrations/carehub_20270111_client_bulk_delete.sql` (same design as products), applied to
+production 2026-11-10 with the owner's approval and probed (results in its header).
 
 - Why a function: live foreign keys (2026-11-10) refuse deleting a client with sales, appointments or consultations,
   silently unlink their debts and customer requests (SET NULL), and cascade away client visits that point at them.
