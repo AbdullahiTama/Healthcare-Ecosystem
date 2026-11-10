@@ -109,9 +109,35 @@ shown" (follows search and filters), **Edit selected**.
   saved rows go straight into the shared client cache (`useUpdateManyClients`), so POS, Debts and every client picker
   see them at once; failures are listed and can be retried.
 - Who: anyone who can open Clients (the same people who can add clients; RLS: members of the business).
-- No bulk delete for clients: a client with sales, appointments or consultations cannot be deleted (live foreign keys,
-  2026-11-10), and deleting one would unlink their debts. It would need the same server-side safeguards as products.
+- Bulk delete: see §7.
 - Rules `modules/clients/clientBulkEdit.js`; dialog `modules/clients/components/ClientBulkEditModal.jsx`.
 - Tests: `clients/clientBulkEdit.test.js`, `clients/repositories/index.test.js` (updateMany),
   `clients/Clients.bulkEdit.test.jsx` (mark and edit, select all with one request, per-client notes, retry, ticking
   does not open details). CareHub suite: 3,533 tests pass; lint 0 errors; build passes.
+
+## 7. Clients: delete selected and restore (added 2026-11-10)
+
+Database: `supabase/migrations/carehub_20270111_client_bulk_delete.sql` (same design as products).
+
+- Why a function: live foreign keys (2026-11-10) refuse deleting a client with sales, appointments or consultations,
+  silently unlink their debts and customer requests (SET NULL), and cascade away client visits that point at them.
+- `delete_clients(business, client_ids)`: keeps, with every reason, clients with sales, appointments,
+  consultations, debts, customer requests or linked client records / visits; copies the rest into `deleted_clients`
+  and deletes them; one `audit_log` entry (`clients.deleted`). Who: the Owner or a role allowed to delete
+  (`can_delete_clients`, not callable by app users directly).
+- `restore_deleted_clients(business, deletion)`: puts them back with their ids; a client whose phone number is now
+  used by another client of the business is skipped and counted (the phone is unique per business); audited.
+- App: **Delete selected** in the Clients selection bar and **Recently deleted** among the page buttons, for the
+  Owner and roles allowed to delete; the result lists who was kept and why ("Ada Obi: has sales, has debts") and
+  offers **Undo**. The shared client list drops exactly the deleted clients at once.
+- Shared with Inventory: `lib/bulkDelete.js` (refusal sentences, grouping deletions), `components/RecentlyDeletedModal.jsx`
+  (now takes a `noun`), `components/SelectionBar.jsx`.
+- Security: no access widened (any member may DELETE clients through the API today; the function is stricter);
+  SECURITY DEFINER, search_path pinned, caller checked first, one business; EXECUTE authenticated only.
+  `deleted_clients` holds personal data for restore under the same access rule as `clients` (members read; no client
+  writes; anon nothing).
+- Tests: PGlite `apps/carefind/src/test/clients/clientBulkDelete.db.test.js` (7: kept reasons for every linked kind,
+  copies and audit, debts stay linked, other business / unknown ids untouched, who may delete, restore, phone clash,
+  table access); `lib/bulkDelete.test.js`; `clients/repositories/index.test.js`; `clients/Clients.bulkEdit.test.jsx`
+  (delete with kept list and Undo, Recently deleted, a role without delete permission). CareHub suite: 3,541 tests pass.
+

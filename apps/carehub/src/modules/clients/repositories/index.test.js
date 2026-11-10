@@ -191,3 +191,25 @@ describe('clientRepository.updateMany', () => {
     expect(rows).toHaveLength(2)
   })
 })
+
+describe('clientRepository: bulk delete and restore', () => {
+  it('calls delete_clients / restore_deleted_clients and groups deleted_clients by deletion', async () => {
+    const calls = []
+    const repo = createClientRepository(async (path, opts = {}) => {
+      calls.push({ path, ...opts, body: opts.body ? JSON.parse(opts.body) : undefined })
+      if (path.startsWith('deleted_clients')) return [{ deletion_id: 'd1', client_name: 'Ada', deleted_at: 't', deleted_by_name: 'Musa', restored_at: null }]
+      return { deleted: 1, kept: [] }
+    })
+    await repo.deleteMany('biz-A', ['c1', 'c2'])
+    await repo.restoreDeleted('biz-A', 'd1')
+    expect(calls[0]).toMatchObject({ path: 'rpc/delete_clients', method: 'POST', body: { p_business_id: 'biz-A', p_client_ids: ['c1', 'c2'] } })
+    expect(calls[1]).toMatchObject({ path: 'rpc/restore_deleted_clients', body: { p_business_id: 'biz-A', p_deletion_id: 'd1' } })
+    expect(await repo.getDeletions('biz-A')).toEqual([{ deletion_id: 'd1', deleted_at: 't', by: 'Musa', all: false, count: 1, restored: 0, names: ['Ada'] }])
+  })
+  it('refusals become sentences; before the update, it says so', async () => {
+    const refused = createClientRepository(async () => { throw new Error('Supabase error (403): DELETE_NOT_ALLOWED: no') })
+    await expect(refused.deleteMany('biz-A', ['c1'])).rejects.toMatchObject({ code: 'DELETE_NOT_ALLOWED' })
+    const missing = createClientRepository(async () => { throw new Error('Supabase error (404): Could not find the function public.delete_clients') })
+    await expect(missing.deleteMany('biz-A', ['c1'])).rejects.toMatchObject({ code: 'DELETE_UNAVAILABLE' })
+  })
+})

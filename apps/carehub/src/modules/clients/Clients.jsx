@@ -1,16 +1,18 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useKeyboardScanner, fieldSnapshot, restoreField } from '../../hooks/useKeyboardScanner'
-import { Users, UserPlus, DollarSign, Search, Download, Upload, ShoppingCart, Calendar, Landmark, Clipboard, History, FileUp, CheckCircle, AlertTriangle, Loader2, Pencil } from 'lucide-react'
+import { Users, UserPlus, DollarSign, Search, Download, Upload, ShoppingCart, Calendar, Landmark, Clipboard, History, FileUp, CheckCircle, AlertTriangle, Loader2, Pencil, Trash2, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { clientRepository, isDuplicateError } from './repositories'
 import { PHARMACY_TYPE_LABEL } from '../consultation/PharmacyForm'
 import { fmt, todayDate } from '../../lib/utils'
 import { getModulesForType } from '../../lib/permissions'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
-import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients, useOpenDebts, useUpdateManyClients } from '../../hooks/queries'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, DataTable, RedBtn, useToast, Toast } from '../../components/ui'
+import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients, useOpenDebts, useUpdateManyClients, useDeleteClients } from '../../hooks/queries'
 import SelectionBar from '../../components/SelectionBar'
 import ClientBulkEditModal from './components/ClientBulkEditModal'
+import ClientDeleteModal from './components/ClientDeleteModal'
+import RecentlyDeletedModal from '../../components/RecentlyDeletedModal'
 import PeriodFilter from '../../components/PeriodFilter'
 import { FilterPanel, FilterSelect, AmountRangeFilter } from '../../components/RecordFilters'
 import { yearsOf } from '../../lib/recordFilters'
@@ -141,6 +143,11 @@ export default function Clients({ brand, role, perms }) {
   const updateManyClients = useUpdateManyClients(brand?.id)
   const [marked, setMarked] = useState(() => new Set())
   const [showBulkEdit, setShowBulkEdit] = useState(false)
+  // Bulk delete (delete_clients): the Owner, or a role allowed to delete, as on Inventory.
+  const deleteClients = useDeleteClients(brand?.id)
+  const canDeleteClients = role === 'Owner' || !!perms?.canDelete
+  const [showDelete, setShowDelete] = useState(false)
+  const [showDeleted, setShowDeleted] = useState(false)
   const toggleMarked = (id) => setMarked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const importing = createManyClients.isPending
 
@@ -432,6 +439,7 @@ export default function Clients({ brand, role, perms }) {
         extraBtns={[
           { label: 'Upload CSV', icon: <Upload size={14} />, onClick: () => setShowUpload(true) },
           { label: 'Export CSV', icon: <Download size={14} />, onClick: exportCsv },
+          ...(canDeleteClients ? [{ label: 'Recently deleted', icon: <RotateCcw size={14} />, onClick: () => setShowDeleted(true) }] : []),
         ]} />
 
       {/* Totals for the clients shown: every filter recalculates them. */}
@@ -475,6 +483,7 @@ export default function Clients({ brand, role, perms }) {
         <SelectionBar count={marked.size} shownCount={filtered.length} allShownSelected={allShownMarked}
           onSelectAll={() => setMarked(prev => new Set([...prev, ...filtered.map(c => c.id)]))} onClear={() => setMarked(new Set())}>
           <TealBtn onClick={() => setShowBulkEdit(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Pencil size={13} aria-hidden='true' /> Edit selected</TealBtn>
+          {canDeleteClients && <RedBtn onClick={() => setShowDelete(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Trash2 size={13} aria-hidden='true' /> Delete selected</RedBtn>}
         </SelectionBar>
       )}
       <DataTable
@@ -512,6 +521,22 @@ export default function Clients({ brand, role, perms }) {
       )}
 
       {showBulkEdit && <ClientBulkEditModal clients={markedClients} runUpdates={runClientUpdates} onClose={() => setShowBulkEdit(false)} />}
+      {showDelete && (
+        <ClientDeleteModal clients={markedClients}
+          onDelete={async () => {
+            const r = await deleteClients.remove(markedClients.map(c => c.id))
+            console.info('[clients] deleted', { deleted: r.deleted, kept: r.kept?.length || 0 })
+            setMarked(new Set())
+            return r
+          }}
+          onRestore={(id) => deleteClients.restore(id)}
+          onClose={() => setShowDelete(false)} />
+      )}
+      {showDeleted && (
+        <RecentlyDeletedModal noun='client' loadDeletions={() => clientRepository.getDeletions(brand.id)} onRestore={(id) => deleteClients.restore(id)}
+          describeSkips={(r) => (r.skipped_phone_taken ? `; ${r.skipped_phone_taken} skipped because their phone number is used by another client now` : '')}
+          onClose={() => setShowDeleted(false)} />
+      )}
 
       {/* Add Client Modal */}
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({}) }} title='Add New Client'

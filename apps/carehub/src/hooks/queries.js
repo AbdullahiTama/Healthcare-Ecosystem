@@ -207,6 +207,27 @@ export function useUpdateManyClients(brandId) {
   }
 }
 
+// Deletes clients (delete_clients) and drops exactly the deleted ones from the shared client list at once; restoring
+// re-reads it. Debts may change client links, so open debts are re-read too.
+export function useDeleteClients(brandId) {
+  const qc = useQueryClient()
+  return {
+    async remove(ids) {
+      const r = await clientRepository.deleteMany(brandId, ids)
+      const kept = new Set((r.kept || []).map((k) => String(k.id)))
+      const gone = new Set(ids.map(String).filter((id) => !kept.has(id)))
+      qc.setQueryData(keys.clients(brandId), (prev) => (Array.isArray(prev) ? prev.filter((c) => !gone.has(String(c.id))) : prev))
+      qc.invalidateQueries({ queryKey: keys.clients(brandId) })
+      return r
+    },
+    async restore(deletionId) {
+      const r = await clientRepository.restoreDeleted(brandId, deletionId)
+      qc.invalidateQueries({ queryKey: keys.clients(brandId) })
+      return r
+    },
+  }
+}
+
 export function useCreateManyClients(brandId) {
   const qc = useQueryClient()
   return useMutation({

@@ -1,5 +1,6 @@
 import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
+import { translateBulkDeleteError, groupDeletions } from '../../../lib/bulkDelete'
 
 // ── Product repository ────────────────────────────────────────────────────────
 // A deep module over the `products` / `stock_batches` tables. Its interface is
@@ -47,29 +48,9 @@ export function translateReceiveError(error) {
   return friendly
 }
 
-const DELETE_REFUSALS = {
-  DELETE_NOT_ALLOWED: 'Only the owner, or a role allowed to delete products, can do this.',
-  DELETE_ALL_OWNER_ONLY: 'Only the owner can delete every product.',
-  DELETE_ALL_CONFIRM: 'Type DELETE ALL PRODUCTS exactly to confirm.',
-  DELETE_NONE: 'Choose at least one product.',
-  DELETE_TOO_MANY: 'Delete at most 5,000 products at a time.',
-  RESTORE_NOT_FOUND: 'That deletion was not found. It may have been restored already.',
-}
-
-// Same contract as translateMergeError. A missing function (the update is not installed yet) gets its own code so
-// the page can say so instead of a raw error.
+// Refusal sentences are shared with Clients (lib/bulkDelete.js).
 export function translateDeleteError(error) {
-  const msg = String(error?.message || '')
-  if (/PGRST20[25]|Could not find the function/i.test(msg)) {
-    const e = new Error('Bulk delete needs the latest CareHub update, which is not installed yet.')
-    e.code = 'DELETE_UNAVAILABLE'
-    return e
-  }
-  const code = Object.keys(DELETE_REFUSALS).find((c) => msg.includes(c))
-  if (!code) return error
-  const friendly = new Error(DELETE_REFUSALS[code])
-  friendly.code = code
-  return friendly
+  return translateBulkDeleteError(error, 'product')
 }
 
 export function createProductRepository(request = sbFetch) {
@@ -188,15 +169,7 @@ export function createProductRepository(request = sbFetch) {
     async getDeletions(businessId) {
       const rows = await pagedQuery(request,
         `deleted_products?business_id=eq.${businessId}&order=deleted_at.desc,id.asc&select=id,deletion_id,product_name,deleted_at,deleted_by_name,deleted_all,restored_at`)
-      const by = new Map()
-      for (const r of rows || []) {
-        if (!by.has(r.deletion_id)) by.set(r.deletion_id, { deletion_id: r.deletion_id, deleted_at: r.deleted_at, by: r.deleted_by_name || null, all: !!r.deleted_all, count: 0, restored: 0, names: [] })
-        const d = by.get(r.deletion_id)
-        d.count++
-        if (r.restored_at) d.restored++
-        if (d.names.length < 3 && r.product_name) d.names.push(r.product_name)
-      }
-      return [...by.values()]
+      return groupDeletions(rows, 'product_name')
     },
 
     async delete(productId, businessId) {

@@ -2,6 +2,7 @@ import { isCompletedSale } from '../../pos/salesReport'
 import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
 import { isDuplicateError } from '../../../lib/dbErrors'
+import { translateBulkDeleteError, groupDeletions } from '../../../lib/bulkDelete'
 
 // `isDuplicateError` (the duplicate-key shape recogniser) moved to
 // lib/dbErrors.js — it is now shared with the sale repository's dispense_ref
@@ -105,6 +106,40 @@ export function createClientRepository(request = sbFetch) {
         rows.push(...(Array.isArray(saved) ? saved : []))
       }
       return rows
+    },
+
+    // Deletes clients through delete_clients (carehub_20270111): clients with sales, appointments, consultations,
+    // debts, customer requests or linked records are kept and returned with their reasons; the rest are copied (for
+    // restore) and deleted. Returns { deletion_id, deleted, kept: [{ id, name, reasons }], not_found }.
+    async deleteMany(businessId, clientIds) {
+      try {
+        const result = await request('rpc/delete_clients', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_client_ids: clientIds }) })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateBulkDeleteError(e, 'client')
+      }
+    },
+
+    // Puts a deletion's clients back (restore_deleted_clients). Returns { restored, skipped_already_back,
+    // skipped_phone_taken }.
+    async restoreDeleted(businessId, deletionId) {
+      try {
+        const result = await request('rpc/restore_deleted_clients', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_deletion_id: deletionId }) })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateBulkDeleteError(e, 'client')
+      }
+    },
+
+    // Bulk deletions of this business's clients, newest first, one entry per deletion.
+    async getDeletions(businessId) {
+      try {
+        const rows = await pagedQuery(request,
+          `deleted_clients?business_id=eq.${businessId}&order=deleted_at.desc,id.asc&select=id,deletion_id,client_name,deleted_at,deleted_by_name,restored_at`)
+        return groupDeletions(rows, 'client_name')
+      } catch (e) {
+        throw translateBulkDeleteError(e, 'client')
+      }
     },
 
     // ── Per-client history ────────────────────────────────────────────────────

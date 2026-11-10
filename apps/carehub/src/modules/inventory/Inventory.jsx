@@ -21,7 +21,7 @@ import { CatalogStatusBanner, CatalogSkeleton } from './components/CatalogStatus
 import BulkEditModal from './components/BulkEditModal'
 import SelectionBar from '../../components/SelectionBar'
 import DeleteProductsModal from './components/DeleteProductsModal'
-import RecentlyDeletedModal from './components/RecentlyDeletedModal'
+import RecentlyDeletedModal from '../../components/RecentlyDeletedModal'
 import { runBulkUpdates, keptReasonText } from './bulkEdit'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, Toggle, GhostBtn, TealBtn, RedBtn, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'

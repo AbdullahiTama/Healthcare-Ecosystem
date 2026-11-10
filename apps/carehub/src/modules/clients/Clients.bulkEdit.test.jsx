@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-const repo = vi.hoisted(() => ({ getAll: vi.fn(), create: vi.fn(), createMany: vi.fn(), updateMany: vi.fn() }))
+const repo = vi.hoisted(() => ({ getAll: vi.fn(), create: vi.fn(), createMany: vi.fn(), updateMany: vi.fn(), deleteMany: vi.fn(), restoreDeleted: vi.fn(), getDeletions: vi.fn() }))
 vi.mock('./repositories', () => ({ clientRepository: repo, isDuplicateError: () => false }))
 vi.mock('../debts/repositories', () => ({ debtRepository: { getOpen: vi.fn(async () => []) } }))
 vi.mock('../../services/supabase', () => ({ sbFetch: vi.fn(), sbFetchWithCount: vi.fn(), sbUpload: vi.fn() }))
@@ -103,3 +103,48 @@ describe('Clients: mark and edit', () => {
     expect(text()).not.toContain('Client Details')
   })
 })
+
+describe('Clients: delete selected', () => {
+  it('deletes what the database deleted, lists who was kept and why, and offers Undo', async () => {
+    repo.deleteMany.mockImplementation(async () => {
+      db = db.filter((c) => c.id !== 'c2') // like the database: Musa deleted, Ada kept
+      return { deletion_id: 'd1', deleted: 1, not_found: 0, kept: [{ id: 'c1', name: 'Ada Obi', reasons: ['sales', 'debts'] }] }
+    })
+    repo.restoreDeleted.mockResolvedValue({ restored: 1, skipped_phone_taken: 0, skipped_already_back: 0 })
+    await click(document.querySelector('input[aria-label="Select Ada Obi"]'))
+    await click(document.querySelector('input[aria-label="Select Musa Bello"]'))
+    await click(btn((b) => b.textContent.includes('Delete selected')))
+    expect(dialog().textContent).toContain('This deletes the 2 marked clients.')
+    await click(btn((b) => b.textContent.trim() === 'Delete 2' && b.closest('[role="dialog"]')))
+    expect(repo.deleteMany).toHaveBeenCalledWith('b1', ['c1', 'c2'])
+    expect(dialog().textContent).toContain('1 client deleted.')
+    expect(dialog().textContent).toContain('Ada Obi: has sales, has debts')
+    expect(qc.getQueryData(['clients', 'b1']).map((c) => c.id)).toEqual(['c1', 'c3'])
+    await click(btn((b) => b.textContent.trim() === 'Undo'))
+    expect(repo.restoreDeleted).toHaveBeenCalledWith('b1', 'd1')
+    expect(dialog().textContent).toContain('1 client restored.')
+  })
+
+  it('Recently deleted lists client deletions and restores, explaining phone clashes', async () => {
+    repo.getDeletions.mockResolvedValue([{ deletion_id: 'd1', deleted_at: '2026-11-10T09:00:00Z', by: 'Ada', all: false, count: 3, restored: 0, names: ['X', 'Y', 'Z'] }])
+    repo.restoreDeleted.mockResolvedValue({ restored: 2, skipped_phone_taken: 1, skipped_already_back: 0 })
+    await click(btn((b) => b.textContent.includes('Recently deleted')))
+    expect(dialog().textContent).toContain('3 clients deleted')
+    await click(btn((b) => b.getAttribute('aria-label') === 'Restore 3 deleted clients'))
+    expect(text()).toContain('2 clients restored; 1 skipped because their phone number is used by another client now.')
+  })
+})
+
+describe('Clients: who may delete', () => {
+  it('a role without delete permission can edit but not delete', async () => {
+    await act(async () => root.unmount())
+    root = createRoot(host)
+    await act(async () => { root.render(<QueryClientProvider client={qc}><MemoryRouter><Clients brand={{ id: 'b1', business_type: 'pharmacy' }} role='Cashier' perms={{}} /></MemoryRouter></QueryClientProvider>) })
+    await flush(); await flush()
+    await click(document.querySelector('input[aria-label="Select Ada Obi"]'))
+    expect(btn((b) => b.textContent.includes('Edit selected'))).toBeTruthy()
+    expect(btn((b) => b.textContent.includes('Delete selected'))).toBeUndefined()
+    expect(text()).not.toContain('Recently deleted')
+  })
+})
+
