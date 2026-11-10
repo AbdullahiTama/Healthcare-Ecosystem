@@ -2,7 +2,7 @@
 --
 -- Status: APPLIED TO PRODUCTION 2026-11-10 with the owner's approval (Supabase migration version 20261110075244),
 -- applied verbatim from this file (statements only); restore was then tightened by
--- carehub_20270110_restore_respects_plan_limit (version in that file). Tested first on PGlite
+-- carehub_20270110_restore_respects_plan_limit (version 20261110083834). Tested first on PGlite
 -- (apps/carefind/src/test/inventory/inventoryBulkDelete.db.test.js) with the live current_business_ids(),
 -- is_business_owner(), is_platform_admin(), the live products foreign keys and the live stock_movements / audit_log
 -- columns, read 2026-11-10. After applying: 9,930 products, unchanged; deleted_products RLS on, authenticated SELECT

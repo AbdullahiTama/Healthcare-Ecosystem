@@ -1,6 +1,7 @@
 -- carehub_20270110_restore_respects_plan_limit
 --
--- Status: APPLIED TO PRODUCTION 2026-11-10 as part of the approved inventory bulk delete change (it only narrows
+-- Status: APPLIED TO PRODUCTION 2026-11-10 (Supabase migration version 20261110083834) as part of the approved inventory
+-- bulk delete change (it only narrows
 -- restore), straight after carehub_20270109_inventory_bulk_delete. Tested first on PGlite
 -- (apps/carefind/src/test/inventory/inventoryBulkDelete.db.test.js, plan-limit case included). Found by the live probe:
 -- the probe's own product insert as a signed-in owner was refused by products_enforce_plan (the plan had expired),
