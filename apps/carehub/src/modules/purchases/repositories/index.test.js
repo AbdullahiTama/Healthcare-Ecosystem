@@ -170,3 +170,37 @@ describe('purchaseRepository editing and analytics (carehub_20261229)', () => {
     expect(calls[3]).toEqual(['rpc/get_purchase_product_stats', { ...base, p_sort: 'units', p_offset: 0, p_limit: 50 }])
   })
 })
+
+describe('purchaseRepository: bulk edit and delete', () => {
+  function recording(reply) {
+    const calls = []
+    const repo = createPurchaseRepository(async (path, opts = {}) => { calls.push({ path, ...opts, body: opts.body ? JSON.parse(opts.body) : undefined }); return reply(path) })
+    return { calls, repo }
+  }
+  it('bulkEdit sends the changes, reason and staff name to bulk_edit_purchases', async () => {
+    const { calls, repo } = recording(async () => ({ updated: 1, unchanged: 0, rows: [], failed: [], skipped: [] }))
+    const r = await repo.bulkEdit(A, ['p1'], { due_date: '' }, { reason: 'Terms changed', staffName: 'Ada' })
+    expect(r.updated).toBe(1)
+    expect(calls[0]).toMatchObject({ path: 'rpc/bulk_edit_purchases', method: 'POST', body: { p_business_id: A, p_purchase_ids: ['p1'], p_changes: { due_date: '' }, p_reason: 'Terms changed', p_staff_name: 'Ada' } })
+  })
+  it('bulkEdit words refusals and a missing update', async () => {
+    const { repo } = recording(async () => { throw new Error('EDIT_REASON: say why the purchases are being changed (3 to 300 characters)') })
+    await expect(repo.bulkEdit(A, ['p1'], { notes: 'x' }, { reason: 'x' })).rejects.toMatchObject({ code: 'EDIT_REASON', message: 'Say why the purchases are being changed (3 to 300 characters).' })
+    const { repo: r2 } = recording(async () => { throw new Error('Supabase error (404): Could not find the function public.bulk_edit_purchases') })
+    await expect(r2.bulkEdit(A, ['p1'], { notes: 'x' }, { reason: 'Because' })).rejects.toMatchObject({ code: 'EDIT_UNAVAILABLE' })
+  })
+  it('deleteMany / restoreDeleted call the functions; getDeletions groups by deletion', async () => {
+    const { calls, repo } = recording(async (path) => path.startsWith('deleted_purchases')
+      ? [{ deletion_id: 'x1', supplier_name: 'MedSupply', deleted_at: 't', deleted_by_name: 'Ada', restored_at: null }]
+      : { deleted: 1, kept: [] })
+    await repo.deleteMany(A, ['p1'])
+    await repo.restoreDeleted(A, 'x1')
+    expect(calls[0]).toMatchObject({ path: 'rpc/delete_purchases', body: { p_business_id: A, p_purchase_ids: ['p1'] } })
+    expect(calls[1]).toMatchObject({ path: 'rpc/restore_deleted_purchases', body: { p_business_id: A, p_deletion_id: 'x1' } })
+    expect(await repo.getDeletions(A)).toEqual([{ deletion_id: 'x1', deleted_at: 't', by: 'Ada', all: false, count: 1, restored: 0, names: ['MedSupply'] }])
+  })
+  it('before the update is installed, deleting says so (code DELETE_UNAVAILABLE)', async () => {
+    const { repo } = recording(async () => { throw new Error('Supabase error (404): Could not find the function public.delete_purchases') })
+    await expect(repo.deleteMany(A, ['p1'])).rejects.toMatchObject({ code: 'DELETE_UNAVAILABLE' })
+  })
+})

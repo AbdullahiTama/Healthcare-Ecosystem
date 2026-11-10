@@ -34,6 +34,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A19 | Medium | Clients (bulk delete) | Client bulk delete and restore through checked database functions | **Closed 2026-11-10**: `carehub_20270111_client_bulk_delete` applied with owner approval and probed |
 | A20 | Medium | Expenses (bulk delete) | Expense bulk delete and restore with payment history | **Closed 2026-11-10**: `carehub_20270112_expense_bulk_delete` applied with owner approval and probed |
 | A21 | Medium | Debts (bulk delete) | Debt bulk delete and restore; sale / purchase debts kept (they are synced by source) | **Closed 2026-11-10**: `carehub_20270113_debt_bulk_delete` applied with owner approval and probed |
+| A22 | Medium | Purchases (bulk edit / delete) | Purchase bulk edit through edit_purchase; delete takes stock back (kept when sold), restore puts it back | Open: `carehub_20270114_purchase_bulk_edit_delete` written and tested, awaiting owner approval to apply |
 
 ## 2. Items
 

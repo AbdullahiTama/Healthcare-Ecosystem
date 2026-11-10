@@ -211,3 +211,48 @@ with nothing to settle. The design follows from that.
   twice; restorer's identity back afterwards; table access); `debts/debtBulkEdit.test.js`;
   `debts/repositories/index.test.js`; `debts/Debts.bulk.test.jsx` (edit across sources, permissions, delete with kept
   reasons and Undo, refusal shown, Recently deleted, other locations not markable).
+
+## 10. Purchases: mark, edit, delete and restore (added 2026-11-10)
+
+Database: `supabase/migrations/carehub_20270114_purchase_bulk_edit_delete.sql` (status in its header). Purchases are
+the most connected record: each put stock into Inventory through the stock ledger (often into a batch of its own), may
+have supplier payments (`purchase_payments`, cascade) and may have raised a "we owe" debt. Before this, a purchase
+could only be changed one at a time (Edit purchase) and never deleted: the direct-write guard refuses UPDATE and DELETE
+from the app.
+
+- **Mark** (Owner, or a role with "Edit purchases"): a tick box per row on the Purchases tab; "Select all N shown"
+  covers the purchases loaded (Load more adds more).
+- **Edit selected**: **supplier**, **supply date** (not in the future), **due date** (set or remove) and **notes**,
+  with **one required reason**. Saved by `bulk_edit_purchases()`, which runs the existing `edit_purchase()` on each
+  purchase in its own subtransaction, so the supplier's debt (name, due date), the payment history's supplier name and
+  the audit (`purchase.edited`, with the reason) follow exactly as for one edit. A purchase whose edit would move stock
+  (its received stock differs from its quantities, or a line is not in Inventory yet) is **skipped** and named; an edit
+  `edit_purchase` refuses is reported per purchase and can be retried. Never here: lines, quantities, costs, amount
+  paid. Rules `modules/purchases/purchaseBulkEdit.js`; dialog `modules/purchases/components/PurchaseBulkEditModal.jsx`.
+  `BulkEditShell` gained `notes` on its result (used for "skipped" and "already had these values").
+- **Delete selected** and **Recently deleted** (Owner, or a role allowed to delete **and** to edit purchases):
+  `delete_purchases()` takes back the stock each line added, through `apply_stock_change` and out of the batch the
+  line filled (what `edit_purchase` does for a removed line, ledger source `purchase_edit` so later edits still add
+  up), then copies the purchase with its payments, debt and the stock taken back into `deleted_purchases`, deletes the
+  debt and the purchase, and audits (`purchases.deleted`: totals, amount paid, units taken back). A purchase is
+  **kept**, all or nothing, when its stock cannot be taken back: units sold or moved since (live 2026-11-10: 20 of 32
+  purchases), a pre-ledger line not linked to a product (8 lines live), a tracked product with no batch, a batch gone.
+  The dialog names the product and says what to do instead. Products a purchase created stay in Inventory; product cost
+  prices are not reverted. Inventory and POS reload their product list after a delete or restore.
+- **Restore** (`restore_deleted_purchases()`) puts each purchase back with its id, lines, totals, edit count and
+  original recorder, its original payment rows (inserted with nothing paid so no "at purchase" payment is invented,
+  then the paid amount; `supplier_key` is generated), its debt, and the stock into the same batch. If a product or
+  batch it stocked is gone, that purchase is skipped and named and stays restorable later.
+- **Security:** no access widened (no client can update or delete a purchase directly; these functions do what
+  `edit_purchase` allows, plus deleting for the Owner / delete roles that may edit purchases). SECURITY DEFINER,
+  search_path pinned, caller checked first, one business; EXECUTE authenticated only; `deleted_purchases` readable by
+  members only, no client writes.
+- **Tests:** PGlite `scripts/db-tests/purchaseBulkEditDelete.pglite.mjs` (56 checks, on the real `edit_purchase`,
+  `purchase_items_normalized`, `apply_stock_change` and guard, md5-identical to production 2026-11-10: who may delete /
+  edit; stock taken back per line and batch; sold-stock and unlinked purchases kept with the product named; copies,
+  audit; exact restore of purchase, payments, debt, recorder and stock; a later edit still moves stock correctly;
+  restore skipped when a batch is gone; bulk edit through `edit_purchase` with debt / payment / audit following, skip
+  when stock would move, unchanged, due date removal, per-purchase refusal; table access).
+  `purchases/purchaseBulkEdit.test.js`, `purchases/repositories/index.test.js`,
+  `purchases/__tests__/Purchases.bulk.test.jsx`. Run: `node scripts/db-tests/purchaseBulkEditDelete.pglite.mjs`
+  (needs `@electric-sql/pglite` resolvable from the repo root).

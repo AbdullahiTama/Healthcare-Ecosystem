@@ -4,12 +4,13 @@ import { Modal, GhostBtn, TealBtn } from './ui'
 import { theme } from '../styles/theme'
 import { groupBulkUpdates } from '../lib/bulkUpdates'
 
-const { danger, dangerBg, success, successBg } = theme
+const { danger, dangerBg, success, successBg, warningBg } = theme
 
 // The frame every bulk-edit dialog shares (Inventory, Clients, Expenses): the Update button with progress, the saved /
 // failed result, and "Try the failed ones again". The page supplies the fields (children) and the plan
 // ([{ id, updates }], only records that would change); `runUpdates(groups, onProgress)` saves and resolves to
-// { saved, failed } (lib/bulkUpdates.js). `noun` is singular ('product').
+// { saved, failed } (lib/bulkUpdates.js), optionally with `notes` (sentences shown under the result, e.g. records
+// skipped and why). `noun` is singular ('product').
 export default function BulkEditShell({ noun, count, plan, valid, runUpdates, onClose, children }) {
   const [saving, setSaving] = useState(false)
   const [progress, setProgress] = useState(null)
@@ -52,6 +53,9 @@ export default function BulkEditShell({ noun, count, plan, valid, runUpdates, on
               <strong>{failedCount} could not be updated.</strong> {result.failed[0].message}
             </div>
           )}
+          {(result.notes || []).map((n) => (
+            <div key={n} style={{ padding: 12, borderRadius: theme.radius.md, background: warningBg, color: theme.amberText, fontSize: 13 }}>{n}</div>
+          ))}
         </div>
       ) : children}
     </Modal>

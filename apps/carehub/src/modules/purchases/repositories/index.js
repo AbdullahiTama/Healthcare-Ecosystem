@@ -1,6 +1,7 @@
 import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
 import { isMissingColumn } from '../../../lib/dbErrors'
+import { translateBulkDeleteError, groupDeletions } from '../../../lib/bulkDelete'
 
 // The analytics filters every history/summary function takes, as RPC
 // arguments. `from`/`to` are inclusive 'YYYY-MM-DD' supply dates; a supplier is
@@ -16,6 +17,19 @@ function filterArgs(businessId, { from = null, to = null, search = '', supplierK
     p_product_key: String(productKey || '').trim() || null,
     p_product_id: productId || null,
   }
+}
+
+// bulk_edit_purchases refuses with "CODE: sentence"; the sentence is shown (code kept). A missing function (the
+// update is not installed yet) gets code EDIT_UNAVAILABLE.
+function translateBulkEditError(error) {
+  const msg = String(error?.message || '')
+  if (/PGRST20[25]|Could not find the function/i.test(msg)) {
+    return Object.assign(new Error('Bulk edit needs the latest CareHub update, which is not installed yet.'), { code: 'EDIT_UNAVAILABLE' })
+  }
+  const m = msg.match(/\b(EDIT_[A-Z_]+): (.+)$/)
+  if (!m) return error
+  const text = m[2].trim()
+  return Object.assign(new Error(text.charAt(0).toUpperCase() + text.slice(1) + (/[.!?]$/.test(text) ? '' : '.')), { code: m[1] })
 }
 
 // ── Purchase repository ───────────────────────────────────────────────────────
@@ -167,6 +181,53 @@ export function createPurchaseRepository(request = sbFetch) {
         method: 'POST',
         body: JSON.stringify({ p_business_id: businessId, p_supplier_key: supplierKey }),
       })
+    },
+
+    // Bulk edit (carehub_20270114): the same header changes (supplier_name, supply_date, due_date, notes) on many
+    // purchases, each through edit_purchase on the server. Returns { updated, unchanged, rows, failed, skipped }.
+    async bulkEdit(businessId, purchaseIds, changes, { reason, staffName = null } = {}) {
+      try {
+        const result = await request('rpc/bulk_edit_purchases', {
+          method: 'POST',
+          body: JSON.stringify({ p_business_id: businessId, p_purchase_ids: purchaseIds, p_changes: changes, p_reason: reason, p_staff_name: staffName || null }),
+        })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateBulkEditError(e)
+      }
+    },
+
+    // Deletes purchases through delete_purchases: each purchase's stock is taken back through the ledger, then it is
+    // copied (with its payments and debt) for restore and audited. A purchase whose stock cannot be taken back is kept.
+    // Returns { deletion_id, deleted, kept: [{ id, name, reasons, product, ref }], not_found }.
+    async deleteMany(businessId, purchaseIds) {
+      try {
+        const result = await request('rpc/delete_purchases', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_purchase_ids: purchaseIds }) })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateBulkDeleteError(e, 'purchase')
+      }
+    },
+
+    // Puts a deletion's purchases back: same ids, lines, payments, debt, recorder; stock back into the same batch.
+    // Returns { restored, skipped_already_back, skipped_stock, skipped: [{ id, name, product }] }.
+    async restoreDeleted(businessId, deletionId) {
+      try {
+        const result = await request('rpc/restore_deleted_purchases', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_deletion_id: deletionId }) })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateBulkDeleteError(e, 'purchase')
+      }
+    },
+
+    // Deletions of this business's purchases, newest first, one entry per deletion.
+    async getDeletions(businessId) {
+      try {
+        const rows = await pagedQuery(request, `deleted_purchases?business_id=eq.${businessId}&order=deleted_at.desc,id.asc&select=id,deletion_id,supplier_name,deleted_at,deleted_by_name,restored_at`)
+        return groupDeletions(rows, 'supplier_name')
+      } catch (e) {
+        throw translateBulkDeleteError(e, 'purchase')
+      }
     },
 
     async getById(purchaseId, businessId) {
