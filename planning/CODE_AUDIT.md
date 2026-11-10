@@ -33,6 +33,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A18 | Low | Data hygiene | 6 products have no `business_id` (visible to no business; untouched by any business action) | Open: review and remove or reassign |
 | A19 | Medium | Clients (bulk delete) | Client bulk delete and restore through checked database functions | **Closed 2026-11-10**: `carehub_20270111_client_bulk_delete` applied with owner approval and probed |
 | A20 | Medium | Expenses (bulk delete) | Expense bulk delete and restore with payment history | **Closed 2026-11-10**: `carehub_20270112_expense_bulk_delete` applied with owner approval and probed |
+| A21 | Medium | Debts (bulk delete) | Debt bulk delete and restore; sale / purchase debts kept (they are synced by source) | Open: `carehub_20270113_debt_bulk_delete` written and tested, awaiting owner approval to apply |
 
 ## 2. Items
 

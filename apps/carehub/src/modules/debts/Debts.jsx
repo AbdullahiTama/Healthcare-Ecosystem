@@ -2,12 +2,17 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useKeyboardScanner, fieldSnapshot, restoreField } from '../../hooks/useKeyboardScanner'
 import { debtTotals } from './debtTotals'
 import { DEFAULT_DEBT_FILTERS, PAYMENT_STATUSES, DEBT_SOURCES, DIRECTIONS, AMOUNT_BASES, filterDebts, debtPaymentStatus, activeDebtFilterCount, describeDebtFilters } from './debtFilters'
-import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck, MapPin } from 'lucide-react'
+import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck, MapPin, Trash2, RotateCcw } from 'lucide-react'
 import { debtRepository } from './repositories'
 // Owners read every location's debts (the database allows it: current_business_ids()); the list of locations comes
 // from the locations module's own repository.
 import { locationsRepository } from '../locations/repositories'
 import PeriodFilter from '../../components/PeriodFilter'
+import SelectionBar from '../../components/SelectionBar'
+import BulkDeleteModal from '../../components/BulkDeleteModal'
+import RecentlyDeletedModal from '../../components/RecentlyDeletedModal'
+import { runBulkUpdates } from '../../lib/bulkUpdates'
+import DebtBulkEditModal from './components/DebtBulkEditModal'
 import { FilterPanel, FilterSelect, AmountRangeFilter } from '../../components/RecordFilters'
 import { yearsOf } from '../../lib/recordFilters'
 import { useQueryParamAction } from '../../hooks/useQueryParamAction'
@@ -27,7 +32,7 @@ import { PurchasePaymentModal } from '../purchases/SupplierPayments'
 import { isManagerRole } from '../../lib/permissions'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, bg } = theme
 
@@ -37,6 +42,13 @@ function sourceLabel(source, short) {
   const Icon = source === 'purchase' ? Truck : source === 'credit_sale' ? ShoppingCart : Pencil
   const text = source === 'purchase' ? 'Purchase' : source === 'credit_sale' ? (short ? 'Sale' : 'Credit Sale') : 'Manual'
   return <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Icon size={11} /> {text}</span>
+}
+
+// Why delete_debts kept a debt (it belongs to the sale or purchase that raised it).
+export function debtKeptText(reasons, kept) {
+  const ref = kept?.ref ? ' ' + kept.ref : ''
+  return (reasons || []).map((r) => (r === 'credit_sale' ? `from credit sale${ref}: record the payment, or correct or delete the sale, instead`
+    : r === 'purchase' ? `from purchase${ref}: record the payment, or correct or delete the purchase, instead` : r)).join(', ')
 }
 
 export default function Debts({ brand, role, perms, staffName }) {
@@ -225,9 +237,52 @@ export default function Debts({ brand, role, perms, staffName }) {
   const filterLabel = describeDebtFilters(filters, { fmt, locationName, defaultLocation })
   const years = useMemo(() => yearsOf(debts.map(d => d.created_at), todayDate()), [debts])
 
+  // ── Bulk actions: mark this location's debts, edit them together, delete them (restorable) ──────────────────
+  // Another location's debts cannot be marked: like settling, they are changed from their own location.
+  const [marked, setMarked] = useState(() => new Set())
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
+  const [showBulkDelete, setShowBulkDelete] = useState(false)
+  const [showDeleted, setShowDeleted] = useState(false)
+  const canBulkDelete = role === 'Owner' || !!perms?.canDelete
+  const markable = useMemo(() => filtered.filter(isHere), [filtered, brand?.id])
+  const markedDebts = debts.filter(d => marked.has(d.id) && isHere(d))
+  const allShownMarked = markable.length > 0 && markable.every(d => marked.has(d.id))
+  const toggleMarked = (id) => setMarked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  useEffect(() => { setMarked(new Set()) }, [brand?.id])
+  async function runDebtUpdates(groups, onProgress) {
+    const r = await runBulkUpdates(groups, (ids, updates) => debtRepository.updateMany(brand.id, ids, updates), { onProgress })
+    if (r.saved.length) {
+      const byId = new Map(r.saved.map(x => [String(x.id), x]))
+      setDebts(prev => prev.map(x => (byId.has(String(x.id)) ? { ...x, ...byId.get(String(x.id)) } : x)))
+    }
+    if (r.failed.length) console.error('[debts] bulk edit: some updates failed', r.failed.map(f => f.message))
+    else console.info('[debts] bulk edit saved', { debts: r.saved.length })
+    return r
+  }
+  async function deleteMarked() {
+    const r = await debtRepository.deleteMany(brand.id, markedDebts.map(d => d.id))
+    console.info('[debts] deleted', { deleted: r.deleted, kept: (r.kept || []).length })
+    setMarked(new Set())
+    load()
+    return r
+  }
+  async function restoreDeletion(deletionId) {
+    try {
+      const r = await debtRepository.restoreDeleted(brand.id, deletionId)
+      load()
+      showToast(`${r.restored} debt${r.restored === 1 ? '' : 's'} restored.${r.client_unlinked ? ` ${r.client_unlinked} no longer linked to a client (the client was deleted).` : ''}`, { type: 'success' })
+      return r
+    } catch (e) {
+      showToast(e?.message || 'Could not restore. Please try again.', { type: 'error' })
+      throw e
+    }
+  }
+  const describeRestore = (r) => (r?.client_unlinked ? `${r.client_unlinked} no longer linked to a client, because the client was deleted; the name is kept.` : '')
+
   return (
     <div ref={rootRef}>
-      <SectionHead title='Debts' sub='Track money owed to you and money you owe' btn='+ Record Debt' onBtn={() => setShowAdd(true)} />
+      <SectionHead title='Debts' sub='Track money owed to you and money you owe' btn='+ Record Debt' onBtn={() => setShowAdd(true)}
+        extraBtn={canBulkDelete ? { label: 'Recently deleted', icon: <RotateCcw size={14} aria-hidden='true' />, onClick: () => setShowDeleted(true) } : undefined} />
 
       {/* Totals for the debts on screen: every filter recalculates them. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: '14px', marginBottom: '20px' }}>
@@ -293,6 +348,12 @@ export default function Debts({ brand, role, perms, staffName }) {
           ? <Empty icon={<Search size={40} />} message={`No debts match ${filterLabel}`} cause='filtered' action='Clear filters' onAction={clearFilters} />
           : <Empty icon={<Landmark size={40} />} message='No debts recorded' action='+ Record Debt' onAction={() => setShowAdd(true)} />
       ) : (
+        <>
+        <SelectionBar count={markedDebts.length} shownCount={markable.length} allShownSelected={allShownMarked}
+          onSelectAll={() => setMarked(prev => new Set([...prev, ...markable.map(d => d.id)]))} onClear={() => setMarked(new Set())}>
+          <TealBtn onClick={() => setShowBulkEdit(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Pencil size={13} aria-hidden='true' /> Edit selected</TealBtn>
+          {canBulkDelete && <RedBtn onClick={() => setShowBulkDelete(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px' }}><Trash2 size={13} aria-hidden='true' /> Delete selected</RedBtn>}
+        </SelectionBar>
         <DataTable
           rows={filtered}
           page={page}
@@ -301,7 +362,15 @@ export default function Debts({ brand, role, perms, staffName }) {
           total={filtered.length}
           count={`${filtered.length} debt${filtered.length !== 1 ? 's' : ''}`}
           onRetry={load}
+          rowStyle={d => (marked.has(d.id) && isHere(d) ? { background: tealMist } : {})}
           columns={[
+            {
+              key: 'select', label: <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>Select</span>,
+              render: d => (isHere(d)
+                ? <input type='checkbox' checked={marked.has(d.id)} onChange={() => toggleMarked(d.id)} onClick={e => e.stopPropagation()}
+                    aria-label={`Select debt: ${d.party_name || 'Unnamed'}, ${fmt(d.balance || 0)} outstanding`} style={{ width: 18, height: 18, cursor: 'pointer', accentColor: tealDeep }} />
+                : null),
+            },
             {
               key: 'source', label: 'Source', sortable: true,
               sortValue: d => d.source || '',
@@ -370,6 +439,25 @@ export default function Debts({ brand, role, perms, staffName }) {
               : <span style={{ fontSize: '11px', color: gray500, whiteSpace: 'nowrap' }}>Settle at {locationName(d.business_id) || 'its location'}</span>)
           )}
         />
+        </>
+      )}
+
+      {showBulkEdit && <DebtBulkEditModal debts={markedDebts} runUpdates={runDebtUpdates} onClose={() => setShowBulkEdit(false)} />}
+      {showBulkDelete && (
+        <BulkDeleteModal noun='debt' count={markedDebts.length} names={markedDebts.map(d => `${d.party_name || 'Unnamed'} (${fmt(d.balance || 0)} outstanding)`)}
+          notes={[
+            <>Only debts <strong>recorded by hand</strong> are deleted. A debt from a credit sale or a purchase is <strong>kept</strong>, because it belongs to that sale or purchase; you will see which and why.</>,
+            <>Deleting a debt does not record a payment: if it was paid, use Mark paid instead, so the money is counted.</>,
+            <>You can <strong>restore</strong> deleted debts afterwards from Recently deleted.</>,
+          ]}
+          reasonText={debtKeptText} keptHeading='because they belong to a sale or a purchase'
+          describeRestore={describeRestore}
+          onDelete={deleteMarked} onRestore={restoreDeletion} onClose={() => setShowBulkDelete(false)} />
+      )}
+      {showDeleted && (
+        <RecentlyDeletedModal noun='debt' loadDeletions={() => debtRepository.getDeletions(brand.id)}
+          onRestore={(id) => restoreDeletion(id)} describeSkips={(r) => (r.client_unlinked ? `; ${r.client_unlinked} no longer linked to a deleted client` : '')}
+          onClose={() => setShowDeleted(false)} />
       )}
 
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ direction: 'owes_us' }) }} title='Record Debt'

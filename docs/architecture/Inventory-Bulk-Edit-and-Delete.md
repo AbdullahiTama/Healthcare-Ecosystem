@@ -176,3 +176,37 @@ owner's approval and probed (an exact restore was confirmed live; results in its
   table access); `expenses/expenseBulkEdit.test.js`; `expenses/repositories/index.test.js`;
   `expenses/Expenses.bulk.test.jsx` (edit in one request, permissions, delete with Undo and restore, single Delete with
   Undo and fallback, Recently deleted). CareHub suite: 3,551 tests pass.
+
+## 9. Debts: mark, edit, delete and restore (added 2026-11-10)
+
+Database: `supabase/migrations/carehub_20270113_debt_bulk_delete.sql` (status in its header).
+
+Most debts are not free-standing (live, 2026-11-10: 36 from credit sales, 27 from purchases, 2 recorded by hand).
+`record_sale_payment`, `record_purchase_payment`, `edit_sale`, `edit_purchase` and `delete_sale` find a sale's or
+purchase's debt by `(source, source_ref)` and keep it in step, so deleting one would leave the sale or purchase owing
+with nothing to settle. The design follows from that.
+
+- **Mark and edit** (anyone who uses Debts): a tick box per row of **this location** (another location's debts are
+  shown but, as for settling, changed from their own location; "Select all N shown" skips them), **Edit selected**:
+  the **due date** (set or remove, any debt) and the **description** (debts recorded by hand only; the dialog says how
+  many marked debts keep theirs). Never here: amount, paid, balance, status (Mark paid / the sale / the purchase keep
+  those in step) and who recorded it. Rules `modules/debts/debtBulkEdit.js`; dialog
+  `modules/debts/components/DebtBulkEditModal.jsx`.
+- **Delete selected** and **Recently deleted** (Owner or a role allowed to delete): `delete_debts()` deletes only
+  debts recorded by hand (`source` 'manual' or none), copies them into `deleted_debts` and audits (`debts.deleted`,
+  with the outstanding total). A debt from a credit sale or a purchase is **kept** and shown with the reason and the
+  sale / purchase reference ("record the payment, or correct or delete the sale, instead"). The dialog also says that
+  deleting is not paying: a paid debt should be marked paid so the money is counted.
+- **Restore** (`restore_deleted_debts()`) puts each debt back with its id, amounts, status, dates and original
+  recorder (request identity cleared for its own insert only, as for expenses). A client deleted since is unlinked
+  (the party name stays) and counted (`client_unlinked`). A debt already back is skipped.
+- `BulkDeleteModal`'s `reasonText` now also receives the kept entry (Debts shows the sale / purchase reference).
+- **Security:** no access widened (any member may DELETE debts through the API today; the functions are stricter:
+  owner / delete role, hand-recorded debts only); SECURITY DEFINER, search_path pinned, caller checked first, one
+  business; EXECUTE authenticated only; `deleted_debts` readable by members only, no client writes.
+- **Tests:** PGlite `apps/carefind/src/test/debts/debtBulkDelete.db.test.js` (8: only hand-recorded debts deleted,
+  sale / purchase debts kept with reason and reference; only-kept means no deletion and no audit; other business /
+  unknown ids untouched; who may delete; limits; exact restore incl. recorder and audit; client deleted since; restoring
+  twice; restorer's identity back afterwards; table access); `debts/debtBulkEdit.test.js`;
+  `debts/repositories/index.test.js`; `debts/Debts.bulk.test.jsx` (edit across sources, permissions, delete with kept
+  reasons and Undo, refusal shown, Recently deleted, other locations not markable).

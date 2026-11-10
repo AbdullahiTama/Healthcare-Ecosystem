@@ -1,5 +1,6 @@
 import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
+import { translateBulkDeleteError, groupDeletions } from '../../../lib/bulkDelete'
 
 // ── Debt repository ───────────────────────────────────────────────────────────
 // A deep module over the `debts` table. The interface is small
@@ -56,6 +57,54 @@ export function createDebtRepository(request = sbFetch) {
         body: JSON.stringify(updates),
         prefer: 'return=minimal',
       })
+    },
+
+    // Bulk edit: the same changes on many debts of this business, 100 ids per request. Returns the saved rows. The
+    // caller (debtBulkEdit.js) only ever sends due_date and, for debts recorded by hand, description.
+    async updateMany(businessId, debtIds, updates) {
+      const ids = [...new Set((debtIds || []).map(String))]
+      const rows = []
+      for (let i = 0; i < ids.length; i += 100) {
+        const chunk = ids.slice(i, i + 100)
+        const saved = await request(`debts?business_id=eq.${businessId}&id=in.(${chunk.join(',')})`, {
+          method: 'PATCH', body: JSON.stringify(updates), prefer: 'return=representation',
+        })
+        rows.push(...(Array.isArray(saved) ? saved : []))
+      }
+      return rows
+    },
+
+    // Deletes debts through delete_debts (carehub_20270113): only debts recorded by hand are deleted (kept in a copy
+    // for restore, audited); a debt from a credit sale or a purchase is kept and reported with the reason.
+    // Returns { deletion_id, deleted, kept: [{ id, name, reasons, ref }], not_found }.
+    async deleteMany(businessId, debtIds) {
+      try {
+        const result = await request('rpc/delete_debts', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_debt_ids: debtIds }) })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateBulkDeleteError(e, 'debt')
+      }
+    },
+
+    // Puts a deletion's debts back (same ids, amounts, status, recorder). Returns { restored, skipped_already_back,
+    // client_unlinked }.
+    async restoreDeleted(businessId, deletionId) {
+      try {
+        const result = await request('rpc/restore_deleted_debts', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_deletion_id: deletionId }) })
+        return Array.isArray(result) ? result[0] : result
+      } catch (e) {
+        throw translateBulkDeleteError(e, 'debt')
+      }
+    },
+
+    // Deletions of this business's debts, newest first, one entry per deletion.
+    async getDeletions(businessId) {
+      try {
+        const rows = await pagedQuery(request, `deleted_debts?business_id=eq.${businessId}&order=deleted_at.desc,id.asc&select=id,deletion_id,party_name,deleted_at,deleted_by_name,restored_at`)
+        return groupDeletions(rows, 'party_name')
+      } catch (e) {
+        throw translateBulkDeleteError(e, 'debt')
+      }
     },
 
     // Finds the open debt raised by a given sale or purchase, so settling the

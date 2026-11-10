@@ -8,7 +8,7 @@ const { navy, gray500, gray600, danger, dangerBg, success, successBg, warning, w
 // Deleting the marked records through a checked database function (delete_clients, delete_expenses): a confirmation,
 // then the result with anything kept and why, and Undo. `onDelete()` resolves to { deletion_id, deleted, kept,
 // not_found }; `onRestore(deletionId)` resolves to the restore result, worded by `describeRestore`. `notes` are the
-// points shown before deleting; `reasonText(reasons)` words why a record was kept; `names` lists a few marked records.
+// points shown before deleting; `reasonText(reasons, kept)` words why a record was kept; `names` lists a few marked records.
 export default function BulkDeleteModal({ noun, count, names = [], notes = [], reasonText = (r) => r.join(', '), keptHeading,
   describeRestore = () => '', onDelete, onRestore, onClose }) {
   const [busy, setBusy] = useState(false)
@@ -49,7 +49,7 @@ export default function BulkDeleteModal({ noun, count, names = [], notes = [], r
                 <AlertTriangle size={14} aria-hidden='true' /> {kept.length} kept{keptHeading ? ', ' + keptHeading : ''}
               </div>
               <ul aria-label={`${noun}s kept`} style={{ margin: 0, paddingLeft: 18, maxHeight: 180, overflowY: 'auto' }}>
-                {kept.map((k) => <li key={k.id}><strong>{k.name}</strong>: {reasonText(k.reasons)}</li>)}
+                {kept.map((k) => <li key={k.id}><strong>{k.name}</strong>: {reasonText(k.reasons, k)}</li>)}
               </ul>
             </div>
           )}
