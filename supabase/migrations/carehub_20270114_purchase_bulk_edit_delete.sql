@@ -1,11 +1,27 @@
 -- carehub_20270114_purchase_bulk_edit_delete
 --
--- Status: NOT APPLIED. Tested on PGlite (scripts/db-tests/purchaseBulkEditDelete.pglite.mjs) on top of
+-- Status: APPLIED TO PRODUCTION 2026-11-10 with the owner's approval (Supabase migration version 20261110134845),
+-- applied verbatim from this file (statements only). Tested first on PGlite
+-- (scripts/db-tests/purchaseBulkEditDelete.pglite.mjs, 56 checks) on top of
 -- carehub_20261229_purchase_editing_and_analytics, whose edit_purchase, purchase_items_normalized,
 -- purchase_line_received, can_edit_purchases and purchases_guard_direct_write match production byte for byte (md5 of
 -- the live bodies, read 2026-11-10), and the live apply_stock_change (docs/architecture/stock-ledger-live-snapshot.sql,
 -- md5 checked the same day), member_can_delete() (carehub_20270112_expense_bulk_delete) and the live
--- stamp_recorded_by() / keep_recorded_by() / pos_actor(). Apply only with the owner's approval and record the result.
+-- stamp_recorded_by() / keep_recorded_by() / pos_actor().
+-- After applying: 32 purchases, 24 payment rows, 5,378 stock movements, unchanged; deleted_purchases RLS on,
+-- authenticated SELECT only; bulk edit / delete / restore EXECUTE: authenticated only.
+-- Live probe (DO block that raised at the end; afterwards 32 / 24 / 5,378, 0 copies, 0 audit rows, Paracetamol stock
+-- 119 as before), on the carehub.test pharmacy's 2 purchases (recorded before line items) plus a purchase recorded in
+-- the probe the way the app does (3 x Paracetamol 500mg, ₦100 paid of ₦300, receive_stock, debt):
+--   cashier:                    bulk edit refused EDIT_NOT_ALLOWED; delete refused DELETE_NOT_ALLOWED
+--   owner of another business:  delete refused DELETE_NOT_ALLOWED
+--   owner bulk edit (all 3):    3 updated through edit_purchase, 0 skipped / failed; stock unchanged (122);
+--                               the debt's due date followed (2026-12-31)
+--   owner delete (all 3):       the probe purchase deleted, stock 122 -> 119, its payment and debt removed; the 2
+--                               summary purchases kept ('not_linked'); audit {deleted 1, kept 2, total 300, paid 100,
+--                               units taken back 3}
+--   owner restores:             1 restored; stock back to 122; purchase row, payment rows and debt identical to before
+--   anon:                       refused, permission denied for function delete_purchases
 --
 -- PROBLEM
 -- -------

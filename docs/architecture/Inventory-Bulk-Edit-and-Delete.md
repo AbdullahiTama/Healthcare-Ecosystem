@@ -214,7 +214,8 @@ with nothing to settle. The design follows from that.
 
 ## 10. Purchases: mark, edit, delete and restore (added 2026-11-10)
 
-Database: `supabase/migrations/carehub_20270114_purchase_bulk_edit_delete.sql` (status in its header). Purchases are
+Database: `supabase/migrations/carehub_20270114_purchase_bulk_edit_delete.sql`, applied to production 2026-11-10 with
+the owner's approval and probed (bulk edit, stock taken back and restored exactly, live; results in its header). Purchases are
 the most connected record: each put stock into Inventory through the stock ledger (often into a batch of its own), may
 have supplier payments (`purchase_payments`, cascade) and may have raised a "we owe" debt. Before this, a purchase
 could only be changed one at a time (Edit purchase) and never deleted: the direct-write guard refuses UPDATE and DELETE
