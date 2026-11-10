@@ -145,7 +145,8 @@ production 2026-11-10 with the owner's approval and probed (results in its heade
 
 ## 8. Expenses: mark, edit, delete and restore (added 2026-11-10)
 
-Database: `supabase/migrations/carehub_20270112_expense_bulk_delete.sql`.
+Database: `supabase/migrations/carehub_20270112_expense_bulk_delete.sql`, applied to production 2026-11-10 with the
+owner's approval and probed (an exact restore was confirmed live; results in its header).
 
 - **Mark and edit** (anyone who can log expenses): a tick box per row, "Select all N shown" (follows the filters),
   **Edit selected**: **category**, **date** (not in the future) and the **staff name as entered**. Not here on

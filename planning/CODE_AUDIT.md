@@ -32,7 +32,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A17 | Medium | Inventory (bulk delete) | Bulk delete / delete all and re-upload / restore through checked database functions | **Closed 2026-11-10**: applied with owner approval and probed |
 | A18 | Low | Data hygiene | 6 products have no `business_id` (visible to no business; untouched by any business action) | Open: review and remove or reassign |
 | A19 | Medium | Clients (bulk delete) | Client bulk delete and restore through checked database functions | **Closed 2026-11-10**: `carehub_20270111_client_bulk_delete` applied with owner approval and probed |
-| A20 | Medium | Expenses (bulk delete) | Expense bulk delete and restore need `carehub_20270112_expense_bulk_delete` | Open: apply with owner approval |
+| A20 | Medium | Expenses (bulk delete) | Expense bulk delete and restore with payment history | **Closed 2026-11-10**: `carehub_20270112_expense_bulk_delete` applied with owner approval and probed |
 
 ## 2. Items
 

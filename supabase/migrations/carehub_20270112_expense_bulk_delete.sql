@@ -1,9 +1,20 @@
 -- carehub_20270112_expense_bulk_delete
 --
--- Status: NOT APPLIED. Tested on PGlite (apps/carefind/src/test/expenses/expenseBulkDelete.db.test.js) with
--- carehub_20270107_expense_payments, the live stamp_recorded_by() / keep_recorded_by() triggers, and the live
--- current_business_ids(), is_business_owner(), is_platform_admin(), read 2026-11-10. Apply only with the owner's
--- approval and record the result here.
+-- Status: APPLIED TO PRODUCTION 2026-11-10 with the owner's approval (Supabase migration version 20261110094557),
+-- applied verbatim from this file (statements only). Tested first on PGlite
+-- (apps/carefind/src/test/expenses/expenseBulkDelete.db.test.js) with carehub_20270107_expense_payments, the live
+-- stamp_recorded_by() / keep_recorded_by() triggers, and the live current_business_ids(), is_business_owner(),
+-- is_platform_admin(), read 2026-11-10. After applying: 57 expenses and 57 payment rows, unchanged; deleted_expenses
+-- RLS on, authenticated SELECT only; delete/restore EXECUTE: authenticated only; member_can_delete: nobody.
+-- Live probe (DO block that raised at the end; afterwards 57 / 57, 0 copies, 0 audit rows), on the carehub.test
+-- pharmacy's 3 expenses:
+--   cashier (no delete permission):        refused DELETE_NOT_ALLOWED
+--   owner of another business:             refused DELETE_NOT_ALLOWED
+--   owner deletes all 3:                   3 deleted, 0 left, 0 payment rows left, 3 payment rows in the copies;
+--                                          audit {amount 166500, deleted 3, requested 3}
+--   owner restores:                        3 restored; expenses and payment rows identical to before (amount, paid
+--                                          amount, recorded_by and its name, date, created_at, every payment column)
+--   anon:                                  refused, permission denied for function delete_expenses
 --
 -- PROBLEM
 -- -------
