@@ -1,6 +1,17 @@
 -- carehub_20270115_purchase_export_audit
 --
--- Status: NOT APPLIED. Needs the owner's approval to apply to production (szdybxmgmhndoytqanfb).
+-- Status: APPLIED TO PRODUCTION 2026-11-11 with the owner's approval (Supabase migration version 20261111153144),
+-- applied verbatim from this file. The live definition was re-read just before and was unchanged.
+-- After applying: definition contains the purchases types; SECURITY DEFINER, search_path public, pg_temp; EXECUTE for
+-- authenticated and service_role only (no anon, no PUBLIC). Rolled-back live probe (a DO block that raised; audit_log
+-- held 33 rows before and after), on a real business with three of its accounts and another business's owner:
+--   Owner, purchases.csv / purchases.xlsx:                RECORDED, actor_type owner, includes_cost_data true
+--   staff on a role with canExportReports, both types:    RECORDED, actor_type staff, includes_cost_data true
+--   staff on a role with canExportReports = false:        REFUSED 42501 "Your role is not allowed to export data"
+--   owner of another business:                            REFUSED 42501 "You are not an active member of this business"
+--   purchases.pdf (any caller):                           REFUSED 22023 "Unknown export type"
+--   anon:                                                 REFUSED, permission denied for function
+-- Security advisor afterwards: no new finding for this function.
 -- Docs: docs/architecture/Purchases-Import-Export.md
 --
 -- PROBLEM

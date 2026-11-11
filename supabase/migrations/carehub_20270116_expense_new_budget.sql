@@ -1,6 +1,27 @@
 -- carehub_20270116_expense_new_budget
 --
--- Status: NOT APPLIED. Needs the owner's approval to apply to production (szdybxmgmhndoytqanfb).
+-- Status: APPLIED TO PRODUCTION 2026-11-11 with the owner's approval (Supabase migration version 20261111153408),
+-- applied verbatim from this file. set_expense_budget was re-read just before and was unchanged.
+-- After applying: RLS on expense_budget_history; authenticated SELECT only on it and on expense_budgets, anon nothing;
+-- both functions SECURITY DEFINER, search_path public, pg_temp, EXECUTE for authenticated and service_role only. The
+-- two existing budgets were unchanged (starts_on NULL, no history rows).
+-- Rolled-back live probe (a DO block that raised; budgets and history identical before and after), on the business
+-- that reported the budget problem (2026-11 budget 50,000; 50,700 spent 1-10 Nov, 0 after), as its Owner, a cashier
+-- on a role with export rights, its General Manager, and the owner of another business:
+--   1-4 amount 0 / start in December / start on 1 Nov / August with no budget:  each REFUSED with its sentence
+--   5   Owner starts 30,000 from 11 Nov:            ALLOWED (2026-11, 30000, starts_on 2026-11-11)
+--   6   history:                                    50,000 from 1 Nov to 10 Nov, spent 50,700, replaced by 30,000
+--   7   a second new budget on the same day:        REFUSED "must start after the current one (from 2026-11-11)"
+--   8-9 Edit to 35,000:                             start kept (2026-11-11); history 'edited' 30,000 -> 35,000
+--   10  Edit to the same amount:                    no history row added
+--   11-14 Owner INSERT/UPDATE/DELETE history, UPDATE starts_on directly:  REFUSED, permission denied
+--   15  cashier reads:                              2 history rows; budget 35,000 from 2026-11-11
+--   16-18 cashier / manager set a new budget, manager edits:  REFUSED 42501
+--   19-20 another business reads / sets:            0 rows / REFUSED 42501
+--   21-22 anon reads / sets:                        REFUSED, permission denied
+-- Security advisor afterwards: the day's baseline (8 groups, 241 findings) plus exactly one finding,
+-- authenticated_security_definer_function_executable for start_new_expense_budget, which is intended (the app's way to
+-- set a new budget; it refuses everyone but the Owner).
 -- Tested on PGlite: apps/carefind/src/test/expenses/expenseNewBudget.db.test.js, with the live
 -- current_business_ids(), is_business_owner(), is_platform_admin() and expense_effective_date(), and
 -- set_expense_budget() read verbatim from the live database on 2026-11-11 (it matched carehub_20270103).

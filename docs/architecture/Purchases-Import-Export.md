@@ -1,8 +1,9 @@
 # Purchases: bulk upload and export (Excel / CSV)
 
 2026-11-11. Pending item 1 of "Still Pending Issues – CareFind Hub". Migration
-`supabase/migrations/carehub_20270115_purchase_export_audit.sql` (**not applied**; needs the owner's approval).
-CODE_AUDIT item A23.
+`supabase/migrations/carehub_20270115_purchase_export_audit.sql`, **applied to production 2026-11-11** (version
+20261111153144) with the owner's approval; the rolled-back live probe passed (results in the migration header).
+CODE_AUDIT item A23 (closed).
 
 ## What the user gets
 
@@ -77,7 +78,7 @@ Text cells are neutralised against spreadsheet formula injection (`neutraliseFor
   only; it is never uploaded or stored.
 - **Export** carries costs. It is offered to the Owner and roles with *Export reports*, and the database decides again in
   `record_export_audit` (Owner or `canExportReports`), recording `includes_cost_data = true`.
-- **Before A23's migration is applied**, the audit call fails with "Unknown export type" (reported as *failed*, not
+- **Before A23's migration was applied** (until 2026-11-11), the audit call fails with "Unknown export type" (reported as *failed*, not
   *refused*), so the file is saved with the warning that no audit record was written. The data itself is already
   readable by those users through the Purchases screen.
 

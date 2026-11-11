@@ -106,8 +106,9 @@ budget. That moves it from the browser to the database; from then on it shows on
 ## Set new budget (2026-11-11)
 
 Pending item 2 of "Still Pending Issues – CareFind Hub". Migration
-`supabase/migrations/carehub_20270116_expense_new_budget.sql`, **not applied** (needs the owner's approval). CODE_AUDIT
-item A24.
+`supabase/migrations/carehub_20270116_expense_new_budget.sql`, **applied to production 2026-11-11** (version
+20261111153408) with the owner's approval; the rolled-back live probe passed (results in the migration header).
+CODE_AUDIT item A24 (closed).
 
 **Report.** "Users cannot set a new budget after the existing budget is exhausted. Only the Edit option is available."
 With one budget per month and `set_expense_budget` overwriting it, raising a used-up ₦50,000 to ₦80,000 on the 18th
@@ -151,7 +152,7 @@ refuse anyone but the Owner (42501); no INSERT/UPDATE/DELETE grant on either tab
 | `apps/carehub/src/modules/expenses/Expenses.newBudget.test.jsx` (7) | used-up budget → Set new budget → preview → saved, counted from the start, old budget in history; validation; failed save; staff see it but cannot set one; before the update (Edit only); failed history read with retry; Edit after a new budget |
 | `expenseRules.test.js`, `repositories/index.test.js` | start day, spending since, start range, validation; the queries and confirmations |
 
-**Manual check after applying:** as the Owner on a month whose budget is used up, set a new budget from today; the
+**Manual check (still to do in the app):** as the Owner on a month whose budget is used up, set a new budget from today; the
 tracker counts from today and Earlier budgets shows the old one with its spending; as staff, the same figures and no
 button; Edit the new budget and confirm the start stays.
 

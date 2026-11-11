@@ -35,8 +35,8 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A20 | Medium | Expenses (bulk delete) | Expense bulk delete and restore with payment history | **Closed 2026-11-10**: `carehub_20270112_expense_bulk_delete` applied with owner approval and probed |
 | A21 | Medium | Debts (bulk delete) | Debt bulk delete and restore; sale / purchase debts kept (they are synced by source) | **Closed 2026-11-10**: `carehub_20270113_debt_bulk_delete` applied with owner approval and probed |
 | A22 | Medium | Purchases (bulk edit / delete) | Purchase bulk edit through edit_purchase; delete takes stock back (kept when sold), restore puts it back | **Closed 2026-11-10**: `carehub_20270114_purchase_bulk_edit_delete` applied with owner approval and probed |
-| A23 | Low | Purchases (import / export) | Bulk upload and Excel/CSV export built; the export audit needs `purchases.*` in `record_export_audit`'s allow-list | Open: `carehub_20270115_purchase_export_audit` awaits owner approval |
-| A24 | Medium | Expenses (set new budget) | A used-up budget could only be edited (history rewritten, old spending counted against the new amount) | Open: `carehub_20270116_expense_new_budget` awaits owner approval |
+| A23 | Low | Purchases (import / export) | Bulk upload and Excel/CSV export; the export audit needed `purchases.*` in `record_export_audit`'s allow-list | **Closed 2026-11-11**: `carehub_20270115_purchase_export_audit` applied with owner approval and probed |
+| A24 | Medium | Expenses (set new budget) | A used-up budget could only be edited (history rewritten, old spending counted against the new amount) | **Closed 2026-11-11**: `carehub_20270116_expense_new_budget` applied with owner approval and probed |
 | A25 | Medium | Data exposure (cost price) | `products.cost_price` is readable by every member of a business; the new POS cost switch is display-only | Open: owner decision |
 
 ## 2. Items
@@ -313,7 +313,7 @@ header); live data unchanged afterwards.
 
 **Close by:** look at what created them (names and created_at), then delete them or attach them to their business.
 
-### A23. Purchases import and export: export audit migration (Low)
+### A23. Purchases import and export: export audit migration (Low) — closed 2026-11-11
 
 **What (2026-11-11):** purchases can be uploaded from Excel/CSV and exported to Excel/CSV
 ([Purchases-Import-Export.md](../docs/architecture/Purchases-Import-Export.md)). Uploads need no database change. Exports
@@ -322,10 +322,12 @@ are audited through `record_export_audit`, whose allow-list (read live 2026-11-1
 `carehub_20270115_purchase_export_audit` is applied the export is saved with "the audit record could not be saved".
 Verified by 16 PGlite checks (`scripts/db-tests/purchaseExportAudit.pglite.mjs`).
 
-**Close by:** apply with the owner's approval, run the rolled-back probe in its header, and confirm an export writes an
-`export.created` row with `includes_cost_data = true`.
+**Closed 2026-11-11:** applied with the owner's approval (version `20261111153144`). Rolled-back live probe as a real
+Owner, a staff member on an export role, a staff member without it and another business's owner: purchase exports
+recorded as cost data for the first two, refused for the others and for anon and unknown types; nothing persisted.
+Results in the migration header.
 
-### A24. Expenses: set a new budget once one is used up (Medium)
+### A24. Expenses: set a new budget once one is used up (Medium) — closed 2026-11-11
 
 **What (2026-11-11):** only Edit existed, which overwrote the month's budget: the overspend disappeared and the spending
 that exhausted the old budget counted against the new one. `carehub_20270116_expense_new_budget` adds `starts_on`, an
@@ -334,9 +336,11 @@ replaces. The app offers Set new budget only once the migration is applied. Veri
 (`apps/carefind/src/test/expenses/expenseNewBudget.db.test.js`) with the live helpers and the live `set_expense_budget`
 (read 2026-11-11). Details: [Expense-Budgets.md](../docs/architecture/Expense-Budgets.md) "Set new budget".
 
-**Close by:** apply with the owner's approval, run a rolled-back probe (Owner starts a new budget on a used-up month;
-staff and another business refused; history readable by members only), confirm the security advisor shows only the
-intended `authenticated_security_definer_function_executable` finding for `start_new_expense_budget`.
+**Closed 2026-11-11:** applied with the owner's approval (version `20261111153408`). Rolled-back live probe (22 checks)
+on the business that reported A15, whose ₦50,000 November budget was already used up (₦50,700 by the 10th): the Owner's
+new budget closed the old one with that spending in the history and counted from its start; staff, managers, another
+business and anon were refused; nobody could write the history directly. Security advisor: the baseline plus the one
+intended finding for `start_new_expense_budget`. Results in the migration header.
 
 ### A25. Cost price is readable by every member of a business (Medium, owner decision)
 
