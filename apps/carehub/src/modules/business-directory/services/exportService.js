@@ -68,12 +68,13 @@ export function buildJson(rows) {
   return JSON.stringify({ exported_at: new Date().toISOString(), count: rows.length, businesses: rows }, null, 2)
 }
 
-export async function buildXlsx(rows, columns = EXPORT_COLUMNS) {
+// `sheetName` lets other modules (Purchases) reuse it; `c.width` / `c.numFmt` are optional per column.
+export async function buildXlsx(rows, columns = EXPORT_COLUMNS, { sheetName = 'Businesses' } = {}) {
   const ExcelJS = (await import('exceljs')).default
   const wb = new ExcelJS.Workbook()
   wb.creator = 'CareHub'
-  const ws = wb.addWorksheet('Businesses')
-  ws.columns = columns.map((c) => ({ header: c.header, key: c.key, width: Math.max(14, c.header.length + 4) }))
+  const ws = wb.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 1 }] })
+  ws.columns = columns.map((c) => ({ header: c.header, key: c.key, width: c.width || Math.max(14, c.header.length + 4), style: c.numFmt ? { numFmt: c.numFmt } : {} }))
   ws.getRow(1).font = { bold: true }
   rows.forEach((r) => {
     const o = {}

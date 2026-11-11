@@ -230,6 +230,33 @@ export function createPurchaseRepository(request = sbFetch) {
       }
     },
 
+    // Every purchase matching the list's filters (the getPage arguments: search,
+    // from/to supply dates, supplierKey), page by page.
+    async getAllPages(businessId, filters = {}, { pageSize = 500, onProgress } = {}) {
+      const all = []
+      for (;;) {
+        const page = await this.getPage(businessId, { ...filters, offset: all.length, limit: pageSize })
+        all.push(...(page || []))
+        onProgress?.(all.length)
+        if (!page || page.length < pageSize) break
+      }
+      return all
+    },
+
+    // Every purchase matching the list's filters (the getPage arguments), with
+    // its invoice lines (`items`), for the export. get_purchases_page does not
+    // return items, so they are read by id in chunks, scoped to the business.
+    async getAllForExport(businessId, filters = {}, { pageSize = 500, onProgress } = {}) {
+      const all = await this.getAllPages(businessId, filters, { pageSize, onProgress })
+      const items = new Map()
+      for (let i = 0; i < all.length; i += 100) {
+        const ids = all.slice(i, i + 100).map(p => p.id)
+        const rows = await request(`purchases?business_id=eq.${businessId}&id=in.(${ids.join(',')})&select=id,items`)
+        for (const r of rows || []) items.set(String(r.id), r.items)
+      }
+      return all.map(p => ({ ...p, items: items.get(String(p.id)) ?? null }))
+    },
+
     async getById(purchaseId, businessId) {
       const rows = await request(`purchases?id=eq.${purchaseId}&business_id=eq.${businessId}&select=*`)
       return (Array.isArray(rows) ? rows[0] : rows) || null

@@ -87,7 +87,7 @@ export function SectionHead({ title, sub, btn, onBtn, extraBtn, extraBtns }) {
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {secondaries.map((b) => (
-          <button key={b.label} onClick={b.onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, background: 'white', color: theme.textDark, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+          <button key={b.label} type='button' onClick={b.onClick} disabled={b.disabled} title={b.title} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, background: 'white', color: theme.textDark, fontWeight: 700, fontSize: 13, cursor: b.disabled ? 'not-allowed' : 'pointer', opacity: b.disabled ? 0.6 : 1 }}>
             {b.icon} {b.label}
           </button>
         ))}

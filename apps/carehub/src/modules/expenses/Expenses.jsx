@@ -1,9 +1,10 @@
 import { businessDateOf, businessDateTime } from '../../lib/businessDay'
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus, ChevronDown, Search, Pencil, Trash2, RotateCcw } from 'lucide-react'
+import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus, ChevronDown, Search, Pencil, Trash2, RotateCcw, RefreshCw } from 'lucide-react'
 import { expenseRepository } from './repositories'
 import { useQueryParamAction } from '../../hooks/useQueryParamAction'
-import { validateExpense, newExpenseId, budgetSummary, expenseDate, inMonth, sumExpenses, expensePaymentStatus, expenseBalance } from './expenseRules'
+import { validateExpense, newExpenseId, budgetSummary, expenseDate, expensePaymentStatus, expenseBalance, budgetStartDay, spentSince, newBudgetStartRange } from './expenseRules'
+import { NewBudgetModal, BudgetHistory } from './components/NewBudget'
 import { useExpenseBudget } from './useExpenseBudget'
 import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
 import { ExpensePaymentFields, RecordExpensePaymentModal, ExpensePaymentSummary, ExpenseStatusPill } from './components/ExpensePayment'
@@ -73,6 +74,13 @@ export default function Expenses({ brand, role, perms, staffName }) {
   const budgetState = useExpenseBudget(brand?.id, budgetMonth, { isOwner })
   const budget = budgetState.status === 'ready' ? budgetState.amount : 0
   const carriedFrom = budget > 0 && budgetState.fromMonth && budgetState.fromMonth !== budgetMonth ? budgetState.fromMonth : null
+  // A budget set mid-month (Set new budget) counts spending from the day it began; otherwise from the 1st.
+  const budgetStart = budgetStartDay({ month: budgetState.fromMonth, startsOn: budgetState.startsOn }, budgetMonth)
+  const startedMidMonth = budget > 0 && budgetStart !== budgetMonth + '-01'
+  const newBudgetRange = newBudgetStartRange(budgetMonth, budgetStart, todayDate())
+  // Set new budget: the Owner, once the update is installed, while a day is left in the month after the current start.
+  const canStartNew = isOwner && budget > 0 && budgetState.status === 'ready' && budgetState.newBudgetAvailable && !budgetState.onDevice && !!newBudgetRange
+  const [showNewBudget, setShowNewBudget] = useState(false)
 
   useEffect(() => { load() }, [brand?.id])
   useEffect(() => { setShownCount(PAGE_SIZE) }, [filters])
@@ -103,11 +111,11 @@ export default function Expenses({ brand, role, perms, staffName }) {
   const years = useMemo(() => yearsOf(expenses.map(expenseDate), todayDate()), [expenses])
   const activeCount = activeExpenseFilterCount(filters, thisMonth)
   const filterLabel = describeExpenseFilters(filters, { fmt })
-  // Budget spending is the whole month, whatever else is filtered.
+  // Budget spending is the budget's month from the day it began, whatever else is filtered.
   // Payment status needs carehub_20270107_expense_payments. Until it is applied the rows have no amount_paid: every
   // expense reads as paid, the form records paid expenses only and nothing offers Record payment.
   const paymentsAvailable = expenses.length === 0 || expenses.some(e => e.amount_paid !== undefined)
-  const monthSpent = useMemo(() => sumExpenses(expenses.filter(e => inMonth(e, budgetMonth))), [expenses, budgetMonth])
+  const monthSpent = useMemo(() => spentSince(expenses, budgetMonth, budgetStart), [expenses, budgetMonth, budgetStart])
 
   async function save() {
     if (saveInFlight.current) return
@@ -210,7 +218,7 @@ export default function Expenses({ brand, role, perms, staffName }) {
     setSavingBudget(false)
   }
 
-  // Budget spending is the whole budget month, whatever else is filtered.
+  // Budget spending: the budget's month from the day it began, whatever else is filtered.
   const total = monthSpent
   // Spending that could not be read (or is still loading) must not show as "nothing spent, all remaining".
   const spendingKnown = !loading && !loadError
@@ -219,6 +227,7 @@ export default function Expenses({ brand, role, perms, staffName }) {
   const pctUsed = spendingKnown ? summary.pctUsed : 0
   const overBudget = spendingKnown && summary.over
   const nearLimit = spendingKnown && summary.near
+  const exhausted = spendingKnown && summary.exhausted
   const money = (n) => (spendingKnown ? fmt(n) : '—')
 
   const byCategory = {}
@@ -264,6 +273,12 @@ export default function Expenses({ brand, role, perms, staffName }) {
               <Target size={14} /> {budget > 0 ? 'Edit budget' : 'Set budget'}
             </button>
           )}
+          {canStartNew && (
+            <button onClick={() => setShowNewBudget(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${exhausted ? tealDeep : border}`, background: exhausted ? tealMist : 'white', color: exhausted ? tealDeep : navy, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
+              <RefreshCw size={14} aria-hidden='true' /> Set new budget
+            </button>
+          )}
           {canBulkDelete && (
             <button onClick={() => setShowDeleted(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
               <RotateCcw size={14} aria-hidden='true' /> Recently deleted
@@ -293,7 +308,7 @@ export default function Expenses({ brand, role, perms, staffName }) {
                 {overBudget ? <><AlertCircle size={15} color={danger} /> Over budget!</> : nearLimit ? <><AlertTriangle size={15} color={warning} /> Approaching limit</> : <><CheckCircle size={15} color={success} /> Budget tracker</>}
               </div>
               <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>
-                {budgetMonth} · {carriedFrom ? 'Carried over from ' + carriedFrom + ' budget' : 'Set by Owner'}
+                {budgetMonth} · {carriedFrom ? 'Carried over from ' + carriedFrom + ' budget' : startedMidMonth ? 'New budget from ' + budgetStart : 'Set by Owner'}
                 {budgetState.onDevice && ' · saved on this device only'}
               </div>
             </div>
@@ -337,7 +352,13 @@ export default function Expenses({ brand, role, perms, staffName }) {
 
           {overBudget && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '12px', padding: '10px 14px', borderRadius: theme.radius.md, background: dangerBg, border: `1px solid ${danger}`, fontSize: '13px', color: danger, fontWeight: '700' }}>
-              <AlertTriangle size={14} /> You have exceeded the monthly budget by {fmt(Math.abs(remaining))}! Please review expenses.
+              <AlertTriangle size={14} /> You have exceeded the {startedMidMonth ? 'budget' : 'monthly budget'} by {fmt(Math.abs(remaining))}! Please review expenses.
+            </div>
+          )}
+          {exhausted && canStartNew && (
+            <div role='status' style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginTop: '10px', padding: '10px 14px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12.5px', color: navy }}>
+              <span>This budget is used up. Set a new one to keep tracking: this one stays in the budget history with what was spent.</span>
+              <TealBtn onClick={() => setShowNewBudget(true)} style={{ padding: '8px 14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: 6 }}><RefreshCw size={13} aria-hidden='true' /> Set new budget</TealBtn>
             </div>
           )}
           {nearLimit && (
@@ -345,6 +366,12 @@ export default function Expenses({ brand, role, perms, staffName }) {
               <AlertTriangle size={14} /> {pctUsed}% of the budget used. Only {fmt(remaining)} is left this month.
             </div>
           )}
+        </Card>
+      )}
+      {/* Budgets replaced (Set new budget) or edited this month, kept with what was spent. */}
+      {budgetState.status === 'ready' && (budgetState.history.length > 0 || budgetState.historyStatus === 'error') && (
+        <Card style={{ padding: '4px 20px 14px', marginBottom: '20px' }}>
+          <BudgetHistory status={budgetState.historyStatus} history={budgetState.history} month={budgetMonth} onRetry={budgetState.reloadHistory} />
         </Card>
       )}
 
@@ -516,7 +543,7 @@ export default function Expenses({ brand, role, perms, staffName }) {
                 <span style={{ fontWeight: '700', color: navy }}>{fmt(parseFloat(budgetInput))}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                <span style={{ color: gray500 }}>Already spent ({budgetMonth})</span>
+                <span style={{ color: gray500 }}>Already spent ({startedMidMonth ? 'since ' + budgetStart : budgetMonth})</span>
                 <span style={{ fontWeight: '700', color: danger }}>{money(total)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', borderTop: `1px solid ${border}`, paddingTop: '8px', marginTop: '4px' }}>
@@ -529,6 +556,15 @@ export default function Expenses({ brand, role, perms, staffName }) {
           )}
         </div>
       </Modal>
+
+      {showNewBudget && newBudgetRange && (
+        <NewBudgetModal month={budgetMonth} current={{ amount: budget, startsOn: budgetStart }} range={newBudgetRange} expenses={expenses} spendingKnown={spendingKnown}
+          onSave={async (v) => {
+            await budgetState.startNew(v.amount, v.startsOn)
+            showToast('New budget of ' + fmt(v.amount) + ' from ' + v.startsOn + '. The previous budget is kept in the budget history.', { type: 'success' })
+          }}
+          onClose={() => setShowNewBudget(false)} />
+      )}
 
       {/* Add Expense Modal */}
       <Modal show={showAdd} onClose={closeAdd} title='Log Expense'

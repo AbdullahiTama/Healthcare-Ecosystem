@@ -127,22 +127,25 @@ function cellText(v) {
 /**
  * File/Blob -> array of rows (strings). Rejects oversized files, legacy .xls and
  * anything that is not .csv / .xlsx before reading it.
+ *
+ * Shared by other bulk uploads (Purchases): `sheetName` is the worksheet read
+ * first (else the first sheet), `columnCount` the minimum cells read per row.
  */
-export async function readSpreadsheet(file) {
+export async function readSpreadsheet(file, { sheetName = 'Businesses', columnCount = TEMPLATE_COLUMNS.length, maxBytes = MAX_FILE_BYTES } = {}) {
   if (!file) throw new Error('Choose a file first.')
-  if (file.size > MAX_FILE_BYTES) throw new Error('This file is larger than ' + MAX_FILE_BYTES / 1024 / 1024 + ' MB. Split it into smaller files.')
+  if (file.size > maxBytes) throw new Error('This file is larger than ' + maxBytes / 1024 / 1024 + ' MB. Split it into smaller files.')
   const name = String(file.name || '').toLowerCase()
   if (name.endsWith('.csv') || name.endsWith('.txt')) return parseCsv(await file.text())
   if (name.endsWith('.xlsx')) {
     const ExcelJS = (await import('exceljs')).default
     const wb = new ExcelJS.Workbook()
     await wb.xlsx.load(await file.arrayBuffer())
-    const ws = wb.getWorksheet('Businesses') || wb.worksheets[0]
+    const ws = wb.getWorksheet(sheetName) || wb.worksheets[0]
     if (!ws) throw new Error('The workbook has no sheets.')
     const rows = []
     ws.eachRow({ includeEmpty: false }, (row) => {
       const cells = []
-      const n = Math.max(row.cellCount, TEMPLATE_COLUMNS.length)
+      const n = Math.max(row.cellCount, columnCount)
       for (let c = 1; c <= n; c++) cells.push(cellText(row.getCell(c).value))
       rows.push(cells)
     })

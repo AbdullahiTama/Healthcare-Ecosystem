@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Pause, Clock, CreditCard, Camera, ShoppingCart,
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
-  DollarSign, Repeat, Divide, Search, Package, PackageX, Clipboard, ReceiptText, ChevronRight, UserPlus, CloudOff,
+  DollarSign, Repeat, Divide, Search, Package, PackageX, Clipboard, ReceiptText, ChevronRight, UserPlus, CloudOff, Eye, EyeOff,
 } from 'lucide-react'
 import { saleRepository, HeldSaleClosedError } from './repositories'
 import { usePersistentDraft } from '../../hooks/usePersistentDraft'
@@ -31,6 +31,7 @@ import CustomerPicker from './CustomerPicker'
 import NewCustomerForm from './NewCustomerForm'
 import SaleDetailModal from './SaleDetailModal'
 import { creditCustomerFor } from './customerPick'
+import { unitCost, marginPct, saleCostSummary, readShowCost, writeShowCost } from './costView'
 import { isDuplicateError } from '../../lib/dbErrors'
 import { startCameraScan } from '../../lib/barcodeScanner'
 import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
@@ -92,7 +93,8 @@ export default function POS(props) {
 
 // One product on the POS grid. Memoised: typing in the search box redraws only
 // the cards whose product or cart quantity changed, not every card.
-const ProductCard = memo(function ProductCard({ p, qty, onAdd }) {
+// `showCost`: the user may see costs and has turned them on (cost and margin under the price).
+const ProductCard = memo(function ProductCard({ p, qty, onAdd, showCost = false }) {
   const service = isService(p)
   const low = !service && p.stock > 0 && p.stock <= (p.reorder_level || 5)
   const Icon = productIcon(p)
@@ -112,6 +114,7 @@ const ProductCard = memo(function ProductCard({ p, qty, onAdd }) {
       <div>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: navy, lineHeight: 1.3, textTransform: 'uppercase' }}>{p.name}</div>
         <div style={{ fontSize: 14, fontWeight: 900, color: navy, marginTop: 4 }}>{fmt(p.price)}</div>
+        {showCost && !service && <CostLine price={p.price} cost={unitCost(p)} />}
       </div>
       <button type='button' onClick={() => onAdd(p)} aria-label={`Add ${p.name}${qty > 0 ? ` (${qty} in sale)` : ''}`}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '8px 0', borderRadius: theme.radius.sm, border: `1px solid ${qty > 0 ? tealDeep : border}`, background: qty > 0 ? tealMist : 'white', color: qty > 0 ? tealDeep : navy, fontWeight: 700, fontSize: 12, cursor: 'pointer', marginTop: 'auto' }}>
@@ -120,6 +123,16 @@ const ProductCard = memo(function ProductCard({ p, qty, onAdd }) {
     </div>
   )
 })
+
+// Cost and margin of one unit, under its price. "No cost set" when none is recorded.
+function CostLine({ price, cost }) {
+  const m = marginPct(price, cost)
+  return (
+    <div style={{ fontSize: 11, fontWeight: 600, color: gray500, marginTop: 2 }} data-testid='pos-cost'>
+      {cost == null ? 'No cost set' : <>Cost {fmt(cost)}{m != null && <span style={{ color: m < 0 ? danger : success, fontWeight: 800 }}> · {m}%</span>}</>}
+    </div>
+  )
+}
 
 function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   // Catalog load state from BusinessDashboard (inventory/hooks/useProductCatalog.js).
@@ -202,6 +215,14 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const { isMobile } = useBreakpoint()
   const navigate = useNavigate()
+  // Cost price at a glance (POS-Cost-Visibility.md): the Owner, or a role granted "See cost prices at the POS".
+  // Off until turned on, and remembered per business and staff member on this device. Display only.
+  const canViewCost = role === 'Owner' || !!perms?.canViewCostPrice
+  const costScope = (brand?.id || '') + ':' + (auth?.staff?.id || 'owner')
+  const [costOn, setCostOn] = useState(() => readShowCost(costScope))
+  useEffect(() => { setCostOn(readShowCost(costScope)) }, [costScope])
+  const showCost = canViewCost && costOn
+  const toggleCost = () => setCostOn(on => { writeShowCost(costScope, !on); console.info('[pos] cost view', !on ? 'shown' : 'hidden'); return !on })
 
   // React Query hooks
   const { data: settings } = useSettings(brand?.id)
@@ -379,6 +400,10 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const sub = cart.reduce((s, c) => s + c.price * c.qty, 0)
   const discAmt = disc ? (discPct ? Math.round(sub * parseFloat(disc) / 100) : parseFloat(disc) || 0) : 0
   const total = Math.max(0, sub - discAmt)
+  // The catalogue's current cost of each cart line (the line itself may predate a cost change).
+  const productById = useMemo(() => new Map(products.map(p => [p.id, p])), [products])
+  const lineCost = (item) => unitCost(productById.get(item.id) || item)
+  const costSummary = showCost ? saleCostSummary(cart, lineCost, total) : null
   const change = method === 'Cash' && cash ? parseFloat(cash) - total : 0
   const splitTotal = method === 'Split' ? Object.values(splitAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0) : 0
 
@@ -1015,6 +1040,12 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: tealDeep, cursor: 'pointer', flexShrink: 0 }}>
               <ReceiptText size={17} />
             </button>
+            {canViewCost && (
+              <button type='button' onClick={toggleCost} aria-pressed={showCost} title={showCost ? 'Hide cost prices' : 'Show cost prices'} aria-label={showCost ? 'Hide cost prices' : 'Show cost prices'}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, borderRadius: theme.radius.md, border: `1px solid ${showCost ? tealDeep : border}`, background: showCost ? tealMist : 'white', color: tealDeep, cursor: 'pointer', flexShrink: 0 }}>
+                {showCost ? <EyeOff size={17} aria-hidden='true' /> : <Eye size={17} aria-hidden='true' />}
+              </button>
+            )}
           </div>
 
           {/* Category pills */}
@@ -1116,7 +1147,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
             </div>
           ) : (
             <>
-              {sellable.slice(0, gridLimit).map(p => <ProductCard key={p.id} p={p} qty={qtyInCart[p.id] || 0} onAdd={add} />)}
+              {sellable.slice(0, gridLimit).map(p => <ProductCard key={p.id} p={p} qty={qtyInCart[p.id] || 0} onAdd={add} showCost={showCost} />)}
               {sellable.length > gridLimit && (
                 <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap', padding: '6px 0 4px', fontSize: 12, color: gray500 }}>
                   <span>Showing {gridLimit.toLocaleString()} of {sellable.length.toLocaleString()} products. Type more of the name to narrow the list.</span>
@@ -1196,6 +1227,15 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
                   ) : (
                     <div style={{ fontSize: 11.5, color: gray400, marginTop: 1 }}>{fmt(item.price)} each</div>
                   )}
+                  {showCost && (() => {
+                    const c = lineCost(item)
+                    const profit = c == null ? null : (item.price - c) * item.qty
+                    return (
+                      <div style={{ fontSize: 11, fontWeight: 600, color: gray500, marginTop: 2 }} data-testid='pos-line-cost'>
+                        {c == null ? 'No cost set' : <>Cost {fmt(c)} each · <span style={{ color: profit < 0 ? danger : success, fontWeight: 800 }}>{profit < 0 ? 'loss ' + fmt(-profit) : 'profit ' + fmt(profit)}</span></>}
+                      </div>
+                    )
+                  })()}
                 </div>
                 <div style={{ fontWeight: 800, fontSize: 13, color: navy, flexShrink: 0 }}>{fmt(item.price * item.qty)}</div>
               </div>
@@ -1232,6 +1272,18 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
               <span style={{ fontSize: 14, fontWeight: 800, color: navy }}>Total</span>
               <span style={{ fontSize: 21, fontWeight: 900, color: navy }}>{fmt(total)}</span>
             </div>
+            {costSummary && cart.length > 0 && (
+              <div role='status' data-testid='pos-sale-cost' style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', fontSize: 12, color: gray600, padding: '6px 8px', borderRadius: theme.radius.sm, background: bg }}>
+                {costSummary.profit == null ? <span>No cost set for these products</span> : (
+                  <>
+                    <span>Est. profit{costSummary.missing ? ' (' + costSummary.missing + ' without cost)' : ''}</span>
+                    <span style={{ fontWeight: 800, color: costSummary.profit < 0 ? danger : success }}>
+                      {fmt(costSummary.profit)}{costSummary.marginPct != null ? ' · ' + costSummary.marginPct + '%' : ''}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Payment method chips */}

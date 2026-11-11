@@ -1,19 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Truck, CreditCard, Hourglass, Search, ChevronDown, History, CheckCircle, Pencil, Trash2, RotateCcw } from 'lucide-react'
+import { Truck, CreditCard, Hourglass, Search, ChevronDown, History, CheckCircle, Pencil, Trash2, RotateCcw, Upload, Download } from 'lucide-react'
 import { purchaseRepository } from './repositories'
 import { useQueryParamAction } from '../../hooks/useQueryParamAction'
-// Product writes go through the inventory seam: replenishment must be atomic
-// now that sales decrement stock server-side (C5/C12).
-import { productRepository } from '../inventory/repositories'
-// Recording a purchase composes three aggregates: the purchase record (above),
-// inventory replenishment, and the debt raised by any shortfall. Each is owned
-// by its own module's repository rather than re-derived here.
-import { debtRepository } from '../debts/repositories'
+// Recording a purchase composes three aggregates (the purchase record, inventory
+// replenishment through the stock ledger, and the debt raised by any shortfall):
+// recordPurchase.js, shared with the bulk upload.
 import { fmt, fmtDate, todayDate } from '../../lib/utils'
-import { purchaseExpirySummary } from './expirySummary'
-import { findDuplicate } from '../../lib/productMatches'
-import { blankItem, isBlankItem, findProductByBarcode, groupLinesByProduct } from './lineItems'
+import { blankItem, isBlankItem } from './lineItems'
 import { usePersistentDraft } from '../../hooks/usePersistentDraft'
 import { useAuth } from '../../providers/AuthProvider'
 import { upsertProducts } from '../inventory/productListState'
@@ -21,9 +15,9 @@ import { PurchasePaymentModal, SupplierBalances, purchaseStatus } from './Suppli
 import PurchaseDetailModal from './PurchaseDetail'
 import EditPurchaseModal from './EditPurchase'
 import PurchaseHistory from './PurchaseHistory'
-import PurchaseForm, { formLineProblems, formTotal } from './PurchaseForm'
+import PurchaseForm, { formLineProblems } from './PurchaseForm'
 import { useSupplierDirectory, useProductInsights } from './hooks'
-import { purchaseItemsFromForm } from './purchaseInvoice'
+import { recordPurchase, resolveExistingProduct, NEW_PRODUCT_MARKUP } from './recordPurchase'
 import { usePlanGate } from '../../hooks/usePlanGate'
 import { restrictedMessage } from '../../lib/planStatus'
 import { isMissingObject } from '../../lib/dbErrors'
@@ -33,16 +27,17 @@ import SelectionBar from '../../components/SelectionBar'
 import BulkDeleteModal from '../../components/BulkDeleteModal'
 import RecentlyDeletedModal from '../../components/RecentlyDeletedModal'
 import PurchaseBulkEditModal from './components/PurchaseBulkEditModal'
+import PurchaseImportModal from './components/PurchaseImportModal'
+import PurchaseExportModal from './components/PurchaseExportModal'
+import { duplicateKey } from './purchaseImport'
+import { exportPurchases } from './purchaseExport'
+import { auditRepository } from '../audit/repositories'
 import { runPurchaseBulkEdit, purchaseKeptText, purchaseLabel } from './purchaseBulkEdit'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, RedBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, warning, warningBg, success } = theme
 
-// Margin applied to newly created products from a purchase so they are
-// immediately sellable (stock is also set). Existing products keep their
-// own selling price; only stock and cost are updated.
-const NEW_PRODUCT_MARKUP = 1.5
 const PAGE_SIZE = 50
 
 // A restore that could not put some purchases back (a product or batch they stocked was deleted since).
@@ -114,6 +109,11 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
   // Deleting takes stock back and removes payments and the debt with the purchase: the Owner, or a role allowed both
   // to delete and to edit purchases (delete_purchases checks the same).
   const canDeletePurchases = canEditPurchases && (role === 'Owner' || !!perms?.canDelete)
+  // Exports carry costs: the Owner, or a role allowed to export (record_export_audit checks the same and refuses
+  // anyone else before the file is saved).
+  const canExport = role === 'Owner' || !!perms?.canExportReports
+  const [showImport, setShowImport] = useState(false)
+  const [showExport, setShowExport] = useState(false)
 
   // The Record Purchase form is kept on this device as it is typed, scoped per
   // business AND per staff member: on a shared till one person's half-entered
@@ -251,14 +251,69 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
     }
   }
 
+  // ── Bulk upload (purchaseImport.js) and export (purchaseExport.js) ──────────────────────────────────────────
+  // Purchases already recorded in the file's supply dates, to spot a file uploaded twice.
+  async function loadExistingKeys({ from, to }) {
+    const rows = await purchaseRepository.getAllPages(brand.id, { from, to })
+    return new Set(rows.map(p => duplicateKey(p.supplier_name, p.supply_date || String(p.created_at || '').slice(0, 10), p.total_cost)))
+  }
+  function onImportDone(r) {
+    const changed = r.recorded.flatMap(x => x.result?.changedRows || [])
+    if (changed.length && setProducts) setProducts(prev => upsertProducts(prev, changed))
+    if (r.recorded.length) { load(); refreshRelated() }
+  }
+  async function exportList(format) {
+    if (!plan.allow('exporting')) return false
+    let purchasesToExport
+    try {
+      purchasesToExport = await purchaseRepository.getAllForExport(brand.id, pageFilters())
+    } catch (e) {
+      console.error('[purchases] export: load failed:', e)
+      showToast('Could not load the purchases to export. Check your connection and try again.', { type: 'error' })
+      return false
+    }
+    if (!purchasesToExport.length) { showToast('There are no purchases to export for these filters.', { type: 'warning' }); return false }
+    let audit = { status: 'failed' }
+    try {
+      const saved = await exportPurchases(format, purchasesToExport, {
+        beforeDownload: async (rowCount) => {
+          audit = await auditRepository.recordExport(brand.id, {
+            exportType: 'purchases.' + format,
+            rowCount,
+            // The search term itself is not stored, only that one was applied.
+            filters: { from: periodFrom || null, to: periodTo || null, supplier: supplierFilter || null, search_applied: !!search.trim(), purchases: purchasesToExport.length },
+          })
+          return audit.status !== 'refused'
+        },
+      })
+      const n = purchasesToExport.length + ' purchase' + (purchasesToExport.length === 1 ? '' : 's')
+      if (!saved) showToast('Your role is not allowed to export data.', { type: 'error' })
+      else if (audit.status !== 'recorded') {
+        console.warn('[purchases] export audit record not saved:', audit.status)
+        showToast(`Exported ${n}, but the audit record could not be saved.`, { type: 'warning' })
+      } else showToast(`Exported ${n}.`, { type: 'success' })
+      return saved
+    } catch (e) {
+      console.error('[purchases] export failed:', e)
+      showToast('Could not export: ' + (e?.message || 'unknown error'), { type: 'error' })
+      return false
+    }
+  }
+  const exportScope = (() => {
+    const parts = []
+    if (supplierFilter) parts.push('from ' + (directory.suppliers.find(x => x.key === supplierFilter)?.name || 'this supplier'))
+    if (period.mode !== 'all' && !filtersUnavailable) parts.push('for ' + periodLabel.toLowerCase())
+    if (search.trim()) parts.push('matching "' + search.trim() + '"')
+    return parts.length ? 'the purchases ' + parts.join(' ') : 'all your purchases'
+  })()
+
   // Every line the user has started. A started line that is incomplete blocks
   // the save (lineItems.itemProblems): it used to be dropped silently with a
   // "success" toast. Fully blank lines are ignored.
   const startedItems = form.items.filter(i => !isBlankItem(i))
   const problemLines = formLineProblems(form, inventory)
-  const computedTotal = formTotal(form)
 
-  const resolveExisting = (line) => (line.productId && inventory.find(p => p.id === line.productId)) || findDuplicate(inventory, line.name, '', null)
+  const resolveExisting = (line) => resolveExistingProduct(inventory, line)
 
   async function save() {
     if (saving) return
@@ -284,135 +339,18 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
     }
     setSaving(true)
     try {
-      const total = computedTotal
-      const paid = parseFloat(form.amountPaid) || 0
-      // Clamp at zero: overpaying a supplier must not persist a negative
-      // balance that the list would mis-render as a green "owed" figure.
-      const balance = Math.max(0, total - paid)
-      const totalQty = startedItems.reduce((s, i) => s + Number(i.qty), 0)
-      const productNames = startedItems.map(i => i.name.trim())
-      const supplier = form.supplier.trim()
-      const supplyDate = form.supplyDate || todayDate()
-      const { expiry, batch } = purchaseExpirySummary(startedItems)
-      const purchase = await purchaseRepository.create(brand.id, {
-        supplier_name: supplier,
-        product_name: productNames.join(', '),
-        quantity: totalQty,
-        cost_price: totalQty > 0 ? total / totalQty : 0,
-        total_cost: total,
-        amount_paid: paid,
-        balance: balance,
-        supply_date: supplyDate,
-        due_date: form.dueDate || '',
-        status: paid >= total ? 'paid' : 'pending',
-        notes: form.notes || '',
-        expiry: expiry,
-        batch: batch,
-        // Each line's quantity and price, for the invoice view.
-        items: purchaseItemsFromForm(startedItems),
-      })
-      const purchaseId = (purchase[0] || {}).id || ''
-
-      // INVENTORY SYNC, through the stock ledger. Lines are grouped by product
-      // so a new product is created once (against the stale snapshot two lines
-      // would otherwise make two catalogue entries) and the cost and price are
-      // written once. Then every line is received on its own through
-      // receive_stock: one ledger movement per line (who, before, after, this
-      // purchase), its batch created in the same transaction, and a key of
-      // purchase + line so a retried request can never add the stock twice.
-      let created = 0
-      let updated = 0
-      const syncFailed = []
-      const changedRows = []
-      const keyBase = purchaseId || ('unsaved-' + Date.now().toString(36))
-      for (const group of groupLinesByProduct(startedItems, resolveExisting)) {
-        const { existing, name, cost, sell, cat, barcode, lines } = group
-        // A barcode entered on the line is saved onto a product that has none,
-        // unless another product already uses it (the form blocks that).
-        const owner = barcode ? findProductByBarcode(inventory, barcode) : null
-        const newBarcode = barcode && !owner ? barcode : null
-        let row = null
-        try {
-          if (existing) {
-            // cost_price is a plain overwrite, with no race to lose. A changed
-            // selling price is an explicit repricing intent, honoured only for
-            // roles allowed to edit prices (the same rule Inventory enforces).
-            const updates = { cost_price: cost }
-            if (canReprice && sell && sell !== Number(existing.price)) updates.price = sell
-            if (newBarcode && !String(existing.barcode || '').trim()) updates.barcode = newBarcode
-            row = (await productRepository.update(existing.id, brand.id, updates)) || { id: existing.id, ...updates }
-            updated++
-          } else {
-            // Created empty, then received like any other line, so the units
-            // are journalled as this purchase rather than as opening stock.
-            const createdRow = await productRepository.create(brand.id, {
-              name,
-              category: cat,
-              price: sell || Math.ceil(cost * NEW_PRODUCT_MARKUP),
-              cost_price: cost,
-              stock: 0,
-              reorder_level: 5,
-              list_on_carefind: true,
-              ...(newBarcode ? { barcode: newBarcode } : {}),
-            })
-            row = Array.isArray(createdRow) ? createdRow[0] : createdRow
-            if (!row?.id) throw new Error('the product could not be created')
-            created++
-          }
-        } catch (e) {
-          syncFailed.push(name)
-          console.error('Inventory sync failed for:', name, e.message)
-          continue
-        }
-        let stock = null
-        for (const line of lines) {
-          try {
-            const result = await productRepository.receiveStock(brand.id, row.id, line.qty, {
-              movementType: 'purchase_receipt',
-              idempotencyKey: 'purchase:' + keyBase + ':' + line.id,
-              sourceType: 'purchase',
-              sourceId: purchaseId || null,
-              sourceLineId: line.id,
-              reason: 'Purchase from ' + supplier,
-              batchNumber: line.batch,
-              expiryDate: line.expiry,
-              dateReceived: supplyDate,
-              supplier,
-            })
-            if (result?.stock != null) stock = result.stock
-          } catch (e) {
-            syncFailed.push(name + (e.code ? ' (' + e.message + ')' : ''))
-            console.error('Stock receipt failed for:', name, e.message)
-          }
-        }
-        changedRows.push({ ...row, ...(stock != null ? { stock } : {}) })
-      }
+      const r = await recordPurchase({ businessId: brand.id, form, inventory, canReprice })
       // One update to the shared catalog with the rows the database returned.
-      if (changedRows.length > 0 && setProducts) setProducts(prev => upsertProducts(prev, changedRows))
-
-      // AUTO-CREATE DEBT: if there is a balance, create a "We Owe" debt automatically
-      if (balance > 0) {
-        await debtRepository.recordUnderpayment({
-          businessId: brand.id,
-          direction: 'we_owe',
-          partyName: supplier,
-          amount: total,
-          amountPaid: paid,
-          dueDate: form.dueDate || '',
-          description: 'Purchase: ' + (productNames[0] || 'Stock') + (productNames.length > 1 ? ' +' + (productNames.length - 1) + ' more' : '') + ': Due: ' + (form.dueDate || 'Not set'),
-          source: 'purchase',
-          sourceRef: purchaseId,
-        })
+      if (r.changedRows.length > 0 && setProducts) setProducts(prev => upsertProducts(prev, r.changedRows))
+      const parts = ['Purchase recorded!']
+      if (r.created > 0 || r.updated > 0) {
+        parts.push(r.created + ' new product(s) added to Inventory, ' + r.updated + ' updated')
+        if (r.newProductsAutoPriced) parts.push('new items priced at a ' + Math.round((NEW_PRODUCT_MARKUP - 1) * 100) + '% markup: adjust in Inventory anytime')
       }
-      const parts = []
-      parts.push('Purchase recorded!')
-      if (created > 0 || updated > 0) {
-        parts.push(created + ' new product(s) added to Inventory, ' + updated + ' updated')
-        if (created > 0 && !startedItems.some(i => !i.productId && Number(i.sell) > 0)) parts.push('new items priced at a ' + Math.round((NEW_PRODUCT_MARKUP - 1) * 100) + '% markup: adjust in Inventory anytime')
-      }
-      if (syncFailed.length > 0) parts.push('Not added to Inventory: ' + syncFailed.join(', ') + '. Add their stock from Inventory')
-      if (balance > 0) parts.push('Debt of ' + fmt(balance) + ' added to Debts automatically')
-      showToast(parts.join(' · '), { type: syncFailed.length > 0 ? 'warning' : 'success', duration: syncFailed.length > 0 ? 10000 : 5000 })
+      if (r.syncFailed.length > 0) parts.push('Not added to Inventory: ' + r.syncFailed.join(', ') + '. Add their stock from Inventory')
+      if (r.balance > 0) parts.push(r.debtFailed ? 'The ' + fmt(r.balance) + ' balance could not be added to Debts: add it there' : 'Debt of ' + fmt(r.balance) + ' added to Debts automatically')
+      const warn = r.syncFailed.length > 0 || r.debtFailed
+      showToast(parts.join(' · '), { type: warn ? 'warning' : 'success', duration: warn ? 10000 : 5000 })
       setShowErrors(false)
       clearDraft()
       load()
@@ -429,7 +367,11 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
   return (
     <div>
       <SectionHead title='Purchases' sub='Record supplier purchases and the payments you make on them' btn={hasDraft ? 'Resume draft' : '+ Record Purchase'} onBtn={openForm}
-        extraBtn={canDeletePurchases ? { label: 'Recently deleted', icon: <RotateCcw size={14} aria-hidden='true' />, onClick: () => setShowDeleted(true) } : undefined} />
+        extraBtns={[
+          { label: 'Upload', icon: <Upload size={14} aria-hidden='true' />, onClick: () => setShowImport(true), disabled: catalogLoading, title: catalogLoading ? 'Wait for your products to load' : 'Upload purchases from Excel or CSV' },
+          ...(canExport ? [{ label: 'Export', icon: <Download size={14} aria-hidden='true' />, onClick: () => setShowExport(true), title: 'Export purchases to Excel or CSV' }] : []),
+          ...(canDeletePurchases ? [{ label: 'Recently deleted', icon: <RotateCcw size={14} aria-hidden='true' />, onClick: () => setShowDeleted(true) }] : []),
+        ]} />
 
       {hasDraft && !showAdd && (
         <div role='status' style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', padding: '12px 16px', marginBottom: '16px', borderRadius: theme.radius.md, background: warningBg, border: `1px solid ${warning}` }}>
@@ -581,6 +523,13 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
 
       </>)}
 
+      {showImport && (
+        <PurchaseImportModal show onClose={() => setShowImport(false)} inventory={inventory} catalogReady={!catalogLoading}
+          restricted={!!plan.restricted} canReprice={canReprice} loadExistingKeys={loadExistingKeys}
+          record={(f, known) => recordPurchase({ businessId: brand.id, form: f, inventory: known, canReprice })}
+          mergeProducts={upsertProducts} onDone={onImportDone} />
+      )}
+      {showExport && <PurchaseExportModal show onClose={() => setShowExport(false)} scope={exportScope} onExport={exportList} />}
       {showBulkEdit && <PurchaseBulkEditModal purchases={markedPurchases} suppliers={supplierNames} runUpdates={runPurchaseUpdates} onClose={() => setShowBulkEdit(false)} />}
       {showBulkDelete && (
         <BulkDeleteModal noun='purchase' count={markedPurchases.length} names={markedPurchases.map(p => `${purchaseLabel(p)} (${fmt(p.total_cost || 0)})`)}

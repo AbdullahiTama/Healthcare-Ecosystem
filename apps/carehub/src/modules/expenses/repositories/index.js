@@ -3,6 +3,8 @@ import { isMissingColumn } from '../../../lib/dbErrors'
 import { translateBulkDeleteError, groupDeletions } from '../../../lib/bulkDelete'
 import { expensePaymentStatus } from '../expenseRules'
 
+const toBudget = (row) => ({ month: row.month, amount: Number(row.amount) || 0, startsOn: row.starts_on || null, updatedAt: row.updated_at || null })
+
 // ── Expense repository ────────────────────────────────────────────────────────
 // A deep module over the `expenses` table. The interface is small
 // (getAll/create/delete/recordPayment/getPayments/getPage/getTotals/getCategories); the implementation
@@ -119,13 +121,15 @@ export function createExpenseRepository(request = sbFetch) {
       return existing[0]
     },
 
-    // ── Monthly budget (carehub_20270103_expense_budgets) ──
+    // ── Monthly budget (carehub_20270103_expense_budgets, carehub_20270116_expense_new_budget) ──
+    // A stored budget as the app uses it. startsOn is the day a month's budget began (null = the 1st); it exists once
+    // carehub_20270116 is applied, so rows are read with select=* and the field is simply absent before.
     // The budget in force for a month: that month's own, else the latest
-    // earlier one (a budget carries over). { month, amount } or null.
+    // earlier one (a budget carries over). { month, amount, startsOn, updatedAt } or null.
     async getBudget(businessId, month) {
-      const rows = await request(`expense_budgets?business_id=eq.${businessId}&month=lte.${month}&order=month.desc&limit=1&select=month,amount,updated_at`)
+      const rows = await request(`expense_budgets?business_id=eq.${businessId}&month=lte.${month}&order=month.desc&limit=1&select=*`)
       const row = Array.isArray(rows) ? rows[0] : rows
-      return row ? { month: row.month, amount: Number(row.amount) || 0, updatedAt: row.updated_at || null } : null
+      return row ? toBudget(row) : null
     },
 
     // Months that have a stored budget, to know which browser-held budgets
@@ -143,7 +147,28 @@ export function createExpenseRepository(request = sbFetch) {
       })
       const row = Array.isArray(rows) ? rows[0] : rows
       if (!row || row.month !== month) throw new Error('The budget could not be confirmed as saved.')
-      return { month: row.month, amount: Number(row.amount) || 0, updatedAt: row.updated_at || null }
+      return toBudget(row)
+    },
+
+    // "Set new budget" (Owner only): the budget in force for `month` is closed the day before `startsOn` and kept in
+    // the budget history with what was spent against it; `amount` runs from `startsOn` (start_new_expense_budget).
+    async startNewBudget(businessId, month, amount, startsOn) {
+      const rows = await request('rpc/start_new_expense_budget', {
+        method: 'POST',
+        body: JSON.stringify({ p_business_id: businessId, p_month: month, p_amount: amount, p_starts_on: startsOn }),
+      })
+      const row = Array.isArray(rows) ? rows[0] : rows
+      if (!row || row.month !== month || row.starts_on !== startsOn) throw new Error('The new budget could not be confirmed as saved.')
+      return toBudget(row)
+    },
+
+    // Budgets of `month` that were replaced by a new budget or edited, oldest first (expense_budget_history).
+    async getBudgetHistory(businessId, month) {
+      const rows = await request(`expense_budget_history?business_id=eq.${businessId}&month=eq.${month}&order=closed_at.asc,id.asc&select=id,month,amount,starts_on,ended_on,spent,reason,new_amount,closed_at`)
+      return (rows || []).map((r) => ({
+        id: r.id, month: r.month, amount: Number(r.amount) || 0, startsOn: r.starts_on, endedOn: r.ended_on || null,
+        spent: r.spent == null ? null : Number(r.spent), reason: r.reason, newAmount: Number(r.new_amount) || 0, closedAt: r.closed_at,
+      }))
     },
 
     // Pays some or all of what is still owed on an expense (record_expense_payment: checks the caller's business,

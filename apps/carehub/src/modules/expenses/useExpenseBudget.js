@@ -17,7 +17,13 @@ import { isMissingObject } from '../../lib/dbErrors'
 //
 // status: 'loading' | 'ready' | 'error'. `amount` is the budget in force for
 // `month` (0 = none); `fromMonth` is the month it was set for, which is earlier
-// than `month` when it carried over.
+// than `month` when it carried over; `startsOn` the day it began when a new
+// budget was set mid-month (carehub_20270116), else null.
+//
+// "Set new budget" (startNew): the budget in force is closed and kept in the
+// budget history; `history` lists the month's earlier budgets. Both need
+// carehub_20270116: until it is applied `newBudgetAvailable` is false and the
+// screen offers Edit only, as before.
 
 const BUDGET_KEY = 'carehub_expense_budget'
 const log = (...a) => console.info('[expenses] budget:', ...a)
@@ -41,10 +47,12 @@ function dropLocal(businessId, months) {
   writeLocal(all)
 }
 
-const EMPTY = { status: 'loading', amount: 0, fromMonth: null, onDevice: false }
+const EMPTY = { status: 'loading', amount: 0, fromMonth: null, startsOn: null, onDevice: false }
+const NO_HISTORY = { historyStatus: 'loading', history: [], newBudgetAvailable: false }
 
 export function useExpenseBudget(businessId, month, { isOwner = false } = {}) {
   const [state, setState] = useState(EMPTY)
+  const [hist, setHist] = useState(NO_HISTORY)
   const seq = useRef(0)
   const moved = useRef(new Set()) // businesses whose browser budgets were already checked this session
 
@@ -75,28 +83,45 @@ export function useExpenseBudget(businessId, month, { isOwner = false } = {}) {
     if (done.length) log(`moved ${done.length} budget(s) from this browser to the database for`, businessId)
   }, [businessId, isOwner])
 
+  // The month's earlier budgets. A missing table means carehub_20270116 is not applied: no history and no
+  // "Set new budget" yet. A failed read is shown as such, never as "no earlier budgets".
+  const loadHistory = useCallback(async (mine) => {
+    setHist((h) => ({ ...h, historyStatus: 'loading' }))
+    try {
+      const rows = await expenseRepository.getBudgetHistory(businessId, month)
+      if (mine !== seq.current) return
+      setHist({ historyStatus: 'ready', history: rows, newBudgetAvailable: true })
+    } catch (e) {
+      if (mine !== seq.current) return
+      if (isMissingObject(e)) { setHist({ historyStatus: 'ready', history: [], newBudgetAvailable: false }); return }
+      console.error('[expenses] budget: history load failed:', e?.message)
+      setHist({ historyStatus: 'error', history: [], newBudgetAvailable: true })
+    }
+  }, [businessId, month])
+
   const load = useCallback(async () => {
     const mine = ++seq.current
-    if (!businessId || !month) { setState({ status: 'ready', amount: 0, fromMonth: null, onDevice: false }); return }
+    if (!businessId || !month) { setState({ status: 'ready', amount: 0, fromMonth: null, startsOn: null, onDevice: false }); setHist({ ...NO_HISTORY, historyStatus: 'ready' }); return }
     setState((s) => ({ ...s, status: 'loading' }))
+    loadHistory(mine)
     try {
       await moveLocalBudgets()
       const b = await expenseRepository.getBudget(businessId, month)
       if (mine !== seq.current) return
-      setState({ status: 'ready', amount: b?.amount || 0, fromMonth: b ? b.month : null, onDevice: false })
+      setState({ status: 'ready', amount: b?.amount || 0, fromMonth: b ? b.month : null, startsOn: b?.startsOn || null, onDevice: false })
     } catch (e) {
       if (mine !== seq.current) return
       if (isMissingObject(e)) {
         // The database update is not installed yet: the browser keeps the budget, as before.
         const b = effectiveBudget(readLocal()[businessId], month)
-        setState({ status: 'ready', amount: b?.amount || 0, fromMonth: b ? b.month : null, onDevice: true })
+        setState({ status: 'ready', amount: b?.amount || 0, fromMonth: b ? b.month : null, startsOn: null, onDevice: true })
         return
       }
       // A failed read is not "no budget": the screen says it could not be loaded.
       console.error('[expenses] budget: load failed:', e?.message)
       setState({ status: 'error', amount: 0, fromMonth: null, onDevice: false })
     }
-  }, [businessId, month, moveLocalBudgets])
+  }, [businessId, month, moveLocalBudgets, loadHistory])
 
   useEffect(() => { load() }, [load])
 
@@ -104,13 +129,28 @@ export function useExpenseBudget(businessId, month, { isOwner = false } = {}) {
   const save = useCallback(async (amount) => {
     try {
       const b = await expenseRepository.setBudget(businessId, month, amount)
-      setState({ status: 'ready', amount: b.amount, fromMonth: b.month, onDevice: false })
+      setState({ status: 'ready', amount: b.amount, fromMonth: b.month, startsOn: b.startsOn, onDevice: false })
+      loadHistory(seq.current)
     } catch (e) {
       if (!isMissingObject(e)) throw e
       setLocal(businessId, month, amount)
-      setState({ status: 'ready', amount, fromMonth: month, onDevice: true })
+      setState({ status: 'ready', amount, fromMonth: month, startsOn: null, onDevice: true })
     }
-  }, [businessId, month])
+  }, [businessId, month, loadHistory])
 
-  return { ...state, save, reload: load }
+  // Closes the budget in force and starts `amount` on `startsOn` (Owner only; the database checks). Resolves once
+  // stored; throws otherwise (a missing function is reported as needing the update).
+  const startNew = useCallback(async (amount, startsOn) => {
+    try {
+      const b = await expenseRepository.startNewBudget(businessId, month, amount, startsOn)
+      log('new budget', amount, 'from', startsOn, 'for', businessId)
+      setState({ status: 'ready', amount: b.amount, fromMonth: b.month, startsOn: b.startsOn, onDevice: false })
+      await loadHistory(seq.current)
+    } catch (e) {
+      if (isMissingObject(e)) throw Object.assign(new Error('Setting a new budget needs the latest CareHub update, which is not installed yet. Use Edit budget for now.'), { code: 'NEW_BUDGET_UNAVAILABLE' })
+      throw e
+    }
+  }, [businessId, month, loadHistory])
+
+  return { ...state, ...hist, save, startNew, reload: load, reloadHistory: () => loadHistory(seq.current) }
 }

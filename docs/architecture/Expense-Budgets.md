@@ -103,6 +103,58 @@ budget. That moves it from the browser to the database; from then on it shows on
 | `apps/carehub/src/modules/expenses/Expenses.budget.test.jsx` | carried over with November spending deducted, staff see it, save, failed save, browser budgets moved once and not over the database, staff never upload, failed budget read, failed spending read, 0 stops carry-over, earlier month, fallback before the migration (12; 10 fail on the previous screen) |
 | `expenseRules.test.js`, `repositories/index.test.js` | the rules and the queries |
 
+## Set new budget (2026-11-11)
+
+Pending item 2 of "Still Pending Issues – CareFind Hub". Migration
+`supabase/migrations/carehub_20270116_expense_new_budget.sql`, **not applied** (needs the owner's approval). CODE_AUDIT
+item A24.
+
+**Report.** "Users cannot set a new budget after the existing budget is exhausted. Only the Edit option is available."
+With one budget per month and `set_expense_budget` overwriting it, raising a used-up ₦50,000 to ₦80,000 on the 18th
+rewrote the month as if ₦80,000 had always applied (the overspend vanished), and the ₦52,000 that exhausted the old
+budget kept counting against the new one.
+
+**Fix.**
+
+- `expense_budgets.starts_on` (NULL = the 1st): the day a month's budget began. Spending against a budget is counted
+  from that day to the end of its month; a budget carried into a later month counts that month from the 1st. Existing
+  rows keep NULL, so every existing budget reads as before.
+- `expense_budget_history`: every budget that was **replaced** (with the days it ran and what was spent against it,
+  computed by the database from `expense_effective_date`) or **edited** (the previous amount). Members of the business
+  read it; nobody writes it directly.
+- `start_new_expense_budget(business, month, amount, starts_on)`, Owner only: closes the budget in force (its own or
+  carried over) the day before `starts_on`, records it in the history, and starts the new amount on `starts_on`. The
+  start must be in the month and after the current budget's start (a change on the same day is an Edit). The new budget
+  carries over to later months like any other. A per-business-and-month advisory lock serialises it with Edit.
+- `set_expense_budget` (Edit) is unchanged except that changing a month's own amount first records the previous amount
+  in the history. It keeps `starts_on`.
+
+**Screen.** For the Owner, **Set new budget** sits next to Edit budget whenever a budget is in force (highlighted when it
+is used up), and the tracker says "This budget is used up. Set a new one…" with the button. The dialog takes the amount
+and the start day (today by default; from the day after the current start to the month's end) and previews how the
+current budget closes ("closes on 17 Nov: ₦52,000 spent of ₦50,000"), what is already dated on or after the new start,
+and what the new budget leaves. The tracker then says "New budget from 2026-11-18" and counts from that day. **Earlier
+budgets in 2026-11** lists replaced budgets with their days and spending (marked when over) and edits, for everyone who
+sees the budget. A failed save keeps the dialog open and changes nothing; a failed history read says so with Try again.
+Before the migration is applied, the history read fails as "table not found", so Set new budget is not offered and Edit
+works as before; the browser-only fallback never offers it.
+
+**Security.** New readable data: earlier budget amounts, dates and spending totals, for members of the business only
+(the same rule as `expense_budgets` and `expenses`). Writes only through the two `SECURITY DEFINER` functions, which
+refuse anyone but the Owner (42501); no INSERT/UPDATE/DELETE grant on either table; EXECUTE revoked from PUBLIC and anon.
+
+**Tests.**
+
+| File | Covers |
+|---|---|
+| `apps/carefind/src/test/expenses/expenseNewBudget.db.test.js` (11, PGlite, applied over carehub_20270103 as in production) | existing budgets unchanged; Owner only; bad amount / start outside the month / not after the current start / nothing to replace; closing a carried-over budget with 52,000 spent of 50,000; October untouched; another business's expenses not counted; carry-over into December; a second new budget in the month; Edit keeps the start and records the old amount (and nothing when unchanged); history unreadable by others and unwritable by anyone; `starts_on` outside the month refused by the table |
+| `apps/carehub/src/modules/expenses/Expenses.newBudget.test.jsx` (7) | used-up budget → Set new budget → preview → saved, counted from the start, old budget in history; validation; failed save; staff see it but cannot set one; before the update (Edit only); failed history read with retry; Edit after a new budget |
+| `expenseRules.test.js`, `repositories/index.test.js` | start day, spending since, start range, validation; the queries and confirmations |
+
+**Manual check after applying:** as the Owner on a month whose budget is used up, set a new budget from today; the
+tracker counts from today and Earlier budgets shows the old one with its spending; as staff, the same figures and no
+button; Edit the new budget and confirm the start stays.
+
 ## USB barcode scanners on the Expenses screen (2026-11-04)
 
 The same scanner fix as the stock screens (`Inventory-Barcode-Scanning.md`, shared `useKeyboardScanner` hook).

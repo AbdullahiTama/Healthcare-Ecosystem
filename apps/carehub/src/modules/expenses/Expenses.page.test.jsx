@@ -14,6 +14,7 @@ vi.mock('./repositories', () => ({
     getBudget: vi.fn(),
     getBudgetMonths: vi.fn(),
     setBudget: vi.fn(),
+    getBudgetHistory: vi.fn(async () => []),
   },
 }))
 

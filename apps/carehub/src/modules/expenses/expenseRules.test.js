@@ -116,11 +116,41 @@ describe('monthly budget rules', async () => {
   })
 
   it('every recorded expense reduces what remains, to the kobo', () => {
-    expect(budgetSummary(50000, 0)).toEqual({ active: true, remaining: 50000, pctUsed: 0, over: false, near: false })
+    expect(budgetSummary(50000, 0)).toEqual({ active: true, remaining: 50000, pctUsed: 0, over: false, near: false, exhausted: false })
     expect(budgetSummary(50000, 12000.1)).toMatchObject({ remaining: 37999.9, pctUsed: 24 })
     expect(budgetSummary(50000, 40000)).toMatchObject({ remaining: 10000, near: true, over: false })
     expect(budgetSummary(50000, 50000.01)).toMatchObject({ remaining: -0.01, over: true, near: false })
-    expect(budgetSummary(0.3, 0.1 + 0.2)).toMatchObject({ remaining: 0, over: false })
-    expect(budgetSummary(0, 100)).toEqual({ active: false, remaining: 0, pctUsed: 0, over: false, near: false })
+    expect(budgetSummary(0.3, 0.1 + 0.2)).toMatchObject({ remaining: 0, over: false, exhausted: true })
+    expect(budgetSummary(0, 100)).toEqual({ active: false, remaining: 0, pctUsed: 0, over: false, near: false, exhausted: false })
+  })
+})
+
+describe('set new budget rules', async () => {
+  const { budgetStartDay, spentSince, newBudgetStartRange, validateNewBudget, lastDayOfMonth } = await import('./expenseRules')
+  const list = [
+    { amount: 40000, date: '2026-11-02' }, { amount: 12000, date: '2026-11-17' }, { amount: 4000, date: '2026-11-18' },
+    { amount: 999, date: '2026-10-31' }, { amount: 7, date: 'bad', created_at: '2026-11-20T08:00:00' },
+  ]
+  it('a budget begun mid-month counts from its start; a carried-over or whole-month one from the 1st', () => {
+    expect(budgetStartDay({ month: '2026-11', startsOn: '2026-11-18' }, '2026-11')).toBe('2026-11-18')
+    expect(budgetStartDay({ month: '2026-11', startsOn: null }, '2026-11')).toBe('2026-11-01')
+    expect(budgetStartDay({ month: '2026-10', startsOn: '2026-10-20' }, '2026-11')).toBe('2026-11-01')
+    expect(spentSince(list, '2026-11', '2026-11-01')).toBe(56007)
+    expect(spentSince(list, '2026-11', '2026-11-18')).toBe(4007) // includes the expense dated by when it was recorded
+  })
+
+  it('a new budget may start after the current start, to the month end; today by default', () => {
+    expect(newBudgetStartRange('2026-11', '2026-11-01', '2026-11-18')).toEqual({ min: '2026-11-02', max: '2026-11-30', defaultDay: '2026-11-18' })
+    expect(newBudgetStartRange('2026-11', '2026-11-18', '2026-12-03')).toEqual({ min: '2026-11-19', max: '2026-11-30', defaultDay: '2026-11-19' })
+    expect(newBudgetStartRange('2026-02', '2026-02-28', '2026-02-28')).toBeNull()
+    expect(lastDayOfMonth('2028-02')).toBe('2028-02-29')
+  })
+
+  it('validates the amount and the start', () => {
+    const range = { min: '2026-11-02', max: '2026-11-30' }
+    expect(validateNewBudget({ amount: '30,000', startsOn: '2026-11-18' }, range)).toEqual({ ok: true, errors: {}, value: { amount: 30000, startsOn: '2026-11-18' } })
+    expect(validateNewBudget({ amount: '0', startsOn: '2026-11-18' }, range).errors).toEqual({ amount: 'The new budget must be more than zero.' })
+    expect(validateNewBudget({ amount: '5', startsOn: '2026-11-01' }, range).errors).toEqual({ startsOn: 'Choose a day from 2026-11-02 to 2026-11-30.' })
+    expect(validateNewBudget({ amount: '5', startsOn: '2026-11-05' }, null).errors.startsOn).toMatch(/cannot start/)
   })
 })

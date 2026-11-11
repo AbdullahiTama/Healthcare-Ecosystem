@@ -152,8 +152,61 @@ export function legacyBudgetEntries(stored, businessId) {
 export function budgetSummary(budget, spent) {
   const b = toKobo(budget)
   const s = toKobo(spent)
-  if (b <= 0) return { active: false, remaining: 0, pctUsed: 0, over: false, near: false }
+  if (b <= 0) return { active: false, remaining: 0, pctUsed: 0, over: false, near: false, exhausted: false }
   const pctUsed = Math.round((s / b) * 100)
   const over = s > b
-  return { active: true, remaining: (b - s) / 100, pctUsed, over, near: !over && pctUsed >= 80 }
+  // Used up: nothing left (exactly spent, or over). This is when "Set new budget" is offered most prominently.
+  return { active: true, remaining: (b - s) / 100, pctUsed, over, near: !over && pctUsed >= 80, exhausted: s >= b }
+}
+
+// ── Set new budget (carehub_20270116_expense_new_budget) ─────────────────────
+// A month's budget can begin after the 1st: when the Owner sets a new budget
+// mid-month, the one before it is closed and kept in the budget history, and
+// spending against the new one counts from its start. A budget carried into a
+// later month counts that month from the 1st.
+
+export function lastDayOfMonth(month) {
+  if (!MONTH_RE.test(month || '')) return null
+  const [y, m] = month.split('-').map(Number)
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
+}
+
+// The first day counted against `budget` ({ month, startsOn } as stored) in `month`.
+export function budgetStartDay(budget, month) {
+  if (!MONTH_RE.test(month || '')) return null
+  if (budget && budget.month === month && budget.startsOn && String(budget.startsOn).startsWith(month)) return String(budget.startsOn).slice(0, 10)
+  return month + '-01'
+}
+
+// Spending in `month` from `startDay` on (by the date each expense belongs to).
+export function spentSince(list, month, startDay) {
+  return sumExpenses((list || []).filter((e) => inMonth(e, month) && (!startDay || expenseDate(e) >= startDay)))
+}
+
+const addDays = (day, n) => { const d = new Date(day + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+
+// The days a new budget may start in `month`: after the current budget's start, to the month's end. `defaultDay` is
+// today when today is one of them, else the first. null when none is left (the current budget began on the last day).
+export function newBudgetStartRange(month, currentStart, today) {
+  const last = lastDayOfMonth(month)
+  if (!last || !currentStart) return null
+  const min = addDays(currentStart, 1)
+  if (min > last) return null
+  const defaultDay = today && today >= min && today <= last ? today : min
+  return { min, max: last, defaultDay }
+}
+
+// Checks the "Set new budget" form: { ok, errors: { amount?, startsOn? }, value: { amount, startsOn } }.
+export function validateNewBudget({ amount, startsOn } = {}, range) {
+  const errors = {}
+  const n = parseAmount(amount)
+  if (amount === undefined || String(amount).trim() === '') errors.amount = 'Enter the new budget.'
+  else if (!Number.isFinite(n)) errors.amount = 'Enter a valid amount with at most 2 decimal places.'
+  else if (n <= 0) errors.amount = 'The new budget must be more than zero.'
+  else if (n > MAX_EXPENSE_AMOUNT) errors.amount = 'That amount is too large.'
+  if (!range) errors.startsOn = 'A new budget cannot start in this month any more.'
+  else if (!startsOn || !isRealDate(startsOn)) errors.startsOn = 'Choose the day the new budget starts.'
+  else if (startsOn < range.min || startsOn > range.max) errors.startsOn = 'Choose a day from ' + range.min + ' to ' + range.max + '.'
+  const ok = Object.keys(errors).length === 0
+  return { ok, errors, value: ok ? { amount: Math.round(n * 100) / 100, startsOn } : null }
 }

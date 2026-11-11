@@ -91,6 +91,7 @@ export function purchaseLines(purchase) {
         batch: i.batch || null,
         expiry: i.expiry || null,
         barcode: i.barcode || null,
+        cat: i.cat || null,
       })),
     }
   }

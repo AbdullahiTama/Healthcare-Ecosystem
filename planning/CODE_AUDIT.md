@@ -35,6 +35,9 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A20 | Medium | Expenses (bulk delete) | Expense bulk delete and restore with payment history | **Closed 2026-11-10**: `carehub_20270112_expense_bulk_delete` applied with owner approval and probed |
 | A21 | Medium | Debts (bulk delete) | Debt bulk delete and restore; sale / purchase debts kept (they are synced by source) | **Closed 2026-11-10**: `carehub_20270113_debt_bulk_delete` applied with owner approval and probed |
 | A22 | Medium | Purchases (bulk edit / delete) | Purchase bulk edit through edit_purchase; delete takes stock back (kept when sold), restore puts it back | **Closed 2026-11-10**: `carehub_20270114_purchase_bulk_edit_delete` applied with owner approval and probed |
+| A23 | Low | Purchases (import / export) | Bulk upload and Excel/CSV export built; the export audit needs `purchases.*` in `record_export_audit`'s allow-list | Open: `carehub_20270115_purchase_export_audit` awaits owner approval |
+| A24 | Medium | Expenses (set new budget) | A used-up budget could only be edited (history rewritten, old spending counted against the new amount) | Open: `carehub_20270116_expense_new_budget` awaits owner approval |
+| A25 | Medium | Data exposure (cost price) | `products.cost_price` is readable by every member of a business; the new POS cost switch is display-only | Open: owner decision |
 
 ## 2. Items
 
@@ -309,6 +312,43 @@ header); live data unchanged afterwards.
 (every policy and function is scoped by business), so they are inert, but they are orphaned data.
 
 **Close by:** look at what created them (names and created_at), then delete them or attach them to their business.
+
+### A23. Purchases import and export: export audit migration (Low)
+
+**What (2026-11-11):** purchases can be uploaded from Excel/CSV and exported to Excel/CSV
+([Purchases-Import-Export.md](../docs/architecture/Purchases-Import-Export.md)). Uploads need no database change. Exports
+are audited through `record_export_audit`, whose allow-list (read live 2026-11-11, identical to
+`carehub_20261210_pos_accounting` §13) does not know `purchases.xlsx` / `purchases.csv`, so until
+`carehub_20270115_purchase_export_audit` is applied the export is saved with "the audit record could not be saved".
+Verified by 16 PGlite checks (`scripts/db-tests/purchaseExportAudit.pglite.mjs`).
+
+**Close by:** apply with the owner's approval, run the rolled-back probe in its header, and confirm an export writes an
+`export.created` row with `includes_cost_data = true`.
+
+### A24. Expenses: set a new budget once one is used up (Medium)
+
+**What (2026-11-11):** only Edit existed, which overwrote the month's budget: the overspend disappeared and the spending
+that exhausted the old budget counted against the new one. `carehub_20270116_expense_new_budget` adds `starts_on`, an
+insert-only `expense_budget_history`, and the Owner-only `start_new_expense_budget`; Edit now records the amount it
+replaces. The app offers Set new budget only once the migration is applied. Verified by 11 PGlite tests
+(`apps/carefind/src/test/expenses/expenseNewBudget.db.test.js`) with the live helpers and the live `set_expense_budget`
+(read 2026-11-11). Details: [Expense-Budgets.md](../docs/architecture/Expense-Budgets.md) "Set new budget".
+
+**Close by:** apply with the owner's approval, run a rolled-back probe (Owner starts a new budget on a used-up month;
+staff and another business refused; history readable by members only), confirm the security advisor shows only the
+intended `authenticated_security_definer_function_executable` finding for `start_new_expense_budget`.
+
+### A25. Cost price is readable by every member of a business (Medium, owner decision)
+
+**What (verified in code 2026-11-11):** the shared product catalogue loads `products?select=*`, so `cost_price` reaches
+every signed-in member of the business, cashiers included, and is readable through the API whatever the screen shows.
+The new POS switch ([POS-Cost-Visibility.md](../docs/architecture/POS-Cost-Visibility.md), permission
+`canViewCostPrice`) only controls what the POS displays; it widens nothing.
+
+**Close by (decide):** keep costs visible to all members (record it as accepted), or make them a data-level secret: a
+column-level revoke on `products.cost_price` for non-cost roles with a cost-free read for them (view or RPC), and every
+cost reader (Inventory, Purchases, reports, transfers, POS) switched over. The second changes access for existing roles
+and needs a plan before implementing.
 
 ## 3. Open items recorded in other audits
 
