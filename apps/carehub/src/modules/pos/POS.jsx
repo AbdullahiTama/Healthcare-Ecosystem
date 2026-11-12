@@ -124,12 +124,18 @@ const ProductCard = memo(function ProductCard({ p, qty, onAdd, showCost = false 
   )
 })
 
-// Cost and margin of one unit, under its price. "No cost set" when none is recorded.
+// Cost and margin of one unit, in a band under the price so it reads at a glance.
+// "No cost set" when none is recorded (never a 100% margin).
 function CostLine({ price, cost }) {
   const m = marginPct(price, cost)
   return (
-    <div style={{ fontSize: 11, fontWeight: 600, color: gray500, marginTop: 2 }} data-testid='pos-cost'>
-      {cost == null ? 'No cost set' : <>Cost {fmt(cost)}{m != null && <span style={{ color: m < 0 ? danger : success, fontWeight: 800 }}> · {m}%</span>}</>}
+    <div data-testid='pos-cost' style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 6, padding: '4px 8px', borderRadius: theme.radius.sm, background: cost == null ? warningBg : bg, fontSize: 11.5 }}>
+      {cost == null
+        ? <span style={{ color: warning, fontWeight: 700 }}>No cost set</span>
+        : <>
+            <span style={{ color: gray600 }}>Cost <strong style={{ color: navy, fontWeight: 800 }}>{fmt(cost)}</strong></span>
+            {m != null && <span style={{ color: m < 0 ? danger : success, fontWeight: 800 }}>{m}%</span>}
+          </>}
     </div>
   )
 }
@@ -216,7 +222,8 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const { isMobile } = useBreakpoint()
   const navigate = useNavigate()
   // Cost price at a glance (POS-Cost-Visibility.md): the Owner, or a role granted "See cost prices at the POS".
-  // Off until turned on, and remembered per business and staff member on this device. Display only.
+  // Shown by default; hiding it (a screen the customer can see) is remembered per business and staff member on this
+  // device. Display only.
   const canViewCost = role === 'Owner' || !!perms?.canViewCostPrice
   const costScope = (brand?.id || '') + ':' + (auth?.staff?.id || 'owner')
   const [costOn, setCostOn] = useState(() => readShowCost(costScope))
@@ -1041,9 +1048,10 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
               <ReceiptText size={17} />
             </button>
             {canViewCost && (
-              <button type='button' onClick={toggleCost} aria-pressed={showCost} title={showCost ? 'Hide cost prices' : 'Show cost prices'} aria-label={showCost ? 'Hide cost prices' : 'Show cost prices'}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, borderRadius: theme.radius.md, border: `1px solid ${showCost ? tealDeep : border}`, background: showCost ? tealMist : 'white', color: tealDeep, cursor: 'pointer', flexShrink: 0 }}>
-                {showCost ? <EyeOff size={17} aria-hidden='true' /> : <Eye size={17} aria-hidden='true' />}
+              <button type='button' onClick={toggleCost} aria-pressed={showCost} title={showCost ? 'Hide cost prices (e.g. when a customer can see the screen)' : 'Show cost prices'} aria-label={showCost ? 'Hide cost prices' : 'Show cost prices'}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0 12px', minWidth: 42, borderRadius: theme.radius.md, border: `1px solid ${showCost ? tealDeep : border}`, background: showCost ? tealMist : 'white', color: tealDeep, fontWeight: 700, fontSize: 12, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                {showCost ? <Eye size={16} aria-hidden='true' /> : <EyeOff size={16} aria-hidden='true' />}
+                <span style={showCost ? undefined : { textDecoration: 'line-through' }}>Cost</span>
               </button>
             )}
           </div>

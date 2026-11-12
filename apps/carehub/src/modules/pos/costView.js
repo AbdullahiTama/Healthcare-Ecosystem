@@ -52,16 +52,18 @@ export function saleCostSummary(cart, costOf, total) {
   }
 }
 
-// Whether costs are shown is remembered on this device, per business and staff
-// member, and starts hidden: the counter screen often faces the customer.
-const KEY = 'carehub_pos_show_cost'
+// Costs are shown to authorised users by default (an off-by-default switch was
+// missed in use: "it is not showing"). Hiding them, for a screen the customer can
+// see, is remembered on this device per business and staff member; what is stored
+// is the choice to HIDE, so a new device or cleared storage shows costs again.
+const KEY = 'carehub_pos_hide_cost'
 export function readShowCost(scope) {
-  try { return JSON.parse(localStorage.getItem(KEY) || '{}')[scope] === true } catch { return false }
+  try { return JSON.parse(localStorage.getItem(KEY) || '{}')[scope] !== true } catch { return true }
 }
 export function writeShowCost(scope, on) {
   try {
     const all = JSON.parse(localStorage.getItem(KEY) || '{}') || {}
-    if (on) all[scope] = true; else delete all[scope]
+    if (on) delete all[scope]; else all[scope] = true
     localStorage.setItem(KEY, JSON.stringify(all))
   } catch { /* storage unavailable: the switch still works for this visit */ }
 }

@@ -43,18 +43,18 @@ describe('the sale at cost', () => {
   })
 })
 
-describe('the Show cost switch', () => {
+describe('the cost switch', () => {
   beforeEach(() => localStorage.clear())
-  it('starts hidden and is remembered per business and staff member', () => {
-    expect(readShowCost('b1:owner')).toBe(false)
-    writeShowCost('b1:owner', true)
+  it('starts shown; hiding is remembered per business and staff member', () => {
     expect(readShowCost('b1:owner')).toBe(true)
-    expect(readShowCost('b1:s2')).toBe(false)
     writeShowCost('b1:owner', false)
     expect(readShowCost('b1:owner')).toBe(false)
+    expect(readShowCost('b1:s2')).toBe(true)
+    writeShowCost('b1:owner', true)
+    expect(readShowCost('b1:owner')).toBe(true)
   })
-  it('broken storage reads as hidden', () => {
-    localStorage.setItem('carehub_pos_show_cost', '{oops')
-    expect(readShowCost('b1:owner')).toBe(false)
+  it('broken storage reads as shown (the default)', () => {
+    localStorage.setItem('carehub_pos_hide_cost', '{oops')
+    expect(readShowCost('b1:owner')).toBe(true)
   })
 })

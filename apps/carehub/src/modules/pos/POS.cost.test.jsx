@@ -1,6 +1,6 @@
-// Quick cost price at the POS for authorised users: a Show cost switch (hidden until turned on, so the customer-facing
-// screen shows nothing by default) puts cost and margin on product cards, cost and profit on cart lines, and the
-// estimated profit of the sale under the total. Nothing about the sale changes.
+// Quick cost price at the POS for authorised users: cost and margin on product cards, cost and profit on cart lines,
+// and the estimated profit of the sale under the total, shown by default (an off-by-default switch was missed in use).
+// A Cost switch hides it when a customer can see the screen. Nothing about the sale changes.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
@@ -45,19 +45,28 @@ const add = async (host, name) => { await act(async () => { host.querySelector(`
 const costs = (host, id) => [...host.querySelectorAll(`[data-testid="${id}"]`)].map((n) => n.textContent)
 
 describe('cost price at the POS', () => {
-  it('is hidden until the Owner turns it on, then shows cost and margin on products', async () => {
+  it('shows the Owner cost and margin on the product cards straight away', async () => {
     const host = await renderPOS()
-    expect(costs(host, 'pos-cost')).toEqual([])
-    expect(toggle(host).getAttribute('aria-pressed')).toBe('false')
-    await act(async () => { toggle(host).click() })
+    expect(toggle(host).getAttribute('aria-pressed')).toBe('true')
     expect(toggle(host).getAttribute('aria-label')).toBe('Hide cost prices')
     // Services carry no stock cost and show none; a zero cost is "not set", not a 100% margin.
-    expect(costs(host, 'pos-cost')).toEqual(['Cost ₦800 · 33%', 'No cost set'])
+    expect(costs(host, 'pos-cost')).toEqual(['Cost ₦80033%', 'No cost set'])
+  })
+
+  it('the Cost switch hides it all, and shows it again', async () => {
+    const host = await renderPOS()
+    await add(host, 'Amoxicillin')
+    await act(async () => { toggle(host).click() })
+    expect(toggle(host).getAttribute('aria-pressed')).toBe('false')
+    expect(costs(host, 'pos-cost')).toEqual([])
+    expect(costs(host, 'pos-line-cost')).toEqual([])
+    expect(costs(host, 'pos-sale-cost')).toEqual([])
+    await act(async () => { toggle(host).click() })
+    expect(costs(host, 'pos-cost')).toHaveLength(2)
   })
 
   it('shows cost and profit on cart lines and the estimated profit of the sale, after the discount', async () => {
     const host = await renderPOS()
-    await act(async () => { toggle(host).click() })
     await add(host, 'Amoxicillin')
     await add(host, 'Amoxicillin')
     expect(costs(host, 'pos-line-cost')).toEqual(['Cost ₦800 each · profit ₦800'])
@@ -74,25 +83,26 @@ describe('cost price at the POS', () => {
     expect(host.textContent).toContain('Charge ₦2,200')
   })
 
-  it('stays on after leaving and coming back, for the same person on this device', async () => {
+  it('stays hidden after leaving and coming back, for the same person on this device', async () => {
     let host = await renderPOS()
     await act(async () => { toggle(host).click() })
     await unmount(); unmount = null
     host = await renderPOS()
-    expect(toggle(host).getAttribute('aria-pressed')).toBe('true')
-    expect(costs(host, 'pos-cost')).toHaveLength(2)
+    expect(toggle(host).getAttribute('aria-pressed')).toBe('false')
+    expect(costs(host, 'pos-cost')).toEqual([])
   })
 
   it('is offered to a role granted "See cost prices at the POS", and not to a cashier', async () => {
     let host = await renderPOS({ role: 'Cashier', perms: { canMakeSales: true } })
     expect(toggle(host)).toBeNull()
-    // Even if this device remembers the switch on (e.g. the Owner used it), a cashier sees no cost.
-    localStorage.setItem('carehub_pos_show_cost', JSON.stringify({ 'b:owner': true }))
-    await unmount(); unmount = null
-    host = await renderPOS({ role: 'Cashier', perms: { canMakeSales: true } })
+    // Shown by default means shown to authorised users only: a cashier sees no cost anywhere.
     expect(costs(host, 'pos-cost')).toEqual([])
+    await add(host, 'Amoxicillin')
+    expect(costs(host, 'pos-line-cost')).toEqual([])
+    expect(costs(host, 'pos-sale-cost')).toEqual([])
     await unmount(); unmount = null
     host = await renderPOS({ role: 'Stock Lead', perms: { canMakeSales: true, canViewCostPrice: true } })
     expect(toggle(host)).not.toBeNull()
+    expect(costs(host, 'pos-cost')).toHaveLength(2)
   })
 })

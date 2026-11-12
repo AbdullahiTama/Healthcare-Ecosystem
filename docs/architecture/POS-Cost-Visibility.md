@@ -5,15 +5,21 @@ the data-level follow-up.
 
 ## What the user gets
 
-Authorised users get a **Show cost** switch (eye icon) beside the search box on the POS Sell tab. It is **off until turned
-on**, because the counter screen often faces the customer, and it is remembered on that device for that business and
-person. When on:
+Authorised users see costs **straight away**; nothing has to be turned on. A **Cost** button (eye icon) beside the search
+box hides them when a customer can see the screen; hiding is remembered on that device for that business and person
+(a new device or cleared storage shows costs again).
 
-- **Product cards:** `Cost ₦800 · 33%` under the price (margin on the selling price; red when below cost). A product with
-  no cost recorded says *No cost set* (never a 100% margin). Services show nothing.
+- **Product cards:** a band under the price, `Cost ₦800` with the margin on the selling price (`33%`, red when the product
+  sells below cost). A product with no cost recorded shows an amber *No cost set* (never a 100% margin). Services show
+  nothing.
 - **Cart lines:** `Cost ₦800 each · profit ₦800` (or *loss*), using the line's actual price, overrides included.
 - **Under the total:** `Est. profit ₦400 · 20%`, after the discount. Lines without a cost are left out and counted:
   `Est. profit (1 without cost)`.
+
+**Change 2026-11-12.** The first version started hidden behind an unlabelled eye icon, and every staff member at the
+first business to try it is on a custom role without the permission, so in use "it is not showing". Costs are now shown
+by default to authorised users, the band on the card is easier to read, and the button is labelled *Cost*. Staff on
+custom roles still need the Owner to turn on *See cost prices at the POS* for their role (Staff › Roles & Permissions).
 
 Nothing about the sale changes: no extra step, dialog or confirmation; prices, totals, receipts, held sales and what is
 saved are untouched. The switch is one tap and works mid-sale.
@@ -49,15 +55,16 @@ A device that remembers the switch as on shows nothing to someone without the pe
 - Making cost a data-level secret would need a column-level restriction on `products.cost_price` (or a view/RPC for
   non-cost roles) and changes to every reader (Inventory, Purchases, reports, transfers). That is proposed as CODE_AUDIT
   A25 for an owner decision rather than done here, because it changes access for existing roles.
-- Hidden by default and remembered per person reduces shoulder-surfing at the counter.
+- Shown by default only to authorised users; anyone can hide it in one tap when a customer can see the screen, and that
+  choice is remembered per person on the device.
 
 ## Test plan
 
 | Test | Covers |
 |---|---|
 | `pos/costView.test.js` (8) | cost not set vs zero, margin and loss, sale profit to the kobo, discount, lines without cost, switch memory per business and person, broken storage |
-| `pos/POS.cost.test.jsx` (4) | hidden until turned on; cards (service and missing cost); cart line and sale estimate before and after a discount; the total and Charge unchanged; remembered across visits; a cashier never sees it even when the device remembers it on; a custom role with the switch |
+| `pos/POS.cost.test.jsx` (5) | shown to the Owner at once on cards (service and missing cost); the Cost button hides cards, lines and the estimate and shows them again; cart line and sale estimate before and after a discount; the total and Charge unchanged; hiding remembered across visits; a cashier sees no cost anywhere; a custom role with the switch sees it at once |
 | Existing POS suite | the sale flow is unchanged |
 
-**Manual check after deploy:** as Owner, turn on Show cost, add two products and a discount, charge; the receipt shows no
-cost. As a Cashier, no switch. In Staff, turn on the switch for a custom role and confirm it appears for that user.
+**Manual check after deploy:** as Owner, open the POS (costs show on the cards), add two products and a discount, charge;
+the receipt shows no cost. Tap Cost: everything hides; reload: still hidden. As a Cashier, no switch. In Staff, turn on the switch for a custom role and confirm it appears for that user.
