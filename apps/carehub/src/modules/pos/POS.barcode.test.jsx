@@ -262,7 +262,10 @@ describe('POS — USB scanner works wherever focus is', () => {
       await act(async () => { keydown(qty, ch); setNativeValue(qty, qty.value + ch) })
       await act(async () => { await new Promise((r) => setTimeout(r, 70)) })
     }
-    expect(qtyOf(m.host, 'Amoxicillin 500mg').value).toBe('120000')
+    // Not taken as a scan (no barcode lookup); the typed quantity is held to the 20 in stock (stockLimit.js).
+    expect(m.host.textContent).not.toContain('No product has the barcode')
+    expect(qtyOf(m.host, 'Amoxicillin 500mg').value).toBe('20')
+    expect(m.host.textContent).toContain('Only 20 Amoxicillin 500mg in stock')
   })
 
   it('fields outside the POS are left alone', async () => {

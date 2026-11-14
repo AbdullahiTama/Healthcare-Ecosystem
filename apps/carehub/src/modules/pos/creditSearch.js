@@ -30,7 +30,7 @@ export const CREDIT_SORTS = {
 
 // A credit sale a payment can be recorded against: owing, not held, and
 // completed (record_sale_payment refuses resumed or deleted rows).
-function isCollectable(s) {
+export function isCollectable(s) {
   return s.is_credit && Number(s.balance) > 0 && !s.is_on_hold && (s.status == null || s.status === 'completed')
 }
 

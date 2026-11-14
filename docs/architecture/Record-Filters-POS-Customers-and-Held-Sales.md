@@ -48,6 +48,9 @@ One rule set, three pages. Nothing is duplicated:
 Cards: **Total outstanding** (both directions), **Owed to us**, **We owe others**, each with its open count. The
 summary adds counts by payment status.
 
+**Since 2026-11-14** the direction is the page's Receivables / Payables tab rather than a filter, and the cards are per
+tab (outstanding, total owed, payments): see [Debt-Accounts-and-POS-Stock-Limits.md](Debt-Accounts-and-POS-Stock-Limits.md) §2.
+
 ### 2.2 Clients
 
 | Filter | Rule |

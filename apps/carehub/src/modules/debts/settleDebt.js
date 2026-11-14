@@ -2,7 +2,8 @@ import { debtRepository as defaultDebts } from './repositories'
 import { purchaseRepository as defaultPurchases } from '../purchases/repositories'
 import { isMissingObject } from '../../lib/dbErrors'
 
-// "Mark paid" on the Debts page, for every debt that is not a credit sale.
+// "Mark paid" on the Debts page, for every debt that is not a credit sale. (A part payment on a debt recorded by hand
+// is recorded in DebtPaymentModal.)
 // (A credit-sale debt is settled in Debts.jsx through the POS ledger's
 // record_sale_payment, after asking how the customer paid.)
 //
@@ -29,6 +30,20 @@ export async function settleDebt(debt, businessId, {
         return { via: 'purchase' }
       } catch (e) {
         // Before carehub_20261212 is applied: mark the debt paid, as before.
+        if (!isMissingObject(e)) throw e
+      }
+    }
+  }
+  // A debt recorded by hand (or imported) is paid through record_debt_payment (carehub_20270117), so the payment is
+  // in its history; the database refuses editing its amounts directly once that is applied. Before then, the debt is
+  // simply marked paid, as it used to be.
+  if ((debt.source || 'manual') === 'manual') {
+    const balance = Math.max(Math.round((Number(debt.amount) - Number(debt.amount_paid || 0)) * 100) / 100, 0)
+    if (balance > 0 && debts.recordPayment) {
+      try {
+        await debts.recordPayment(debt.id, { amount: balance, method: 'Other', note: 'Marked paid from the Debts page', staffName })
+        return { via: 'debt' }
+      } catch (e) {
         if (!isMissingObject(e)) throw e
       }
     }

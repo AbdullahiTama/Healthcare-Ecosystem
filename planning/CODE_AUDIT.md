@@ -38,6 +38,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A23 | Low | Purchases (import / export) | Bulk upload and Excel/CSV export; the export audit needed `purchases.*` in `record_export_audit`'s allow-list | **Closed 2026-11-11**: `carehub_20270115_purchase_export_audit` applied with owner approval and probed |
 | A24 | Medium | Expenses (set new budget) | A used-up budget could only be edited (history rewritten, old spending counted against the new amount) | **Closed 2026-11-11**: `carehub_20270116_expense_new_budget` applied with owner approval and probed |
 | A25 | Medium | Data exposure (cost price) | `products.cost_price` is readable by every member of a business; the new POS cost switch is display-only | Open: owner decision |
+| A26 | Medium | Debts / suppliers / credit accounts | Debt payment history, guarded hand-recorded debts, supplier accounts, account payments and debt import need `carehub_20270117_debt_and_supplier_accounts`; written and tested, not applied | Open: owner approval to apply |
 
 ## 2. Items
 
@@ -353,6 +354,27 @@ The new POS switch ([POS-Cost-Visibility.md](../docs/architecture/POS-Cost-Visib
 column-level revoke on `products.cost_price` for non-cost roles with a cost-free read for them (view or RPC), and every
 cost reader (Inventory, Purchases, reports, transfers, POS) switched over. The second changes access for existing roles
 and needs a plan before implementing.
+
+### A26. Debts, supplier accounts and credit accounts: migration to apply (Medium)
+
+**What (2026-11-14):** Receivables / Payables, part payments with history on debts recorded by hand, Excel/CSV debt
+import (matching or creating customers and suppliers without duplicates) and export, Purchases › Supplier summary
+(supplier accounts from purchases plus supply records, one payment applied oldest first) and POS › Credit customer
+accounts. Details: [Debt-Accounts-and-POS-Stock-Limits.md](../docs/architecture/Debt-Accounts-and-POS-Stock-Limits.md).
+POS stock limits (same note, §1) need no database change.
+
+**Database:** `supabase/migrations/carehub_20270117_debt_and_supplier_accounts.sql` (written against the live schema
+read 2026-11-14; 16 PGlite tests in `apps/carefind/src/test/debts/debtAccounts.db.test.js`). Until it is applied the app
+works as before: debts can only be marked paid in full, the supplier summary shows purchase totals without supply
+records or account payments, import says it is not available yet, and a customer-account payment that fits the oldest
+visit is recorded on it.
+
+**Close by:** apply with the owner's approval, run the probe in the migration header, record the version and results
+there, and check the security advisor shows only the intended new SECURITY DEFINER findings.
+
+**Also found (not changed):** `anon` holds full table grants on `debts` (RLS denies it every row; revoke as defence in
+depth). **Proposed:** a `suppliers` table so a supplier is an id rather than a normalised name (note §5); it would
+re-key purchases and their functions, so it needs its own plan.
 
 ## 3. Open items recorded in other audits
 

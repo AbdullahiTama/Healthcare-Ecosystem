@@ -1,6 +1,6 @@
 import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
-import { isMissingColumn } from '../../../lib/dbErrors'
+import { isMissingColumn, isMissingObject } from '../../../lib/dbErrors'
 import { translateBulkDeleteError, groupDeletions } from '../../../lib/bulkDelete'
 
 // The analytics filters every history/summary function takes, as RPC
@@ -172,6 +172,63 @@ export function createPurchaseRepository(request = sbFetch) {
     // Totals per supplier (get_supplier_balances): bought, paid, outstanding.
     async getSupplierBalances(businessId) {
       return request(`rpc/get_supplier_balances?p_business_id=${businessId}`)
+    },
+
+    // Supplier accounts (get_supplier_accounts, carehub_20270117): per supplier, its purchases plus its supply records
+    // (hand-recorded or imported "we owe" debts without products), with supplied, paid and outstanding totals and a
+    // count of items whose figures do not add up. Before the migration is applied, the purchase-only totals
+    // (get_supplier_balances) in the same shape, with `available: false` (account payments and supply records are
+    // then not offered). Returns { available, rows }.
+    async getSupplierAccounts(businessId) {
+      try {
+        const rows = await request('rpc/get_supplier_accounts', { method: 'POST', body: JSON.stringify({ p_business_id: businessId }) })
+        return { available: true, rows: rows || [] }
+      } catch (e) {
+        if (!isMissingObject(e)) throw e
+        const rows = await request(`rpc/get_supplier_balances?p_business_id=${businessId}`)
+        return {
+          available: false,
+          rows: (rows || []).map((r) => ({
+            supplier_key: r.supplier_key, supplier_name: r.supplier_name, purchase_count: r.purchase_count, supply_count: 0,
+            supplied_total: r.total_cost, paid_total: r.amount_paid, balance: r.balance, open_count: r.open_count, mismatch_count: 0,
+            last_supply_at: r.last_purchase_at,
+          })),
+        }
+      }
+    },
+
+    // One supplier's supplies (purchases and supply records) and every payment to it (get_supplier_activity). Before
+    // the migration: its purchases and purchase payments only. Returns { supplies, payments }.
+    async getSupplierActivity(businessId, supplierKey) {
+      try {
+        const r = await request('rpc/get_supplier_activity', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_supplier_key: supplierKey }) })
+        const a = Array.isArray(r) ? r[0] : r
+        return { supplies: a?.supplies || [], payments: a?.payments || [] }
+      } catch (e) {
+        if (!isMissingObject(e)) throw e
+        const [purchases, payments] = await Promise.all([
+          request('rpc/get_supplier_purchases', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_supplier_key: supplierKey }) }),
+          pagedQuery(request, `purchase_payments?business_id=eq.${businessId}&supplier_key=eq.${encodeURIComponent(supplierKey)}&order=created_at.desc,id.asc&select=*`),
+        ])
+        return {
+          supplies: (purchases || []).map((p) => ({
+            kind: 'purchase', id: p.id, party_name: p.supplier_name, date: p.supply_date, created_at: p.created_at,
+            description: p.product_name || 'Purchase', lines: Array.isArray(p.items) ? p.items.length : null,
+            amount: p.total_cost, paid: p.amount_paid, balance: Math.max(Number(p.balance) || 0, 0), due_date: p.due_date, status: p.status,
+          })),
+          payments: (payments || []).map((x) => ({ ...x, source: 'purchase', item_id: x.purchase_id })),
+        }
+      }
+    },
+
+    // One payment to a supplier, applied to its open purchases and supply records oldest first, all or nothing
+    // (record_supplier_payment). Returns { allocation_id, amount, allocations: [{ kind, id, amount, balance }], balance }.
+    async recordSupplierPayment(businessId, supplierKey, { amount, method = 'Transfer', paidOn = null, note = null, staffName = null }) {
+      const r = await request('rpc/record_supplier_payment', {
+        method: 'POST',
+        body: JSON.stringify({ p_business_id: businessId, p_supplier_key: supplierKey, p_amount: amount, p_method: method, p_paid_on: paidOn || null, p_note: note || null, p_staff_name: staffName || null }),
+      })
+      return Array.isArray(r) ? r[0] : r
     },
 
     // The purchases from one supplier, matched by the same key as the totals

@@ -11,7 +11,8 @@ import { blankItem, isBlankItem } from './lineItems'
 import { usePersistentDraft } from '../../hooks/usePersistentDraft'
 import { useAuth } from '../../providers/AuthProvider'
 import { upsertProducts } from '../inventory/productListState'
-import { PurchasePaymentModal, SupplierBalances, purchaseStatus } from './SupplierPayments'
+import { PurchasePaymentModal, purchaseStatus } from './SupplierPayments'
+import SupplierAccounts from './SupplierAccounts'
 import PurchaseDetailModal from './PurchaseDetail'
 import EditPurchaseModal from './EditPurchase'
 import PurchaseHistory from './PurchaseHistory'
@@ -394,7 +395,7 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
       </div>
 
       <div role='tablist' aria-label='Purchases views' style={{ display: 'flex', gap: 24, borderBottom: `1px solid ${border}`, marginBottom: 16 }}>
-        {[['purchases', 'Purchases'], ['history', 'History & analytics'], ['suppliers', 'Suppliers & payments']].map(([v, label]) => {
+        {[['purchases', 'Purchases'], ['history', 'History & analytics'], ['suppliers', 'Supplier summary']].map(([v, label]) => {
           const on = view === v
           return (
             <button key={v} type='button' role='tab' aria-selected={on} onClick={() => setView(v)}
@@ -406,7 +407,7 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
       </div>
 
       {view === 'suppliers' ? (
-        <SupplierBalances brand={brand} staffName={staffName} showToast={showToast} onPaid={load} />
+        <SupplierAccounts brand={brand} role={role} perms={perms} staffName={staffName} showToast={showToast} onPaid={load} />
       ) : view === 'history' ? (
         <PurchaseHistory brand={brand} suppliers={directory.suppliers} onOpenPurchase={(id) => setViewing({ id })} />
       ) : (<>

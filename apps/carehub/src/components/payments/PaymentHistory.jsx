@@ -6,6 +6,8 @@ const KIND_LABEL = {
   // purchase_payments
   at_purchase: 'Paid with the purchase',
   before_history: 'Paid before payment history was kept',
+  // debt_payments / expense_payments
+  at_recording: 'Paid when recorded',
   // sale_payments (the POS ledger): 'collection' is a normal repayment
   sale: 'Paid at the sale',
   refund: 'Refund',

@@ -14,7 +14,9 @@
 - **Purchases → Suppliers & payments.** For each supplier, the screen shows
   purchases, total bought, amount paid, amount owed and open purchases. A
   supplier's details list their unpaid purchases, each with "Record payment",
-  and the supplier's full payment history.
+  and the supplier's full payment history. Since 2026-11-14 this is **Supplier summary**, which adds supply records
+  without products and one payment on the account
+  ([Debt-Accounts-and-POS-Stock-Limits.md](Debt-Accounts-and-POS-Stock-Limits.md) §3).
 - **Debts → Mark paid.**
   - A credit-sale debt asks how the customer paid, then records the payment in
     the POS ledger. This flow came from the Sales & Accounts report work.

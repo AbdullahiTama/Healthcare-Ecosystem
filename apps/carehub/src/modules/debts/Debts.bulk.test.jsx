@@ -53,21 +53,23 @@ afterEach(async () => { await act(async () => root.unmount()); host.remove(); do
 describe('Debts: mark and edit', () => {
   it('sets a due date on all marked debts and the description only on hand-recorded ones', async () => {
     await mount()
-    await click(box('Ada')); await click(box('Landlord')); await click(box('Ben'))
-    expect(text()).toContain('3 selected')
+    // Receivables first; the marks are per tab (switching tab clears them), so Landlord is marked on Payables alone.
+    expect(box('Landlord')).toBeNull()
+    await click(box('Ada')); await click(box('Ben'))
+    expect(text()).toContain('2 selected')
     await click(btn((b) => b.textContent.includes('Edit selected')))
-    expect(dialog().textContent).toContain('3 marked, ₦27,000 outstanding.')
+    expect(dialog().textContent).toContain('2 marked, ₦7,000 outstanding.')
     expect(dialog().textContent).toContain('1 marked debt comes from a credit sale or a purchase and keeps its description.')
     await type(dialog().querySelector('select'), 'set')
     await type(dialog().querySelector('input[type="date"]'), '2026-12-01')
     await type([...dialog().querySelectorAll('input')].find((i) => i.placeholder === 'Leave as it is'), 'Old balance')
-    // Landlord already has that due date; Ben (credit sale) gets the date only.
-    expect(dialog().textContent).toContain('3 of 3 debts will change.')
-    await click(btn((b) => b.textContent.startsWith('Update 3 debts')))
+    // Ben (credit sale) gets the date only.
+    expect(dialog().textContent).toContain('2 of 2 debts will change.')
+    await click(btn((b) => b.textContent.startsWith('Update 2 debts')))
     const calls = repo.updateMany.mock.calls.map(([, ids, u]) => [ids.slice().sort(), u])
     expect(calls).toContainEqual([['d1'], { due_date: '2026-12-01', description: 'Old balance' }])
-    expect(calls).toContainEqual([['d2'], { description: 'Old balance' }])
     expect(calls).toContainEqual([['d3'], { due_date: '2026-12-01' }])
+    expect(calls.some(([ids]) => ids.includes('d2'))).toBe(false)
     for (const [, u] of calls) expect(Object.keys(u).every((k) => k === 'due_date' || k === 'description')).toBe(true)
     expect(db.find((d) => d.id === 'd3').description).toBe('Credit sale')
   })
@@ -133,8 +135,8 @@ describe('Debts: other locations', () => {
     await type(document.getElementById(id), '')
     expect(text()).toContain('Zed')
     expect(box('Zed')).toBeNull()
-    await click(btn((b) => b.textContent === 'Select all 3 shown'))
-    expect(text()).toContain('3 selected')
+    await click(btn((b) => b.textContent === 'Select all 2 shown'))
+    expect(text()).toContain('2 selected')
   })
 
   it('kept reasons read as sentences', () => {

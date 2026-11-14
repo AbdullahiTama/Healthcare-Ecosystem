@@ -23,3 +23,22 @@ export function debtTotals(debts = []) {
 export function matchesParty(debt, search) {
   return matchesText([debt?.party_name], search)
 }
+
+// Amount, paid and outstanding for a list of debts (one direction: the Receivables or Payables tab), in whole kobo.
+// `unreconciled` counts debts whose amount is not paid + balance (a figure that would not add up is shown, not hidden).
+export function debtLedgerTotals(debts = []) {
+  let amount = 0
+  let paid = 0
+  let balance = 0
+  let open = 0
+  let unreconciled = 0
+  for (const d of debts) {
+    const a = toKobo(d.amount)
+    const p = toKobo(d.amount_paid)
+    const b = Math.max(toKobo(d.balance), 0)
+    amount += a; paid += p; balance += b
+    if (b > 0) open++
+    if (Math.abs(a - p - b) > 0 && !(d.status === 'paid' && b === 0)) unreconciled++
+  }
+  return { amount: amount / 100, paid: paid / 100, balance: balance / 100, open, count: debts.length, unreconciled }
+}

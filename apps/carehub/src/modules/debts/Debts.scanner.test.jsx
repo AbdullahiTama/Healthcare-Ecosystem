@@ -103,12 +103,13 @@ describe('Debts — a USB scan is never recorded', () => {
     expect(debts.create).not.toHaveBeenCalled()
   })
 
-  it('the scanner\'s Enter on a row\'s Mark paid does not settle a hand-entered debt', async () => {
+  it('the scanner\'s Enter on a row\'s Record payment does not open or pay a hand-entered debt', async () => {
     await render()
-    const markPaid = buttons('Mark paid')[1] // Chidi, manual: one click settles it
-    const enter = countEnter(markPaid)
-    await scan(markPaid, UPC)
+    const recordPayment = host.querySelector('button[aria-label="Record payment: Chidi"]')
+    const enter = countEnter(recordPayment)
+    await scan(recordPayment, UPC)
     expect(enter.v).toBe(0)
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
     expect(debts.update).not.toHaveBeenCalled()
   })
 
@@ -125,7 +126,7 @@ describe('Debts — a USB scan is never recorded', () => {
 
   it('a scan into the search box is undone', async () => {
     await render()
-    const search = host.querySelector('input[aria-label="Search debts by customer or party name"]')
+    const search = host.querySelector('input[aria-label="Search receivables by customer name"]')
     await act(async () => { setValue(search, 'Bo') })
     await scan(search, UPC)
     expect(search.value).toBe('Bo')

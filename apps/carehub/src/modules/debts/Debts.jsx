@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useKeyboardScanner, fieldSnapshot, restoreField } from '../../hooks/useKeyboardScanner'
-import { debtTotals } from './debtTotals'
-import { DEFAULT_DEBT_FILTERS, PAYMENT_STATUSES, DEBT_SOURCES, DIRECTIONS, AMOUNT_BASES, filterDebts, debtPaymentStatus, activeDebtFilterCount, describeDebtFilters } from './debtFilters'
-import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck, MapPin, Trash2, RotateCcw } from 'lucide-react'
+import { debtLedgerTotals } from './debtTotals'
+import { DEFAULT_DEBT_FILTERS, PAYMENT_STATUSES, DEBT_SOURCES, AMOUNT_BASES, filterDebts, debtPaymentStatus, activeDebtFilterCount, describeDebtFilters } from './debtFilters'
+import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck, MapPin, Trash2, RotateCcw, Upload, Download, AlertTriangle } from 'lucide-react'
 import { debtRepository } from './repositories'
 // Owners read every location's debts (the database allows it: current_business_ids()); the list of locations comes
 // from the locations module's own repository.
@@ -13,6 +13,11 @@ import BulkDeleteModal from '../../components/BulkDeleteModal'
 import RecentlyDeletedModal from '../../components/RecentlyDeletedModal'
 import { runBulkUpdates } from '../../lib/bulkUpdates'
 import DebtBulkEditModal from './components/DebtBulkEditModal'
+import DebtPaymentModal from './components/DebtPaymentModal'
+import DebtImportModal from './components/DebtImportModal'
+import ExportFormatModal from '../../components/ExportFormatModal'
+import { auditedExport, exportColumns } from '../../lib/auditedExport'
+import { debtExportColumns, debtExportRows } from './debtImport'
 import { FilterPanel, FilterSelect, AmountRangeFilter } from '../../components/RecordFilters'
 import { yearsOf } from '../../lib/recordFilters'
 import { useQueryParamAction } from '../../hooks/useQueryParamAction'
@@ -32,9 +37,17 @@ import { PurchasePaymentModal } from '../purchases/SupplierPayments'
 import { isManagerRole } from '../../lib/permissions'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
+import { Card, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Loading, Empty, ErrorState, DataTable, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, bg } = theme
+
+// The two ledgers: Receivables (customers and others who owe the business) and Payables (suppliers and others it
+// owes). Every debt is in exactly one, by its direction.
+export const DEBT_TABS = [
+  ['owes_us', 'Receivables', 'Owed to the business'],
+  ['we_owe', 'Payables', 'Owed by the business'],
+]
+const isManual = (d) => (d?.source || 'manual') === 'manual'
 
 // `short`: the Details-column pill has less room than the Source column, so it
 // uses "Sale" instead of "Credit Sale" — same icon/source mapping either way.
@@ -68,9 +81,12 @@ export default function Debts({ brand, role, perms, staffName }) {
   const defaultLocation = multiLocation ? String(brand?.id) : ''
   const [filters, setFilters] = useState(DEFAULT_DEBT_FILTERS)
   const setFilter = (k, v) => setFilters(p => ({ ...p, [k]: v }))
+  // Receivables or Payables; the direction filter is the tab.
+  const [tab, setTab] = useState('owes_us')
+  const receivables = tab === 'owes_us'
   const clearFilters = () => setFilters({ ...DEFAULT_DEBT_FILTERS, location: defaultLocation })
   const [page, setPage] = useState(0)
-  useEffect(() => { setPage(0) }, [filters, debts.length])
+  useEffect(() => { setPage(0) }, [filters, debts.length, tab])
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ direction: 'owes_us' })
   const [saving, setSaving] = useState(false)
@@ -80,6 +96,11 @@ export default function Debts({ brand, role, perms, staffName }) {
   // The debt opened in full, and a purchase being paid from it.
   const [detail, setDetail] = useState(null)
   const [payingPurchase, setPayingPurchase] = useState(null)
+  // A hand-recorded debt being paid (full or part, with its history); import and export dialogs.
+  const [payingDebt, setPayingDebt] = useState(null)
+  const [showImport, setShowImport] = useState(false)
+  const [showExport, setShowExport] = useState(false)
+  const canExport = role === 'Owner' || !!perms?.canExportReports
   const { data: settings } = useSettings(brand?.id)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
@@ -129,10 +150,12 @@ export default function Debts({ brand, role, perms, staffName }) {
 
   async function save() {
     if (!form.party || !form.amount) { showToast('Please enter party name and amount.', { type: 'warning' }); return }
+    const amt = parseFloat(form.amount) || 0
+    const paid = parseFloat(form.amountPaid) || 0
+    if (amt <= 0 || paid < 0) { showToast('Enter an amount greater than zero.', { type: 'warning' }); return }
+    if (paid > amt) { showToast('The amount already paid cannot be more than the total amount.', { type: 'warning' }); return }
     setSaving(true)
     try {
-      const amt = parseFloat(form.amount) || 0
-      const paid = parseFloat(form.amountPaid) || 0
       await debtRepository.create(brand.id, {
         client_id: form.client_id || null,
         direction: form.direction || 'owes_us',
@@ -145,7 +168,7 @@ export default function Debts({ brand, role, perms, staffName }) {
         description: form.description || '',
       })
       showToast('Debt recorded!', { type: 'success' })
-      setForm({ direction: 'owes_us' }); setShowAdd(false); load()
+      setForm({ direction: tab }); setShowAdd(false); load()
     } catch (e) { showToast('Could not save debt. Please try again.', { type: 'error' }) }
     setSaving(false)
   }
@@ -157,6 +180,8 @@ export default function Debts({ brand, role, perms, staffName }) {
   // (or when the sale cannot be found) the debt-only update is kept.
   function markPaid(debt) {
     if (debt.source === 'credit_sale' && debt.source_ref) { setPayMethod('Cash'); setPayTarget(debt); return }
+    // A debt recorded by hand or imported: full or part payment, kept in its payment history.
+    if (isManual(debt)) { setPayingDebt(debt); return }
     markDebtPaid(debt)
   }
 
@@ -224,11 +249,13 @@ export default function Debts({ brand, role, perms, staffName }) {
   // A debt of another location is shown and counted, but settled from that location (switch to it first): its
   // sale, purchase, receipt settings and staff attribution all belong there.
   const isHere = (d) => !d.business_id || String(d.business_id) === String(brand?.id)
-  const filtered = useMemo(() => filterDebts(debts, filters), [debts, filters])
-  const activeCount = activeDebtFilterCount(filters, defaultLocation)
+  const filtered = useMemo(() => filterDebts(debts, { ...filters, direction: tab }), [debts, filters, tab])
+  const activeCount = activeDebtFilterCount({ ...filters, direction: '' }, defaultLocation)
   const isFiltered = activeCount > 0
-  // The cards always total the rows on screen: every filter (including location) recalculates them.
-  const shown = debtTotals(filtered)
+  // The cards always total the rows on screen: the tab and every filter (including location) recalculate them.
+  const shown = debtLedgerTotals(filtered)
+  // Each tab's outstanding total for the location in view (filters other than location do not change the tab label).
+  const tabTotals = useMemo(() => Object.fromEntries(DEBT_TABS.map(([dir]) => [dir, debtLedgerTotals(filterDebts(debts, { location: filters.location, direction: dir }))])), [debts, filters.location])
   const statusCounts = useMemo(() => {
     const c = { paid: 0, partial: 0, unpaid: 0 }
     filtered.forEach(d => { c[debtPaymentStatus(d)]++ })
@@ -277,36 +304,80 @@ export default function Debts({ brand, role, perms, staffName }) {
       throw e
     }
   }
+  // ── Import (DebtImportModal → import_debts) and export (the rows on screen) ──────────────────────────────────
+  function onImported(r) {
+    // The dialog refreshes the cached customers, supplier accounts and debt lists itself.
+    load()
+    console.info('[debts] import finished', { direction: tab, ...r.summary })
+  }
+  async function exportShown(format) {
+    const clientsById = new Map(clients.map(c => [String(c.id), c]))
+    const statusLabel = (d) => PAYMENT_STATUSES.find(([k]) => k === debtPaymentStatus(d))[1]
+    return auditedExport({
+      format, rows: debtExportRows(filtered, { clientsById, statusLabel }),
+      columns: exportColumns(debtExportColumns(tab), ['amount', 'paid', 'balance']),
+      sheetName: receivables ? 'Receivables' : 'Payables', fileBase: receivables ? 'CareHub_Receivables' : 'CareHub_Payables',
+      businessId: brand.id, exportType: 'debts', noun: 'debt', showToast, logTag: '[debts]',
+      // The search text itself is not stored, only that one was applied.
+      filters: { direction: tab, status: filters.status || null, source: filters.source || null, location: filters.location || null, search_applied: !!filters.search.trim(), debts: filtered.length },
+    })
+  }
+
   const describeRestore = (r) => (r?.client_unlinked ? `${r.client_unlinked} no longer linked to a client, because the client was deleted; the name is kept.` : '')
 
   return (
     <div ref={rootRef}>
-      <SectionHead title='Debts' sub='Track money owed to you and money you owe' btn='+ Record Debt' onBtn={() => setShowAdd(true)}
-        extraBtn={canBulkDelete ? { label: 'Recently deleted', icon: <RotateCcw size={14} aria-hidden='true' />, onClick: () => setShowDeleted(true) } : undefined} />
+      <SectionHead title='Debts' sub='Receivables (owed to you) and payables (what you owe), with every payment' btn='+ Record Debt' onBtn={() => { setForm({ direction: tab }); setShowAdd(true) }}
+        extraBtns={[
+          { label: 'Import', icon: <Upload size={14} aria-hidden='true' />, onClick: () => setShowImport(true), title: `Import ${receivables ? 'receivables' : 'payables'} from Excel or CSV` },
+          ...(canExport ? [{ label: 'Export', icon: <Download size={14} aria-hidden='true' />, onClick: () => setShowExport(true), title: `Export ${receivables ? 'receivables' : 'payables'} to Excel or CSV` }] : []),
+          ...(canBulkDelete ? [{ label: 'Recently deleted', icon: <RotateCcw size={14} aria-hidden='true' />, onClick: () => setShowDeleted(true) }] : []),
+        ]} />
 
-      {/* Totals for the debts on screen: every filter recalculates them. */}
+      <div role='tablist' aria-label='Receivables and payables' style={{ display: 'flex', gap: 24, borderBottom: `1px solid ${border}`, marginBottom: 16, overflowX: 'auto' }}>
+        {DEBT_TABS.map(([dir, label, hint]) => {
+          const on = tab === dir
+          const t = tabTotals[dir]
+          return (
+            <button key={dir} type='button' role='tab' id={`debts-tab-${dir}`} aria-selected={on} aria-controls='debts-panel' onClick={() => { setTab(dir); setMarked(new Set()) }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '10px 2px', marginBottom: -1, textAlign: 'left', borderBottom: on ? `2px solid ${tealDeep}` : '2px solid transparent', whiteSpace: 'nowrap' }}>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: on ? 800 : 600, color: on ? tealDeep : gray600 }}>{label}</span>
+              <span style={{ display: 'block', fontSize: 11.5, color: gray500 }}>{hint}{!loading && !loadError ? ` · ${fmt(t.balance)}` : ''}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div id='debts-panel' role='tabpanel' aria-labelledby={`debts-tab-${tab}`}>
+      {/* Totals for the debts on screen: the tab and every filter recalculate them. Amount = paid + outstanding. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: '14px', marginBottom: '20px' }}>
+        <Card style={{ padding: '18px', borderLeft: `4px solid ${receivables ? success : danger}` }}>
+          <div style={{ fontSize: '12px', color: gray500, fontWeight: '600' }}>{receivables ? 'Outstanding: owed to you' : 'Outstanding: you owe'}</div>
+          <div style={{ fontSize: '24px', fontWeight: '900', color: receivables ? success : danger, marginTop: '6px' }}>{loadError ? '—' : fmt(shown.balance)}</div>
+          <div style={{ fontSize: '11.5px', color: gray500, marginTop: '4px' }}>{shown.open} open debt{shown.open !== 1 ? 's' : ''}</div>
+        </Card>
         <Card style={{ padding: '18px', borderLeft: `4px solid ${navy}` }}>
-          <div style={{ fontSize: '12px', color: gray500, fontWeight: '600' }}>Total outstanding</div>
-          <div style={{ fontSize: '24px', fontWeight: '900', color: navy, marginTop: '6px' }}>{loadError ? '—' : fmt(shown.outstanding)}</div>
-          <div style={{ fontSize: '11.5px', color: gray500, marginTop: '4px' }}>{shown.openOwedToUs + shown.openWeOwe} open debt{shown.openOwedToUs + shown.openWeOwe !== 1 ? 's' : ''}</div>
+          <div style={{ fontSize: '12px', color: gray500, fontWeight: '600' }}>{receivables ? 'Total owed' : 'Total supplied / owed'}</div>
+          <div style={{ fontSize: '24px', fontWeight: '900', color: navy, marginTop: '6px' }}>{loadError ? '—' : fmt(shown.amount)}</div>
+          <div style={{ fontSize: '11.5px', color: gray500, marginTop: '4px' }}>{shown.count} debt{shown.count !== 1 ? 's' : ''}</div>
         </Card>
-        <Card style={{ padding: '18px', borderLeft: `4px solid ${success}` }}>
-          <div style={{ fontSize: '12px', color: gray500, fontWeight: '600' }}>Owed to us</div>
-          <div style={{ fontSize: '24px', fontWeight: '900', color: success, marginTop: '6px' }}>{loadError ? '—' : fmt(shown.owedToUs)}</div>
-          <div style={{ fontSize: '11.5px', color: gray500, marginTop: '4px' }}>{shown.openOwedToUs} open</div>
-        </Card>
-        <Card style={{ padding: '18px', borderLeft: `4px solid ${danger}` }}>
-          <div style={{ fontSize: '12px', color: gray500, fontWeight: '600' }}>We owe others</div>
-          <div style={{ fontSize: '24px', fontWeight: '900', color: danger, marginTop: '6px' }}>{loadError ? '—' : fmt(shown.weOwe)}</div>
-          <div style={{ fontSize: '11.5px', color: gray500, marginTop: '4px' }}>{shown.openWeOwe} open</div>
+        <Card style={{ padding: '18px', borderLeft: `4px solid ${tealDeep}` }}>
+          <div style={{ fontSize: '12px', color: gray500, fontWeight: '600' }}>{receivables ? 'Payments received' : 'Payments made'}</div>
+          <div style={{ fontSize: '24px', fontWeight: '900', color: tealDeep, marginTop: '6px' }}>{loadError ? '—' : fmt(shown.paid)}</div>
+          <div style={{ fontSize: '11.5px', color: gray500, marginTop: '4px' }}>Total owed − payments = outstanding</div>
         </Card>
       </div>
+      {!loading && !loadError && shown.unreconciled > 0 && (
+        <div role='status' style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', marginBottom: 14, borderRadius: theme.radius.md, background: theme.warningBg, border: `1px solid ${theme.warning}`, fontSize: 12.5, color: navy }}>
+          <AlertTriangle size={15} color={theme.warning} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden='true' />
+          <span>{shown.unreconciled} debt{shown.unreconciled === 1 ? '' : 's'} on screen {shown.unreconciled === 1 ? 'has' : 'have'} an outstanding balance that is not its amount less what was paid (recorded before payment history was kept). Open {shown.unreconciled === 1 ? 'it' : 'them'} to check.</span>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '180px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
           <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
-          <input value={filters.search} onChange={e => setFilter('search', e.target.value)} placeholder='Search customer, supplier or party name...' aria-label='Search debts by customer or party name'
+          <input value={filters.search} onChange={e => setFilter('search', e.target.value)} placeholder={receivables ? 'Search customer name...' : 'Search supplier or party name...'} aria-label={receivables ? 'Search receivables by customer name' : 'Search payables by supplier or party name'}
             style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
         </div>
       </div>
@@ -321,7 +392,6 @@ export default function Debts({ brand, role, perms, staffName }) {
             options={locations.map(l => [String(l.id), locationName(l.id) + (String(l.id) === String(brand?.id) ? ' (this location)' : '')])} />
         )}
         <FilterSelect label='Payment status' value={filters.status} onChange={v => setFilter('status', v)} options={PAYMENT_STATUSES} />
-        <FilterSelect label='Direction' value={filters.direction} onChange={v => setFilter('direction', v)} options={DIRECTIONS} />
         <FilterSelect label='Transaction type / source' value={filters.source} onChange={v => setFilter('source', v)} options={DEBT_SOURCES} />
         <AmountRangeFilter label='Amount range (₦)' value={filters.amount} onChange={v => setFilter('amount', v)}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: gray600, marginBottom: 6 }}>
@@ -337,8 +407,7 @@ export default function Debts({ brand, role, perms, staffName }) {
       {isFiltered && !loading && !loadError && (
         <div role='status' aria-live='polite' style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 18px', padding: '12px 16px', marginBottom: '14px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}` }}>
           <span style={{ fontSize: '12.5px', color: gray600 }}>{shown.count} debt{shown.count !== 1 ? 's' : ''} for {filterLabel}</span>
-          <span style={{ fontSize: '13px', color: gray600 }}>Outstanding, owed to you: <strong style={{ color: success, fontSize: '15px' }}>{fmt(shown.owedToUs)}</strong>{shown.openOwedToUs > 0 && <span style={{ color: gray500 }}> ({shown.openOwedToUs} open)</span>}</span>
-          {shown.weOwe > 0 && <span style={{ fontSize: '13px', color: gray600 }}>You owe: <strong style={{ color: danger, fontSize: '15px' }}>{fmt(shown.weOwe)}</strong></span>}
+          <span style={{ fontSize: '13px', color: gray600 }}>Outstanding: <strong style={{ color: receivables ? success : danger, fontSize: '15px' }}>{fmt(shown.balance)}</strong>{shown.open > 0 && <span style={{ color: gray500 }}> ({shown.open} open)</span>}</span>
           {shown.count > 0 && <span style={{ fontSize: '12px', color: gray500 }}>{statusCounts.unpaid} unpaid · {statusCounts.partial} partially paid · {statusCounts.paid} paid</span>}
         </div>
       )}
@@ -346,7 +415,7 @@ export default function Debts({ brand, role, perms, staffName }) {
       {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : filtered.length === 0 ? (
         isFiltered
           ? <Empty icon={<Search size={40} />} message={`No debts match ${filterLabel}`} cause='filtered' action='Clear filters' onAction={clearFilters} />
-          : <Empty icon={<Landmark size={40} />} message='No debts recorded' action='+ Record Debt' onAction={() => setShowAdd(true)} />
+          : <Empty icon={<Landmark size={40} />} message={receivables ? 'No receivables recorded' : 'No payables recorded'} action='+ Record Debt' onAction={() => { setForm({ direction: tab }); setShowAdd(true) }} />
       ) : (
         <>
         <SelectionBar count={markedDebts.length} shownCount={markable.length} allShownSelected={allShownMarked}
@@ -377,11 +446,7 @@ export default function Debts({ brand, role, perms, staffName }) {
               render: d => <Pill label={sourceLabel(d.source, false)} type={d.source === 'purchase' ? 'amber' : d.source === 'credit_sale' ? 'blue' : 'gray'} />,
             },
             {
-              key: 'direction', label: 'Direction', sortable: true,
-              render: d => <Pill label={d.direction === 'owes_us' ? 'Owed to Us' : 'We Owe'} type={d.direction === 'owes_us' ? 'green' : 'red'} />,
-            },
-            {
-              key: 'party_name', label: 'Party', sortable: true,
+              key: 'party_name', label: receivables ? 'Customer' : 'Supplier / party', sortable: true,
               render: d => (
                 <>
                   {/* The row opens the debt in full; the name is its keyboard-reachable button. */}
@@ -435,12 +500,13 @@ export default function Debts({ brand, role, perms, staffName }) {
           onRowClick={d => setDetail(d)}
           actions={d => (
             d.status !== 'paid' && (isHere(d)
-              ? <button onClick={(e) => { e.stopPropagation(); markPaid(d) }} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Mark paid</button>
+              ? <button onClick={(e) => { e.stopPropagation(); markPaid(d) }} aria-label={`${isManual(d) ? 'Record payment' : 'Mark paid'}: ${d.party_name || 'debt'}`} style={{ padding: '6px 12px', minHeight: 32, borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>{isManual(d) ? 'Record payment' : 'Mark paid'}</button>
               : <span style={{ fontSize: '11px', color: gray500, whiteSpace: 'nowrap' }}>Settle at {locationName(d.business_id) || 'its location'}</span>)
           )}
         />
         </>
       )}
+      </div>
 
       {showBulkEdit && <DebtBulkEditModal debts={markedDebts} runUpdates={runDebtUpdates} onClose={() => setShowBulkEdit(false)} />}
       {showBulkDelete && (
@@ -460,13 +526,13 @@ export default function Debts({ brand, role, perms, staffName }) {
           onClose={() => setShowDeleted(false)} />
       )}
 
-      <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ direction: 'owes_us' }) }} title='Record Debt'
-        footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({ direction: 'owes_us' }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Debt'}</TealBtn></>}>
+      <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ direction: tab }) }} title='Record Debt'
+        footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({ direction: tab }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Debt'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
             <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '8px' }}>Direction</div>
             <div style={{ display: 'flex', gap: '10px' }}>
-              {[['owes_us', 'Client owes us'], ['we_owe', 'We owe someone']].map(([val, label]) => (
+              {[['owes_us', 'Receivable: owed to us'], ['we_owe', 'Payable: we owe']].map(([val, label]) => (
                 <label key={val} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${form.direction === val ? tealDeep : border}`, background: form.direction === val ? tealMist : 'white', cursor: 'pointer', fontSize: '13px', color: navy }}>
                   <input type='radio' checked={form.direction === val} onChange={() => f('direction', val)} style={{ accentColor: tealDeep }} />{label}
                 </label>
@@ -516,10 +582,21 @@ export default function Debts({ brand, role, perms, staffName }) {
       {detail && !isHere(detail) && (
         <OtherLocationDebt debt={detail} locationName={locationName(detail.business_id)} onClose={() => setDetail(null)} />
       )}
-      {detail && isHere(detail) && (
+      {detail && isHere(detail) && isManual(detail) && (
+        <DebtPaymentModal brand={brand} debt={detail} staffName={staffName} showToast={showToast} onClose={() => setDetail(null)} onPaid={load} />
+      )}
+      {detail && isHere(detail) && !isManual(detail) && (
         <DebtDetail debt={detail} brand={brand} settings={settings} canRefund={role === 'Owner' || isManagerRole(role)} showToast={showToast}
           onClose={() => setDetail(null)} onChanged={load} onMarkPaid={markPaid}
           onPay={(purchase) => { setDetail(null); setPayingPurchase(purchase) }} />
+      )}
+      {payingDebt && (
+        <DebtPaymentModal brand={brand} debt={payingDebt} staffName={staffName} showToast={showToast} onClose={() => setPayingDebt(null)} onPaid={load} />
+      )}
+      {showImport && <DebtImportModal brand={brand} direction={tab} onClose={() => setShowImport(false)} onDone={onImported} />}
+      {showExport && (
+        <ExportFormatModal show onClose={() => setShowExport(false)} onExport={exportShown} title={`Export ${receivables ? 'receivables' : 'payables'}`} name='debt-export-format'
+          description={`Exports the ${filtered.length} ${receivables ? 'receivable' : 'payable'}${filtered.length === 1 ? '' : 's'} on screen (with the filters applied), in the same columns as the import template, with each debt's balance and status. The export is recorded in the audit log.`} />
       )}
       {payingPurchase && (
         <PurchasePaymentModal brand={brand} purchase={payingPurchase} staffName={staffName} showToast={showToast}
