@@ -197,6 +197,51 @@ export function createPurchaseRepository(request = sbFetch) {
       }
     },
 
+    // ── Supplier list (table `suppliers`, carehub_20270119_supplier_directory) ──────────────────────────────────
+    // Contact details per supplier, keyed like purchases (supplier_key = lower(btrim(name))). Before the migration is
+    // applied the table is missing: { available: false, rows: [] }, and the screen offers no supplier-list import.
+    async getSuppliers(businessId) {
+      try {
+        const rows = await pagedQuery(request, `suppliers?business_id=eq.${businessId}&order=name.asc,id.asc&select=id,name,supplier_key,contact_person,phone,email,address,notes,created_at,updated_at`)
+        return { available: true, rows }
+      } catch (e) {
+        if (isMissingObject(e)) return { available: false, rows: [] }
+        throw e
+      }
+    },
+
+    // Adds suppliers; a name the business already has (any capitals or spacing) is skipped by the unique key, never
+    // overwritten, so an import running alongside another add cannot duplicate one. In batches; a failed batch is
+    // reported and the rest continue. Returns { added: [names], skipped: n, failed: [{ names, message }] }.
+    async createSuppliers(businessId, records, batchSize = 200) {
+      const added = []
+      const failed = []
+      let skipped = 0
+      for (let i = 0; i < records.length; i += batchSize) {
+        const batch = records.slice(i, i + batchSize).map((r) => ({ ...r, business_id: businessId }))
+        try {
+          const rows = await request('suppliers?on_conflict=business_id,supplier_key', {
+            method: 'POST', body: JSON.stringify(batch), prefer: 'resolution=ignore-duplicates,return=representation',
+          })
+          const n = Array.isArray(rows) ? rows.length : 0
+          added.push(...(rows || []).map((r) => r.name))
+          skipped += batch.length - n
+        } catch (e) {
+          failed.push({ names: batch.map((r) => r.name), message: e?.message || 'Could not save' })
+        }
+      }
+      return { added, skipped, failed }
+    },
+
+    // Saves changes to one supplier record (tenant-scoped). The database keeps the name's key fixed.
+    async updateSupplier(businessId, id, changes) {
+      const rows = await request(`suppliers?id=eq.${id}&business_id=eq.${businessId}`, {
+        method: 'PATCH', body: JSON.stringify(changes), prefer: 'return=representation',
+      })
+      if (Array.isArray(rows) && rows.length === 0) throw new Error('This supplier could not be found. It may belong to another location.')
+      return Array.isArray(rows) ? rows[0] : rows
+    },
+
     // One supplier's supplies (purchases and supply records) and every payment to it (get_supplier_activity). Before
     // the migration: its purchases and purchase payments only. Returns { supplies, payments }.
     async getSupplierActivity(businessId, supplierKey) {

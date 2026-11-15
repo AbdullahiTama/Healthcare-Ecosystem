@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Search, Truck, X, Upload, Download, Plus, AlertTriangle } from 'lucide-react'
+import { Search, Truck, X, Upload, Download, Plus, AlertTriangle, Pencil, Phone, Mail, MapPin, User, Users, Wallet } from 'lucide-react'
 import { Card, Modal, Empty, ErrorState, Loading, Pill, Input, Textarea, GhostBtn, TealBtn } from '../../components/ui'
 import RecordPaymentForm from '../../components/payments/RecordPaymentForm'
 import PaymentHistory from '../../components/payments/PaymentHistory'
 import ExportFormatModal from '../../components/ExportFormatModal'
-import { useSupplierAccounts, useSupplierActivity, useRecordSupplierPayment } from '../../hooks/queries'
+import { useSupplierAccounts, useSupplierActivity, useRecordSupplierPayment, useSuppliers, useUpdateSupplier } from '../../hooks/queries'
 import { paymentErrorMessage } from '../../lib/dbErrors'
 import { auditedExport, exportColumns } from '../../lib/auditedExport'
 import { fmt, fmtDate } from '../../lib/utils'
@@ -16,12 +16,17 @@ import DebtImportModal from '../debts/components/DebtImportModal'
 import { debtRepository } from '../debts/repositories'
 import { matchSupplier, supplierKey } from './suppliers'
 import { toAccount, accountTotals, filterAccounts, ACCOUNT_SORTS, groupSupplierPayments, SUPPLIER_EXPORT_COLUMNS } from './supplierAccounts'
+import { mergeSuppliers, SUPPLIER_CONTACT_EXPORT_COLUMNS, supplierFormChanges, validateSupplierForm } from './supplierDirectory'
+import SupplierImportModal from './components/SupplierImportModal'
+import { purchaseRepository } from './repositories'
 
 const { navy, gray400, gray500, gray600, gray100, border, danger, success, tealDeep, warning, warningBg } = theme
 
 // Purchases › Supplier summary: every supplier's account (what it supplied, what was paid, what is still owed) built
 // from the existing purchases plus supply records (amounts owed without products), with supply and payment history,
-// one payment on the account (applied oldest first), import and export. Product quantities and prices stay in the
+// one payment on the account (applied oldest first), import and export. Suppliers with a record in the supplier list
+// (carehub_20270119) also show their contact details, and suppliers added to the list before any purchase show with
+// nothing supplied yet (docs/architecture/Supplier-Directory.md). Product quantities and prices stay in the
 // Purchase entry; nothing here needs them. Docs: docs/architecture/Debt-Accounts-and-POS-Stock-Limits.md §3.
 export default function SupplierAccounts({ brand, role, perms, staffName, showToast, onPaid }) {
   const accountsQuery = useSupplierAccounts(brand?.id)
@@ -29,11 +34,16 @@ export default function SupplierAccounts({ brand, role, perms, staffName, showTo
   const [sort, setSort] = useState('owed')
   const [owingOnly, setOwingOnly] = useState(false)
   const [selectedKey, setSelectedKey] = useState(null)
-  const [showImport, setShowImport] = useState(false)
+  const [showImport, setShowImport] = useState(null) // null | 'choose' | 'list' | 'balances'
+  const [editing, setEditing] = useState(null) // { record, name } | null: add or edit a supplier's details
   const [showExport, setShowExport] = useState(false)
   const [addingFor, setAddingFor] = useState(null) // '' = choose a supplier; a name = that supplier
   const available = accountsQuery.data?.available !== false
-  const accounts = useMemo(() => (accountsQuery.data?.rows || []).map(toAccount), [accountsQuery.data])
+  const directoryQuery = useSuppliers(brand?.id)
+  const directory = directoryQuery.data?.rows || []
+  const listAvailable = directoryQuery.data?.available === true
+  const plainAccounts = useMemo(() => (accountsQuery.data?.rows || []).map(toAccount), [accountsQuery.data])
+  const accounts = useMemo(() => mergeSuppliers(plainAccounts, directory), [plainAccounts, directory])
   const rows = useMemo(() => filterAccounts(accounts, { query, sort, owingOnly }), [accounts, query, sort, owingOnly])
   const totals = accountTotals(rows)
   const canExport = role === 'Owner' || !!perms?.canExportReports
@@ -41,20 +51,22 @@ export default function SupplierAccounts({ brand, role, perms, staffName, showTo
 
   async function exportShown(format) {
     return auditedExport({
-      format, rows, columns: exportColumns(SUPPLIER_EXPORT_COLUMNS, ['supplied', 'paid', 'balance']),
+      format, rows,
+      columns: exportColumns(listAvailable ? [SUPPLIER_EXPORT_COLUMNS[0], ...SUPPLIER_CONTACT_EXPORT_COLUMNS, ...SUPPLIER_EXPORT_COLUMNS.slice(1)] : SUPPLIER_EXPORT_COLUMNS, ['supplied', 'paid', 'balance']),
       sheetName: 'Supplier accounts', fileBase: 'CareHub_Supplier_Accounts', businessId: brand.id, exportType: 'supplier_accounts',
       noun: 'supplier', showToast, logTag: '[suppliers]',
       filters: { search_applied: !!query.trim(), owing_only: owingOnly, sort, suppliers: rows.length },
     })
   }
 
-  if (accountsQuery.isLoading) return <Loading text='Loading supplier accounts…' />
+  if (accountsQuery.isLoading || directoryQuery.isLoading) return <Loading text='Loading suppliers…' />
   if (accountsQuery.isError) return <ErrorState message="We couldn't load your supplier accounts." onRetry={() => accountsQuery.refetch()} />
 
   const toolbar = (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {listAvailable && <GhostBtn onClick={() => setEditing({ record: null, name: '' })} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={14} aria-hidden='true' /> Add supplier</GhostBtn>}
       {available && <GhostBtn onClick={() => setAddingFor('')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={14} aria-hidden='true' /> Supply record</GhostBtn>}
-      {available && <GhostBtn onClick={() => setShowImport(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Upload size={14} aria-hidden='true' /> Import</GhostBtn>}
+      {(available || listAvailable) && <GhostBtn onClick={() => setShowImport(listAvailable && available ? 'choose' : listAvailable ? 'list' : 'balances')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Upload size={14} aria-hidden='true' /> Import</GhostBtn>}
       {canExport && accounts.length > 0 && <GhostBtn onClick={() => setShowExport(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Download size={14} aria-hidden='true' /> Export</GhostBtn>}
     </div>
   )
@@ -63,11 +75,18 @@ export default function SupplierAccounts({ brand, role, perms, staffName, showTo
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
         <div style={{ fontSize: 12.5, color: gray600, maxWidth: 620, lineHeight: 1.5 }}>
-          Each supplier's account: everything supplied (purchases and supply records), what you have paid and what you still owe.
+          Each supplier's contact details and account: everything supplied (purchases and supply records), what you have paid and what you still owe.
           Product quantities and prices stay in the purchase entries.
         </div>
         {toolbar}
       </div>
+      {directoryQuery.isError && (
+        <div role='alert' style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '10px 12px', marginBottom: 12, borderRadius: theme.radius.md, background: warningBg, border: `1px solid ${warning}`, fontSize: 12.5, color: navy }}>
+          <AlertTriangle size={15} color={warning} aria-hidden='true' />
+          <span style={{ flex: 1, minWidth: 200 }}>Contact details could not be loaded. Balances and payments below are complete.</span>
+          <GhostBtn onClick={() => directoryQuery.refetch()} style={{ padding: '6px 12px' }}>Retry</GhostBtn>
+        </div>
+      )}
       {!available && (
         <div role='status' style={{ fontSize: 12.5, color: gray600, marginBottom: 12 }}>
           Supply records, account payments and import become available once the latest database update is applied. Totals below are from purchases.
@@ -75,7 +94,8 @@ export default function SupplierAccounts({ brand, role, perms, staffName, showTo
       )}
 
       {accounts.length === 0 ? (
-        <Empty icon={<Truck size={40} />} message='No suppliers yet. Record a purchase, add a supply record or import your supplier balances.' />
+        <Empty icon={<Truck size={40} />} message={listAvailable ? 'No suppliers yet. Add a supplier, import your supplier list, or record a purchase.' : 'No suppliers yet. Record a purchase, add a supply record or import your supplier balances.'}
+          action={listAvailable ? 'Import supplier list' : undefined} onAction={listAvailable ? () => setShowImport('list') : undefined} />
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))', gap: 10, marginBottom: 14 }}>
@@ -92,7 +112,7 @@ export default function SupplierAccounts({ brand, role, perms, staffName, showTo
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
             <div style={{ flex: '1 1 220px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 12px' }}>
               <Search size={15} color={gray400} aria-hidden='true' />
-              <input type='search' value={query} onChange={(e) => setQuery(e.target.value)} placeholder='Search suppliers' aria-label='Search suppliers'
+              <input type='search' value={query} onChange={(e) => setQuery(e.target.value)} placeholder={listAvailable ? 'Search name, phone, email or contact' : 'Search suppliers'} aria-label='Search suppliers'
                 style={{ flex: 1, border: 'none', outline: 'none', padding: '10px 0', fontSize: 13, background: 'transparent', color: navy, minWidth: 0 }} />
               {query && <button type='button' onClick={() => setQuery('')} aria-label='Clear search' style={{ background: 'none', border: 'none', cursor: 'pointer', color: gray500, display: 'flex', minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}><X size={15} /></button>}
             </div>
@@ -127,7 +147,9 @@ export default function SupplierAccounts({ brand, role, perms, staffName, showTo
                       <tr key={a.key} style={{ borderBottom: `1px solid ${gray100}` }}>
                         <td style={{ padding: 12, fontSize: 13, color: navy }}>
                           <div style={{ fontWeight: 700 }}>{a.name}</div>
-                          {a.lastSupply && <div style={{ fontSize: 11.5, color: gray500 }}>Last supply {fmtDate(a.lastSupply)}</div>}
+                          {(a.phone || a.contactPerson) && <div style={{ fontSize: 11.5, color: gray600 }}>{[a.contactPerson, a.phone].filter(Boolean).join(' · ')}</div>}
+                          {a.lastSupply ? <div style={{ fontSize: 11.5, color: gray500 }}>Last supply {fmtDate(a.lastSupply)}</div>
+                            : !a.purchases && !a.supplies && <div style={{ fontSize: 11.5, color: gray500 }}>Nothing supplied yet</div>}
                         </td>
                         <td style={{ padding: 12, fontSize: 13, color: navy, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(a.supplied)}</td>
                         <td style={{ padding: 12, fontSize: 13, color: success, textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(a.paid)}</td>
@@ -153,16 +175,23 @@ export default function SupplierAccounts({ brand, role, perms, staffName, showTo
 
       {selected && (
         <SupplierAccountModal brand={brand} account={selected} available={available} staffName={staffName} showToast={showToast}
-          onPaid={onPaid} onAddSupply={() => setAddingFor(selected.name)} onClose={() => setSelectedKey(null)} />
+          onPaid={onPaid} onAddSupply={() => setAddingFor(selected.name)} onClose={() => setSelectedKey(null)}
+          onEditDetails={listAvailable ? () => { setEditing({ record: selected.record, name: selected.name, reopenKey: selected.key }); setSelectedKey(null) } : null} />
       )}
       {addingFor != null && (
         <SupplyRecordModal brand={brand} accounts={accounts} supplier={addingFor} showToast={showToast}
           onSaved={() => { accountsQuery.refetch(); onPaid?.() }} onClose={() => setAddingFor(null)} />
       )}
-      {showImport && <DebtImportModal brand={brand} direction='we_owe' title='Import supplier accounts from Excel / CSV' onClose={() => setShowImport(false)} onDone={() => { accountsQuery.refetch(); onPaid?.() }} />}
+      {showImport === 'choose' && <ImportChoiceModal onChoose={setShowImport} onClose={() => setShowImport(null)} />}
+      {showImport === 'list' && <SupplierImportModal brand={brand} directory={directory} accounts={plainAccounts} onClose={() => setShowImport(null)} onDone={() => directoryQuery.refetch()} />}
+      {showImport === 'balances' && <DebtImportModal brand={brand} direction='we_owe' title='Import supplier balances from Excel / CSV' onClose={() => setShowImport(null)} onDone={() => { accountsQuery.refetch(); onPaid?.() }} />}
+      {editing && (
+        <SupplierFormModal brand={brand} record={editing.record} initialName={editing.name} showToast={showToast}
+          onSaved={() => directoryQuery.refetch()} onClose={() => { const k = editing.reopenKey; setEditing(null); if (k != null) setSelectedKey(k) }} />
+      )}
       {showExport && (
-        <ExportFormatModal show onClose={() => setShowExport(false)} onExport={exportShown} title='Export supplier accounts' name='supplier-export-format'
-          description={`Exports the ${rows.length} supplier account${rows.length === 1 ? '' : 's'} on screen: supplied, paid and outstanding for each. Supply values are cost data, so the export is recorded in the audit log.`} />
+        <ExportFormatModal show onClose={() => setShowExport(false)} onExport={exportShown} title='Export suppliers' name='supplier-export-format'
+          description={`Exports the ${rows.length} supplier${rows.length === 1 ? '' : 's'} on screen: ${listAvailable ? 'contact details, ' : ''}supplied, paid and outstanding for each. Supply values are cost data, so the export is recorded in the audit log.`} />
       )}
     </div>
   )
@@ -174,7 +203,7 @@ const asDebt = (s) => ({ id: s.id, party_name: s.party_name, direction: 'we_owe'
 
 // One supplier's account: figures, one payment on the account, every supply (purchases and supply records, each
 // payable on its own) and every payment.
-function SupplierAccountModal({ brand, account, available, staffName, showToast, onPaid, onAddSupply, onClose }) {
+function SupplierAccountModal({ brand, account, available, staffName, showToast, onPaid, onAddSupply, onEditDetails, onClose }) {
   const activity = useSupplierActivity(brand?.id, account.key)
   const recordPayment = useRecordSupplierPayment(brand?.id)
   const [view, setView] = useState('supplies')
@@ -214,6 +243,7 @@ function SupplierAccountModal({ brand, account, available, staffName, showToast,
   return (
     <Modal show onClose={onClose} title={account.name} wide>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <ContactDetails account={account} onEdit={onEditDetails} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           <Figure label='Supplied / owed' value={fmt(account.supplied)} />
           <Figure label='Paid' value={fmt(account.paid)} color={success} />
@@ -338,6 +368,122 @@ function SupplyRecordModal({ brand, accounts, supplier, showToast, onSaved, onCl
         </div>
         <Input id='supply-due' label='Due date' type='date' value={form.dueDate} onChange={(v) => set('dueDate', v)} />
         <Textarea label='Description' value={form.description} onChange={(v) => set('description', v)} placeholder='e.g. Opening balance, invoice 2041' rows={2} />
+        {error && <div role='alert' style={{ fontSize: 12.5, color: danger }}>{error}</div>}
+      </div>
+    </Modal>
+  )
+}
+
+// A supplier's contact details at the top of its account, with Edit (or Add) details when the supplier list exists.
+function ContactDetails({ account, onEdit }) {
+  const lines = [
+    [User, 'Contact person', account.contactPerson],
+    [Phone, 'Phone', account.phone],
+    [Mail, 'Email', account.email],
+    [MapPin, 'Address', account.address],
+  ].filter(([, , v]) => v)
+  if (!onEdit && !lines.length) return null
+  return (
+    <section aria-label='Contact details' style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', padding: 12, borderRadius: theme.radius.md, background: gray100 }}>
+      {lines.length ? (
+        <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '8px 16px', flex: '1 1 260px' }}>
+          {lines.map(([Icon, label, v]) => (
+            <div key={label} style={{ minWidth: 0 }}>
+              <dt style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: gray500, fontWeight: 700 }}><Icon size={12} aria-hidden='true' /> {label}</dt>
+              <dd style={{ margin: 0, fontSize: 13, color: navy, overflowWrap: 'anywhere' }}>
+                {label === 'Phone' ? <a href={'tel:' + v.replace(/[^+\d]/g, '')} style={{ color: navy }}>{v}</a> : label === 'Email' ? <a href={'mailto:' + v} style={{ color: navy }}>{v}</a> : v}
+              </dd>
+            </div>
+          ))}
+          {account.notes && <div style={{ gridColumn: '1 / -1', fontSize: 12, color: gray600, overflowWrap: 'anywhere' }}>{account.notes}</div>}
+        </dl>
+      ) : (
+        <div style={{ fontSize: 12.5, color: gray600, flex: '1 1 260px' }}>No contact details yet.</div>
+      )}
+      {onEdit && (
+        <GhostBtn onClick={onEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px' }}>
+          <Pencil size={13} aria-hidden='true' /> {account.record ? 'Edit details' : 'Add details'}
+        </GhostBtn>
+      )}
+    </section>
+  )
+}
+
+// Import: the supplier list (contact details) or balances owed (supply records and payments). Two different files.
+function ImportChoiceModal({ onChoose, onClose }) {
+  const option = (key, Icon, title, text) => (
+    <button type='button' onClick={() => onChoose(key)}
+      style={{ display: 'flex', gap: 12, alignItems: 'flex-start', textAlign: 'left', width: '100%', padding: 14, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', cursor: 'pointer' }}>
+      <Icon size={20} color={tealDeep} aria-hidden='true' style={{ flexShrink: 0, marginTop: 2 }} />
+      <span>
+        <span style={{ display: 'block', fontWeight: 800, fontSize: 14, color: navy }}>{title}</span>
+        <span style={{ display: 'block', fontSize: 12.5, color: gray600, marginTop: 2, lineHeight: 1.5 }}>{text}</span>
+      </span>
+    </button>
+  )
+  return (
+    <Modal show onClose={onClose} title='What do you want to import?'>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {option('list', Users, 'Supplier list', 'Names and contact details: phone, email, address, contact person. No amounts.')}
+        {option('balances', Wallet, 'Opening balances and payments', 'What you owe each supplier (supply records) and payments made, added to their accounts.')}
+      </div>
+    </Modal>
+  )
+}
+
+const EMPTY_FORM = { name: '', contact_person: '', phone: '', email: '', address: '', notes: '' }
+
+// Add a supplier to the list, or edit one's details. A supplier with purchases but no record gets one under its
+// existing name. The name can be corrected only in capitals or spacing (purchases are recorded under it).
+function SupplierFormModal({ brand, record, initialName, showToast, onSaved, onClose }) {
+  const [form, setForm] = useState(() => (record ? { ...EMPTY_FORM, ...Object.fromEntries(Object.keys(EMPTY_FORM).map((k) => [k, record[k] || ''])) } : { ...EMPTY_FORM, name: initialName || '' }))
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const update = useUpdateSupplier(brand?.id)
+  const set = (k, v) => { setForm((p) => ({ ...p, [k]: v })); setError('') }
+  const lockedName = !!initialName && !record // details for an existing account: its name is fixed
+
+  async function save() {
+    const problem = validateSupplierForm(form, record || (lockedName ? { name: initialName } : null))
+    if (problem) { setError(problem); return }
+    const changes = supplierFormChanges(record, form)
+    setSaving(true)
+    try {
+      if (record) {
+        if (Object.keys(changes).length) await update.mutateAsync({ id: record.id, changes })
+        console.info('[suppliers] details saved', { supplier: record.supplier_key, fields: Object.keys(changes) })
+        showToast(`${changes.name || record.name}'s details saved.`, { type: 'success' })
+      } else {
+        const r = await purchaseRepository.createSuppliers(brand.id, [changes])
+        if (r.failed.length) throw new Error(r.failed[0].message)
+        if (!r.added.length) { setError(`${changes.name} is already in your supplier list. Open it from the list to edit its details.`); setSaving(false); return }
+        console.info('[suppliers] supplier added', { fields: Object.keys(changes).filter((k) => changes[k]) })
+        showToast(`${r.added[0]} added to your suppliers.`, { type: 'success' })
+      }
+      onSaved?.()
+      onClose()
+    } catch (e) {
+      console.error('[suppliers] save failed:', e)
+      setError(/capitals or spacing/.test(e?.message || '') ? 'The name can only be corrected in capitals or spacing: purchases are recorded under it.' : 'Could not save. Check your connection and try again.')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal show onClose={() => !saving && onClose()} title={record ? `Edit ${record.name}` : lockedName ? `Add details for ${initialName}` : 'Add supplier'} preventClose={saving}
+      footer={<><GhostBtn onClick={onClose} disabled={saving} style={{ flex: 1, padding: 12 }}>Cancel</GhostBtn><TealBtn onClick={save} disabled={saving} style={{ flex: 1, padding: 12 }}>{saving ? 'Saving…' : 'Save'}</TealBtn></>}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {lockedName
+          ? <div style={{ fontSize: 13, color: navy }}><span style={{ color: gray500 }}>Supplier: </span><strong>{initialName}</strong></div>
+          : <Input id='supplier-name' label='Supplier name *' value={form.name} onChange={(v) => set('name', v)} placeholder='e.g. Emzor Distributors' />}
+        {record && <div style={{ fontSize: 12, color: gray500, marginTop: -6 }}>Only capitals and spacing can change: purchases are recorded under this name.</div>}
+        <Input id='supplier-contact' label='Contact person' value={form.contact_person} onChange={(v) => set('contact_person', v)} placeholder='Who you deal with' />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: 12 }}>
+          <Input id='supplier-phone' label='Phone number' type='tel' value={form.phone} onChange={(v) => set('phone', v)} placeholder='0803 000 0000' />
+          <Input id='supplier-email' label='Email' type='email' value={form.email} onChange={(v) => set('email', v)} placeholder='sales@supplier.com' />
+        </div>
+        <Input id='supplier-address' label='Address' value={form.address} onChange={(v) => set('address', v)} placeholder='Office or warehouse address' />
+        <Textarea label='Notes' value={form.notes} onChange={(v) => set('notes', v)} placeholder='Terms, account numbers…' rows={2} />
         {error && <div role='alert' style={{ fontSize: 12.5, color: danger }}>{error}</div>}
       </div>
     </Modal>

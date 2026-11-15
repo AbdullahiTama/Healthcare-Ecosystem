@@ -222,7 +222,7 @@ function ImportRow({ r, noun }) {
   )
 }
 
-function Stat({ label, value, tone }) {
+export function Stat({ label, value, tone }) {
   const color = tone === 'danger' ? danger : tone === 'success' ? success : navy
   return (
     <div style={{ padding: '10px 12px', borderRadius: theme.radius.md, background: tealMist }}>
@@ -232,7 +232,7 @@ function Stat({ label, value, tone }) {
   )
 }
 
-function Notice({ tone, children }) {
+export function Notice({ tone, children }) {
   const c = tone === 'danger' ? { bg: dangerBg, fg: danger, Icon: AlertTriangle } : tone === 'warning' ? { bg: warningBg, fg: warning, Icon: AlertTriangle } : { bg: tealMist, fg: tealDeep, Icon: CheckCircle }
   return (
     <div role={tone === 'danger' ? 'alert' : 'status'} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', borderRadius: theme.radius.md, background: c.bg, border: `1px solid ${c.fg}`, fontSize: 12.5, color: navy, lineHeight: 1.5 }}>

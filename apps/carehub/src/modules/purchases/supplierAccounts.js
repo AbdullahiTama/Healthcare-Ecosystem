@@ -45,11 +45,15 @@ export const ACCOUNT_SORTS = {
   name: { label: 'Supplier A–Z', compare: (a, b) => a.name.localeCompare(b.name) },
 }
 
+// What the search looks in: the name and, when the supplier has a record (supplierDirectory.mergeSuppliers), its
+// contact person, phone, email and address.
+const searchText = (a) => lookupKey([a.name, a.contactPerson, a.phone, a.email, a.address].filter(Boolean).join(' '))
+
 // Accounts matching the search (every word, any order), sorted; `owingOnly` keeps those with a balance.
 export function filterAccounts(accounts, { query = '', sort = 'owed', owingOnly = false } = {}) {
   const words = lookupKey(query).split(' ').filter(Boolean)
   return (accounts || [])
-    .filter((a) => (!owingOnly || a.balance > 0) && words.every((w) => lookupKey(a.name).includes(w)))
+    .filter((a) => { if (owingOnly && !(a.balance > 0)) return false; const t = searchText(a); return words.every((w) => t.includes(w)) })
     .sort((ACCOUNT_SORTS[sort] || ACCOUNT_SORTS.owed).compare)
 }
 

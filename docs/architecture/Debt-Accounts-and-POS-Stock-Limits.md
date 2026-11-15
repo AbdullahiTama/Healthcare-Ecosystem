@@ -149,7 +149,8 @@ purchased and paid, with **Record payment**, **View details** and **View transac
 
 - **No suppliers table.** Suppliers are identified by the normalised name, as purchases always have been
   (`get_supplier_balances`). A table would mean re-keying every purchase and its functions; proposed as a follow-up
-  (CODE_AUDIT A26). Until then "creating a supplier profile" means starting its account under the exact name, and the
+  (CODE_AUDIT A26). **Update 2026-11-15:** a `suppliers` table now holds contact details keyed by that same
+  normalised name, so purchases are still not re-keyed ([Supplier-Directory.md](Supplier-Directory.md)). Until then "creating a supplier profile" means starting its account under the exact name, and the
   import and the supply-record form reuse an existing spelling.
 - Customer payments are not imported against credit sales (§2).
 - An account payment on a customer's credit account is not grouped by an id in `sale_payments` (that would change

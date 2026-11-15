@@ -25,6 +25,7 @@ export const keys = {
   supplierPurchases: (brandId, supplierKey) => ['purchases', 'supplier', brandId, supplierKey],
   supplierAccounts: (brandId) => ['purchases', 'accounts', brandId],
   supplierActivity: (brandId, supplierKey) => ['purchases', 'activity', brandId, supplierKey],
+  suppliers: (brandId) => ['purchases', 'directory', brandId],
   purchasePayments: (brandId, scope) => ['purchases', 'payments', brandId, scope],
   purchase: (brandId, purchaseId) => ['purchases', 'one', brandId, purchaseId],
   purchaseForEdit: (brandId, purchaseId) => ['purchases', 'edit', brandId, purchaseId],
@@ -407,6 +408,25 @@ export function useSupplierAccounts(brandId, enabled = true) {
     queryFn: () => purchaseRepository.getSupplierAccounts(brandId),
     enabled: !!brandId && enabled,
     staleTime: 30_000,
+  })
+}
+
+// The supplier list with contact details (purchaseRepository.getSuppliers): { available, rows }.
+export function useSuppliers(brandId) {
+  return useQuery({
+    queryKey: keys.suppliers(brandId),
+    queryFn: () => purchaseRepository.getSuppliers(brandId),
+    enabled: !!brandId,
+    staleTime: 30_000,
+  })
+}
+
+// Saves a supplier's details, then the list is read again.
+export function useUpdateSupplier(brandId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, changes }) => purchaseRepository.updateSupplier(brandId, id, changes),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.suppliers(brandId) }),
   })
 }
 

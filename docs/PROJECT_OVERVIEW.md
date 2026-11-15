@@ -136,6 +136,7 @@ and database migrations on PGlite. On 2026-11-02 CareHub had 304 test files and 
 | Importer / manufacturer operating models, representative ledgers, transaction register | [architecture/Importer-Operating-Models.md](architecture/Importer-Operating-Models.md) |
 | Debts, Clients and Expenses filters; adding customers at the POS; held sales shown at once | [architecture/Record-Filters-POS-Customers-and-Held-Sales.md](architecture/Record-Filters-POS-Customers-and-Held-Sales.md) |
 | Purchases bulk upload and Excel/CSV export | [architecture/Purchases-Import-Export.md](architecture/Purchases-Import-Export.md) |
+| Supplier list: contact details, Excel/CSV import with validation, export | [architecture/Supplier-Directory.md](architecture/Supplier-Directory.md) |
 | Expense budgets, including Set new budget and budget history | [architecture/Expense-Budgets.md](architecture/Expense-Budgets.md) |
 | Cost price at the POS (who sees it, what it shows) | [architecture/POS-Cost-Visibility.md](architecture/POS-Cost-Visibility.md) |
 | Receivables / payables, debt import and export, supplier summary, customer credit accounts, POS stock limits | [architecture/Debt-Accounts-and-POS-Stock-Limits.md](architecture/Debt-Accounts-and-POS-Stock-Limits.md) |

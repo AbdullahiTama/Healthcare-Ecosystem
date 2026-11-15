@@ -40,6 +40,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A25 | Medium | Data exposure (cost price) | `products.cost_price` is readable by every member of a business; the new POS cost switch is display-only | Open: owner decision |
 | A26 | Medium | Debts / suppliers / credit accounts | Debt payment history, guarded hand-recorded debts, supplier accounts, account payments and debt import needed `carehub_20270117_debt_and_supplier_accounts` (unapplied, it was the cause of the 2026-11-15 "debt upload not working" report); Record Debt linking added | **Closed 2026-11-15**: applied with owner approval (version 20261115205734) and probed |
 | A27 | High | POS (production defect) | An Owner's sales at a branch location are refused: "This sale is not authorized for your account." | **Closed 2026-11-15**: `carehub_20270118_sale_guard_branch_owner` applied with owner approval (version 20261115222717) and probed; a first version refused every sale for 72 s and was rolled back (see item) |
+| A28 | Low | Suppliers (contact list) | Supplier list with contact details, import and export needs `carehub_20270119_supplier_directory` (new table; nothing existing changes); until applied the screen is as before | Open: apply with owner approval, then probe |
 
 ## 2. Items
 
@@ -355,6 +356,17 @@ The new POS switch ([POS-Cost-Visibility.md](../docs/architecture/POS-Cost-Visib
 column-level revoke on `products.cost_price` for non-cost roles with a cost-free read for them (view or RPC), and every
 cost reader (Inventory, Purchases, reports, transfers, POS) switched over. The second changes access for existing roles
 and needs a plan before implementing.
+
+### A28. Supplier list: migration to apply (Low)
+
+**What (2026-11-15):** bulk supplier import/export needed somewhere to keep contact details; suppliers were only names
+on purchases. `carehub_20270119_supplier_directory` adds `suppliers` keyed by the purchases' supplier key, with RLS for
+members, no DELETE, and a guard that keeps the key fixed. The app shows the list, import, Add / Edit details and the
+contact columns in the export only once the table exists. Details and test plan:
+[Supplier-Directory.md](../docs/architecture/Supplier-Directory.md). Tests: 10 PGlite (live helpers and grants), 24 app.
+
+**To close:** apply with owner approval; probe as a member (add, edit, duplicate refused, rename refused), another
+business (nothing visible) and anon (refused).
 
 ### A27. Owner's sales at a branch refused: "This sale is not authorized for your account." (High) — closed 2026-11-15
 
