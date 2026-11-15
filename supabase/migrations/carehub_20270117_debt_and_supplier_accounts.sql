@@ -1,12 +1,24 @@
 -- carehub_20270117_debt_and_supplier_accounts
 --
--- Status: NOT APPLIED. Written 2026-11-14 against the live schema read that day (read-only): debts, clients,
--- purchases, purchase_payments, sales, sale_payments columns; the debts / clients / purchases policies, grants and
--- triggers; the live bodies of record_sale_payment, record_purchase_payment, purchases_guard_direct_write,
--- record_export_audit, member_can_delete, stamp_recorded_by, keep_recorded_by; delete_debts and
--- restore_deleted_debts as applied from carehub_20270113_debt_bulk_delete. Tested on PGlite
--- (apps/carefind/src/test/debts/debtAccounts.db.test.js). Apply only with the owner's approval, then record the
--- version and the live probe below here.
+-- Status: APPLIED to production 2026-11-15 with the owner's approval (version 20261115205734). Before applying, the live
+-- ledger was checked: no migration after carehub_20270116 (2026-11-11), so the replaced bodies (delete_debts,
+-- restore_deleted_debts, record_export_audit) were still the ones this was written against. The 4 hand-recorded debts
+-- with amount_paid > 0 got one 'before_history' row each.
+-- Live probe 2026-11-15 (DO blocks that raised at the end; nothing remained), as the Owner of a business with
+-- hand-recorded debts, the owner of another business and anon:
+--   1 every hand-recorded debt's history sums to its amount_paid (0 mismatched)
+--   2 10,000 receivable, paid 4,000 + 6,000: 10000.00 / 0.00 / paid, 2 payment rows; a further 1 refused
+--   3 direct PATCH of amount_paid refused; a client_id / description change allowed (Record Debt's "Link to clients")
+--   4 record_debt_payment on a credit-sale debt refused, naming the sale
+--   5 delete + restore: 1 deleted, 1 restored, the 2 payment rows back, no 'at_recording' row invented
+--   6 get_supplier_accounts: mismatch_count 0
+--   9 import_debts dry run (new customer twice, a blank name): 2 debts, 1 customer created, 1 error; clients and debts
+--     unchanged afterwards; payables dry run starts a new supplier ('created')
+--  10 other business's owner: record_debt_payment and import_debts P0002 (not found), debt_payments 0 rows visible;
+--     anon: import_debts and debt_payments 42501
+-- Security advisor afterwards: import_debts, record_debt_payment, record_supplier_payment and record_customer_payment
+-- listed once each as SECURITY DEFINER executable by authenticated (expected; each checks the caller's business
+-- first); none executable by anon; no finding for debt_payments.
 -- Live data on 2026-11-14: 91 debts (44 credit_sale, 44 purchase, 3 manual: 2 owes_us, 1 we_owe), 27 credit sales
 -- (26 open, 2 without a client link), 50 purchases (23 open), one pair of clients sharing a name, no suppliers table
 -- (suppliers are identified by lower(btrim(supplier_name)), as get_supplier_balances has always done).

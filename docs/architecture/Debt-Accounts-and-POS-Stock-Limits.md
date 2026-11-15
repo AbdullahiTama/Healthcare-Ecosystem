@@ -10,9 +10,10 @@ summary is built from the underlying records and must add up to them.
 | 3 | Purchases › Supplier summary: supplier accounts, account payments, supply records, import/export | `modules/purchases/SupplierAccounts.jsx`, `supplierAccounts.js` | Yes (falls back) |
 | 4 | POS › Credit: one account per customer | `modules/pos/CreditCollections.jsx`, `creditAccounts.js` | Account payment only (falls back) |
 
-Migration: `supabase/migrations/carehub_20270117_debt_and_supplier_accounts.sql`, **not applied**. It needs the owner's
-approval; its header has the probe to run afterwards. Until then every screen works as before, and the new parts that
-need it say so (CODE_AUDIT A26).
+Migration: `supabase/migrations/carehub_20270117_debt_and_supplier_accounts.sql`, **applied to production 2026-11-15**
+with the owner's approval (version 20261115205734); the live probe passed (results in its header; CODE_AUDIT A26).
+Until it was applied, the import stopped at the preview ("available once the latest database update is applied"),
+which is what was reported on 2026-11-15 as "debt upload not working".
 
 ## 1. POS stock validation
 

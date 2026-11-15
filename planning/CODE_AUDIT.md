@@ -38,7 +38,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A23 | Low | Purchases (import / export) | Bulk upload and Excel/CSV export; the export audit needed `purchases.*` in `record_export_audit`'s allow-list | **Closed 2026-11-11**: `carehub_20270115_purchase_export_audit` applied with owner approval and probed |
 | A24 | Medium | Expenses (set new budget) | A used-up budget could only be edited (history rewritten, old spending counted against the new amount) | **Closed 2026-11-11**: `carehub_20270116_expense_new_budget` applied with owner approval and probed |
 | A25 | Medium | Data exposure (cost price) | `products.cost_price` is readable by every member of a business; the new POS cost switch is display-only | Open: owner decision |
-| A26 | Medium | Debts / suppliers / credit accounts | Debt payment history, guarded hand-recorded debts, supplier accounts, account payments and debt import need `carehub_20270117_debt_and_supplier_accounts`; written and tested, not applied (the cause of the 2026-11-15 "debt upload not working" report). Record Debt linking added without it | Open: owner approval to apply |
+| A26 | Medium | Debts / suppliers / credit accounts | Debt payment history, guarded hand-recorded debts, supplier accounts, account payments and debt import needed `carehub_20270117_debt_and_supplier_accounts` (unapplied, it was the cause of the 2026-11-15 "debt upload not working" report); Record Debt linking added | **Closed 2026-11-15**: applied with owner approval (version 20261115205734) and probed |
 
 ## 2. Items
 
@@ -355,7 +355,7 @@ column-level revoke on `products.cost_price` for non-cost roles with a cost-free
 cost reader (Inventory, Purchases, reports, transfers, POS) switched over. The second changes access for existing roles
 and needs a plan before implementing.
 
-### A26. Debts, supplier accounts and credit accounts: migration to apply (Medium)
+### A26. Debts, supplier accounts and credit accounts: migration to apply (Medium) — closed 2026-11-15
 
 **What (2026-11-14):** Receivables / Payables, part payments with history on debts recorded by hand, Excel/CSV debt
 import (matching or creating customers and suppliers without duplicates) and export, Purchases › Supplier summary
@@ -377,8 +377,10 @@ cause. Verified live that day: none of the migration's functions (`import_debts`
 by name or phone, never guessing between two of one name) or supplier account, and **Link to clients** links the 3 live
 unlinked receivables (note §2, "Record Debt: linking a debt typed in").
 
-**Close by:** apply with the owner's approval, run the probe in the migration header, record the version and results
-there, and check the security advisor shows only the intended new SECURITY DEFINER findings.
+**Closed by:** applied to production 2026-11-15 with the owner's approval (version `20261115205734`) after checking no
+later migration had changed the functions it replaces; the rolled-back live probe passed every step and the security
+advisor shows only the intended new findings (results in the migration header). Still to do on the live business: use
+**Link to clients** once on the Debts page for the existing unlinked receivables.
 
 **Also found (not changed):** `anon` holds full table grants on `debts` (RLS denies it every row; revoke as defence in
 depth). **Proposed:** a `suppliers` table so a supplier is an id rather than a normalised name (note §5); it would
