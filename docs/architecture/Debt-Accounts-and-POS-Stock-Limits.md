@@ -80,6 +80,32 @@ else runs in `import_debts`:
 customer-record link, Excel or CSV, audited through `record_export_audit` (`debts.xlsx|csv`). Owner or
 `canExportReports`.
 
+### Record Debt: linking a debt typed in (added 2026-11-15)
+
+**Finding.** The import links parties in the database, but **Record Debt** still saved a debt under whatever was
+typed: a customer was linked only when picked from the list with the exact saved spelling, and a missing customer was
+never created. Live on 2026-11-15 every hand-recorded receivable (3) had no `client_id`, so none showed on the client's
+history.
+
+**Now** (`debts/debtParty.js`, `debts/recordDebt.js`; no database change):
+
+- A line under the name says where the debt goes: **Linked to client …**, **New client record for …**, **Added to
+  supplier …**, **New supplier account for …**.
+- **Receivable:** linked to the client with that name (case and spacing ignored, the till's rule) or, with the new
+  optional **Phone** field, the client with that number. No match: a client record is created once and the debt linked.
+  Two clients with the same name are never guessed between: **Which …?** (name, phone, address) must be answered before
+  Save. (The import, which cannot ask, links the earliest and notes it.) A retry after a refused save reuses the client
+  already created.
+- **Payable:** the picker offers suppliers bought from plus those known from earlier "we owe" debts; a typed name that
+  matches one (by `lower(btrim(name))`, the supplier summary's key) is saved under its spelling; a near miss shows
+  **Did you mean …?**; a new name starts the account.
+- **Link to clients:** when hand-recorded receivables have no client, a banner links them all (the client of that name,
+  or a new one); names shared by two clients are left and named.
+- Works before and after the migration: inserts satisfy `debts_manual_defaults`; linking changes `client_id` only, which
+  `debts_manual_guard` allows.
+
+Tests: `debts/debtParty.test.js` (11), `debts/recordDebt.test.js` (10), `debts/Debts.linking.test.jsx` (7).
+
 ## 3. Purchases › Supplier summary
 
 The detailed Purchase entry (products, quantities, cost and selling prices) is unchanged. The **Supplier summary** tab

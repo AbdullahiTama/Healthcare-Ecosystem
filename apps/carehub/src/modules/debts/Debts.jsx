@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useKeyboardScanner, fieldSnapshot, restoreField } from '../../hooks/useKeyboardScanner'
 import { debtLedgerTotals } from './debtTotals'
 import { DEFAULT_DEBT_FILTERS, PAYMENT_STATUSES, DEBT_SOURCES, AMOUNT_BASES, filterDebts, debtPaymentStatus, activeDebtFilterCount, describeDebtFilters } from './debtFilters'
-import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck, MapPin, Trash2, RotateCcw, Upload, Download, AlertTriangle } from 'lucide-react'
+import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck, MapPin, Trash2, RotateCcw, Upload, Download, AlertTriangle, Link2 } from 'lucide-react'
 import { debtRepository } from './repositories'
 // Owners read every location's debts (the database allows it: current_business_ids()); the list of locations comes
 // from the locations module's own repository.
@@ -15,6 +15,11 @@ import { runBulkUpdates } from '../../lib/bulkUpdates'
 import DebtBulkEditModal from './components/DebtBulkEditModal'
 import DebtPaymentModal from './components/DebtPaymentModal'
 import DebtImportModal from './components/DebtImportModal'
+// Record Debt links each debt to its client record (created once when missing) or supplier account; older customer
+// debts without a client can be linked in one go (debtParty.js / recordDebt.js).
+import { recordDebt, linkUnlinkedDebts, unlinkedClientDebts } from './recordDebt'
+import { resolveDebtParty, describeParty, knownSuppliers } from './debtParty'
+import { useSupplierDirectory } from '../purchases/hooks'
 import ExportFormatModal from '../../components/ExportFormatModal'
 import { auditedExport, exportColumns } from '../../lib/auditedExport'
 import { debtExportColumns, debtExportRows } from './debtImport'
@@ -27,7 +32,7 @@ import { paymentErrorMessage } from '../../lib/dbErrors'
 // exposes it through its own repository. `getClients` is still the shared
 // services/supabase read used by POS too — repoint it when that call is
 // consolidated; it is unrelated to this module's own aggregate.
-import { useClients, useSettings, useInvalidateSales } from '../../hooks/queries'
+import { useClients, useSettings, useInvalidateSales, useInvalidateDebts } from '../../hooks/queries'
 import ClientsLoadNote from '../clients/components/ClientsLoadNote'
 // A debt raised by a credit sale is settled against that sale, through the
 // sales aggregate's own collection function, so the two never disagree.
@@ -104,16 +109,28 @@ export default function Debts({ brand, role, perms, staffName }) {
   const { data: settings } = useSettings(brand?.id)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
+  // After a debt is saved or linked: every debt read (supplier accounts, what each client owes) and the client list.
+  const refreshLinkedViews = useInvalidateDebts(brand?.id)
+  // Suppliers to offer for a payable: those bought from, and those known from an earlier "we owe" debt.
+  const supplierDirectory = useSupplierDirectory(brand?.id)
+  const suppliers = useMemo(() => knownSuppliers(supplierDirectory.suppliers, debts), [supplierDirectory.suppliers, debts])
+  // Clients created here that the shared list may not show yet (it is re-read after a save), so a retry or the next
+  // debt links to them instead of creating the same client again.
+  const createdClients = useRef([])
+  const matchClients = () => [...clients, ...createdClients.current.filter(c => !clients.some(x => String(x.id) === String(c.id)))]
+  const [linking, setLinking] = useState(false)
+  // Where the debt being typed will go: an existing client / supplier, a new one, or two clients to choose between.
+  const party = useMemo(() => (String(form.party || '').trim() ? resolveDebtParty({ direction: form.direction, partyName: form.party, phone: form.phone, clientId: form.client_id }, { clients: matchClients(), suppliers }) : null),
+    [form.direction, form.party, form.phone, form.client_id, clients, suppliers])
 
   useEffect(() => { load() }, [brand?.id])
   // Opened from the Owner's activity feed: ?debt=<id> shows that debt once the list is in.
   useQueryParamAction('debt', (id) => { const d = debts.find((x) => String(x.id) === id); if (d) setDetail(d) }, !loading && !loadError)
 
-  // Picking a saved client links the debt to their customer record so it
-  // shows up on their history.
-  function pickClient(name) {
-    const c = clients.find(x => x.full_name === name)
-    setForm(p => ({ ...p, party: name, client_id: c?.id || null }))
+  // Typing or picking the party. The link itself is worked out by resolveDebtParty (exact name, phone, or the client
+  // chosen when two share a name); typing a different name drops an earlier choice.
+  function pickParty(name) {
+    setForm(p => ({ ...p, party: name, client_id: null }))
   }
 
   // An owner with branches gets every location's debts in one read, so the location filter and the totals switch
@@ -149,28 +166,51 @@ export default function Debts({ brand, role, perms, staffName }) {
   }
 
   async function save() {
-    if (!form.party || !form.amount) { showToast('Please enter party name and amount.', { type: 'warning' }); return }
-    const amt = parseFloat(form.amount) || 0
-    const paid = parseFloat(form.amountPaid) || 0
-    if (amt <= 0 || paid < 0) { showToast('Enter an amount greater than zero.', { type: 'warning' }); return }
-    if (paid > amt) { showToast('The amount already paid cannot be more than the total amount.', { type: 'warning' }); return }
+    if (!String(form.party || '').trim() || !form.amount) { showToast('Please enter party name and amount.', { type: 'warning' }); return }
+    if (saving) return
     setSaving(true)
+    const ctxClients = matchClients()
+    const known = ctxClients.length
     try {
-      await debtRepository.create(brand.id, {
-        client_id: form.client_id || null,
-        direction: form.direction || 'owes_us',
-        party_name: form.party,
-        amount: amt,
-        amount_paid: paid,
-        balance: amt - paid,
-        due_date: form.dueDate || '',
-        status: paid >= amt ? 'paid' : 'pending',
-        description: form.description || '',
-      })
-      showToast('Debt recorded!', { type: 'success' })
+      const { party: saved, createdClient } = await recordDebt(brand.id, {
+        direction: form.direction || 'owes_us', partyName: form.party, phone: form.phone, clientId: form.client_id,
+        amount: form.amount, amountPaid: form.amountPaid, dueDate: form.dueDate, description: form.description,
+      }, { clients: ctxClients, suppliers })
+      showToast(createdClient ? `Debt recorded. A client record was created for ${saved.name}.`
+        : saved.kind === 'client' ? `Debt recorded on ${saved.name}'s client record.`
+          : saved.kind === 'supplier' ? `Debt recorded in ${saved.name}'s supplier account.`
+            : saved.kind === 'new-supplier' ? `Debt recorded. ${saved.name} now has a supplier account.` : 'Debt recorded!', { type: 'success' })
       setForm({ direction: tab }); setShowAdd(false); load()
-    } catch (e) { showToast('Could not save debt. Please try again.', { type: 'error' }) }
+    } catch (e) {
+      console.error('[debts] save failed:', e)
+      showToast(e?.message && !/^Supabase error/.test(e.message) ? e.message : 'Could not save debt. Please try again.', { type: 'error' })
+    } finally {
+      createdClients.current.push(...ctxClients.slice(known))
+    }
+    // Also after a failure: a client may have been created before the debt was refused.
+    refreshLinkedViews()
     setSaving(false)
+  }
+
+  // Hand-recorded customer debts with no client record (saved before linking existed, or their client was deleted).
+  const unlinked = useMemo(() => unlinkedClientDebts(debts, brand?.id), [debts, brand?.id])
+  async function linkUnlinked() {
+    if (linking || !unlinked.length) return
+    setLinking(true)
+    const ctxClients = matchClients()
+    const known = ctxClients.length
+    try {
+      const r = await linkUnlinkedDebts(brand.id, unlinked, { clients: ctxClients })
+      const skipped = r.skipped.length ? ` ${r.skipped.length} not linked: ${r.skipped.slice(0, 3).map(x => `${x.debt.party_name} (${x.reason})`).join(', ')}${r.skipped.length > 3 ? '…' : ''}.` : ''
+      showToast(`${r.linked} debt${r.linked === 1 ? '' : 's'} linked to client records${r.created ? `, ${r.created} new client record${r.created === 1 ? '' : 's'} created` : ''}.${skipped}`, { type: r.skipped.length ? 'warning' : 'success' })
+    } catch (e) {
+      console.error('[debts] link unlinked failed:', e)
+      showToast('Could not link the debts. Please try again.', { type: 'error' })
+    } finally {
+      createdClients.current.push(...ctxClients.slice(known))
+    }
+    load(); refreshLinkedViews()
+    setLinking(false)
   }
 
   // A credit-sale debt is settled through record_sale_payment(): the sale,
@@ -333,6 +373,17 @@ export default function Debts({ brand, role, perms, staffName }) {
           ...(canExport ? [{ label: 'Export', icon: <Download size={14} aria-hidden='true' />, onClick: () => setShowExport(true), title: `Export ${receivables ? 'receivables' : 'payables'} to Excel or CSV` }] : []),
           ...(canBulkDelete ? [{ label: 'Recently deleted', icon: <RotateCcw size={14} aria-hidden='true' />, onClick: () => setShowDeleted(true) }] : []),
         ]} />
+
+      {!loading && !loadError && unlinked.length > 0 && (
+        <div role='status' style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 14px', padding: '12px 16px', marginBottom: '14px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}` }}>
+          <Link2 size={16} color={tealDeep} aria-hidden='true' />
+          <span style={{ flex: '1 1 240px', fontSize: '13px', color: gray600 }}>
+            {unlinked.length} customer debt{unlinked.length === 1 ? ' is' : 's are'} not linked to a client record, so {unlinked.length === 1 ? 'it does' : 'they do'} not show on the client&apos;s history.
+            Linking uses the client with the same name, or creates one.
+          </span>
+          <TealBtn onClick={linkUnlinked} disabled={linking || !clientsQuery.isSuccess} style={{ padding: '7px 14px' }}>{linking ? 'Linking…' : 'Link to clients'}</TealBtn>
+        </div>
+      )}
 
       <div role='tablist' aria-label='Receivables and payables' style={{ display: 'flex', gap: 24, borderBottom: `1px solid ${border}`, marginBottom: 16, overflowX: 'auto' }}>
         {DEBT_TABS.map(([dir, label, hint]) => {
@@ -527,30 +578,52 @@ export default function Debts({ brand, role, perms, staffName }) {
       )}
 
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ direction: tab }) }} title='Record Debt'
-        footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({ direction: tab }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Debt'}</TealBtn></>}>
+        footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({ direction: tab }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} disabled={saving || (party && (party.kind === 'invalid' || (party.kind === 'ambiguous' && !form.client_id)))} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Debt'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
             <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '8px' }}>Direction</div>
             <div style={{ display: 'flex', gap: '10px' }}>
               {[['owes_us', 'Receivable: owed to us'], ['we_owe', 'Payable: we owe']].map(([val, label]) => (
                 <label key={val} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${form.direction === val ? tealDeep : border}`, background: form.direction === val ? tealMist : 'white', cursor: 'pointer', fontSize: '13px', color: navy }}>
-                  <input type='radio' checked={form.direction === val} onChange={() => f('direction', val)} style={{ accentColor: tealDeep }} />{label}
+                  <input type='radio' checked={form.direction === val} onChange={() => setForm(p => ({ ...p, direction: val, client_id: null }))} style={{ accentColor: tealDeep }} />{label}
                 </label>
               ))}
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Party Name *</div>
+            <label htmlFor='debt-party' style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>{form.direction === 'we_owe' ? 'Supplier / Party Name *' : 'Customer / Client Name *'}</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
               <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
-              <input list='debt-clients' value={form.party || ''} onChange={e => pickClient(e.target.value)} placeholder='Pick a saved client or type a name...'
+              <input id='debt-party' list={form.direction === 'we_owe' ? 'debt-suppliers' : 'debt-clients'} value={form.party || ''} onChange={e => pickParty(e.target.value)}
+                placeholder={form.direction === 'we_owe' ? 'Pick a supplier or type a name...' : 'Pick a saved client or type a name...'} aria-describedby='debt-party-link'
                 style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
               <datalist id='debt-clients'>
-                {clients.map(c => <option key={c.id} value={c.full_name} />)}
+                {clients.map(c => <option key={c.id} value={c.full_name}>{c.phone || undefined}</option>)}
               </datalist>
-              <ClientsLoadNote query={clientsQuery} />
+              <datalist id='debt-suppliers'>
+                {suppliers.map(sp => <option key={sp.key} value={sp.name} />)}
+              </datalist>
+              {form.direction !== 'we_owe' && <ClientsLoadNote query={clientsQuery} />}
             </div>
+            <div id='debt-party-link' aria-live='polite' style={{ fontSize: '12px', marginTop: '6px', color: party?.kind === 'ambiguous' || party?.kind === 'invalid' ? danger : tealDeep }}>
+              {party && describeParty(party)}{party?.note ? ` (${party.note})` : ''}
+            </div>
+            {party?.kind === 'ambiguous' && (
+              <div style={{ marginTop: '8px' }}>
+                <Sel id='debt-client-choice' label={`Which ${party.name}?`} value={form.client_id || ''} onChange={v => f('client_id', v || null)} placeholder='Choose the client…'
+                  options={party.choices.map(c => ({ value: c.id, label: `${c.full_name}${c.phone ? ' · ' + c.phone : ''}${c.address ? ' · ' + c.address : ''}` }))} />
+              </div>
+            )}
+            {party?.kind === 'new-supplier' && party.similar.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: '6px', fontSize: '12px', color: gray600 }}>
+                Did you mean
+                {party.similar.map(n => <GhostBtn key={n} onClick={() => pickParty(n)} style={{ padding: '4px 10px', fontSize: '12px' }}>{n}</GhostBtn>)}?
+              </div>
+            )}
           </div>
+          {form.direction !== 'we_owe' && (
+            <Inp label='Phone (optional)' value={form.phone} onChange={v => f('phone', v)} type='tel' placeholder='Links to the client with this number, or is saved on a new client' />
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Inp label='Total Amount (₦) *' value={form.amount} onChange={v => f('amount', v)} type='number' placeholder='0' required />
             <Inp label='Amount Already Paid (₦)' value={form.amountPaid} onChange={v => f('amountPaid', v)} type='number' placeholder='0' />

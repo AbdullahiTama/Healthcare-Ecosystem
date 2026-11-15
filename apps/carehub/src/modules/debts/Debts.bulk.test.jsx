@@ -14,7 +14,8 @@ const repo = vi.hoisted(() => ({
 const locs = vi.hoisted(() => ({ getAll: vi.fn() }))
 vi.mock('./repositories', () => ({ debtRepository: repo }))
 vi.mock('../locations/repositories', () => ({ locationsRepository: locs }))
-vi.mock('../../hooks/queries', () => ({ useClients: () => ({ data: [], isLoading: false, isError: false }), useSettings: () => ({ data: {} }), useInvalidateSales: () => () => {} }))
+vi.mock('../../hooks/queries', () => ({ useClients: () => ({ data: [], isLoading: false, isError: false }), useSettings: () => ({ data: {} }), useInvalidateSales: () => () => {}, useInvalidateDebts: () => () => {} }))
+vi.mock('../purchases/hooks', () => ({ useSupplierDirectory: () => ({ suppliers: [], isLoading: false, isError: false }) }))
 
 import Debts, { debtKeptText } from './Debts.jsx'
 

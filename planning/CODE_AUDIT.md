@@ -38,7 +38,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A23 | Low | Purchases (import / export) | Bulk upload and Excel/CSV export; the export audit needed `purchases.*` in `record_export_audit`'s allow-list | **Closed 2026-11-11**: `carehub_20270115_purchase_export_audit` applied with owner approval and probed |
 | A24 | Medium | Expenses (set new budget) | A used-up budget could only be edited (history rewritten, old spending counted against the new amount) | **Closed 2026-11-11**: `carehub_20270116_expense_new_budget` applied with owner approval and probed |
 | A25 | Medium | Data exposure (cost price) | `products.cost_price` is readable by every member of a business; the new POS cost switch is display-only | Open: owner decision |
-| A26 | Medium | Debts / suppliers / credit accounts | Debt payment history, guarded hand-recorded debts, supplier accounts, account payments and debt import need `carehub_20270117_debt_and_supplier_accounts`; written and tested, not applied | Open: owner approval to apply |
+| A26 | Medium | Debts / suppliers / credit accounts | Debt payment history, guarded hand-recorded debts, supplier accounts, account payments and debt import need `carehub_20270117_debt_and_supplier_accounts`; written and tested, not applied (the cause of the 2026-11-15 "debt upload not working" report). Record Debt linking added without it | Open: owner approval to apply |
 
 ## 2. Items
 
@@ -368,6 +368,14 @@ read 2026-11-14; 16 PGlite tests in `apps/carefind/src/test/debts/debtAccounts.d
 works as before: debts can only be marked paid in full, the supplier summary shows purchase totals without supply
 records or account payments, import says it is not available yet, and a customer-account payment that fits the oldest
 visit is recorded on it.
+
+**Reported 2026-11-15 as "debt upload not working; uploaded records neither processed nor displayed":** this is the
+cause. Verified live that day: none of the migration's functions (`import_debts`, `get_supplier_accounts`, …) or
+`debt_payments` exist, so every import stops at the preview. Its 24 PGlite tests pass on `main`.
+
+**Done meanwhile (2026-11-15, no migration):** Record Debt links a typed debt to its client (created once when missing,
+by name or phone, never guessing between two of one name) or supplier account, and **Link to clients** links the 3 live
+unlinked receivables (note §2, "Record Debt: linking a debt typed in").
 
 **Close by:** apply with the owner's approval, run the probe in the migration header, record the version and results
 there, and check the security advisor shows only the intended new SECURITY DEFINER findings.

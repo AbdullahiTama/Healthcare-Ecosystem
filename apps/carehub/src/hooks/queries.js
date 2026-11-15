@@ -280,6 +280,17 @@ export function useInvalidateSales(brandId) {
   }
 }
 
+// After a debt is recorded or linked by hand: every debt read (Debts, supplier accounts, what each client owes) and the
+// client list (a client record may have been created).
+export function useInvalidateDebts(brandId) {
+  const qc = useQueryClient()
+  return () => {
+    qc.invalidateQueries({ queryKey: ['debts'] })
+    qc.invalidateQueries({ queryKey: keys.supplierAccounts(brandId) })
+    qc.invalidateQueries({ queryKey: keys.clients(brandId) })
+  }
+}
+
 // ── Credit-sale payments ──────────────────────────────────────────────────────
 
 // Payment history for one credit sale, newest first, from the sale_payments
