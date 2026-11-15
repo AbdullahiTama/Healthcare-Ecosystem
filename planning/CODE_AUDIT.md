@@ -379,8 +379,9 @@ unlinked receivables (note §2, "Record Debt: linking a debt typed in").
 
 **Closed by:** applied to production 2026-11-15 with the owner's approval (version `20261115205734`) after checking no
 later migration had changed the functions it replaces; the rolled-back live probe passed every step and the security
-advisor shows only the intended new findings (results in the migration header). Still to do on the live business: use
-**Link to clients** once on the Debts page for the existing unlinked receivables.
+advisor shows only the intended new findings (results in the migration header). The 3 existing unlinked
+receivables (three businesses; no name matched an existing client) were linked on 2026-11-15 with the Link to clients
+rules: one client record created for each, notes "Added automatically when a debt was linked."; 0 left unlinked.
 
 **Also found (not changed):** `anon` holds full table grants on `debts` (RLS denies it every row; revoke as defence in
 depth). **Proposed:** a `suppliers` table so a supplier is an id rather than a normalised name (note §5); it would
