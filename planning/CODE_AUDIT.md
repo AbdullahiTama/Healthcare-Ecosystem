@@ -39,7 +39,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A24 | Medium | Expenses (set new budget) | A used-up budget could only be edited (history rewritten, old spending counted against the new amount) | **Closed 2026-11-11**: `carehub_20270116_expense_new_budget` applied with owner approval and probed |
 | A25 | Medium | Data exposure (cost price) | `products.cost_price` is readable by every member of a business; the new POS cost switch is display-only | Open: owner decision |
 | A26 | Medium | Debts / suppliers / credit accounts | Debt payment history, guarded hand-recorded debts, supplier accounts, account payments and debt import needed `carehub_20270117_debt_and_supplier_accounts` (unapplied, it was the cause of the 2026-11-15 "debt upload not working" report); Record Debt linking added | **Closed 2026-11-15**: applied with owner approval (version 20261115205734) and probed |
-| A27 | High | POS (production defect) | An Owner's sales at a branch location are refused: "This sale is not authorized for your account." | Open: fix written and tested on PGlite; apply `carehub_20270118_sale_guard_branch_owner` with owner approval, then probe |
+| A27 | High | POS (production defect) | An Owner's sales at a branch location are refused: "This sale is not authorized for your account." | **Closed 2026-11-15**: `carehub_20270118_sale_guard_branch_owner` applied with owner approval (version 20261115222717) and probed; a first version refused every sale for 72 s and was rolled back (see item) |
 
 ## 2. Items
 
@@ -356,7 +356,7 @@ column-level revoke on `products.cost_price` for non-cost roles with a cost-free
 cost reader (Inventory, Purchases, reports, transfers, POS) switched over. The second changes access for existing roles
 and needs a plan before implementing.
 
-### A27. Owner's sales at a branch refused: "This sale is not authorized for your account." (High)
+### A27. Owner's sales at a branch refused: "This sale is not authorized for your account." (High) — closed 2026-11-15
 
 **Report (2026-11-15):** "blocked by the server … not authorized for your account" at the till, again and again.
 
@@ -368,14 +368,27 @@ differ from their parent). So the Owner passed RLS at a branch, had no staff row
 sale. Queued sales show it most (they are posted under the location they were rung up at); online sales at a branch are
 refused the same way. Queued sales are not lost: refused sales stay in the device queue and sync once the fix is live.
 
-**Fixed in code:** `carehub_20270118_sale_guard_branch_owner` asks `is_business_owner(NEW.business_id)` (the helper
-every Owner-only function uses, bounded by `current_business_ids()`); nothing else in the trigger changes. Widens
-nothing RLS did not already allow: parent staff at a branch, a branch outside the depth limit and strangers are still
-refused, and price overrides by staff still are. Tests: `apps/carefind/src/test/pos/saleGuardBranchOwner.db.test.js`
-(9, PGlite, live helpers and policy; reproduces the refusal first).
+**Fixed:** `carehub_20270118_sale_guard_branch_owner` recognises an Owner when the sale's business is in
+`current_business_ids()` and `caller_owns_business()` holds (the helper the live "owner manages own branches" policy
+uses); nothing else in the trigger changes. Widens nothing RLS did not already allow: parent staff at a branch, a
+branch outside the depth limit and strangers are still refused, and price overrides by staff still are. Tests:
+`apps/carefind/src/test/pos/saleGuardBranchOwner.db.test.js` (10, PGlite, live helpers, policy and **function grants**;
+reproduces the refusal first).
 
-**To close:** apply with owner approval, then a rolled-back live probe as an Owner at a branch (accepted) and as a
-Cashier with an override (refused); press Sync on the affected till.
+**Applied 2026-11-15** with owner approval as version 20261115222717, probed live before committing (inside a
+rolled-back transaction) and after: Owner at a branch accepted, staff at catalog price accepted, stranger refused, staff
+price override refused.
+
+**Incident during the fix (2026-11-15, 21:38:11–21:39:23 UTC, 72 s):** the first version (20261115213811) called
+`is_business_owner()`, which `authenticated` cannot execute (only `postgres` and `service_role`; its other callers are
+SECURITY DEFINER). The trigger runs as the caller, so every signed-in sale was refused with "permission denied for
+function is_business_owner". The live probe caught it and it was rolled back (20261115213923). No sale was recorded in
+that window (last sale before it: 21:28:55); a till that tried one would have shown the error, and a queued sale stays
+queued. Cause of the miss: the PGlite test granted EXECUTE by Postgres' default (PUBLIC); it now reproduces the live
+grants and fails on that version. Lesson for every trigger that runs as the caller: check the live `proacl` of each
+helper it calls, and probe new bodies inside a rolled-back transaction before applying.
+
+**Remaining:** a till holding refused queued sales sends them on its next Sync.
 
 ### A26. Debts, supplier accounts and credit accounts: migration to apply (Medium) — closed 2026-11-15
 

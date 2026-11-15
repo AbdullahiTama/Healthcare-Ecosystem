@@ -2,8 +2,25 @@
 -- POS: an Owner's sale at one of their branch locations is refused with
 -- "This sale is not authorized for your account."
 --
--- STATUS: NOT YET APPLIED. Apply with owner approval, then record the version
--- and the live probe here.
+-- STATUS: APPLIED 2026-11-15 as version 20261115222717
+--   (carehub_20270118_sale_guard_branch_owner_v2), with owner approval.
+--   Probed live BEFORE committing (the new body installed inside a rolled-back
+--   transaction) and again after, both rolled back: Owner selling at their
+--   branch ACCEPTED (through every sales trigger); staff of their own business
+--   at catalog price ACCEPTED; a stranger at the branch REFUSED ("This sale is
+--   not authorized for your account."); a staff price override REFUSED
+--   ("Price override not allowed").
+--
+--   History:
+--   The first version called is_business_owner() and was applied 2026-11-15
+--   (version 20261115213811) with owner approval. The live probe found that
+--   authenticated has no EXECUTE on is_business_owner (only postgres and
+--   service_role; every other caller is SECURITY DEFINER), and this trigger
+--   runs as the caller, so EVERY signed-in sale was refused with "permission
+--   denied for function is_business_owner". Rolled back 72 s later (version
+--   20261115213923, the 20260814 body); no sale was recorded in that window
+--   (last sale 21:28:55 UTC, window 21:38:11-21:39:23 UTC). The PGlite test
+--   now reproduces the live function grants, which is why it had passed.
 --
 -- PROBLEM (reported 2026-11-15; verified against the live definitions)
 -- -------
@@ -24,27 +41,27 @@
 --
 -- FIX
 -- ---
--- Step (a) now asks is_business_owner(NEW.business_id): the helper every other
--- Owner-only function already uses. It is true when the caller owns the sale's
--- business or an ancestor of it AND that business is in current_business_ids()
--- (so the branch depth limit is respected exactly as RLS respects it), or when
--- the caller is an active staff member with role 'Owner' on that business (who
--- step (b) already resolved to 'Owner'). Nothing else in the trigger changes:
--- price checks, the custom roles override and the trusted-role exemption are
--- identical.
---
+-- Step (a) is now: the sale's business is in current_business_ids() (the set the
+-- sales policy checks, so the branch depth limit is respected exactly as RLS
+-- respects it) AND caller_owns_business(NEW.business_id) (the caller's email is
+-- on that business or a business above it). caller_owns_business is the helper
+-- the live "owner manages own branches" policy on businesses already uses; both
+-- helpers are SECURITY DEFINER and EXECUTE is granted to authenticated.
+-- A staff member whose role is 'Owner' still resolves to 'Owner' in step (b).
+-- Nothing else in the trigger changes: price checks, the custom roles override
+-- and the trusted-role exemption are identical.
+
 -- SECURITY IMPLICATIONS
 -- ---------------------
--- * Widens nothing RLS did not already allow: is_business_owner requires the
---   business to be in current_business_ids(), the same set the sales policy
---   checks. A stranger, a staff member of the parent (staff never see
+-- * Widens nothing RLS did not already allow: the business must be in
+--   current_business_ids(), the same set the sales policy checks. A stranger, a staff member of the parent (staff never see
 --   branches), or an Owner beyond the depth limit is still refused.
 -- * An Owner at a branch now gets the Owner preset (canEditPrice) unless the
 --   branch has a custom 'Owner' roles row, which is what the app already shows
 --   them (role = 'Owner' in BusinessDashboard).
 -- * Staff resolution, price-override refusal and negative-price refusal are
 --   unchanged. The function stays SECURITY INVOKER with a pinned search_path;
---   is_business_owner is SECURITY DEFINER and only SELECTs.
+--   both helpers are SECURITY DEFINER, only SELECT, and are already granted.
 --
 -- ROLLBACK
 -- --------
@@ -82,8 +99,10 @@ BEGIN
   END IF;
 
   -- (a) Owner of this business or of a business above it (a branch location),
-  -- within the depth limit RLS applies: the same rule as every Owner-only function.
-  v_is_owner := coalesce(public.is_business_owner(NEW.business_id), false);
+  -- limited to the businesses RLS gives them. Both helpers are executable by
+  -- authenticated (this trigger runs as the caller); is_business_owner is not.
+  v_is_owner := NEW.business_id IN (SELECT public.current_business_ids())
+                AND coalesce(public.caller_owns_business(NEW.business_id), false);
 
   IF v_is_owner THEN
     v_role := 'Owner';

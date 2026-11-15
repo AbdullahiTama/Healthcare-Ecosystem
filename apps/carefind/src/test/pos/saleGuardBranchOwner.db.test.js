@@ -1,6 +1,7 @@
 // @vitest-environment node
 // carehub_20270118_sale_guard_branch_owner on PGlite, applied over carehub_20260814_guard_sale_item_prices (as in
-// production), with the live current_business_ids(), is_business_owner(), is_platform_admin() and the live
+// production), with the live current_business_ids(), is_business_owner(), caller_owns_business(), is_platform_admin(), their live
+// EXECUTE grants, and the live
 // "sales of own business" policy. Reported: "This sale is not authorized for your account." for an Owner selling at
 // one of their branch locations, which RLS allows but the price guard refused.
 import { describe, it, expect, beforeAll, vi } from 'vitest'
@@ -89,6 +90,22 @@ beforeAll(async () => {
       SELECT COALESCE((SELECT is_platform_admin FROM businesses WHERE lower(email) = lower(auth.email())), false)
     $function$;
 
+    CREATE OR REPLACE FUNCTION public.caller_owns_business(bid uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public', 'pg_temp' AS $function$
+      WITH RECURSIVE up(id, parent_business_id, email, depth) AS (
+        SELECT b.id, b.parent_business_id, b.email, 0 FROM public.businesses b WHERE b.id = bid
+        UNION
+        SELECT p.id, p.parent_business_id, p.email, up.depth + 1 FROM public.businesses p JOIN up ON p.id = up.parent_business_id WHERE up.depth < 10
+      )
+      SELECT auth.email() IS NOT NULL AND EXISTS (SELECT 1 FROM up WHERE lower(up.email) = lower(auth.email()))
+    $function$;
+    -- Function grants exactly as live (read 2026-11-15). Postgres grants EXECUTE to PUBLIC by default; Supabase does
+    -- not keep it. is_business_owner is NOT executable by authenticated: a trigger running as the caller cannot use it
+    -- (the first version of this fix did, and refused every sale in production for 72 s).
+    revoke execute on function public.current_business_ids(), public.is_business_owner(uuid), public.is_platform_admin(), public.caller_owns_business(uuid) from public;
+    grant execute on function public.current_business_ids() to authenticated, anon, service_role;
+    grant execute on function public.is_platform_admin(), public.caller_owns_business(uuid) to authenticated, service_role;
+    grant execute on function public.is_business_owner(uuid) to service_role;
+
     alter table sales enable row level security;
     alter table products enable row level security;
     alter table staff enable row level security;
@@ -146,6 +163,10 @@ describe('after carehub_20270118_sale_guard_branch_owner', () => {
 
   it('still refuses a price override by a Cashier', async () => {
     expect((await as(BRANCH_CASHIER, sale(BRANCH, P_BRANCH, 1))).error).toMatch(/Price override not allowed/)
+  })
+
+  it('accepts a plain staff sale at catalog price (the trigger runs as the caller with live grants)', async () => {
+    expect((await as(CASHIER, sale(BIZ, P_MAIN, 500))).error).toBeUndefined()
   })
 
   it('still refuses a stranger', async () => {
