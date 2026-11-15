@@ -7,7 +7,7 @@ accounts and an import of balances.
 
 | Part | Where |
 |---|---|
-| Table `suppliers` | `supabase/migrations/carehub_20270119_supplier_directory.sql` |
+| Table `suppliers` | `supabase/migrations/carehub_20270119_supplier_directory.sql` (applied 2026-11-15, version 20261115224942) |
 | Template, file reading, validation, merge, form rules (pure) | `apps/carehub/src/modules/purchases/supplierDirectory.js` |
 | Data access | `purchaseRepository.getSuppliers / createSuppliers / updateSupplier` |
 | Hooks | `useSuppliers`, `useUpdateSupplier` (`hooks/queries.js`) |
@@ -83,7 +83,7 @@ and the rest continue. Retrying is safe.
 | Repository | `modules/purchases/repositories/index.test.js` (supplier list, 3) |
 | Screen and import dialog | `modules/purchases/SupplierAccounts.directory.test.jsx` (9) |
 
-**Manual test plan** (after the migration is applied; phone and desktop):
+**Manual test plan** (phone and desktop):
 
 1. Supplier summary › Import › Supplier list › Excel template; fill 5 rows including a supplier you already buy from
    (typed in capitals), the same name twice, one with no phone or email, one with a bad email. Check the preview

@@ -1,8 +1,13 @@
 -- ============================================================================
 -- Suppliers: a supplier list with contact details, for bulk import and export
 --
--- STATUS: NOT YET APPLIED. Apply with owner approval, then record the version
--- and the live probe here.
+-- STATUS: APPLIED 2026-11-15 as version 20261115224942, with owner approval.
+--   Probed live before committing (the whole migration inside a rolled-back
+--   transaction) and after, both rolled back: a staff member adds a supplier
+--   (name tidied, key generated), a second spelling of the same name is ignored
+--   by the import's upsert, details edit, a rename is refused, DELETE is
+--   refused; another business sees none and cannot insert; anon is refused.
+--   Security advisor: no finding for suppliers or suppliers_guard.
 --
 -- PROBLEM (2026-11-15)
 -- -------
