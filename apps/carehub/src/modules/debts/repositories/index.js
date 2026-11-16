@@ -107,6 +107,33 @@ export function createDebtRepository(request = sbFetch) {
       }
     },
 
+    // A full or part payment on a debt recorded by hand (or imported), through record_debt_payment
+    // (carehub_20270117): the debt and its history row move together. A sale or purchase debt is refused by the
+    // database with where to pay it. Returns { payment_id, amount, amount_paid, balance, status }.
+    async recordPayment(debtId, { amount, method = 'Cash', paidOn = null, note = null, staffName = null } = {}) {
+      const result = await request('rpc/record_debt_payment', {
+        method: 'POST',
+        body: JSON.stringify({ p_debt_id: debtId, p_amount: amount, p_method: method, p_paid_on: paidOn || null, p_note: note || null, p_staff_name: staffName || null }),
+      })
+      return Array.isArray(result) ? result[0] : result
+    },
+
+    // The payment history of one hand-recorded debt, newest first.
+    async getPayments(businessId, debtId) {
+      return request(`debt_payments?business_id=eq.${businessId}&debt_id=eq.${debtId}&order=paid_on.desc,created_at.desc&select=*`)
+    },
+
+    // Imports receivables (owes_us) or payables (we_owe) through import_debts (carehub_20270117). `rows` come from
+    // debtImport.js. With dryRun the database does everything and rolls it back: the preview is the real code path.
+    // Returns { dry_run, direction, summary, rows: [{ row, status, kind, party, matched_by, note, message, ... }] }.
+    async importRows(businessId, direction, rows, { dryRun = true, allowDuplicates = false } = {}) {
+      const result = await request('rpc/import_debts', {
+        method: 'POST',
+        body: JSON.stringify({ p_business_id: businessId, p_direction: direction, p_rows: rows, p_dry_run: dryRun, p_allow_duplicates: allowDuplicates }),
+      })
+      return Array.isArray(result) ? result[0] : result
+    },
+
     // Finds the open debt raised by a given sale or purchase, so settling the
     // source can settle the debt with it. POS and Purchases both used to fetch
     // *every* debt for the business and scan it in JavaScript for this; the
@@ -141,7 +168,8 @@ export function createDebtRepository(request = sbFetch) {
     // consolidated.
     //
     // Never throws — a failed debt write must not undo an already-completed
-    // sale or purchase. Returns null when there is nothing owed.
+    // sale or purchase. Returns null when there is nothing owed, the saved row
+    // when recorded, and { failed: true, message } when it could not be.
     async recordUnderpayment({
       businessId,
       direction,
@@ -171,7 +199,10 @@ export function createDebtRepository(request = sbFetch) {
           source_ref: sourceRef,
         })
       } catch (e) {
-        return null
+        // Reported, not thrown: it used to return null here too (the same as "nothing owed"), so Purchases could not
+        // tell and reported every purchase's debt as recorded.
+        console.error('[debts] the debt for', source, sourceRef, 'could not be recorded:', e?.message)
+        return { failed: true, message: String(e?.message || e) }
       }
     },
   }

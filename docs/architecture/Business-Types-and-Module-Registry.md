@@ -84,7 +84,7 @@ Checklist:
 ## Related
 
 - `Hospital-Model-Current-State-and-Gap-Analysis.md`: the registry is the only enforcement of the Hospital Model
-  boundary today (the database does not check business type for clinical tables); see its §3.1 and CODE_AUDIT A27.
+  boundary today (the database does not check business type for clinical tables); see its §3.1 and CODE_AUDIT A35.
 
 - `src/pages/landing/data/businessTypes.js` — per-type product notes (the claims this registry backs).
 - `src/lib/roleTemplates.js` — New Role templates for pharmacy / hospital / enterprise (clinic, laboratory and beauty template sets are a follow-up content pass).

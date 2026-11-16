@@ -26,6 +26,7 @@ let host, root, qc
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 const summary = () => host.querySelector('[role="status"][aria-live="polite"]')
 const card = (title) => [...host.querySelectorAll('div')].find((d) => d.firstChild?.textContent === title && d.children.length >= 2)
+const tab = (label) => [...host.querySelectorAll('[role="tab"]')].find((t) => t.textContent.startsWith(label))
 const button = (text) => [...host.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith(text))
 async function openFilters() { await act(async () => { button('Debt filters').click() }); await flush() }
 async function choose(label, value) {
@@ -61,21 +62,24 @@ describe('Debts: totals for a filter', () => {
   })
 
   it('searching a customer shows the total they owe across all their debts (any capitalisation)', async () => {
-    await type('Search debts by customer or party name', '  bola ')
+    await type('Search receivables by customer name', '  bola ')
     expect(summary().textContent).toContain('3 debts for "bola"')
-    expect(summary().textContent).toContain('Outstanding, owed to you: ₦4,500')
+    expect(summary().textContent).toContain('Outstanding: ₦4,500')
     expect(summary().textContent).toContain('(2 open)')
-    expect(summary().textContent).not.toContain('You owe')
   })
 
-  it('a supplier search shows what the business owes them', async () => {
-    await type('Search debts by customer or party name', 'emzor')
-    expect(summary().textContent).toContain('Outstanding, owed to you: ₦0')
-    expect(summary().textContent).toContain('You owe: ₦9,000')
+  it('a supplier is on the Payables tab, with what the business owes them', async () => {
+    await type('Search receivables by customer name', 'emzor')
+    expect(host.textContent).toContain('No debts match "emzor"')
+    await act(async () => { tab('Payables').click() }); await flush()
+    await type('Search payables by supplier or party name', 'emzor')
+    expect(summary().textContent).toContain('1 debt for "emzor"')
+    expect(summary().textContent).toContain('Outstanding: ₦9,000')
+    expect(card('Outstanding: you owe').textContent).toContain('₦9,000')
   })
 
   it('search and month together total only the matching rows', async () => {
-    await type('Search debts by customer or party name', 'bola')
+    await type('Search receivables by customer name', 'bola')
     await openFilters()
     await choose('Date recorded', 'month')
     await setInput(host.querySelector('input[type="month"]'), '2026-10')
@@ -83,29 +87,34 @@ describe('Debts: totals for a filter', () => {
     expect(summary().textContent).toContain('₦3,000')
   })
 
+  it('each tab shows its own outstanding total; amount = payments + outstanding', async () => {
+    expect(tab('Receivables').textContent).toContain('₦5,200')
+    expect(tab('Payables').textContent).toContain('₦9,000')
+    expect(card('Outstanding: owed to you').textContent).toContain('₦5,200')
+    expect(card('Total owed').textContent).toContain('₦8,000')
+    expect(card('Payments received').textContent).toContain('₦2,800')
+    expect(host.textContent).not.toContain('Emzor Ltd')
+  })
+
   it('the cards always total what is shown: a payment-status filter recalculates them', async () => {
-    expect(card('Total outstanding').textContent).toContain('₦14,200')
-    expect(card('Owed to us').textContent).toContain('₦5,200')
-    expect(card('We owe others').textContent).toContain('₦9,000')
     await openFilters()
     await choose('Payment status', 'partial')
-    expect(card('Total outstanding').textContent).toContain('₦3,000')
-    expect(card('We owe others').textContent).toContain('₦0')
+    expect(card('Outstanding: owed to you').textContent).toContain('₦3,000')
+    expect(card('Total owed').textContent).toContain('₦5,000')
     expect(summary().textContent).toContain('1 debt for Partially paid')
     expect(summary().textContent).toContain('0 unpaid · 1 partially paid · 0 paid')
   })
 
-  it('direction and amount range narrow the list and the totals together', async () => {
+  it('amount range narrows the list and the totals together', async () => {
     await openFilters()
-    await choose('Direction', 'owes_us')
     const [min] = host.querySelectorAll('input[type="number"]')
     await setInput(min, '1000')
-    expect(card('Owed to us').textContent).toContain('₦4,500')
-    expect(summary().textContent).toContain('Owed to us · outstanding at least ₦1,000')
+    expect(card('Outstanding: owed to you').textContent).toContain('₦4,500')
+    expect(summary().textContent).toContain('outstanding at least ₦1,000')
   })
 
   it('no matches: says so and offers to clear the filters', async () => {
-    await type('Search debts by customer or party name', 'nobody')
+    await type('Search receivables by customer name', 'nobody')
     expect(host.textContent).toContain('No debts match "nobody"')
     expect(summary().textContent).toContain('0 debts')
     await act(async () => { [...host.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Clear filters').click() })
@@ -132,14 +141,14 @@ describe('Debts: locations (owner with branches)', () => {
   it('loads every location but shows the one in use by default', async () => {
     expect(debts.getForBusinesses).toHaveBeenCalledWith(['b', 'br2'])
     expect(host.textContent).not.toContain('Ikeja customer')
-    expect(card('Owed to us').textContent).toContain('₦3,000')
+    expect(card('Outstanding: owed to you').textContent).toContain('₦3,000')
     expect(summary()).toBeNull()
   })
 
   it('"All locations" totals both, and a branch\'s debt is settled at that branch', async () => {
     await openFilters()
     await choose('Location', '')
-    expect(card('Owed to us').textContent).toContain('₦5,000')
+    expect(card('Outstanding: owed to you').textContent).toContain('₦5,000')
     expect(host.textContent).toContain('Ikeja customer')
     expect(host.textContent).toContain('Settle at Ikeja')
     expect(summary().textContent).toContain('all locations')

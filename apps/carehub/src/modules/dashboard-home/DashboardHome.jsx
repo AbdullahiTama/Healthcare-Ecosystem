@@ -23,7 +23,8 @@ import { canSeeAllActivity, isManagerRole } from '../../lib/permissions'
 import FieldTeamToday from './FieldTeamToday.jsx'
 import OwnerActivity from './OwnerActivity.jsx'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useOpenSales, useAppointments, useSettings, useInvalidateSales, useUnpaidExpenses } from '../../hooks/queries'
+import { useOpenSales, useAppointments, useSettings, useInvalidateSales, useUnpaidExpenses, useClients } from '../../hooks/queries'
+import { clientsById, withCurrentClientNames } from '../../lib/clientNames'
 // Bills to pay: the Expenses module's own rules and totals, so the dashboard and the Expenses page agree.
 import { expenseDate, expenseBalance, expensePaymentStatus } from '../expenses/expenseRules'
 import { expenseTotals, EXPENSE_PAYMENT_STATUSES } from '../expenses/expenseFilters'
@@ -69,8 +70,11 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
   const { data: todayData, isLoading: loadingToday, isError: errToday, refetch: refetchToday } =
     useSalesReportData(brand?.id, todayRange, { refetchInterval: LIVE_REFRESH_MS })
   const todayView = useMemo(() => (todayData ? reportView(todayData) : null), [todayData])
-  const todaySales = useMemo(() => [...(todayView?.sales || [])]
-    .sort((a, b) => (parseDbTime(b.created_at)?.getTime() || 0) - (parseDbTime(a.created_at)?.getTime() || 0)), [todayView])
+  // Sales linked to a client show the client's current name (Edit Client); client_name is kept as recorded.
+  const clientsQuery = useClients(brand?.id)
+  const clientIndex = useMemo(() => clientsById(clientsQuery.data), [clientsQuery.data])
+  const todaySales = useMemo(() => withCurrentClientNames(todayView?.sales || [], clientIndex, 'client_name')
+    .sort((a, b) => (parseDbTime(b.created_at)?.getTime() || 0) - (parseDbTime(a.created_at)?.getTime() || 0)), [todayView, clientIndex])
   // A recent sale opened in full (items, payments, receipt).
   const [detailSale, setDetailSale] = useState(null)
   const { data: settings } = useSettings(brand?.id)
@@ -105,8 +109,9 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
 
   const todayTotal = todayView?.summary.totalSales || 0
   const todayRefunds = todayView?.summary.refunds.total || 0
-  const heldSales = openSales.filter(s => s.is_on_hold)
-  const creditSales = openSales.filter(s => s.is_credit && s.balance > 0)
+  const namedOpenSales = useMemo(() => withCurrentClientNames(openSales, clientIndex, 'client_name'), [openSales, clientIndex])
+  const heldSales = namedOpenSales.filter(s => s.is_on_hold)
+  const creditSales = namedOpenSales.filter(s => s.is_credit && s.balance > 0)
   const creditTotal = creditSales.reduce((s, x) => s + (x.balance || 0), 0)
   const lowStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5))
   const outStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock <= 0)
@@ -426,7 +431,7 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
         )}
       </div>
       <SaleDetailModal show={!!detailSale} sale={detailSale} onClose={() => setDetailSale(null)} brand={brand} settings={settings}
-        canRefund={role === 'Owner' || isManagerRole(role)} ledgerAvailable showToast={showToast}
+        canRefund={role === 'Owner' || isManagerRole(role)} ledgerAvailable clients={clientsQuery.data || []} showToast={showToast}
         onChanged={() => { setDetailSale(null); invalidateSales() }} />
       <Toast msg={toastMsg} type={toastType} />
     </div>

@@ -448,6 +448,23 @@ export function createPaymentRepository({ request = sbFetch } = {}) {
       return request(`sale_payments?business_id=eq.${businessId}&sale_id=eq.${saleId}&order=received_at.asc&select=*`)
     },
 
+    // The ledger rows of several sales (a customer's credit account), oldest first, 100 sale ids per request.
+    async getForSales(businessId, saleIds) {
+      const ids = [...new Set((saleIds || []).map(String).filter((id) => /^[0-9a-f-]{36}$/i.test(id)))]
+      const rows = []
+      for (let i = 0; i < ids.length; i += 100) {
+        rows.push(...(await pagedQuery(request, `sale_payments?business_id=eq.${businessId}&sale_id=in.(${ids.slice(i, i + 100).join(',')})&order=received_at.asc,id.asc&select=*`)))
+      }
+      return rows.sort((a, b) => String(a.received_at || '').localeCompare(String(b.received_at || '')))
+    },
+
+    // One payment on a customer's credit account, applied to the given open credit sales oldest first, each through
+    // record_sale_payment (cashier, shift, sale and debt), all or nothing (record_customer_payment, carehub_20270117).
+    // Returns { amount, allocations: [{ sale_id, txn_no, amount, balance }], balance }.
+    async recordAccountPayment(businessId, saleIds, amount, method) {
+      return rpc(request, 'record_customer_payment', { p_business_id: businessId, p_sale_ids: saleIds, p_amount: amount, p_method: method })
+    },
+
     // Everything taken or refunded during one shift: the close-shift preview
     // of expected cash. The server recomputes it on close; this is a preview.
     async getForShift(businessId, shiftId) {

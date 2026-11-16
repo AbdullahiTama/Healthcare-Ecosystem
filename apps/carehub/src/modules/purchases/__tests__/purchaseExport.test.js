@@ -62,7 +62,7 @@ describe('files', () => {
     const ws = wb.getWorksheet('Purchases')
     expect(ws.rowCount).toBe(4)
     expect(ws.getRow(1).getCell(1).value).toBe('Purchase Ref')
-    expect(ws.getRow(3).getCell(4).value).toBe("'=HYPERLINK(\"x\")")
+    expect(ws.getRow(3).getCell(5).value).toBe("'=HYPERLINK(\"x\")")
   })
 
   it('nothing is saved when the audit refuses; the row count is passed to it', async () => {

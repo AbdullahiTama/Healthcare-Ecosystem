@@ -136,9 +136,15 @@ and database migrations on PGlite. On 2026-11-02 CareHub had 304 test files and 
 | Importer / manufacturer operating models, representative ledgers, transaction register | [architecture/Importer-Operating-Models.md](architecture/Importer-Operating-Models.md) |
 | Debts, Clients and Expenses filters; adding customers at the POS; held sales shown at once | [architecture/Record-Filters-POS-Customers-and-Held-Sales.md](architecture/Record-Filters-POS-Customers-and-Held-Sales.md) |
 | Purchases bulk upload and Excel/CSV export | [architecture/Purchases-Import-Export.md](architecture/Purchases-Import-Export.md) |
+| Client Account: financial summary, ledger, summary and detailed statements (Excel / PDF) | [architecture/Client-Account.md](architecture/Client-Account.md) |
+| Client Owes Us / We Owe Client; opening balances on the client upload | [architecture/Client-Position-and-Opening-Balances.md](architecture/Client-Position-and-Opening-Balances.md) |
+| Edit Client; a client's current name on linked sales and debts | [architecture/Client-Edit.md](architecture/Client-Edit.md) |
+| Supplier list: contact details, Excel/CSV import with validation, export | [architecture/Supplier-Directory.md](architecture/Supplier-Directory.md) |
+| Inventory upload accounting for every row, purchase debts reported, supplier phone in Purchases, POS out-of-stock price | [architecture/Bulk-Uploads-and-Debt-Linking.md](architecture/Bulk-Uploads-and-Debt-Linking.md) |
 | Expense budgets, including Set new budget and budget history | [architecture/Expense-Budgets.md](architecture/Expense-Budgets.md) |
 | Cost price at the POS (who sees it, what it shows) | [architecture/POS-Cost-Visibility.md](architecture/POS-Cost-Visibility.md) |
 | Hospital Model: current state, defects and gap analysis against the hospital upgrade specification | [architecture/Hospital-Model-Current-State-and-Gap-Analysis.md](architecture/Hospital-Model-Current-State-and-Gap-Analysis.md) |
+| Receivables / payables, debt import and export, supplier summary, customer credit accounts, POS stock limits | [architecture/Debt-Accounts-and-POS-Stock-Limits.md](architecture/Debt-Accounts-and-POS-Stock-Limits.md) |
 | Business directory and discovery | [architecture/CareHub-Business-Directory-and-Discovery.md](architecture/CareHub-Business-Directory-and-Discovery.md) |
 | Production readiness, performance | [architecture/Production-Readiness.md](architecture/Production-Readiness.md), [architecture/Performance-and-Resilience.md](architecture/Performance-and-Resilience.md) |
 | Linting | [architecture/Linting.md](architecture/Linting.md) |

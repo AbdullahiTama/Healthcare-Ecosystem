@@ -1,62 +1,99 @@
 import { describe, it, expect } from 'vitest'
-import { parseInventoryCsv, normalizeExpiryDate } from './csvImport.js'
+import { readInventoryTable, planInventoryImport, toImportProduct, normalizeExpiryDate, buildInventoryTemplateCsv, UNCOUNTED_STOCK } from './csvImport.js'
+import { parseCsv } from '../../lib/spreadsheet'
 
-// A legacy template row — exactly the 9 columns the original template shipped,
-// before Expiry Date was appended as column 10.
-const LEGACY_ROW = '"Amoxicillin 500mg","Amoxicillin","Medicines","1500","800","100","20","","yes"'
-const NEW_ROW = '"Amoxicillin 500mg","Amoxicillin","Medicines","1500","800","100","20","","yes","2027-06-30"'
+const HEADER = 'Product Name,Generic Name,Category,Selling Price (NGN),Cost Price (NGN),Stock Quantity,Reorder Level,Barcode,List on CareFind (yes/no),Expiry Date'
+const table = (csv) => readInventoryTable(parseCsv(csv))
+const plan = (csv, ctx) => planInventoryImport(table(csv).rows, ctx)
 
-describe('parseInventoryCsv', () => {
-  it('imports legacy 9-column rows with a null expiry date', () => {
-    const csv = 'Product Name,Generic Name,Category,Selling Price (NGN),Cost Price (NGN),Stock Quantity,Reorder Level,Barcode,List on CareFind (yes/no)\n' + LEGACY_ROW
-    const { rows, error } = parseInventoryCsv(csv)
-    expect(error).toBeNull()
-    expect(rows).toHaveLength(1)
-    expect(rows[0]).toMatchObject({
-      name: 'Amoxicillin 500mg',
-      generic_name: 'Amoxicillin',
-      category: 'Medicines',
-      price: 1500,
-      cost_price: 800,
-      stock: 100,
-      reorder_level: 20,
-      list_on_carefind: true,
-    })
-    expect(rows[0].expiry_date).toBeNull()
+describe('readInventoryTable', () => {
+  it('reads the template columns by header, with spreadsheet row numbers', () => {
+    const { rows, missing } = table(HEADER + '\n"Amoxicillin 500mg","Amoxicillin","Medicines","1500","800","100","20","","yes","2027-06-30"')
+    expect(missing).toEqual([])
+    expect(rows).toEqual([{ rowNumber: 2, cells: expect.objectContaining({ name: 'Amoxicillin 500mg', price: '1500', expiry_date: '2027-06-30' }) }])
   })
 
-  it('parses the expiry date from a 10-column row', () => {
-    const csv = 'Product Name,Generic Name,Category,Selling Price (NGN),Cost Price (NGN),Stock Quantity,Reorder Level,Barcode,List on CareFind (yes/no),Expiry Date\n' + NEW_ROW
-    const { rows, error } = parseInventoryCsv(csv)
-    expect(error).toBeNull()
-    expect(rows[0].expiry_date).toBe('2027-06-30')
+  it('imports a legacy 9-column file (no Expiry Date) with a null expiry', () => {
+    const header = HEADER.replace(',Expiry Date', '')
+    const p = plan(header + '\n"Amoxicillin 500mg","Amoxicillin","Medicines","1500","800","100","20","","yes"')
+    expect(p.items[0].status).toBe('ready')
+    expect(p.items[0].product).toMatchObject({ name: 'Amoxicillin 500mg', price: 1500, cost_price: 800, stock: 100, reorder_level: 20, list_on_carefind: true, expiry_date: null })
   })
 
-  it('nulls a malformed expiry date but still imports the row', () => {
-    const row = '"Bad Date Product","Generic","Medicines","100","50","10","5","","no","not-a-date"'
-    const csv = 'Product Name,Generic Name,Category,Selling Price (NGN),Cost Price (NGN),Stock Quantity,Reorder Level,Barcode,List on CareFind (yes/no),Expiry Date\n' + row
-    const { rows } = parseInventoryCsv(csv)
-    expect(rows).toHaveLength(1)
-    expect(rows[0].expiry_date).toBeNull()
-    expect(rows[0].list_on_carefind).toBe(false)
+  it('matches columns in any order and ignores extra ones (an edited Inventory export, or a rows-to-fix file)', () => {
+    const { rows, ignored } = table('Barcode,Stock Quantity,Product Name,Problem\n111,5,Zinc 20mg,Duplicate')
+    expect(rows[0].cells).toMatchObject({ name: 'Zinc 20mg', stock: '5', barcode: '111' })
+    expect(ignored).toEqual(['Problem'])
   })
 
-  it('normalises Excel-style dates to ISO', () => {
-    const row = '"Excel Product","G","Medicines","100","50","10","5","","yes","5/31/2027"'
-    const csv = 'Product Name,Generic Name,Category,Selling Price (NGN),Cost Price (NGN),Stock Quantity,Reorder Level,Barcode,List on CareFind (yes/no),Expiry Date\n' + row
-    const { rows } = parseInventoryCsv(csv)
-    expect(rows[0].expiry_date).toBe('2027-05-31')
+  it('reads a file whose headers are not recognised in the template order, as before', () => {
+    const { rows } = table('A,B,C,D\nZinc 20mg,Zinc,Supplements,300')
+    expect(rows[0].cells).toMatchObject({ name: 'Zinc 20mg', generic_name: 'Zinc', category: 'Supplements', price: '300' })
   })
 
-  it('skips rows without a product name and reports an error when nothing valid remains', () => {
-    const header = 'Product Name,Generic Name,Category,Selling Price (NGN),Cost Price (NGN),Stock Quantity,Reorder Level,Barcode,List on CareFind (yes/no)'
-    const empty = parseInventoryCsv(header + '\n,"No name","Medicines","1","1","1","1","","yes"')
-    expect(empty.rows).toHaveLength(0)
-    expect(empty.error).toBe('No valid products found.')
+  it('keeps a quoted cell with a line break as one row (the old line split cut it in two)', () => {
+    const p = plan(HEADER + '\n"Cough Syrup\n100ml","Dextromethorphan","Medicines","900","500","10","2","","yes",""\n"Zinc 20mg","Zinc","Supplements","300","150","40","5","","yes",""')
+    expect(p.summary).toMatchObject({ submitted: 2, ready: 2 })
+    expect(p.items[0].product.name).toBe('Cough Syrup\n100ml')
+  })
 
-    const blank = parseInventoryCsv('')
-    expect(blank.rows).toHaveLength(0)
-    expect(blank.error).toBe('File is empty or has no products.')
+  it('refuses an empty file with a sentence', () => {
+    expect(() => table('')).toThrow('The file is empty.')
+    expect(() => table(HEADER)).toThrow('The file has headers but no rows.')
+  })
+})
+
+describe('toImportProduct', () => {
+  it('reads ₦ and thousands separators (parseFloat read "1,500" as 1)', () => {
+    expect(toImportProduct({ name: 'X', price: '₦1,500', cost_price: '1,200.50' }).product).toMatchObject({ price: 1500, cost_price: 1200.5 })
+  })
+
+  it('reports numbers it cannot read instead of saving 0', () => {
+    const r = toImportProduct({ name: 'X', price: 'abc', stock: '-3', reorder_level: '2.5' })
+    expect(r.problems).toEqual(['Selling price "abc" is not a number.', 'Stock quantity cannot be negative.', 'Reorder level must be a whole number.'])
+  })
+
+  it('keeps the old defaults for blank cells', () => {
+    expect(toImportProduct({ name: 'Consultation' }).product).toMatchObject({ category: 'Medicines', price: 0, cost_price: 0, stock: UNCOUNTED_STOCK, reorder_level: 5, list_on_carefind: true, expiry_date: null })
+    expect(toImportProduct({ name: 'X', list_on_carefind: 'No' }).product.list_on_carefind).toBe(false)
+  })
+
+  it('saves a product with an unreadable expiry without one, and says so', () => {
+    const r = toImportProduct({ name: 'X', expiry_date: 'not-a-date' })
+    expect(r.problems).toEqual([])
+    expect(r.product.expiry_date).toBeNull()
+    expect(r.warnings[0]).toContain('"not-a-date" could not be read')
+  })
+})
+
+describe('planInventoryImport', () => {
+  const existing = [{ id: 'p1', name: 'Panadol 500mg', generic_name: 'Paracetamol', barcode: '6200000000001' }]
+
+  it('does NOT skip a different product that shares a generic name with one in stock (the reported shortfall)', () => {
+    const p = plan(HEADER + '\nEmzor Paracetamol 500mg,Paracetamol,Medicines,500,300,10,5,,yes,\nParacetamol Syrup 60ml,Paracetamol,Medicines,700,400,10,5,,yes,', { existing })
+    expect(p.items.map(i => i.status)).toEqual(['ready', 'ready'])
+  })
+
+  it('skips a product whose name or barcode is already in Inventory, with the reason', () => {
+    const p = plan(HEADER + '\n panadol  500MG ,Paracetamol,Medicines,500,300,10,5,,yes,\nOther Name,,Medicines,1,1,1,1,6200000000001,yes,', { existing })
+    expect(p.items.map(i => i.status)).toEqual(['duplicate', 'duplicate'])
+    expect(p.items[0].reason).toBe('Duplicate: already in Inventory as Panadol 500mg.')
+    expect(p.items[1].reason).toBe('Duplicate: barcode 6200000000001 is already used by Panadol 500mg.')
+  })
+
+  it('skips a repeat of an earlier row in the same file', () => {
+    const p = plan(HEADER + '\nZinc 20mg,Zinc,Supplements,300,150,40,5,,yes,\nzinc 20mg,Zinc,Supplements,300,150,40,5,,yes,')
+    expect(p.items[1]).toMatchObject({ status: 'duplicate', reason: 'Duplicate: same name as row 2.' })
+  })
+
+  it('accounts for every row: submitted = ready + duplicates + invalid + over limit', () => {
+    const rows = [HEADER]
+    for (let i = 0; i < 1000; i++) rows.push(`Product ${i},Generic ${i % 7},Medicines,${100 + i},50,10,5,,yes,`)
+    rows.push(',No name,Medicines,1,1,1,1,,yes,') // invalid
+    rows.push('Product 3,,Medicines,1,1,1,1,,yes,') // duplicate of row 5
+    const p = plan(rows.join('\n'), { existing: [], remaining: 990 })
+    expect(p.summary).toEqual({ submitted: 1002, ready: 990, duplicates: 1, invalid: 1, overLimit: 10 })
+    expect(p.items.find(i => i.status === 'invalid').reason).toBe('Product name is missing.')
   })
 })
 
@@ -68,18 +105,27 @@ describe('normalizeExpiryDate', () => {
     expect(normalizeExpiryDate(null)).toBeNull()
   })
 
-  it('accepts ISO dates and passes them through unchanged', () => {
+  it('accepts ISO dates, Excel date cells and serials, and day-first dates', () => {
     expect(normalizeExpiryDate('2027-06-30')).toBe('2027-06-30')
+    expect(normalizeExpiryDate('2027-06-30T00:00:00.000Z')).toBe('2027-06-30')
+    expect(normalizeExpiryDate('46569')).toBe('2027-07-01')
+    expect(normalizeExpiryDate('30/06/2027')).toBe('2027-06-30')
   })
 
   it('rejects impossible calendar dates instead of rolling them over', () => {
-    // JS silently rolls 2027-02-31 to March; the stored day must be what the
-    // user typed or nothing at all.
     expect(normalizeExpiryDate('2027-02-31')).toBeNull()
     expect(normalizeExpiryDate('2027-13-01')).toBeNull()
   })
 
   it('parses other unambiguous formats via Date.parse', () => {
     expect(normalizeExpiryDate('June 30, 2027')).toBe('2027-06-30')
+    expect(normalizeExpiryDate('5/31/2027')).toBe('2027-05-31')
+  })
+})
+
+describe('buildInventoryTemplateCsv', () => {
+  it('is read back by the importer with every example row ready', () => {
+    const p = planInventoryImport(readInventoryTable(parseCsv(buildInventoryTemplateCsv())).rows)
+    expect(p.summary).toMatchObject({ submitted: 3, ready: 3 })
   })
 })

@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Shield, Eye, FileText, Flag, AlertTriangle, Pill } from 'lucide-react'
+import { Shield, Eye, FileText, Flag, AlertTriangle, Pill, BookOpen } from 'lucide-react'
 import TrustQueue from './TrustQueue'
 import Verifications from './Verifications'
 import Moderation from './Moderation'
 import Claims from './Claims'
 import DrugIntel from './DrugIntel'
+import ProductLibrary from './ProductLibrary'
 
 const SUBS = [
   { id: 'queue', label: 'Queue', icon: Shield, comp: TrustQueue },
@@ -12,6 +13,7 @@ const SUBS = [
   { id: 'claims', label: 'Claims', icon: FileText, comp: Claims },
   { id: 'moderation', label: 'Moderation', icon: Flag, comp: Moderation },
   { id: 'drug', label: 'Drug Intel', icon: Pill, comp: DrugIntel },
+  { id: 'library', label: 'Product Library', icon: BookOpen, comp: ProductLibrary },
 ]
 
 export default function TrustPanel() {

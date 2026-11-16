@@ -204,3 +204,43 @@ describe('purchaseRepository: bulk edit and delete', () => {
     await expect(repo.deleteMany(A, ['p1'])).rejects.toMatchObject({ code: 'DELETE_UNAVAILABLE' })
   })
 })
+
+describe('purchaseRepository: supplier list', () => {
+  function recording(responses) {
+    const calls = []
+    const request = async (path, opts = {}) => {
+      calls.push({ path, ...opts })
+      const r = responses.shift()
+      if (r instanceof Error) throw r
+      return typeof r === 'function' ? r(path, opts) : r
+    }
+    return { calls, repo: createPurchaseRepository(request) }
+  }
+
+  it('getSuppliers reads this business only, and says when the table is not installed yet', async () => {
+    const { calls, repo } = recording([[{ id: 's1', name: 'Emzor' }]])
+    expect(await repo.getSuppliers(A)).toEqual({ available: true, rows: [{ id: 's1', name: 'Emzor' }] })
+    expect(calls[0].path).toMatch(/^suppliers\?business_id=eq\.biz-A&/)
+    const missing = recording([new Error('Supabase error (404): relation "public.suppliers" does not exist')])
+    expect(await missing.repo.getSuppliers(A)).toEqual({ available: false, rows: [] })
+  })
+
+  it('createSuppliers stamps the business, skips names already there, and keeps going after a failed batch', async () => {
+    const { calls, repo } = recording([
+      (path, opts) => JSON.parse(opts.body).filter((r) => r.name !== 'Emzor'),
+      new Error('Supabase error (500): boom'),
+    ])
+    const r = await repo.createSuppliers(A, [{ name: 'Emzor' }, { name: 'Fidson' }, { name: 'May' }], 2)
+    expect(calls[0].path).toBe('suppliers?on_conflict=business_id,supplier_key')
+    expect(calls[0].prefer).toBe('resolution=ignore-duplicates,return=representation')
+    expect(JSON.parse(calls[0].body).every((x) => x.business_id === A)).toBe(true)
+    expect(r).toEqual({ added: ['Fidson'], skipped: 1, failed: [{ names: ['May'], message: 'Supabase error (500): boom' }] })
+  })
+
+  it('updateSupplier is tenant-scoped and says when nothing matched', async () => {
+    const { calls, repo } = recording([[{ id: 's1', phone: '1' }], []])
+    expect(await repo.updateSupplier(A, 's1', { phone: '1' })).toEqual({ id: 's1', phone: '1' })
+    expect(calls[0].path).toBe('suppliers?id=eq.s1&business_id=eq.biz-A')
+    await expect(repo.updateSupplier(B, 's1', { phone: '1' })).rejects.toThrow(/could not be found/)
+  })
+})

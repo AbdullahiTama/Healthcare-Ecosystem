@@ -57,38 +57,41 @@ export function createClientRepository(request = sbFetch) {
     //              surfacing a raw constraint error.
     //   failed   — [{ full_name, message }] for every other kind of write
     //              failure. The page reports the counts and the first few.
+    //   created  — the saved rows (with their ids), for anything the import links to them (opening balances).
     async createMany(businessId, clients, batchSize = 20) {
       let added = 0
       let skipped = 0
       const failed = []
+      const created = []
       for (let i = 0; i < clients.length; i += batchSize) {
         const batch = clients.slice(i, i + batchSize)
         const results = await Promise.all(batch.map(c =>
           create(businessId, c)
-            .then(() => true)
+            .then((rows) => ({ row: Array.isArray(rows) ? rows[0] : rows }))
             .catch(err => {
               if (isDuplicateError(err)) return 'skipped'
               return { full_name: c.full_name || 'Unknown', message: err.message || 'error' }
             })
         ))
         results.forEach(r => {
-          if (r === true) added++
+          if (r && typeof r === 'object' && 'row' in r) { added++; if (r.row) created.push(r.row) }
           else if (r === 'skipped') skipped++
           else failed.push(r)
         })
       }
-      return { added, skipped, failed }
+      return { added, skipped, failed, created }
     },
 
-    // No UI calls this yet — it replaces a dead `updateClient` in
-    // services/supabase.js that PATCHed by id alone, so any future edit screen
-    // reaches for a tenant-scoped write instead of an unscoped one.
+    // Edit Client: saves one client's changed details, tenant-scoped, and returns the saved row. Nothing matched (a
+    // client of another business, or deleted meanwhile) is an error, not a silent "saved".
     async update(clientId, businessId, updates) {
-      return request(`clients?id=eq.${clientId}&business_id=eq.${businessId}`, {
+      const rows = await request(`clients?id=eq.${clientId}&business_id=eq.${businessId}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
-        prefer: 'return=minimal',
+        prefer: 'return=representation',
       })
+      if (Array.isArray(rows) && rows.length === 0) throw new Error('This client could not be found. They may have been deleted.')
+      return Array.isArray(rows) ? rows[0] : rows
     },
 
     // The same changes for many clients, one request per 100 (bulk edit on the Clients page). Tenant-scoped like
@@ -161,6 +164,28 @@ export function createClientRepository(request = sbFetch) {
 
     async getDebts(clientId, businessId) {
       return request(`debts?client_id=eq.${clientId}&business_id=eq.${businessId}&order=created_at.desc&select=*`)
+    },
+
+    // ── Client Account (clientLedger.js) ─────────────────────────────────────────
+    // Everything the account is built from, scoped by client AND business: the client's sales (every status; the
+    // ledger keeps completed ones), the payments ledger rows of those sales, the client's debts, and the payments on
+    // them. Ids go into `in.(...)` lists of at most 100 to keep URLs short.
+    async getAccountRecords(clientId, businessId) {
+      const sales = await pagedQuery(request, `sales?client_id=eq.${clientId}&business_id=eq.${businessId}&order=created_at.asc,id.asc&select=id,txn_no,created_at,total,amount_paid,balance,refunded_amount,status,is_on_hold,payment_method,items,client_name`)
+      const debts = await pagedQuery(request, `debts?client_id=eq.${clientId}&business_id=eq.${businessId}&order=created_at.asc,id.asc&select=id,direction,party_name,amount,amount_paid,balance,status,description,source,source_ref,created_at,due_date`)
+      const inChunks = async (table, column, ids, select) => {
+        const rows = []
+        for (let i = 0; i < ids.length; i += 100) {
+          rows.push(...await pagedQuery(request, `${table}?business_id=eq.${businessId}&${column}=in.(${ids.slice(i, i + 100).join(',')})&order=id.asc&select=${select}`))
+        }
+        return rows
+      }
+      const manualIds = debts.filter((d) => (d.source || 'manual') === 'manual').map((d) => d.id)
+      const [salePayments, debtPayments] = await Promise.all([
+        inChunks('sale_payments', 'sale_id', sales.map((x) => x.id), 'id,sale_id,kind,method,amount,received_at,note'),
+        inChunks('debt_payments', 'debt_id', manualIds, 'id,debt_id,kind,method,amount,paid_on,created_at,note'),
+      ])
+      return { sales, salePayments, debts, debtPayments }
     },
 
     // `consultation_forms` is the skincare/pharmacy consultation table. The

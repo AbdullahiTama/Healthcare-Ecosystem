@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 const repo = vi.hoisted(() => ({
   getPage: vi.fn(), getTotals: vi.fn(async () => [{ purchase_count: 1, total_paid: 0, total_owed: 0 }]),
-  getSupplierStats: vi.fn(async () => []), getSupplierBalances: vi.fn(async () => []), getProductStats: vi.fn(async () => []),
+  getSupplierStats: vi.fn(async () => []), getSupplierBalances: vi.fn(async () => []), getSuppliers: vi.fn(async () => ({ available: true, rows: [] })), saveSupplierPhone: vi.fn(async () => 'saved'), getProductStats: vi.fn(async () => []),
   getAllPages: vi.fn(async () => []), getAllForExport: vi.fn(), create: vi.fn(),
 }))
 const products = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), receiveStock: vi.fn() }))
@@ -96,6 +96,26 @@ describe('upload', () => {
     expect(debts.recordUnderpayment).toHaveBeenCalledWith(expect.objectContaining({ partyName: 'Emzor', amount: 5500, amountPaid: 1000, sourceRef: 'NEW-PURCHASE' }))
     expect(text()).toContain('1 purchase recorded')
     expect(setProducts).toHaveBeenCalled()
+  })
+
+  it('an optional Supplier Phone column is saved on the supplier record; a bad one is named', async () => {
+    await mount()
+    await click(btn((b) => b.textContent.trim() === 'Upload'))
+    await upload('Supplier,Supplier Phone,Supply Date,Product Name,Quantity,Unit Cost (NGN)\nFidson,0805 123 4567,2026-11-04,Zinc,2,50\nEmzor,call us,2026-11-04,ORS,1,10\n')
+    expect(text()).toContain('Row 3: Supplier phone "call us" is not a phone number.')
+    await click(btn((b) => b.textContent === 'Record 1 purchase'))
+    await settle()
+    expect(repo.saveSupplierPhone).toHaveBeenCalledWith('B1', 'Fidson', '0805 123 4567')
+  })
+
+  it('a balance whose debt could not be recorded is reported, not counted as linked', async () => {
+    debts.recordUnderpayment.mockResolvedValue({ failed: true, message: 'network down' })
+    await mount()
+    await click(btn((b) => b.textContent.trim() === 'Upload'))
+    await upload('Supplier,Supply Date,Product Name,Quantity,Unit Cost (NGN)\nFidson,2026-11-04,Zinc,2,50\n')
+    await click(btn((b) => b.textContent === 'Record 1 purchase'))
+    await settle()
+    expect(text()).toContain('1 recorded purchase with a balance could not be added to Debts.')
   })
 
   it('a file uploaded twice: the purchase already recorded is skipped unless ticked', async () => {

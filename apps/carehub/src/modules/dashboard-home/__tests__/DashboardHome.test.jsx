@@ -16,6 +16,7 @@ vi.mock('../../../hooks/queries', () => ({
   useSettings: vi.fn(() => ({ data: {} })),
   useInvalidateSales: vi.fn(() => vi.fn()),
   useUnpaidExpenses: vi.fn(),
+  useClients: vi.fn(() => ({ data: [] })),
 }))
 // "Sales today" reads the Sales & Accounts report data for Today.
 vi.mock('../../pos/useSalesReportData', () => ({ useSalesReportData: vi.fn() }))

@@ -11,7 +11,7 @@ vi.mock('./repositories', () => ({ purchaseRepository: repo }))
 vi.mock('../debts/repositories', () => ({ debtRepository: debts }))
 vi.mock('../../services/supabase', () => ({ sbFetch: vi.fn(), sbFetchWithCount: vi.fn() }))
 
-import { SupplierBalances, PurchasePaymentModal, purchaseStatus } from './SupplierPayments.jsx'
+import { PurchasePaymentModal, purchaseStatus } from './SupplierPayments.jsx'
 import PurchaseDetailModal from './PurchaseDetail.jsx'
 
 // What PostgREST says when a migration has not been applied yet.
@@ -57,21 +57,6 @@ describe('purchaseStatus', () => {
 })
 
 describe('Suppliers & payments', () => {
-  it('lists suppliers with what is owed, searchable, and opens a supplier with unpaid purchases and history', async () => {
-    await mount(<SupplierBalances brand={BRAND} staffName='Ada' showToast={toast} onPaid={onPaid} />)
-    expect(text()).toContain('2 suppliers')
-    expect(text()).toContain('₦6,000 owed')
-    await act(async () => type(host.querySelector('input[type="search"]'), 'fid'))
-    expect(text()).toContain('1 supplier')
-    await act(async () => type(host.querySelector('input[type="search"]'), ''))
-    await act(async () => button('Payments').click())
-    await flush(); await flush()
-    expect(repo.getBySupplier).toHaveBeenCalledWith('biz-1', 'emzor ltd')
-    expect(repo.getPayments).toHaveBeenCalledWith('biz-1', { supplierKey: 'emzor ltd' })
-    expect(text()).toContain('Unpaid purchases')
-    expect(text()).toContain('Paid with the purchase')
-  })
-
   it('records a partial supplier payment with date and note, then refreshes', async () => {
     repo.recordPayment.mockResolvedValue({ amount: 2500, amount_paid: 6500, balance: 3500, status: 'partial' })
     const onClose = vi.fn()
@@ -131,12 +116,6 @@ describe('Purchase invoice view', () => {
 })
 
 describe('Before the supplier-payments update is applied', () => {
-  it('the suppliers view explains instead of failing', async () => {
-    repo.getSupplierBalances.mockRejectedValue(notDeployed('function public.get_supplier_balances'))
-    await mount(<SupplierBalances brand={BRAND} staffName='Ada' showToast={toast} onPaid={onPaid} />)
-    expect(text()).toContain('become available once the latest database update is applied')
-  })
-
   it('a payment is only ever recorded through record_purchase_payment: a failure writes nothing directly and says so', async () => {
     // Since carehub_20261229 a direct update of a purchase is refused, so there
     // is no "mark it paid" fallback any more.

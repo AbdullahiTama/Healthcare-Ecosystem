@@ -37,12 +37,20 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A22 | Medium | Purchases (bulk edit / delete) | Purchase bulk edit through edit_purchase; delete takes stock back (kept when sold), restore puts it back | **Closed 2026-11-10**: `carehub_20270114_purchase_bulk_edit_delete` applied with owner approval and probed |
 | A23 | Low | Purchases (import / export) | Bulk upload and Excel/CSV export; the export audit needed `purchases.*` in `record_export_audit`'s allow-list | **Closed 2026-11-11**: `carehub_20270115_purchase_export_audit` applied with owner approval and probed |
 | A24 | Medium | Expenses (set new budget) | A used-up budget could only be edited (history rewritten, old spending counted against the new amount) | **Closed 2026-11-11**: `carehub_20270116_expense_new_budget` applied with owner approval and probed |
-| A25 | Medium | Data exposure (cost price) | `products.cost_price` is readable by every member of a business; the new POS cost switch is display-only | Open: owner decision |
-| A26 | High | Hospital (clinical data access) | Every member of a business, in any role, can read, change and delete all clinical records through the API; deleting a patient cascades away their history; no clinical audit | Open |
-| A27 | High | Hospital (model boundary) | Hospital tables accept any business type; an owner can change their own `business_type` through the API | Open |
-| A28 | High | Hospital (production defect) | Doctor → Lab / Imaging send fails (unknown `patient_name` column) and leaves partial records; jsonb read with `JSON.parse`; dispensing discharges the patient | Open |
-| A29 | Medium | Hospital (schema) | The eight hospital tables, their policies and grants are not in `supabase/migrations/`; `anon` holds full grants including TRUNCATE | Open |
-| A30 | Medium | Hospital (data model) | Two patient identities: Reception writes `patients`, the hospital "Patients" menu and the rest of CareHub use `clients` | Open: owner decision |
+| A25 | Medium | Data exposure (cost price) | `products.cost_price` is readable by every member of a business; the new POS cost switch is display-only | Open: step 1 (screens) done 2026-11-16; step 2 (data-level) to plan |
+| A26 | Medium | Debts / suppliers / credit accounts | Debt payment history, guarded hand-recorded debts, supplier accounts, account payments and debt import needed `carehub_20270117_debt_and_supplier_accounts` (unapplied, it was the cause of the 2026-11-15 "debt upload not working" report); Record Debt linking added | **Closed 2026-11-15**: applied with owner approval (version 20261115205734) and probed |
+| A27 | High | POS (production defect) | An Owner's sales at a branch location are refused: "This sale is not authorized for your account." | **Closed 2026-11-15**: `carehub_20270118_sale_guard_branch_owner` applied with owner approval (version 20261115222717) and probed; a first version refused every sale for 72 s and was rolled back (see item) |
+| A28 | Low | Suppliers (contact list) | Supplier list with contact details, import and export needs `carehub_20270119_supplier_directory` (new table; nothing existing changes); until applied the screen is as before | **Closed 2026-11-15**: applied with owner approval (version 20261115224942) and probed |
+| A29 | Medium | Clients / POS (defect) | Resuming a held sale restored only the customer's name: a renamed client, or one sharing a name, was charged without (or to the wrong) client record | **Closed 2026-11-16**: re-picked by `client_id`; tested (fails on the old code) |
+| A30 | Low | Clients (data integrity) | Any member can overwrite `clients.visit_count` / `total_spend` through the API (no guard); `anon` holds table grants on `clients` (RLS denies every row) | **Closed 2026-11-16**: `carehub_20270122_client_totals_guard` applied with owner approval (version 20261116104753); Owner or staff given access only |
+| A31 | Medium | Clients / suppliers (opening balances) | A "we owe" debt linked to a client would have been listed and paid as a supplier; opening balances need one per client | **Closed 2026-11-16**: applied with owner approval (version 20261116092716), probed, then the app change deployed |
+| A32 | Low | Debts (data hygiene) | 8 credit-sale debts have no `client_id`, some although their sale is linked to a client; Debts' Link to clients covers hand-recorded debts only | **Closed 2026-11-16**: `carehub_20270121_link_credit_sale_debts` applied with owner approval (version 20261116102618); 3 linked, 5 have no client to link |
+| A33 | High | Uploads / debts / POS / Purchases | Inventory upload lost rows (generic-name duplicate rule, line breaks, .xlsx read as text, rows dropped uncounted); a failed purchase debt was reported as recorded; no supplier phone in Record Purchase or the purchase template; POS showed no price for out-of-stock products | **Closed 2026-11-16**: app only, no database change; tested |
+| A34 | High | Hospital (clinical data access) | Every member of a business, in any role, can read, change and delete all clinical records through the API; deleting a patient cascades away their history; no clinical audit | Open |
+| A35 | High | Hospital (model boundary) | Hospital tables accept any business type; an owner can change their own `business_type` through the API | Open |
+| A36 | High | Hospital (production defect) | Doctor → Lab / Imaging send fails (unknown `patient_name` column) and leaves partial records; jsonb read with `JSON.parse`; dispensing discharges the patient | Open |
+| A37 | Medium | Hospital (schema) | The eight hospital tables, their policies and grants are not in `supabase/migrations/`; `anon` holds full grants including TRUNCATE | Open |
+| A38 | Medium | Hospital (data model) | Two patient identities: Reception writes `patients`, the hospital "Patients" menu and the rest of CareHub use `clients` | Open: owner decision |
 
 ## 2. Items
 
@@ -359,36 +367,198 @@ column-level revoke on `products.cost_price` for non-cost roles with a cost-free
 cost reader (Inventory, Purchases, reports, transfers, POS) switched over. The second changes access for existing roles
 and needs a plan before implementing.
 
-### A26–A30. Hospital Model findings (verified 2026-11-16)
+
+**Decided 2026-11-16 (owner):** the Owner or staff given access ("See cost prices"), screens first, then data.
+**Step 1 done (screens):** Inventory shows cost price, margin, total profit and profit margin, the cost field in the
+product form and bulk edit, and Cost Price / Cost Value in the Excel export only to the Owner or `canViewCostPrice`;
+for anyone else the product's cost is saved unchanged. The POS already followed it. The permission is now labelled
+"See cost prices" (Staff › Roles). Purchases still show what was paid (entering costs is the purchase itself; the
+screen is limited to roles with Purchases). Tests: `modules/inventory/Inventory.cost.test.jsx`.
+**Still open (step 2, data-level):** the API still returns `products.cost_price` and purchase costs to every member;
+all staff share one database role, so this needs cost moved into a protected table and every reader and writer
+(14 app files, 11 database functions, purchases) switched over. To plan and approve separately.
+### A33. Incomplete uploads, unreported purchase debts, supplier phone, POS out-of-stock price (High) — closed 2026-11-16
+
+**What (verified 2026-11-16 on `main` at `56e20dd` and the live database):** the Inventory upload skipped every row
+whose *generic* name matched a product in stock, split rows on raw line breaks, read .xlsx as text and dropped nameless
+and over-limit rows uncounted. `recordUnderpayment` returned null for a failed write, so Purchases reported a lost debt
+as recorded. No supplier phone in Record Purchase or the purchase template; no price on out-of-stock products at the POS.
+Debt linking itself was checked and found complete (A26, A32).
+
+**Closed 2026-11-16 (app only):** every Inventory row is accounted for (imported / duplicate / needs fixing / over limit /
+failed, with reasons and a rows-to-fix file); failed purchase debts reported; optional supplier phone saved on the
+supplier record; POS shows the price. Details and test plan:
+[Bulk-Uploads-and-Debt-Linking.md](../docs/architecture/Bulk-Uploads-and-Debt-Linking.md).
+
+### A32. Credit-sale debts without their client (Low) — closed 2026-11-16
+
+**Found 2026-11-16 (live, read-only)** while checking the Client Account against Debt Management: 8 `credit_sale`
+debts have no `client_id`. For one client both credit sales are linked to the client but their debts are not (₦22,600).
+The Clients page still counts them by exact name, so nothing shown is wrong today, but a renamed client, or two
+clients sharing the name, would lose them from the position. **Close by:** a data fix setting `debts.client_id` from
+the sale (`source = 'credit_sale' and source_ref = sales.txn_no`, same business) where the sale has a client, and
+checking why those debts were created without it. Needs owner approval (changes data).
+
+**Closed:** `carehub_20270121_link_credit_sale_debts` (applied with owner approval, version 20261116102618, after a
+dry run in a rolled-back transaction) set `client_id` on the 3 debts whose single matching sale has a client of the
+same business (TXN657611 ₦17,800 and TXN804886 ₦4,800 open, TXN568634 paid); nothing else on any debt changed. The
+other 5 are left as they are: 3 walk-ins, and "Musa" (₦3,200 open) and a clinic (paid), sold to without a client
+record (add a client and link from Debts if wanted). **Cause: historic.** The till passes the sale's client to the debt
+and `edit_sale` keeps them in step; every credit-sale debt since 2026-10-26 10:37 (42 of 42) carries its sale's
+client, so no code change. After the fix every client's Client Account balance equals Debt Management's by link
+(0 of 39 differ). Tests: `apps/carefind/src/test/debts/linkCreditSaleDebts.db.test.js` (2, PGlite).
+
+### A31. Client opening balances: supplier functions and one per client (Medium) — closed 2026-11-16
+
+**What (2026-11-16):** "We owe client" opening balances are manual `we_owe` debts linked to the client. Read live:
+`get_supplier_accounts`, `get_supplier_activity` and `record_supplier_payment` take every manual `we_owe` debt as a
+supplier's supply record, so such a balance would have shown as a supplier named after the client and could have
+taken a supplier payment (reproduced on PGlite). `carehub_20270120_client_opening_balances` adds `client_id IS NULL`
+to those predicates (checked edit of the live definitions; aborts on mismatch or a second run) and a unique index for
+one opening balance per client. Details: [Client-Position-and-Opening-Balances.md](../docs/architecture/Client-Position-and-Opening-Balances.md).
+Tests: 8 PGlite. **To close:** apply with owner approval, probe (supplier accounts unchanged; a client credit not
+listed or payable as a supplier; second opening balance refused), then deploy the app change.
+
+**Closed:** applied 2026-11-16 as version 20261116092716 with owner approval; probed inside a rolled-back transaction
+before committing and again after: all supplier accounts identical, a client's "we owe" balance neither listed nor
+payable as a supplier, a second opening balance refused, function grants unchanged. App change pushed after.
+
+### A29. Resuming a held sale lost its client (Medium) — closed 2026-11-16
+
+**Found 2026-11-16** while adding Edit Client: `openHeld` (POS.jsx) restored only `client_name`; checkout found the
+client by exact name (`creditCustomerFor`). A client renamed after the sale was held, or two clients with the same name,
+meant the completed sale was saved without the client or against the other one, and a credit sale was refused for
+having no customer. **Fixed:** the client is re-picked by the held sale's `client_id`. Test: `POS.held.test.jsx`
+"Held sales linked to a client" (the same-name case fails on the previous code). Details:
+[Client-Edit.md](../docs/architecture/Client-Edit.md) §3.
+
+### A30. Client totals writable by members; anon grants on clients (Low) — closed 2026-11-16
+
+**Verified live 2026-11-16 (read-only):** `clients` has no triggers; the only policy is "clients of own business" (ALL,
+`current_business_ids()`); `authenticated` and `anon` hold every table privilege. So any member can PATCH
+`visit_count` and `total_spend`, which are meant to come from sales (`refresh_client_totals`). Edit Client never sends
+them. **Close by:** a BEFORE UPDATE trigger keeping both columns unless the caller is the totals function or a trusted
+role, and revoking `anon`'s grants (RLS already denies it). Needs owner approval (changes access for existing roles).
+
+**Closed** (owner's decision 2026-11-16: the Owner or staff given access): `carehub_20270122_client_totals_guard`,
+applied with owner approval as version 20261116104753 after a probe in a rolled-back transaction, and probed again.
+`can_adjust_client_totals(business)` (Owner, or a role with the new **canAdjustClientTotals** switch in Staff › Roles)
+gates a BEFORE INSERT OR UPDATE trigger on `clients`: without it, a change to visits or total spent is refused and a
+new client starts at 0; the database's own recalculation after each sale (`refresh_client_totals`, run as postgres) is
+unaffected. `anon` lost every privilege on `clients`; `authenticated` lost TRUNCATE, REFERENCES and TRIGGER. Edit
+Client shows the two figures to the Owner and permitted staff, noting the next sale recalculates them. Tests:
+`apps/carefind/src/test/clients/clientTotalsGuard.db.test.js` (6, live helpers and grants; fails if the helper is not
+executable by authenticated), `clientEdit.test.js`, `Clients.edit.test.jsx`. Advisor: the helper's SECURITY DEFINER +
+EXECUTE warning is intended (it answers only for the caller), as `caller_owns_business`.
+
+### A28. Supplier list: migration to apply (Low) — closed 2026-11-15
+
+**What (2026-11-15):** bulk supplier import/export needed somewhere to keep contact details; suppliers were only names
+on purchases. `carehub_20270119_supplier_directory` adds `suppliers` keyed by the purchases' supplier key, with RLS for
+members, no DELETE, and a guard that keeps the key fixed. The app shows the list, import, Add / Edit details and the
+contact columns in the export only once the table exists. Details and test plan:
+[Supplier-Directory.md](../docs/architecture/Supplier-Directory.md). Tests: 10 PGlite (live helpers and grants), 24 app.
+
+**Closed:** applied with owner approval as version 20261115224942; probed before committing (inside a rolled-back
+transaction) and after: member add / edit accepted, same name in other capitals ignored, rename and delete refused,
+another business sees nothing and cannot insert, anon refused. Security advisor: no finding for the table.
+
+### A27. Owner's sales at a branch refused: "This sale is not authorized for your account." (High) — closed 2026-11-15
+
+**Report (2026-11-15):** "blocked by the server … not authorized for your account" at the till, again and again.
+
+**Verified 2026-11-15 (live definitions, read-only):** the message comes from the BEFORE INSERT trigger
+`guard_sale_item_prices`. It recognised an Owner only when `businesses.email` of *the sale's own business* is theirs,
+else it looked for a staff row there, else refused. The sales RLS policy (`current_business_ids()`) also gives an Owner
+every branch below their business, and a branch is its own `businesses` row with its own email (all 3 live branches
+differ from their parent). So the Owner passed RLS at a branch, had no staff row there, and the trigger refused the
+sale. Queued sales show it most (they are posted under the location they were rung up at); online sales at a branch are
+refused the same way. Queued sales are not lost: refused sales stay in the device queue and sync once the fix is live.
+
+**Fixed:** `carehub_20270118_sale_guard_branch_owner` recognises an Owner when the sale's business is in
+`current_business_ids()` and `caller_owns_business()` holds (the helper the live "owner manages own branches" policy
+uses); nothing else in the trigger changes. Widens nothing RLS did not already allow: parent staff at a branch, a
+branch outside the depth limit and strangers are still refused, and price overrides by staff still are. Tests:
+`apps/carefind/src/test/pos/saleGuardBranchOwner.db.test.js` (10, PGlite, live helpers, policy and **function grants**;
+reproduces the refusal first).
+
+**Applied 2026-11-15** with owner approval as version 20261115222717, probed live before committing (inside a
+rolled-back transaction) and after: Owner at a branch accepted, staff at catalog price accepted, stranger refused, staff
+price override refused.
+
+**Incident during the fix (2026-11-15, 21:38:11–21:39:23 UTC, 72 s):** the first version (20261115213811) called
+`is_business_owner()`, which `authenticated` cannot execute (only `postgres` and `service_role`; its other callers are
+SECURITY DEFINER). The trigger runs as the caller, so every signed-in sale was refused with "permission denied for
+function is_business_owner". The live probe caught it and it was rolled back (20261115213923). No sale was recorded in
+that window (last sale before it: 21:28:55); a till that tried one would have shown the error, and a queued sale stays
+queued. Cause of the miss: the PGlite test granted EXECUTE by Postgres' default (PUBLIC); it now reproduces the live
+grants and fails on that version. Lesson for every trigger that runs as the caller: check the live `proacl` of each
+helper it calls, and probe new bodies inside a rolled-back transaction before applying.
+
+**Remaining:** a till holding refused queued sales sends them on its next Sync.
+
+### A26. Debts, supplier accounts and credit accounts: migration to apply (Medium) — closed 2026-11-15
+
+**What (2026-11-14):** Receivables / Payables, part payments with history on debts recorded by hand, Excel/CSV debt
+import (matching or creating customers and suppliers without duplicates) and export, Purchases › Supplier summary
+(supplier accounts from purchases plus supply records, one payment applied oldest first) and POS › Credit customer
+accounts. Details: [Debt-Accounts-and-POS-Stock-Limits.md](../docs/architecture/Debt-Accounts-and-POS-Stock-Limits.md).
+POS stock limits (same note, §1) need no database change.
+
+**Database:** `supabase/migrations/carehub_20270117_debt_and_supplier_accounts.sql` (written against the live schema
+read 2026-11-14; 16 PGlite tests in `apps/carefind/src/test/debts/debtAccounts.db.test.js`). Until it is applied the app
+works as before: debts can only be marked paid in full, the supplier summary shows purchase totals without supply
+records or account payments, import says it is not available yet, and a customer-account payment that fits the oldest
+visit is recorded on it.
+
+**Reported 2026-11-15 as "debt upload not working; uploaded records neither processed nor displayed":** this is the
+cause. Verified live that day: none of the migration's functions (`import_debts`, `get_supplier_accounts`, …) or
+`debt_payments` exist, so every import stops at the preview. Its 24 PGlite tests pass on `main`.
+
+**Done meanwhile (2026-11-15, no migration):** Record Debt links a typed debt to its client (created once when missing,
+by name or phone, never guessing between two of one name) or supplier account, and **Link to clients** links the 3 live
+unlinked receivables (note §2, "Record Debt: linking a debt typed in").
+
+**Closed by:** applied to production 2026-11-15 with the owner's approval (version `20261115205734`) after checking no
+later migration had changed the functions it replaces; the rolled-back live probe passed every step and the security
+advisor shows only the intended new findings (results in the migration header). The 3 existing unlinked
+receivables (three businesses; no name matched an existing client) were linked on 2026-11-15 with the Link to clients
+rules: one client record created for each, notes "Added automatically when a debt was linked."; 0 left unlinked.
+
+**Also found (not changed):** `anon` holds full table grants on `debts` (RLS denies it every row; revoke as defence in
+depth). **Proposed:** a `suppliers` table so a supplier is an id rather than a normalised name (note §5); it would
+re-key purchases and their functions, so it needs its own plan.
+
+### A34–A38. Hospital Model findings (verified 2026-11-16)
 
 Found while auditing the Hospital Model against the hospital upgrade specification. Full evidence, the gap matrix and the
 recommended sequence are in
 [Hospital-Model-Current-State-and-Gap-Analysis.md](../docs/architecture/Hospital-Model-Current-State-and-Gap-Analysis.md)
 (§3.5 and §4). Verified against `main` at `7eadd23` and the live database (read-only).
 
-- **A26 (High): clinical data is open to every role.** Each of `patients`, `triage`, `consultations`,
+- **A34 (High): clinical data is open to every role.** Each of `patients`, `triage`, `consultations`,
   `prescriptions`, `lab_requests`, `lab_results`, `imaging_requests` and `patient_messages` has one `FOR ALL`
   policy scoped only by business membership, so a Cashier can read every diagnosis and delete a patient. Every
   clinical foreign key is `ON DELETE CASCADE`, so deleting a patient deletes their clinical history. There is no audit trail.
   **Close by:** role-scoped read and write through checked functions, no client DELETE on clinical tables,
   retention-safe deletion, an append-only clinical audit. This changes access for existing roles and needs a plan
   approved first.
-- **A27 (High): the Hospital Model boundary is UI-only.** No policy checks the business type (3 live patients belong to
+- **A35 (High): the Hospital Model boundary is UI-only.** No policy checks the business type (3 live patients belong to
   non-hospital businesses). `businesses.business_type` can be changed by the owner through the API: the `own business
   row` policy allows the update, `authenticated` holds column UPDATE, and neither `guard_business_privileged_columns`
   nor `businesses_operating_model_guard` checks the column. **Close by:** guarding `business_type` (platform-only,
   audited change), and hospital-only writes on the clinical tables.
-- **A28 (High, production defect): the Doctor screen cannot send to Lab or Imaging.** `Doctor.jsx` writes
+- **A36 (High, production defect): the Doctor screen cannot send to Lab or Imaging.** `Doctor.jsx` writes
   `patient_name` to `lab_requests` and `imaging_requests`, which have no such column. The consultation and prescription
   are saved first, so a failure leaves partial records, and a retry duplicates the consultation. Also: `Lab.jsx` and
   `RxInbox.jsx` `JSON.parse` jsonb values that the live rows hold as arrays; Rx Inbox discharges the patient on dispense
   whatever is pending, without a stock deduction. Not reproduced through the API (read-only audit); the evidence is the code
   and the live columns. **Close by:** fixing the writes and reads, one atomic consultation function, with tests.
-- **A29 (Medium): hospital schema not under version control.** None of the eight tables is created by a migration
+- **A37 (Medium): hospital schema not under version control.** None of the eight tables is created by a migration
   file. `anon` and `authenticated` hold every privilege, TRUNCATE included (same over-breadth closed for `export_logs`
   in A2). **Close by:** a baseline migration reproducing the live schema, verified on PGlite, then revoking the
   unneeded grants.
-- **A30 (Medium, owner decision): two patient identities.** Reception writes `patients`; the "Patients" menu, POS,
+- **A38 (Medium, owner decision): two patient identities.** Reception writes `patients`; the "Patients" menu, POS,
   debts and appointments use `clients`. The specification requires one identity, reused. **Close by:** an owner
   decision on the identity of record, then a migration plan. This blocks the encounter model (Phase 1).
 

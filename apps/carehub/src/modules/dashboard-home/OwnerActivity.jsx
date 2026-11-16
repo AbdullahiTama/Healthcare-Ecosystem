@@ -51,11 +51,12 @@ export default function OwnerActivity({ brand, onOpenSale }) {
   const owed = useQuery({
     queryKey: ['ownerFollowUps', brand?.id],
     queryFn: async () => {
-      const [supplierBalances, debts] = await Promise.all([
-        purchaseRepository.getSupplierBalances(brand.id),
+      // Supplier accounts (purchases plus supply records), so this matches Purchases › Supplier summary.
+      const [accounts, debts] = await Promise.all([
+        purchaseRepository.getSupplierAccounts(brand.id),
         debtRepository.getOpen(brand.id),
       ])
-      return followUps({ supplierBalances: supplierBalances || [], debts: debts || [] })
+      return followUps({ supplierBalances: accounts?.rows || [], debts: debts || [] })
     },
     enabled: !!brand?.id,
     staleTime: 30_000,

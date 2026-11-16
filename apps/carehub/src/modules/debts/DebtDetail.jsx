@@ -22,7 +22,7 @@ export async function loadDebtSource(debt, businessId, { sales = saleRepository,
 // sale in full (items bought, payments made, what is outstanding, reprint,
 // repayment); a purchase debt shows the supplier invoice; anything else, or a
 // debt whose record cannot be found, shows the debt itself.
-export default function DebtDetail({ debt, brand, settings, canRefund, showToast, onClose, onChanged, onMarkPaid, onPay }) {
+export default function DebtDetail({ debt, brand, settings, canRefund, showToast, onClose, onChanged, onMarkPaid, onPay, clients = [] }) {
   const source = useQuery({
     queryKey: ['debts', 'source', brand?.id, debt?.id],
     queryFn: () => loadDebtSource(debt, brand.id),
@@ -43,7 +43,7 @@ export default function DebtDetail({ debt, brand, settings, canRefund, showToast
   if (source.data?.kind === 'sale' && found) {
     return (
       <SaleDetailModal show sale={found} onClose={onClose} brand={brand} settings={settings} canRefund={canRefund}
-        ledgerAvailable showToast={showToast} onChanged={() => { onClose(); onChanged?.() }} />
+        ledgerAvailable clients={clients} showToast={showToast} onChanged={() => { onClose(); onChanged?.() }} />
     )
   }
   if (source.data?.kind === 'purchase' && found) {
@@ -83,6 +83,7 @@ export function DebtSummary({ debt, notFound, note, onClose, onMarkPaid }) {
           <Row label='Outstanding' value={fmt(bal)} color={bal > 0 ? danger : gray500} strong />
           <Row label='Due' value={debt.due_date ? fmtDate(debt.due_date) : 'Not set'} />
           <Row label='Recorded' value={fmtDate(debt.created_at)} />
+          {debt.recorded_name && <Row label='Recorded as' value={debt.recorded_name} color={gray600} />}
         </div>
         <div style={{ fontSize: 11.5, color: gray400 }}>Payments on a debt recorded by hand are not itemised; marking it paid closes it.</div>
       </div>

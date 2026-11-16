@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateMasterForm, formFromMaster, parseBranchPrice, carryingByLocation, carryingSummary, rxStatus, locationName } from '../catalogueRules'
+import { validateMasterForm, formFromMaster, parseBranchPrice, carryingByLocation, carryingSummary, rxStatus, locationName, rxOptionsFor, applyLibraryToForm } from '../catalogueRules'
 
 const CATS = [
   { code: 'antibiotics', label: 'Antibiotics & anti-infectives', rx_default: 'prescription_only' },
@@ -78,5 +78,20 @@ describe('rxStatus', () => {
   it('labels each status and nothing else', () => {
     expect(rxStatus('prescription_only').label).toBe('Prescription only')
     expect(rxStatus('x')).toBeNull()
+  })
+})
+
+describe('the CareHub library (phase 4)', () => {
+  it('a linked item may only be as strict as the library or stricter', () => {
+    expect(rxOptionsFor('prescription_only').map((s) => s.value)).toEqual(['prescription_only', 'controlled'])
+    expect(rxOptionsFor(null)).toHaveLength(4)
+  })
+
+  it('picking a library item fills empty fields, keeps what was typed, and links it', () => {
+    const form = { ...formFromMaster(null), name: 'My Amoxil', default_price: '1200', rx_status: 'otc' }
+    const out = applyLibraryToForm(form, { id: 'c1', brand_name: 'Amoxil', strength: '500mg', generic_name: 'Amoxicillin', barcodes: ['501'], rx_status: 'prescription_only', category_code: 'antibiotics' })
+    expect(out).toMatchObject({ name: 'My Amoxil', generic_name: 'Amoxicillin', strength: '500mg', barcode: '501', category_code: 'antibiotics',
+      rx_status: 'prescription_only', default_price: '1200', catalog_item_id: 'c1' })
+    expect(applyLibraryToForm(formFromMaster(null), { id: 'c2', brand_name: 'Amoxil 500mg caps', strength: '500mg', rx_status: 'otc' }).name).toBe('Amoxil 500mg caps')
   })
 })

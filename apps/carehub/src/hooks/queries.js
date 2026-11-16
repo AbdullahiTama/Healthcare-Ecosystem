@@ -15,12 +15,17 @@ export const keys = {
   appointments: (brandId) => ['appointments', brandId],
   clients: (brandId) => ['clients', brandId],
   openDebts: (brandId) => ['debts', 'open', brandId],
+  debtPayments: (brandId, debtId) => ['debts', 'payments', brandId, debtId],
   unpaidExpenses: (brandId) => ['expenses', 'unpaid', brandId],
   settings: (brandId) => ['settings', brandId],
   products: (brandId) => ['products', brandId],
   salePayments: (saleId) => ['sales', 'payments', saleId],
+  creditAccount: (brandId, accountKey) => ['sales', 'creditAccount', brandId, accountKey],
   supplierBalances: (brandId) => ['purchases', 'suppliers', brandId],
   supplierPurchases: (brandId, supplierKey) => ['purchases', 'supplier', brandId, supplierKey],
+  supplierAccounts: (brandId) => ['purchases', 'accounts', brandId],
+  supplierActivity: (brandId, supplierKey) => ['purchases', 'activity', brandId, supplierKey],
+  suppliers: (brandId) => ['purchases', 'directory', brandId],
   purchasePayments: (brandId, scope) => ['purchases', 'payments', brandId, scope],
   purchase: (brandId, purchaseId) => ['purchases', 'one', brandId, purchaseId],
   purchaseForEdit: (brandId, purchaseId) => ['purchases', 'edit', brandId, purchaseId],
@@ -32,6 +37,8 @@ export const keys = {
   clientSales: (clientId, brandId) => ['clients', 'sales', clientId, brandId],
   clientConsults: (clientId, brandId) => ['clients', 'consults', clientId, brandId],
   clientHistory: (clientId, brandId, tab) => ['clients', 'history', clientId, brandId, tab],
+  // Under keys.clients(brandId): every refresh of the client list (a sale, payment, debt or edit) refreshes it too.
+  clientAccount: (clientId, brandId) => ['clients', brandId, 'account', clientId],
 }
 
 // ── Dashboard Queries ─────────────────────────────────────────────────────────
@@ -194,6 +201,30 @@ export function useCreateClient(brandId) {
 
 // Saves bulk-edit groups ({ ids, updates }) for clients and puts the saved rows into the shared client list at once
 // (Clients, POS, Debts and every picker read it), then re-reads it. Resolves to runBulkUpdates' { saved, failed }.
+// Edit Client: saves one client's details and puts the saved row into the shared client list at once, so the POS
+// customer picker, credit accounts, Debts and reports show the new name straight away; then the list is re-read.
+// The Client Account's records (clientRepository.getAccountRecords). Its key sits under keys.clients(brandId), so
+// every sale, payment, debt or client change that refreshes the client list refreshes the account as well.
+export function useClientAccount(clientId, brandId) {
+  return useQuery({
+    queryKey: keys.clientAccount(clientId, brandId),
+    queryFn: () => clientRepository.getAccountRecords(clientId, brandId),
+    enabled: !!clientId && !!brandId,
+    staleTime: 15_000,
+  })
+}
+
+export function useUpdateClient(brandId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, changes }) => clientRepository.update(id, brandId, changes),
+    onSuccess: (saved) => {
+      if (saved?.id) qc.setQueryData(keys.clients(brandId), (prev) => (Array.isArray(prev) ? prev.map((c) => (String(c.id) === String(saved.id) ? { ...c, ...saved } : c)) : prev))
+      qc.invalidateQueries({ queryKey: keys.clients(brandId) })
+    },
+  })
+}
+
 export function useUpdateManyClients(brandId) {
   const qc = useQueryClient()
   return async (groups, onProgress) => {
@@ -276,6 +307,17 @@ export function useInvalidateSales(brandId) {
   }
 }
 
+// After a debt is recorded or linked by hand: every debt read (Debts, supplier accounts, what each client owes) and the
+// client list (a client record may have been created).
+export function useInvalidateDebts(brandId) {
+  const qc = useQueryClient()
+  return () => {
+    qc.invalidateQueries({ queryKey: ['debts'] })
+    qc.invalidateQueries({ queryKey: keys.supplierAccounts(brandId) })
+    qc.invalidateQueries({ queryKey: keys.clients(brandId) })
+  }
+}
+
 // ── Credit-sale payments ──────────────────────────────────────────────────────
 
 // Payment history for one credit sale, newest first, from the sale_payments
@@ -307,6 +349,71 @@ export function useRecordSalePayment(brandId) {
           .filter((s) => s.is_on_hold || (s.is_credit && Number(s.balance) > 0))
       })
       invalidateSalesFigures(qc)
+      // The sale's debt and its client's position and account move with the payment.
+      qc.invalidateQueries({ queryKey: ['debts'] })
+      qc.invalidateQueries({ queryKey: keys.clients(brandId) })
+    },
+  })
+}
+
+// ── Payments on debts recorded by hand (carehub_20270117) ────────────────────
+
+// One hand-recorded debt's payment history, newest first.
+export function useDebtPayments(brandId, debtId, enabled = true) {
+  return useQuery({
+    queryKey: keys.debtPayments(brandId, debtId),
+    queryFn: () => debtRepository.getPayments(brandId, debtId),
+    enabled: !!brandId && !!debtId && enabled,
+    staleTime: 30_000,
+  })
+}
+
+// Records a full or part payment on a hand-recorded debt; refreshes every debt figure (Debts, Clients' owed totals,
+// supplier accounts, which count hand-recorded payables).
+export function useRecordDebtPayment(brandId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ debtId, ...payment }) => debtRepository.recordPayment(debtId, payment),
+    onSuccess: () => {
+      for (const prefix of ['debts', 'purchases', 'reports']) qc.invalidateQueries({ queryKey: [prefix] })
+      qc.invalidateQueries({ queryKey: keys.clients(brandId) })
+    },
+  })
+}
+
+// ── Customer credit accounts (POS › Credit) ───────────────────────────────────
+
+// Every purchase and payment of one credit account. A customer with a record: all their credit sales (paid ones too)
+// and the ledger rows of each; an account without a record: its open sales. `complete` says which.
+export function useCreditAccountTransactions(brandId, account, enabled = true) {
+  const ids = (account?.sales || []).map((s) => s.id)
+  return useQuery({
+    queryKey: keys.creditAccount(brandId, account?.key),
+    queryFn: async () => {
+      let sales = account.sales
+      if (account.clientId) {
+        const all = await clientRepository.getSales(account.clientId, brandId)
+        const onCredit = (all || []).filter((s) => !s.is_on_hold && !s.deleted_at && (s.is_credit || s.payment_method === 'Credit' || ids.includes(s.id)))
+        const byId = new Map([...onCredit, ...account.sales].map((s) => [String(s.id), s]))
+        sales = [...byId.values()]
+      }
+      const payments = await paymentRepository.getForSales(brandId, sales.map((s) => s.id))
+      return { sales, payments, complete: !!account.clientId }
+    },
+    enabled: !!brandId && !!account && enabled,
+    staleTime: 30_000,
+  })
+}
+
+// One payment on a customer's credit account (record_customer_payment). Every sales and money figure refreshes.
+export function useRecordCustomerPayment(brandId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ saleIds, amount, method }) => paymentRepository.recordAccountPayment(brandId, saleIds, amount, method),
+    onSuccess: () => {
+      invalidateSalesFigures(qc)
+      qc.invalidateQueries({ queryKey: keys.clients(brandId) })
+      qc.invalidateQueries({ queryKey: ['debts'] })
     },
   })
 }
@@ -320,6 +427,56 @@ export function useSupplierBalances(brandId, enabled = true) {
     queryFn: () => purchaseRepository.getSupplierBalances(brandId),
     enabled: !!brandId && enabled,
     staleTime: 30_000,
+  })
+}
+
+// Supplier accounts: purchases plus supply records per supplier (purchaseRepository.getSupplierAccounts).
+export function useSupplierAccounts(brandId, enabled = true) {
+  return useQuery({
+    queryKey: keys.supplierAccounts(brandId),
+    queryFn: () => purchaseRepository.getSupplierAccounts(brandId),
+    enabled: !!brandId && enabled,
+    staleTime: 30_000,
+  })
+}
+
+// The supplier list with contact details (purchaseRepository.getSuppliers): { available, rows }.
+export function useSuppliers(brandId) {
+  return useQuery({
+    queryKey: keys.suppliers(brandId),
+    queryFn: () => purchaseRepository.getSuppliers(brandId),
+    enabled: !!brandId,
+    staleTime: 30_000,
+  })
+}
+
+// Saves a supplier's details, then the list is read again.
+export function useUpdateSupplier(brandId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, changes }) => purchaseRepository.updateSupplier(brandId, id, changes),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.suppliers(brandId) }),
+  })
+}
+
+// One supplier's supplies and payments.
+export function useSupplierActivity(brandId, supplierKey) {
+  return useQuery({
+    queryKey: keys.supplierActivity(brandId, supplierKey),
+    queryFn: () => purchaseRepository.getSupplierActivity(brandId, supplierKey),
+    enabled: !!brandId && supplierKey != null,
+    staleTime: 30_000,
+  })
+}
+
+// One payment on a supplier account, spread oldest first. Purchases, their debts and supply records all move.
+export function useRecordSupplierPayment(brandId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ supplierKey, ...payment }) => purchaseRepository.recordSupplierPayment(brandId, supplierKey, payment),
+    onSuccess: () => {
+      for (const prefix of ['purchases', 'debts', 'reports']) qc.invalidateQueries({ queryKey: [prefix] })
+    },
   })
 }
 

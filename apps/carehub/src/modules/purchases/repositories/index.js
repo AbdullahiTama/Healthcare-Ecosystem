@@ -1,6 +1,6 @@
 import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
-import { isMissingColumn } from '../../../lib/dbErrors'
+import { isMissingColumn, isMissingObject } from '../../../lib/dbErrors'
 import { translateBulkDeleteError, groupDeletions } from '../../../lib/bulkDelete'
 
 // The analytics filters every history/summary function takes, as RPC
@@ -172,6 +172,137 @@ export function createPurchaseRepository(request = sbFetch) {
     // Totals per supplier (get_supplier_balances): bought, paid, outstanding.
     async getSupplierBalances(businessId) {
       return request(`rpc/get_supplier_balances?p_business_id=${businessId}`)
+    },
+
+    // Supplier accounts (get_supplier_accounts, carehub_20270117): per supplier, its purchases plus its supply records
+    // (hand-recorded or imported "we owe" debts without products), with supplied, paid and outstanding totals and a
+    // count of items whose figures do not add up. Before the migration is applied, the purchase-only totals
+    // (get_supplier_balances) in the same shape, with `available: false` (account payments and supply records are
+    // then not offered). Returns { available, rows }.
+    async getSupplierAccounts(businessId) {
+      try {
+        const rows = await request('rpc/get_supplier_accounts', { method: 'POST', body: JSON.stringify({ p_business_id: businessId }) })
+        return { available: true, rows: rows || [] }
+      } catch (e) {
+        if (!isMissingObject(e)) throw e
+        const rows = await request(`rpc/get_supplier_balances?p_business_id=${businessId}`)
+        return {
+          available: false,
+          rows: (rows || []).map((r) => ({
+            supplier_key: r.supplier_key, supplier_name: r.supplier_name, purchase_count: r.purchase_count, supply_count: 0,
+            supplied_total: r.total_cost, paid_total: r.amount_paid, balance: r.balance, open_count: r.open_count, mismatch_count: 0,
+            last_supply_at: r.last_purchase_at,
+          })),
+        }
+      }
+    },
+
+    // ── Supplier list (table `suppliers`, carehub_20270119_supplier_directory) ──────────────────────────────────
+    // Contact details per supplier, keyed like purchases (supplier_key = lower(btrim(name))). Before the migration is
+    // applied the table is missing: { available: false, rows: [] }, and the screen offers no supplier-list import.
+    async getSuppliers(businessId) {
+      try {
+        const rows = await pagedQuery(request, `suppliers?business_id=eq.${businessId}&order=name.asc,id.asc&select=id,name,supplier_key,contact_person,phone,email,address,notes,created_at,updated_at`)
+        return { available: true, rows }
+      } catch (e) {
+        if (isMissingObject(e)) return { available: false, rows: [] }
+        throw e
+      }
+    },
+
+    // Adds suppliers; a name the business already has (any capitals or spacing) is skipped by the unique key, never
+    // overwritten, so an import running alongside another add cannot duplicate one. In batches; a failed batch is
+    // reported and the rest continue. Returns { added: [names], skipped: n, failed: [{ names, message }] }.
+    async createSuppliers(businessId, records, batchSize = 200) {
+      const added = []
+      const failed = []
+      let skipped = 0
+      for (let i = 0; i < records.length; i += batchSize) {
+        const batch = records.slice(i, i + batchSize).map((r) => ({ ...r, business_id: businessId }))
+        try {
+          const rows = await request('suppliers?on_conflict=business_id,supplier_key', {
+            method: 'POST', body: JSON.stringify(batch), prefer: 'resolution=ignore-duplicates,return=representation',
+          })
+          const n = Array.isArray(rows) ? rows.length : 0
+          added.push(...(rows || []).map((r) => r.name))
+          skipped += batch.length - n
+        } catch (e) {
+          failed.push({ names: batch.map((r) => r.name), message: e?.message || 'Could not save' })
+        }
+      }
+      return { added, skipped, failed }
+    },
+
+    // Saves changes to one supplier record (tenant-scoped). The database keeps the name's key fixed.
+    // A phone given in Record Purchase or the purchase upload, put on the supplier's record (created for a supplier
+    // that has none). A different phone already on file is never overwritten here (it is edited in Supplier summary).
+    // Returns 'saved', 'kept' (a different phone is on file) or 'unavailable' (no suppliers table yet); null when
+    // there is nothing to save.
+    async saveSupplierPhone(businessId, supplierName, phone) {
+      const name = String(supplierName || '').trim().replace(/\s+/g, ' ')
+      const value = String(phone || '').trim()
+      if (!name || !value) return null
+      try {
+        const rows = await request(`suppliers?business_id=eq.${businessId}&supplier_key=eq.${encodeURIComponent(name.toLowerCase())}&select=id,phone`)
+        const row = Array.isArray(rows) ? rows[0] : null
+        if (!row) {
+          await request('suppliers?on_conflict=business_id,supplier_key', {
+            method: 'POST', body: JSON.stringify([{ business_id: businessId, name, phone: value }]), prefer: 'resolution=ignore-duplicates,return=minimal',
+          })
+          return 'saved'
+        }
+        const onFile = String(row.phone || '').trim()
+        if (!onFile) {
+          await request(`suppliers?id=eq.${row.id}&business_id=eq.${businessId}`, { method: 'PATCH', body: JSON.stringify({ phone: value }), prefer: 'return=minimal' })
+          return 'saved'
+        }
+        return onFile.replace(/\D/g, '') === value.replace(/\D/g, '') ? 'saved' : 'kept'
+      } catch (e) {
+        if (isMissingObject(e)) return 'unavailable'
+        throw e
+      }
+    },
+
+    async updateSupplier(businessId, id, changes) {
+      const rows = await request(`suppliers?id=eq.${id}&business_id=eq.${businessId}`, {
+        method: 'PATCH', body: JSON.stringify(changes), prefer: 'return=representation',
+      })
+      if (Array.isArray(rows) && rows.length === 0) throw new Error('This supplier could not be found. It may belong to another location.')
+      return Array.isArray(rows) ? rows[0] : rows
+    },
+
+    // One supplier's supplies (purchases and supply records) and every payment to it (get_supplier_activity). Before
+    // the migration: its purchases and purchase payments only. Returns { supplies, payments }.
+    async getSupplierActivity(businessId, supplierKey) {
+      try {
+        const r = await request('rpc/get_supplier_activity', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_supplier_key: supplierKey }) })
+        const a = Array.isArray(r) ? r[0] : r
+        return { supplies: a?.supplies || [], payments: a?.payments || [] }
+      } catch (e) {
+        if (!isMissingObject(e)) throw e
+        const [purchases, payments] = await Promise.all([
+          request('rpc/get_supplier_purchases', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_supplier_key: supplierKey }) }),
+          pagedQuery(request, `purchase_payments?business_id=eq.${businessId}&supplier_key=eq.${encodeURIComponent(supplierKey)}&order=created_at.desc,id.asc&select=*`),
+        ])
+        return {
+          supplies: (purchases || []).map((p) => ({
+            kind: 'purchase', id: p.id, party_name: p.supplier_name, date: p.supply_date, created_at: p.created_at,
+            description: p.product_name || 'Purchase', lines: Array.isArray(p.items) ? p.items.length : null,
+            amount: p.total_cost, paid: p.amount_paid, balance: Math.max(Number(p.balance) || 0, 0), due_date: p.due_date, status: p.status,
+          })),
+          payments: (payments || []).map((x) => ({ ...x, source: 'purchase', item_id: x.purchase_id })),
+        }
+      }
+    },
+
+    // One payment to a supplier, applied to its open purchases and supply records oldest first, all or nothing
+    // (record_supplier_payment). Returns { allocation_id, amount, allocations: [{ kind, id, amount, balance }], balance }.
+    async recordSupplierPayment(businessId, supplierKey, { amount, method = 'Transfer', paidOn = null, note = null, staffName = null }) {
+      const r = await request('rpc/record_supplier_payment', {
+        method: 'POST',
+        body: JSON.stringify({ p_business_id: businessId, p_supplier_key: supplierKey, p_amount: amount, p_method: method, p_paid_on: paidOn || null, p_note: note || null, p_staff_name: staffName || null }),
+      })
+      return Array.isArray(r) ? r[0] : r
     },
 
     // The purchases from one supplier, matched by the same key as the totals

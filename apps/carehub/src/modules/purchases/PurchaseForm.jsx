@@ -9,6 +9,8 @@ import { theme } from '../../styles/theme'
 import { Inp, Textarea } from '../../components/ui'
 import { blankItem, isBlankItem, findProductForEntry, findProductByBarcode, applyProduct, itemProblems, isPastExpiry, looksLikeBarcode } from './lineItems'
 import SupplierField from './SupplierField'
+import { supplierKey } from './suppliers'
+import { isValidPhone } from '../business-directory/services/normalize'
 import ProductInsight from './ProductInsight'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, dangerBg, warning, success, bg } = theme
@@ -57,9 +59,15 @@ export function formLineProblems(form, inventory, editLines = null) {
 // still in stock, and selling prices of existing products are changed in
 // Inventory, not here. The caller can focus a line field through the ref
 // (focusLine(id, field)) to point at a problem.
+// A supplier phone is optional; when given it must look like one (the database refuses anything else).
+export function phoneError(phone) {
+  const v = String(phone || '').trim()
+  return v && (v.length > 40 || !isValidPhone(v)) ? 'Use digits, spaces and + ( ) - only' : undefined
+}
+
 const PurchaseForm = forwardRef(function PurchaseForm({
   form, setForm, inventory = [], inventoryStatus = 'ready', catalog, canReprice = false, showErrors = false,
-  brandId, suppliers = [], suppliersStatus = 'ready', insights, mode = 'record', editLines = null,
+  brandId, suppliers = [], suppliersStatus = 'ready', insights, mode = 'record', editLines = null, supplierPhones = new Map(),
 }, ref) {
   const [focusTarget, setFocusTarget] = useState(null)
   const [scanningId, setScanningId] = useState(null)
@@ -234,6 +242,17 @@ const PurchaseForm = forwardRef(function PurchaseForm({
           error={showErrors && !String(form.supplier || '').trim() ? 'Enter the supplier name' : undefined} />
         <Inp label='Supply Date' id={editing ? 'edit-purchase-supply-date' : 'purchase-supply-date'} value={form.supplyDate} onChange={v => f('supplyDate', v)} type='date' max={today}
           error={showErrors && editing && !form.supplyDate ? 'Enter the supply date' : undefined} />
+        {/* Optional: put on the supplier's record when it has no phone (docs/architecture/Bulk-Uploads-and-Debt-Linking.md).
+            Record only; a phone on file is changed in Supplier summary. */}
+        {!editing && (
+          <div>
+            <Inp label='Supplier Phone (optional)' id='purchase-supplier-phone' value={form.supplierPhone || ''} onChange={v => f('supplierPhone', v)} type='tel' placeholder='e.g. 0803 123 4567'
+              error={phoneError(form.supplierPhone)} />
+            {!String(form.supplierPhone || '').trim() && supplierPhones.get(supplierKey(form.supplier)) && (
+              <div style={{ fontSize: '11.5px', color: gray500, marginTop: '4px' }}>On file: {supplierPhones.get(supplierKey(form.supplier))}</div>
+            )}
+          </div>
+        )}
       </div>
 
       <div>

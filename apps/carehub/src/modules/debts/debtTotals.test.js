@@ -31,3 +31,14 @@ describe('matchesParty', () => {
     expect(matchesParty({ party_name: null }, '')).toBe(true)
   })
 })
+
+describe('debtLedgerTotals', () => {
+  it('adds amount, paid and outstanding in kobo, counts open debts, and flags figures that do not add up', async () => {
+    const { debtLedgerTotals } = await import('./debtTotals')
+    expect(debtLedgerTotals([
+      { amount: 1000, amount_paid: 250.5, balance: 749.5 },
+      { amount: 500, amount_paid: 500, balance: 0, status: 'paid' },
+      { amount: 300, amount_paid: 0, balance: 200 },
+    ])).toEqual({ amount: 1800, paid: 750.5, balance: 949.5, open: 2, count: 3, unreconciled: 1 })
+  })
+})

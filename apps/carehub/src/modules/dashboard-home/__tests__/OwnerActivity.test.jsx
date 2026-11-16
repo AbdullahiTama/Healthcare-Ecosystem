@@ -12,7 +12,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const repos = vi.hoisted(() => ({ feed: vi.fn(), balances: vi.fn(), debts: vi.fn() }))
 vi.mock('../../staff/repositories', () => ({ staffActivityRepository: { get: repos.feed } }))
-vi.mock('../../purchases/repositories', () => ({ purchaseRepository: { getSupplierBalances: repos.balances } }))
+vi.mock('../../purchases/repositories', () => ({ purchaseRepository: { getSupplierAccounts: async (...a) => ({ available: true, rows: await repos.balances(...a) }) } }))
 vi.mock('../../debts/repositories', () => ({ debtRepository: { getOpen: repos.debts } }))
 
 import OwnerActivity from '../OwnerActivity.jsx'

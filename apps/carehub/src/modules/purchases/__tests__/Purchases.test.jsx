@@ -10,6 +10,7 @@ let receiveImpl = null
 let supplierRows = []
 let productStatRows = []
 let pageRows = []
+let supplierRecords = []
 
 vi.mock('../repositories', () => ({
   purchaseRepository: {
@@ -19,6 +20,8 @@ vi.mock('../repositories', () => ({
     // The supplier picker and the "last bought" insight.
     getSupplierStats: async () => supplierRows,
     getSupplierBalances: async () => [],
+    getSuppliers: async () => ({ available: true, rows: supplierRecords }),
+    saveSupplierPhone: async (...a) => { calls.push(['supplier.phone', ...a]); return 'saved' },
     getProductStats: async () => productStatRows,
   },
 }))
@@ -58,6 +61,7 @@ beforeEach(() => {
   supplierRows = []
   productStatRows = []
   pageRows = []
+  supplierRecords = []
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   localStorage.clear()
   global.IS_REACT_ACT_ENVIRONMENT = true
@@ -186,6 +190,34 @@ describe('Purchases — bulk stock entry', () => {
     expect(purchase).toMatchObject({ supplier_name: 'MedSupply Ltd', quantity: 15, total_cost: 12000, amount_paid: 12000, status: 'paid' })
     expect(host.querySelector('[role="dialog"]')).toBeNull()
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+  })
+
+  it('saves an optional supplier phone on the supplier record, and shows the phone already on file', async () => {
+    supplierRecords = [{ id: 's1', supplier_key: 'medsupply ltd', name: 'MedSupply Ltd', phone: '0803 000 1111' }]
+    await render()
+    await openForm()
+    await type(host.querySelector('#purchase-supplier'), 'MedSupply Ltd')
+    expect(host.textContent).toContain('On file: 0803 000 1111')
+    await type(host.querySelector('#purchase-supplier-phone'), '0809 222 3333')
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    await type(field(0, 'qty'), '2')
+    await click(button('Save Purchase'))
+    await flush()
+    expect(calls.find(c => c[0] === 'supplier.phone')).toEqual(['supplier.phone', 'B1', 'MedSupply Ltd', '0809 222 3333'])
+    // The phone belongs to the supplier, not the purchase record.
+    expect(calls.find(c => c[0] === 'purchase.create')[2]).not.toHaveProperty('supplierPhone')
+  })
+
+  it('a purchase without a phone saves nothing on the supplier (the field is optional)', async () => {
+    await render()
+    await openForm()
+    await type(host.querySelector('#purchase-supplier'), 'MedSupply Ltd')
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    await type(field(0, 'qty'), '2')
+    await click(button('Save Purchase'))
+    await flush()
+    expect(calls.find(c => c[0] === 'purchase.create')).toBeTruthy()
+    expect(calls.find(c => c[0] === 'supplier.phone')).toBeUndefined()
   })
 
   it('does not let a role without price permission reprice an existing product', async () => {

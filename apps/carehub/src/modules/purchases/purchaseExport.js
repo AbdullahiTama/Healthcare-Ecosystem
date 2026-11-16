@@ -33,6 +33,9 @@ export function purchaseExportRows(p) {
   const head = {
     ref: purchaseRef(p),
     supplier: p.supplier_name || '',
+    // Kept on the supplier account, not the purchase: filled when the caller passes it (supplierPhone), else blank,
+    // which changes nothing when the file is uploaded again.
+    supplierPhone: p.supplierPhone || '',
     supplyDate: day(p.supply_date) || day(p.created_at),
     amountPaid: num(p.amount_paid),
     dueDate: day(p.due_date),

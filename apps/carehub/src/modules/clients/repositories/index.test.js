@@ -82,7 +82,7 @@ describe('clientRepository', () => {
   it('createMany is a no-op for an empty list', async () => {
     const { repo, client } = build()
     const result = await repo.createMany(A, [])
-    expect(result).toEqual({ added: 0, skipped: 0, failed: [] })
+    expect(result).toEqual({ added: 0, skipped: 0, failed: [], created: [] })
     expect(client.rows('clients')).toHaveLength(0)
   })
 
@@ -125,8 +125,9 @@ describe('clientRepository', () => {
         { id: 'c9', business_id: B, full_name: 'Other biz client', phone: '0900' },
       ],
     })
-    await repo.update('c1', A, { phone: '0111' })
-    await repo.update('c9', A, { phone: 'hacked' }) // wrong tenant — must no-op
+    expect(await repo.update('c1', A, { phone: '0111' })).toMatchObject({ id: 'c1', phone: '0111' })
+    // Wrong tenant: nothing matches, and the edit says so instead of reporting "saved".
+    await expect(repo.update('c9', A, { phone: 'hacked' })).rejects.toThrow(/could not be found/)
 
     const byId = Object.fromEntries(client.rows('clients').map((c) => [c.id, c]))
     expect(byId['c1'].phone).toBe('0111')
@@ -211,5 +212,28 @@ describe('clientRepository: bulk delete and restore', () => {
     await expect(refused.deleteMany('biz-A', ['c1'])).rejects.toMatchObject({ code: 'DELETE_NOT_ALLOWED' })
     const missing = createClientRepository(async () => { throw new Error('Supabase error (404): Could not find the function public.delete_clients') })
     await expect(missing.deleteMany('biz-A', ['c1'])).rejects.toMatchObject({ code: 'DELETE_UNAVAILABLE' })
+  })
+})
+
+describe('clientRepository.getAccountRecords', () => {
+  it('reads the client\'s sales, debts and their payments, scoped by client and business, ids in chunks', async () => {
+    const calls = []
+    const sales = Array.from({ length: 150 }, (_, i) => ({ id: 's' + i }))
+    const request = async (path) => {
+      calls.push(path)
+      if (path.startsWith('sales?')) return path.includes('offset=0') ? sales : []
+      if (path.startsWith('debts?')) return [{ id: 'd1', source: 'manual' }, { id: 'd2', source: 'credit_sale' }]
+      return []
+    }
+    const repo = createClientRepository(request)
+    const r = await repo.getAccountRecords('c1', 'biz-A')
+    expect(r.sales).toHaveLength(150)
+    expect(calls.find((p) => p.startsWith('sales?'))).toMatch(/^sales\?client_id=eq\.c1&business_id=eq\.biz-A&/)
+    expect(calls.find((p) => p.startsWith('debts?'))).toMatch(/^debts\?client_id=eq\.c1&business_id=eq\.biz-A&/)
+    const pay = calls.filter((p) => p.startsWith('sale_payments?'))
+    expect(pay.length).toBeGreaterThanOrEqual(2)
+    expect(pay.every((p) => p.includes('business_id=eq.biz-A'))).toBe(true)
+    // Payments of hand-recorded debts only: a credit-sale debt's payments are the sale's.
+    expect(calls.find((p) => p.startsWith('debt_payments?'))).toMatch(/debt_id=in\.\(d1\)/)
   })
 })

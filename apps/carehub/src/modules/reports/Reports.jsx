@@ -21,6 +21,7 @@ import SaleDetailModal from '../pos/SaleDetailModal'
 import { useInvalidateSalesReport } from '../pos/useSalesReportData'
 import { useProductCatalog } from '../inventory/hooks/useProductCatalog'
 import { useSettings, useClients } from '../../hooks/queries'
+import { clientsById, withCurrentClientNames } from '../../lib/clientNames'
 import { fmt, currentMonth } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { usePlanGate } from '../../hooks/usePlanGate'
@@ -79,7 +80,10 @@ export default function Reports({ brand, role, perms, embedded = false }) {
   const inRange = (item, dateOf) => inPeriod(item, { period, month: customMonth, dateOf })
 
   // Held, resumed and deleted rows are not sales.
-  const fSales = useMemo(() => sales.filter(s => inRange(s)).filter(isCompletedSale), [reportQuery.data, period, customMonth])
+  // Linked sales show their client's current name (Edit Client) in the list, search and CSV; client_name is kept as
+  // recorded (lib/clientNames.js).
+  const clientIndex = useMemo(() => clientsById(clientsQuery.data), [clientsQuery.data])
+  const fSales = useMemo(() => withCurrentClientNames(sales.filter(s => inRange(s)).filter(isCompletedSale), clientIndex, 'client_name'), [reportQuery.data, period, customMonth, clientIndex])
   // Expenses belong to the date the user recorded (same rule as the Expenses page and the database).
   const fExpenses = expenses.filter(x => inRange(x, expenseDate))
   const fPurchases = purchases.filter(p => inRange(p))

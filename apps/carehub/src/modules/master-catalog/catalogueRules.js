@@ -137,3 +137,33 @@ export function carryingSummary(rows) {
   if (!carried.length) return 'Not carried at any location'
   return `Carried at ${carried.length} of ${rows.length} location${rows.length === 1 ? '' : 's'} · ${stock.toLocaleString()} in stock`
 }
+
+// ── The CareHub library (phase 4) ────────────────────────────────────────────
+// The prescription statuses an item may have: a linked item can never be less strict than its library entry.
+export const rxRank = (value) => RX_STATUSES.findIndex((s) => s.value === value)
+
+export function rxOptionsFor(libraryRx) {
+  const floor = rxRank(libraryRx)
+  return floor < 0 ? RX_STATUSES : RX_STATUSES.slice(floor)
+}
+
+// The form after picking a library item: its details fill the form; the name, price and anything already typed stay
+// as the owner set them, except the prescription status, which cannot be looser than the library's.
+export function applyLibraryToForm(form, lib) {
+  const pick = (k, v) => (String(form[k] ?? '').trim() ? form[k] : v || '')
+  const label = [lib.brand_name, lib.strength && !String(lib.brand_name).toLowerCase().includes(String(lib.strength).toLowerCase()) ? lib.strength : ''].filter(Boolean).join(' ')
+  const allowed = rxOptionsFor(lib.rx_status).map((s) => s.value)
+  return {
+    ...form,
+    name: pick('name', label),
+    generic_name: pick('generic_name', lib.generic_name),
+    strength: pick('strength', lib.strength),
+    dose_form: pick('dose_form', lib.dose_form),
+    pack_size: pick('pack_size', lib.pack_size),
+    barcode: pick('barcode', lib.barcodes?.[0]),
+    category_code: pick('category_code', lib.category_code),
+    description: pick('description', lib.description),
+    rx_status: allowed.includes(form.rx_status) ? form.rx_status : lib.rx_status,
+    catalog_item_id: lib.id,
+  }
+}

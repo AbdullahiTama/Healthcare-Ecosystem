@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Upload, Download, AlertTriangle, CheckCircle, FileSpreadsheet, Copy } from 'lucide-react'
+import { Upload, Download, FileSpreadsheet } from 'lucide-react'
 import { readSpreadsheet } from '../../business-directory/services/importService'
 import { downloadBlob } from '../../business-directory/services/exportService'
 import {
@@ -9,8 +9,9 @@ import {
 import { fmt, todayDate } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
 import { Modal, GhostBtn, TealBtn, Loading, Empty, Pill } from '../../../components/ui'
+import { ImportStat as Stat, ImportNotice as Notice } from '../../../components/BulkUpload'
 
-const { tealDeep, tealMist, navy, gray600, gray500, gray100, border, danger, dangerBg, warning, warningBg, success } = theme
+const { tealDeep, navy, gray600, gray500, gray100, border, danger, dangerBg, warning, warningBg } = theme
 
 // Bulk upload of purchases (docs/architecture/Purchases-Import-Export.md).
 // Steps: choose a file → preview (every purchase checked; nothing saved) →
@@ -102,8 +103,9 @@ export default function PurchaseImportModal({ show, onClose, inventory = [], cat
     })
     const stockIssues = r.recorded.flatMap(x => x.result?.syncFailed || [])
     const debtIssues = r.recorded.filter(x => x.result?.debtFailed).length
+    const phoneIssues = r.recorded.filter(x => x.result?.phone === 'failed' || x.result?.phone === 'unavailable').length
     console.info('[purchases] import recorded', { recorded: r.recorded.length, failed: r.failed.length, cancelled: cancelRef.current, stockIssues: stockIssues.length, debtIssues })
-    const summary = { ...r, stockIssues, debtIssues, cancelled: cancelRef.current, notStarted: ready.length - r.recorded.length - r.failed.length }
+    const summary = { ...r, stockIssues, debtIssues, phoneIssues, cancelled: cancelRef.current, notStarted: ready.length - r.recorded.length - r.failed.length }
     setResult(summary)
     setStep('done')
     onDone?.(summary)
@@ -212,6 +214,7 @@ export default function PurchaseImportModal({ show, onClose, inventory = [], cat
               </div>
             )}
             {result.stockIssues.length > 0 && <Notice tone='warning'>Recorded, but stock was not added for: {result.stockIssues.join(', ')}. Add it from Inventory.</Notice>}
+            {result.phoneIssues > 0 && <Notice tone='warning'>The supplier phone was not saved for {result.phoneIssues} recorded purchase{result.phoneIssues === 1 ? '' : 's'}. Add it under Suppliers &amp; payments.</Notice>}
             {result.debtIssues > 0 && <Notice tone='warning'>{result.debtIssues} recorded purchase{result.debtIssues === 1 ? '' : 's'} with a balance could not be added to Debts. Add {result.debtIssues === 1 ? 'it' : 'them'} in Debts.</Notice>}
           </div>
         )}
@@ -244,25 +247,5 @@ function PlanRow({ p, skipped }) {
         </ul>
       )}
     </li>
-  )
-}
-
-function Stat({ label: text, value, tone }) {
-  const color = tone === 'danger' ? danger : tone === 'success' ? success : navy
-  return (
-    <div style={{ padding: '10px 12px', borderRadius: theme.radius.md, background: tealMist }}>
-      <div style={{ fontSize: 11, color: gray500, fontWeight: 600 }}>{text}</div>
-      <div style={{ fontSize: 16, fontWeight: 900, color, marginTop: 2 }}>{value}</div>
-    </div>
-  )
-}
-
-function Notice({ tone, children }) {
-  const c = tone === 'danger' ? { bg: dangerBg, fg: danger, Icon: AlertTriangle } : tone === 'warning' ? { bg: warningBg, fg: warning, Icon: AlertTriangle } : tone === 'success' ? { bg: tealMist, fg: tealDeep, Icon: CheckCircle } : { bg: tealMist, fg: tealDeep, Icon: Copy }
-  return (
-    <div role={tone === 'danger' ? 'alert' : 'status'} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', borderRadius: theme.radius.md, background: c.bg, border: `1px solid ${c.fg}`, fontSize: 12.5, color: navy, lineHeight: 1.5 }}>
-      <c.Icon size={15} color={c.fg} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden='true' />
-      <div>{children}</div>
-    </div>
   )
 }

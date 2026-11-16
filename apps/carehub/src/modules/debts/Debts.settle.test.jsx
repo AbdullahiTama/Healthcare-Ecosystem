@@ -11,7 +11,8 @@ const debts = vi.hoisted(() => ({ getAll: vi.fn(), update: vi.fn(), create: vi.f
 const sales = vi.hoisted(() => ({ getById: vi.fn() }))
 const payments = vi.hoisted(() => ({ recordCollection: vi.fn() }))
 vi.mock('./repositories', () => ({ debtRepository: debts }))
-vi.mock('../../hooks/queries', () => ({ useClients: () => ({ data: [], isLoading: false, isError: false }), useSettings: () => ({ data: {} }), useInvalidateSales: () => () => {} }))
+vi.mock('../../hooks/queries', () => ({ useClients: () => ({ data: [], isLoading: false, isError: false }), useSettings: () => ({ data: {} }), useInvalidateSales: () => () => {}, useInvalidateDebts: () => () => {} }))
+vi.mock('../purchases/hooks', () => ({ useSupplierDirectory: () => ({ suppliers: [], isLoading: false, isError: false }) }))
 vi.mock('../pos/repositories', async (orig) => {
   const real = await orig()
   return { saleRepository: sales, paymentRepository: payments, isMissingObject: real.isMissingObject }
@@ -70,10 +71,10 @@ describe('Debts: mark paid', () => {
     expect(host.textContent).toContain('Nothing is outstanding on this sale')
   })
 
-  it('a manual debt is still marked paid in one click', async () => {
+  it('a debt recorded by hand is not closed in one click: its row offers Record payment (full or part, with history)', async () => {
     await render()
-    await click(buttons('Mark paid')[1])
-    expect(debts.update).toHaveBeenCalledWith('d2', 'b', { amount_paid: 500, balance: 0, status: 'paid' })
-    expect(payments.recordCollection).not.toHaveBeenCalled()
+    expect(buttons('Mark paid')).toHaveLength(1)
+    expect(host.querySelector('button[aria-label="Record payment: Chidi"]')).not.toBeNull()
+    expect(debts.update).not.toHaveBeenCalled()
   })
 })

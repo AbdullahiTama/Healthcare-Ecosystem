@@ -32,6 +32,23 @@ describe('settleDebt', () => {
     expect(f.debts.update).toHaveBeenCalledWith('d3', 'biz', { amount_paid: 100, balance: 0, status: 'paid' })
   })
 
+  it('a manual debt is paid in full through record_debt_payment, so the payment is in its history', async () => {
+    const f = fakes()
+    f.debts.recordPayment = vi.fn(async () => ({ balance: 0 }))
+    expect(await settleDebt({ id: 'd6', source: 'manual', amount: 900, amount_paid: 250 }, 'biz', { ...f, staffName: 'Ada' })).toEqual({ via: 'debt' })
+    expect(f.debts.recordPayment).toHaveBeenCalledWith('d6', { amount: 650, method: 'Other', note: 'Marked paid from the Debts page', staffName: 'Ada' })
+    expect(f.debts.update).not.toHaveBeenCalled()
+  })
+
+  it('before the debt-payments update, a manual debt is just marked paid; other refusals are shown', async () => {
+    const f = fakes()
+    f.debts.recordPayment = vi.fn().mockRejectedValue(new Error('Supabase error (404): Could not find the function public.record_debt_payment in the schema cache'))
+    expect(await settleDebt({ id: 'd7', source: 'manual', amount: 900 }, 'biz', f)).toEqual({ via: 'debt' })
+    expect(f.debts.update).toHaveBeenCalledWith('d7', 'biz', { amount_paid: 900, balance: 0, status: 'paid' })
+    f.debts.recordPayment.mockRejectedValue(new Error('This debt is already paid in full.'))
+    await expect(settleDebt({ id: 'd8', source: 'manual', amount: 900 }, 'biz', f)).rejects.toThrow(/already paid/)
+  })
+
   it('before the supplier-payments update, a purchase debt is just marked paid, as it used to be', async () => {
     const f = fakes({ purchase: { id: 'p-1', balance: 700 } })
     f.purchases.recordPayment.mockRejectedValue(new Error('Supabase error (404): Could not find the function public.record_purchase_payment in the schema cache'))

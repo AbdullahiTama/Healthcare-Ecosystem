@@ -87,7 +87,10 @@ function StaffTeam({ brand, role, perms }) {
     // Read by the database (can_edit_purchases): this switch is what authorises an edit.
     ['canEditPurchases', 'Edit purchases', 'Can correct a recorded purchase: supplier, items, quantities, prices, dates and amount paid. Stock, debts and reports follow. The Owner can always do this.'],
     ['canViewFinance', 'View finance', 'Can see expenses, debts and financial figures.'],
-    ['canViewCostPrice', 'See cost prices at the POS', 'Can show cost price, margin and estimated profit on the POS screen (a Show cost switch, off until turned on, so customers do not see it). The Owner can always do this.'],
+    ['canViewCostPrice', 'See cost prices', 'Can see cost price, margin and profit in Inventory (list, product form, bulk edit, Excel export) and show them on the POS screen (a Show cost switch, off until turned on, so customers do not see it). Purchases always show what was paid. The Owner can always do this.'],
+    // Read by the database (can_adjust_client_totals, carehub_20270122): without it a client's visits and total spent
+    // can only change through sales.
+    ['canAdjustClientTotals', 'Adjust client visits and total spent', 'Can correct a client\'s number of visits and total spent in Edit Client. CareHub recalculates both from the client\'s sales at their next sale. The Owner can always do this.'],
     ['canMakeSales', 'Make sales', 'Can record sales at the POS / counter.'],
     ['canViewSettings', 'View settings', 'Can open Settings and change business configuration.'],
     // Read by the database (rep_ledger_can): these switches authorise the representative ledger

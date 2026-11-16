@@ -20,6 +20,7 @@ import { debtRepository } from '../debts/repositories'
 import { clientRepository } from '../clients/repositories'
 import { consultationRepository } from '../consultation/repositories'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
+import { clientsById, withCurrentClientNames } from '../../lib/clientNames'
 import { buildReceiptHtml, buildReceiptQrDataUrl, saleToReceipt, heldSaleToInvoice } from './receiptPrint'
 import { buildReceiptEscpos } from './receiptEscpos'
 import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscpos, requestPrinter } from './escposUsb'
@@ -27,6 +28,7 @@ import { theme } from '../../styles/theme'
 import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, ErrorState, Loading, Skeleton } from '../../components/ui'
 import { CatalogStatusBanner, loadingLabel } from '../inventory/components/CatalogStatus'
 import CreditCollections from './CreditCollections'
+import { limitQty, cartStockProblems, stockLimitMessage, cartStockMessage } from './stockLimit'
 import CustomerPicker from './CustomerPicker'
 import NewCustomerForm from './NewCustomerForm'
 import SaleDetailModal from './SaleDetailModal'
@@ -51,6 +53,10 @@ export const GRID_PAGE = 60
 // actual reason ("Price override not allowed: ...") instead of the raw
 // "Supabase error (403): ..." wrapper.
 const cleanServerError = (e) => String(e?.message || e).replace(/^Supabase error \(\d{3}\):\s*/, '')
+
+// Said when a scanned or searched product cannot be sold for lack of stock. The
+// selling price is included so the cashier can still answer "how much is it?".
+export const outOfStockMessage = (p) => p.name + ' is out of stock. Selling price: ' + fmt(p.price) + '.'
 
 const PAYMENT_METHODS = [
   ['Cash', DollarSign], ['Transfer', Repeat], ['POS', CreditCard], ['Split', Divide], ['Credit', Clock],
@@ -248,7 +254,9 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const invalidateSales = useInvalidateSales(brand?.id)
   const loadingSales = loadingOpen
 
-  const heldSales = openSales.filter(s => s.is_on_hold)
+  // Linked sales show their client's current name (lib/clientNames.js); the saved client_name is not rewritten.
+  const byClientId = useMemo(() => clientsById(clients), [clients])
+  const heldSales = withCurrentClientNames(openSales.filter(s => s.is_on_hold), byClientId, 'client_name')
   const creditSales = openSales.filter(s => s.is_credit && s.balance > 0)
   const showHeldNow = useUpsertOpenSale(brand?.id)
   // Held sales saved on this device but not yet in the database (offline, or the connection failed): they are in the
@@ -330,11 +338,27 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   // Cart operations
   // Stable (functional update), so the memoised product cards are not redrawn
   // on every key press.
-  const add = useCallback(p => {
+  // Never more than is on hand (stockLimit.js): adding one more of a product whose units are all in the sale is
+  // refused with the quantity available. The check reads the cart as rendered (cartRef) so the toast is shown once,
+  // outside the state updater; the updater applies the same limit, so two quick taps can never pass it either.
+  // Returns true when a unit was added.
+  const cartRef = useRef(cart)
+  cartRef.current = cart
+  // `baseCart`: the cart the add applies to when it is not the one on screen (a scan first puts the sale back as it
+  // was before the scanner typed into a field).
+  const add = useCallback((p, baseCart) => {
+    const inCart = (baseCart || cartRef.current).find(c => c.id === p.id)?.qty || 0
+    const { limited, available } = limitQty(p, inCart + 1)
+    if (limited) {
+      console.info('[pos] add refused: stock limit', { product: p.id, available, inCart })
+      showToast(stockLimitMessage(p.name, available), { type: 'warning' })
+      return false
+    }
     setCart(cart => cart.some(c => c.id === p.id)
-      ? cart.map(c => c.id === p.id ? { ...c, qty: c.qty + 1 } : c)
+      ? cart.map(c => c.id === p.id ? { ...c, qty: limitQty(p, c.qty + 1).qty } : c)
       : [...cart, { ...p, qty: 1 }])
-  }, [])
+    return true
+  }, [setCart, showToast])
   const qtyInCart = useMemo(() => Object.fromEntries(cart.map(c => [c.id, c.qty])), [cart])
   // Hardware scanners type the code into the focused field and press Enter.
   // When the whole query is a registered barcode, treat it as a scan and add
@@ -347,9 +371,8 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     const match = findByBarcode(code)
     if (!match) return
     e.preventDefault()
-    if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
-    add(match)
-    showToast('Added: ' + match.name, { type: 'success' })
+    if (!isService(match) && match.stock <= 0) { showToast(outOfStockMessage(match), { type: 'warning' }); return }
+    if (add(match)) showToast('Added: ' + match.name, { type: 'success' })
     setSearch('')
   }
 
@@ -380,9 +403,8 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
       return
     }
     setSearch(snap.inSearch ? '' : snap.search)
-    if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
-    add(match)
-    showToast('Added: ' + match.name, { type: 'success' })
+    if (!isService(match) && match.stock <= 0) { showToast(outOfStockMessage(match), { type: 'warning' }); return }
+    if (add(match, normalizePosDraft(snap.draft).cart)) showToast('Added: ' + match.name, { type: 'success' })
   }
   useKeyboardScanner({
     ignore: ignoreScanKey,
@@ -391,7 +413,30 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   }, { window: true, enabled: view === 'pos' && !receipt })
 
   const rmv = id => setCart(cart.filter(c => c.id !== id))
-  const setQty = (id, v) => { const n = parseInt(v) || 0; if (n <= 0) rmv(id); else setCart(cart.map(c => c.id === id ? { ...c, qty: n } : c)) }
+  // A typed or stepped quantity above the stock on hand is cut down to what is available, with an alert saying so.
+  // Lowering a quantity is always allowed (a line resumed from a held sale may be above the stock now).
+  const setQty = (id, v) => {
+    const n = parseInt(v) || 0
+    if (n <= 0) { rmv(id); return }
+    const line = cart.find(c => c.id === id)
+    const product = productById.get(id) || line
+    const { qty, limited, available } = limitQty(product, n)
+    if (limited && n > (line?.qty || 0)) {
+      console.info('[pos] quantity limited to stock', { product: id, requested: n, available })
+      showToast(stockLimitMessage(product?.name || line?.name || 'This product', available, n), { type: 'warning' })
+      if (qty <= 0) return
+      setCart(cart.map(c => c.id === id ? { ...c, qty: Math.max(qty, 1) } : c))
+      return
+    }
+    setCart(cart.map(c => c.id === id ? { ...c, qty: n } : c))
+  }
+  // Brings every line down to the stock on hand (lines with none left are removed).
+  const fitCartToStock = () => {
+    setCart(cart.flatMap(c => {
+      const { qty } = limitQty(productById.get(c.id) || c, c.qty)
+      return qty > 0 ? [{ ...c, qty }] : []
+    }))
+  }
   // One-off unit-price override for a single sale — the vendor can charge a
   // different price for a particular customer without touching the catalog
   // price (which stays in the product's own record). Clearing the field or
@@ -409,6 +454,16 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const total = Math.max(0, sub - discAmt)
   // The catalogue's current cost of each cart line (the line itself may predate a cost change).
   const productById = useMemo(() => new Map(products.map(p => [p.id, p])), [products])
+  // Lines asking for more than is on hand now (stock fell after they were added, or a held sale was resumed).
+  const stockProblems = useMemo(() => cartStockProblems(cart, productById), [cart, productById])
+  const shortById = useMemo(() => new Map(stockProblems.map(p => [p.id, p])), [stockProblems])
+  // Charging is refused while a line is above the stock on hand; the alert says which and how many are available.
+  const refuseOverStock = () => {
+    if (!stockProblems.length) return false
+    console.info('[pos] charge refused: stock limit', stockProblems)
+    showToast(cartStockMessage(stockProblems), { type: 'error', duration: 7000 })
+    return true
+  }
   const lineCost = (item) => unitCost(productById.get(item.id) || item)
   const costSummary = showCost ? saleCostSummary(cart, lineCost, total) : null
   const change = method === 'Cash' && cash ? parseFloat(cash) - total : 0
@@ -485,6 +540,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   async function charge() {
     if (!cart.length) return
     if (charging) return
+    if (refuseOverStock()) return
     if (method === 'Split' && splitTotal < total) { showToast('Split amounts do not add up to total.', { type: 'warning' }); return }
     setCharging(true)
     try {
@@ -568,6 +624,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   async function chargeCredit() {
     if (!cart.length) return
     if (charging) return
+    if (refuseOverStock()) return
     setCharging(true)
     try {
     const txnNo = genId('TXN')
@@ -735,10 +792,16 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     if (resumedSale && String(resumedSale.id) === String(sale.id)) { setView('pos'); return }
     let items = []
     try { items = JSON.parse(sale.items || '[]') } catch (e) {}
+    // The customer is re-picked by the client record the held sale is linked to, under their current name, so a client
+    // renamed since (Edit Client) or sharing a name with another stays linked when the sale is charged. Before this
+    // the name alone was restored and matched by spelling at checkout.
+    const linked = sale.client_id != null ? clients.find((c) => String(c.id) === String(sale.client_id)) : null
+    const picked = linked || (sale.client_id != null ? { id: sale.client_id, full_name: sale.client_name || '' } : null)
     setDraft({
       ...blankPosDraft(),
       cart: items,
-      client: sale.client_name || 'Walk-in',
+      pickedClient: customerRef(picked),
+      client: picked?.full_name || sale.client_name || 'Walk-in',
       disc: Number(sale.discount) > 0 ? String(sale.discount) : '',
       holdNote: sale.notes || '',
       resumedSale: heldSaleRef(sale),
@@ -818,8 +881,8 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         onCode: (code) => {
           const match = findByBarcode(code) || products.find(p => (p.name || '').toLowerCase().includes(code.toLowerCase()))
           if (match) {
-            if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
-            add(match); showToast('Added: ' + match.name, { type: 'success' })
+            if (!isService(match) && match.stock <= 0) { showToast(outOfStockMessage(match), { type: 'warning' }); return }
+            if (add(match)) showToast('Added: ' + match.name, { type: 'success' })
           }
           else { setSearch(code) }
         },
@@ -829,8 +892,8 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
       if (code) {
         const m = findByBarcode(code) || products.find(p => (p.name || '').toLowerCase().includes(code.toLowerCase()))
         if (m) {
-          if (!isService(m) && m.stock <= 0) { showToast(m.name + ' is out of stock.', { type: 'warning' }); return }
-          add(m); showToast('Added: ' + m.name, { type: 'success' })
+          if (!isService(m) && m.stock <= 0) { showToast(outOfStockMessage(m), { type: 'warning' }); return }
+          if (add(m)) showToast('Added: ' + m.name, { type: 'success' })
         } else setSearch(code)
       }
     }
@@ -972,7 +1035,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         ) : recentQuery.isError ? (
           <ErrorState message="We couldn't load recent sales." onRetry={() => recentQuery.refetch()} />
         ) : (() => {
-          const recent = recentQuery.data || []
+          const recent = withCurrentClientNames(recentQuery.data || [], byClientId, 'client_name')
           if (recent.length === 0) return <Empty icon={<Clipboard size={40} strokeWidth={1.5} />} message="No sales yet" />
           return recent.slice(0, 50).map(s => {
             let items = []; try { items = JSON.parse(s.items || '[]') } catch (e) {}
@@ -1003,7 +1066,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         })()}
       </div>
       <SaleDetailModal show={!!detailSale} sale={detailSale} onClose={() => setDetailSale(null)} brand={brand} settings={settings}
-        readOnly ledgerAvailable showToast={showToast} />
+        readOnly ledgerAvailable clients={clients} showToast={showToast} />
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )
@@ -1013,7 +1076,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: bg }}>
       <div style={{ background: 'white', padding: isMobile ? '6px 16px 0' : '8px 24px 0', flexShrink: 0 }}>{tabBar('credit')}</div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-        <CreditCollections brand={brand} creditSales={creditSales} loading={loadingOpen} error={openError} onRetry={() => refetchOpen()} showToast={showToast} />
+        <CreditCollections brand={brand} creditSales={creditSales} clients={clients} role={role} perms={perms} loading={loadingOpen} error={openError} onRetry={() => refetchOpen()} showToast={showToast} />
       </div>
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
@@ -1247,6 +1310,11 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
                 </div>
                 <div style={{ fontWeight: 800, fontSize: 13, color: navy, flexShrink: 0 }}>{fmt(item.price * item.qty)}</div>
               </div>
+              {shortById.has(item.id) && (
+                <div role='alert' data-testid='pos-line-stock' style={{ fontSize: 11.5, fontWeight: 700, color: danger, marginTop: 4 }}>
+                  {shortById.get(item.id).available > 0 ? `Only ${shortById.get(item.id).available} in stock` : 'Out of stock'}: reduce the quantity to sell.
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', border: `1px solid ${border}`, borderRadius: theme.radius.md, overflow: 'hidden' }}>
                   <button onClick={() => setQty(item.id, item.qty - 1)} aria-label='Decrease quantity' style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, background: 'white', border: 'none', cursor: 'pointer', color: gray600 }}><Minus size={13} /></button>
@@ -1349,6 +1417,15 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
             </div>
           )}
 
+          {stockProblems.length > 0 && (
+            <div role='alert' data-testid='pos-stock-banner' style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '10px 12px', marginBottom: 8, borderRadius: theme.radius.md, background: dangerBg, border: `1px solid ${danger}`, fontSize: 12.5, color: navy }}>
+              <span style={{ flex: '1 1 200px' }}>{cartStockMessage(stockProblems)}</span>
+              <button type='button' onClick={fitCartToStock} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: danger, color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer', minHeight: 32 }}>
+                Set to available stock
+              </button>
+            </div>
+          )}
+
           {/* Actions */}
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setShowHoldModal(true)} disabled={!cart.length} className="pos-hold"
@@ -1406,7 +1483,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 14px', borderRadius: theme.radius.md, border: `1px solid ${gray100}`, background: 'white' }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                <div style={{ fontSize: '11.5px', color: gray400, marginTop: 2 }}>{p.cat || p.category || 'Product'}{p.reorder_level ? ' · reorder at ' + p.reorder_level : ''}</div>
+                <div style={{ fontSize: '11.5px', color: gray400, marginTop: 2 }}>{p.cat || p.category || 'Product'}{p.reorder_level ? ' · reorder at ' + p.reorder_level : ''} · <span style={{ color: navy, fontWeight: 700 }}>Selling price {fmt(p.price)}</span></div>
               </div>
               <Pill label='Out of stock' type='red' />
             </div>
