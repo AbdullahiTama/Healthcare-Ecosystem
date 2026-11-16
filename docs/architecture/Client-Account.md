@@ -61,9 +61,8 @@ available credit, account status (with the number of open items), and refunds pa
 
 The account and the client's position (Clients list and profile, from the open debts) come from the same records, so
 they agree; the account also checks it: if its closing balance and Debt Management's position for the client differ,
-it says so (usually a sale or debt recorded under the client's name without being linked). Live on 2026-11-16, 15 of
-16 clients with a balance agree exactly by link; the 16th has two credit-sale debts without `client_id` (CODE_AUDIT
-A32), which the Clients page still counts by exact name, so the screen agrees.
+it says so (usually a sale or debt recorded under the client's name without being linked). Live on 2026-11-16, after
+linking 3 old credit-sale debts to their sale's client (CODE_AUDIT A32), every client agrees by link (0 of 39 differ).
 
 Every sale, payment, debt, client edit or import refreshes the account: its query key sits under the client list's
 (`['clients', business, 'account', client]`). A credit collection at the till now also refreshes debts and clients
