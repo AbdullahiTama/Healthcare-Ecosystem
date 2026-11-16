@@ -380,6 +380,17 @@ businesses (1,735 by three or more); 1,490 barcodes are shared. No item has its 
 
 ### Database (`supabase/migrations/carehub_20261223_shared_product_library.sql`)
 
+**Applied to live 2026-11-16**, with the follow-up `carehub_20261224_catalog_items_anon_read.sql`. Verified on live:
+27 functions, 9 indexes, 3 triggers, RLS and 3 policies, `master_products.catalog_item_id`; seeding added
+**2,106 pending candidates** (fewer than the 3,000 estimated in October because live has 10,237 items now); the old
+`master_catalog_page` call still works; anon, businesses and links have no write access.
+
+**Follow-up (`carehub_20261224`):** the original read policy on `catalog_items` called `is_platform_admin()` for anon
+too. anon may not execute that function (security remediation, see `carefind_20261003`), so every logged-out read
+of the library, `catalog_search` included, failed with "permission denied" instead of returning approved items. The
+policy is now split like `carefind_20261003`: anon reads approved items only; signed-in users read approved items,
+and admins everything. The PGlite test now revokes the function from anon, as live, so this is covered.
+
 | Object | What it does |
 |---|---|
 | `catalog_items` | The library: name, strength, generic name, form, pack size, manufacturer, NAFDAC number, barcodes, category, prescription status, description, `status` (`pending`, `active`, `retired`) and `source` (`seeded`, `nafdac_import`, `suggested`, `admin`). `match_key` (name + strength, lower case, a number joined to its unit) is unique among items that are not retired; so is the NAFDAC number, compared without spaces or hyphens. |
@@ -430,6 +441,8 @@ else is added, approved. Rows without a name are skipped and reported. Prescript
 
 - No permission is widened. The library is read-only to the public and to businesses, and only approved items are
   visible to them. Pending, retired and reviewer details are admin-only.
+- Read policies are per role (`carehub_20261224`): the anon policy never calls `is_platform_admin()`, which anon may
+  not execute. No function grant was added to make it work.
 - All writes go through SECURITY DEFINER functions that check the caller first: platform admin for the library,
   owner or manager of that main business for links and suggestions. Direct writes to both tables are revoked, admins
   included.
@@ -440,8 +453,8 @@ else is added, approved. Rows without a name are skipped and reported. Prescript
 
 ### Test plan
 
-- **PGlite:** `apps/carefind/src/test/catalogue/sharedProductLibrary.db.test.js` (26 tests, on the phase 1 migration
-  and the live shapes):
+- **PGlite:** `apps/carefind/src/test/catalogue/sharedProductLibrary.db.test.js` (26 tests, on the phase 1 migration,
+  the live shapes and anon without `is_platform_admin()`):
   - matching key; seeding (two or more businesses, chosen spelling, most common details, stricter tie, barcodes;
     re-seeding adds nothing; retired names stay out);
   - who can read, and that nobody writes the tables directly; admin functions refuse others;

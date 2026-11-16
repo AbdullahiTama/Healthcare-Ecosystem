@@ -1,7 +1,8 @@
 // @vitest-environment node
 // Product catalogue phase 4 (carehub_20261223_shared_product_library), on PGlite with the live shapes of businesses,
 // staff, products, master_products, branch_products and staff_notifications, the live current_business_ids(),
-// is_platform_admin() and is_business_manager(), and carehub_20261215 (catalogue foundation) applied first.
+// is_platform_admin() (not executable by anon, as live) and is_business_manager(), and carehub_20261215 (catalogue
+// foundation) applied first; carehub_20261224 (anon read policy) applied after.
 import { describe, it, expect, beforeAll, vi } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { readFileSync } from 'node:fs'
@@ -11,6 +12,7 @@ vi.setConfig({ testTimeout: 60000, hookTimeout: 120000 })
 const read = (f) => readFileSync(fileURLToPath(new URL(`../../../../../supabase/migrations/${f}`, import.meta.url)), 'utf8')
 const FOUNDATION = read('carehub_20261215_catalogue_foundation.sql')
 const MIGRATION = read('carehub_20261223_shared_product_library.sql')
+const ANON_READ = read('carehub_20261224_catalog_items_anon_read.sql')
 
 const A = 'a0000000-0000-4000-8000-000000000001'   // Allen Pharmacy (main)
 const A1 = 'a0000000-0000-4000-8000-000000000011'  // its Ikeja branch
@@ -79,6 +81,9 @@ beforeAll(async () => {
       select distinct id from visible $$;
     create function is_platform_admin() returns boolean language sql stable security definer set search_path = public as $$
       select coalesce((select is_platform_admin from businesses where lower(email) = lower(auth.email()) limit 1), false) $$;
+    -- As live (security remediation): logged-out visitors may not call is_platform_admin().
+    revoke execute on function is_platform_admin() from public, anon;
+    grant execute on function is_platform_admin() to authenticated, service_role;
     create function is_business_manager(bid uuid) returns boolean language sql stable security definer set search_path = public as $$
       with recursive ancestry as (
         select b.id, b.parent_business_id, b.email, 0 as depth from businesses b where b.id = bid
@@ -121,6 +126,7 @@ beforeAll(async () => {
   `)
   await db.exec(FOUNDATION)
   await db.exec(MIGRATION)
+  await db.exec(ANON_READ)
 })
 
 describe('matching key and seeding', () => {
@@ -399,6 +405,8 @@ describe('re-running', () => {
   it('applying the migration again is safe and adds no candidates', async () => {
     const before = await one('select count(*) n from catalog_items')
     await db.exec(MIGRATION)
+    await db.exec(ANON_READ)
     expect(await one('select count(*) n from catalog_items')).toEqual(before)
+    expect(await anon((q) => q('select count(*) n from catalog_items'))).toEqual([{ n: expect.anything() }])
   })
 })
