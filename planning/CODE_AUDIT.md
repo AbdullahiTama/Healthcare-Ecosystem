@@ -41,6 +41,8 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A26 | Medium | Debts / suppliers / credit accounts | Debt payment history, guarded hand-recorded debts, supplier accounts, account payments and debt import needed `carehub_20270117_debt_and_supplier_accounts` (unapplied, it was the cause of the 2026-11-15 "debt upload not working" report); Record Debt linking added | **Closed 2026-11-15**: applied with owner approval (version 20261115205734) and probed |
 | A27 | High | POS (production defect) | An Owner's sales at a branch location are refused: "This sale is not authorized for your account." | **Closed 2026-11-15**: `carehub_20270118_sale_guard_branch_owner` applied with owner approval (version 20261115222717) and probed; a first version refused every sale for 72 s and was rolled back (see item) |
 | A28 | Low | Suppliers (contact list) | Supplier list with contact details, import and export needs `carehub_20270119_supplier_directory` (new table; nothing existing changes); until applied the screen is as before | **Closed 2026-11-15**: applied with owner approval (version 20261115224942) and probed |
+| A29 | Medium | Clients / POS (defect) | Resuming a held sale restored only the customer's name: a renamed client, or one sharing a name, was charged without (or to the wrong) client record | **Closed 2026-11-16**: re-picked by `client_id`; tested (fails on the old code) |
+| A30 | Low | Clients (data integrity) | Any member can overwrite `clients.visit_count` / `total_spend` through the API (no guard); `anon` holds table grants on `clients` (RLS denies every row) | Open: guard the two columns (trigger) and revoke anon grants |
 
 ## 2. Items
 
@@ -356,6 +358,23 @@ The new POS switch ([POS-Cost-Visibility.md](../docs/architecture/POS-Cost-Visib
 column-level revoke on `products.cost_price` for non-cost roles with a cost-free read for them (view or RPC), and every
 cost reader (Inventory, Purchases, reports, transfers, POS) switched over. The second changes access for existing roles
 and needs a plan before implementing.
+
+### A29. Resuming a held sale lost its client (Medium) — closed 2026-11-16
+
+**Found 2026-11-16** while adding Edit Client: `openHeld` (POS.jsx) restored only `client_name`; checkout found the
+client by exact name (`creditCustomerFor`). A client renamed after the sale was held, or two clients with the same name,
+meant the completed sale was saved without the client or against the other one, and a credit sale was refused for
+having no customer. **Fixed:** the client is re-picked by the held sale's `client_id`. Test: `POS.held.test.jsx`
+"Held sales linked to a client" (the same-name case fails on the previous code). Details:
+[Client-Edit.md](../docs/architecture/Client-Edit.md) §3.
+
+### A30. Client totals writable by members; anon grants on clients (Low)
+
+**Verified live 2026-11-16 (read-only):** `clients` has no triggers; the only policy is "clients of own business" (ALL,
+`current_business_ids()`); `authenticated` and `anon` hold every table privilege. So any member can PATCH
+`visit_count` and `total_spend`, which are meant to come from sales (`refresh_client_totals`). Edit Client never sends
+them. **Close by:** a BEFORE UPDATE trigger keeping both columns unless the caller is the totals function or a trusted
+role, and revoking `anon`'s grants (RLS already denies it). Needs owner approval (changes access for existing roles).
 
 ### A28. Supplier list: migration to apply (Low) — closed 2026-11-15
 

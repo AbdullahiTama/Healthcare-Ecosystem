@@ -15,7 +15,7 @@ vi.mock('./useSalesReportData', () => ({
   useSalesReportData: () => state.query,
   useInvalidateSalesReport: () => vi.fn(),
 }))
-vi.mock('../../hooks/queries', () => ({ useSettings: () => ({ data: {} }) }))
+vi.mock('../../hooks/queries', () => ({ useSettings: () => ({ data: {} }), useClients: () => ({ data: [] }) }))
 vi.mock('./ShiftControl', () => ({ default: () => null }))
 vi.mock('../audit/repositories', () => ({ auditRepository: { recordExport: vi.fn() } }))
 const receipts = vi.hoisted(() => ({ search: vi.fn() }))

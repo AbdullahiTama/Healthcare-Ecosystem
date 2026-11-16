@@ -36,7 +36,12 @@ export default function SaleDetailModal({ sale, show, onClose, shiftsById = {}, 
   const [discount, setDiscount] = useState('')
   const [customer, setCustomer] = useState('')
   const [productQuery, setProductQuery] = useState('')
-  const clientRecord = sale?.client_id ? clients.find((c) => c.id === sale.client_id) : null
+  const clientRecord = sale?.client_id ? clients.find((c) => String(c.id) === String(sale.client_id)) : null
+  // The customer's current name when the sale is linked to a client (Edit Client), and what the sale was saved as when
+  // that differs. The sale itself keeps client_name as recorded; a reprinted receipt shows the recorded name.
+  const savedName = sale?.recorded_name || sale?.client_name || 'Walk-in'
+  const shownName = clientRecord?.full_name || sale?.client_name || 'Walk-in'
+  const recordedAs = savedName !== shownName ? savedName : ''
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('Cash')
   const [reason, setReason] = useState('')
@@ -89,7 +94,7 @@ export default function SaleDetailModal({ sale, show, onClose, shiftsById = {}, 
   async function reprint() {
     const w = window.open('', '_blank', 'width=400,height=700')
     if (!w) { showToast('The pop-up was blocked. Allow pop-ups for this site, then try again.', { type: 'warning' }); return }
-    const r = saleToReceipt(sale)
+    const r = saleToReceipt({ ...sale, client_name: savedName })
     const qrDataUrl = await buildReceiptQrDataUrl(r, settings || {})
     w.document.write(buildReceiptHtml({ receipt: r, business: brand || {}, settings: settings || {}, qrDataUrl }))
     w.document.close()
@@ -251,7 +256,8 @@ export default function SaleDetailModal({ sale, show, onClose, shiftsById = {}, 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, fontSize: 13 }}>
             <Fact label='Date' value={when(sale.created_at)} />
-            <Fact label='Customer' value={sale.client_name || 'Walk-in'} />
+            <Fact label='Customer' value={shownName} />
+            {recordedAs && <Fact label='Recorded on the sale as' value={recordedAs} />}
             {clientRecord?.phone && <Fact label='Phone' value={clientRecord.phone} />}
             {clientRecord?.email && <Fact label='Email' value={clientRecord.email} />}
             {clientRecord?.address && <Fact label='Address' value={clientRecord.address} />}

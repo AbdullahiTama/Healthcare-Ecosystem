@@ -20,6 +20,7 @@ import { debtRepository } from '../debts/repositories'
 import { clientRepository } from '../clients/repositories'
 import { consultationRepository } from '../consultation/repositories'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
+import { clientsById, withCurrentClientNames } from '../../lib/clientNames'
 import { buildReceiptHtml, buildReceiptQrDataUrl, saleToReceipt, heldSaleToInvoice } from './receiptPrint'
 import { buildReceiptEscpos } from './receiptEscpos'
 import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscpos, requestPrinter } from './escposUsb'
@@ -249,7 +250,9 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   const invalidateSales = useInvalidateSales(brand?.id)
   const loadingSales = loadingOpen
 
-  const heldSales = openSales.filter(s => s.is_on_hold)
+  // Linked sales show their client's current name (lib/clientNames.js); the saved client_name is not rewritten.
+  const byClientId = useMemo(() => clientsById(clients), [clients])
+  const heldSales = withCurrentClientNames(openSales.filter(s => s.is_on_hold), byClientId, 'client_name')
   const creditSales = openSales.filter(s => s.is_credit && s.balance > 0)
   const showHeldNow = useUpsertOpenSale(brand?.id)
   // Held sales saved on this device but not yet in the database (offline, or the connection failed): they are in the
@@ -785,10 +788,16 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     if (resumedSale && String(resumedSale.id) === String(sale.id)) { setView('pos'); return }
     let items = []
     try { items = JSON.parse(sale.items || '[]') } catch (e) {}
+    // The customer is re-picked by the client record the held sale is linked to, under their current name, so a client
+    // renamed since (Edit Client) or sharing a name with another stays linked when the sale is charged. Before this
+    // the name alone was restored and matched by spelling at checkout.
+    const linked = sale.client_id != null ? clients.find((c) => String(c.id) === String(sale.client_id)) : null
+    const picked = linked || (sale.client_id != null ? { id: sale.client_id, full_name: sale.client_name || '' } : null)
     setDraft({
       ...blankPosDraft(),
       cart: items,
-      client: sale.client_name || 'Walk-in',
+      pickedClient: customerRef(picked),
+      client: picked?.full_name || sale.client_name || 'Walk-in',
       disc: Number(sale.discount) > 0 ? String(sale.discount) : '',
       holdNote: sale.notes || '',
       resumedSale: heldSaleRef(sale),
@@ -1022,7 +1031,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         ) : recentQuery.isError ? (
           <ErrorState message="We couldn't load recent sales." onRetry={() => recentQuery.refetch()} />
         ) : (() => {
-          const recent = recentQuery.data || []
+          const recent = withCurrentClientNames(recentQuery.data || [], byClientId, 'client_name')
           if (recent.length === 0) return <Empty icon={<Clipboard size={40} strokeWidth={1.5} />} message="No sales yet" />
           return recent.slice(0, 50).map(s => {
             let items = []; try { items = JSON.parse(s.items || '[]') } catch (e) {}
@@ -1053,7 +1062,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         })()}
       </div>
       <SaleDetailModal show={!!detailSale} sale={detailSale} onClose={() => setDetailSale(null)} brand={brand} settings={settings}
-        readOnly ledgerAvailable showToast={showToast} />
+        readOnly ledgerAvailable clients={clients} showToast={showToast} />
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )

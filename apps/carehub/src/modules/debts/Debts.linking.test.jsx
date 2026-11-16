@@ -16,6 +16,7 @@ vi.mock('../locations/repositories', () => ({ locationsRepository: { getAll: vi.
 vi.mock('../../hooks/queries', () => ({
   useClients: () => ({ data: clientList.rows, isLoading: false, isError: false, isSuccess: true }),
   useSettings: () => ({ data: {} }), useInvalidateSales: () => () => {}, useInvalidateDebts: () => invalidateDebts,
+  useDebtPayments: () => ({ data: [], isLoading: false, isError: false }), useRecordDebtPayment: () => ({ mutateAsync: vi.fn() }),
 }))
 vi.mock('../purchases/hooks', () => ({ useSupplierDirectory: () => ({ suppliers: [{ key: 'emzor distributors', name: 'Emzor Distributors' }], isLoading: false, isError: false }) }))
 
@@ -156,5 +157,31 @@ describe('Older unlinked customer debts', () => {
     expect(repo.update.mock.calls).toEqual([['u1', 'B1', { client_id: 'c1' }], ['u2', 'B1', { client_id: 'new-Tunde' }]])
     expect(text()).toContain('2 debts linked to client records, 1 new client record created.')
     expect(text()).not.toContain('not linked to a client record')
+  })
+})
+
+// Edit Client: a debt linked to a client shows the client's current name (and what it was recorded as), is found by
+// it, and keeps party_name as recorded.
+describe('Debts linked to a renamed client', () => {
+  it('shows and finds the current name, notes the recorded one, and never rewrites the debt', async () => {
+    clientList.rows = [{ id: 'c1', full_name: 'Ada Obi-Okafor', phone: '08031234567' }]
+    db = [
+      { id: 'd1', business_id: 'B1', direction: 'owes_us', party_name: 'Ada Obi', client_id: 'c1', amount: 5000, amount_paid: 0, balance: 5000, status: 'pending', source: 'manual', created_at: '2026-11-01' },
+      { id: 'd2', business_id: 'B1', direction: 'owes_us', party_name: 'Walk-in Bisi', amount: 1000, amount_paid: 0, balance: 1000, status: 'pending', source: 'manual', created_at: '2026-11-02' },
+    ]
+    await mount()
+    expect(text()).toContain('Ada Obi-Okafor')
+    expect(text()).toContain('Recorded as Ada Obi')
+    expect(text()).toContain('Walk-in Bisi')
+    const search = document.querySelector('input[type="search"], input[aria-label*="Search"]')
+    await type(search, 'okafor')
+    await settle()
+    expect(text()).toContain('Ada Obi-Okafor')
+    expect(text()).not.toContain('Walk-in Bisi')
+    // A debt recorded by hand opens its payment dialog, under the current name.
+    await click(btn((b) => b.getAttribute('aria-label') === 'View debt: Ada Obi-Okafor'))
+    expect(dialog().textContent).toContain('Ada Obi-Okafor')
+    expect(repo.update).not.toHaveBeenCalled()
+    expect(db[0].party_name).toBe('Ada Obi')
   })
 })

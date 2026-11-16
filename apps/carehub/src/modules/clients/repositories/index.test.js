@@ -125,8 +125,9 @@ describe('clientRepository', () => {
         { id: 'c9', business_id: B, full_name: 'Other biz client', phone: '0900' },
       ],
     })
-    await repo.update('c1', A, { phone: '0111' })
-    await repo.update('c9', A, { phone: 'hacked' }) // wrong tenant — must no-op
+    expect(await repo.update('c1', A, { phone: '0111' })).toMatchObject({ id: 'c1', phone: '0111' })
+    // Wrong tenant: nothing matches, and the edit says so instead of reporting "saved".
+    await expect(repo.update('c9', A, { phone: 'hacked' })).rejects.toThrow(/could not be found/)
 
     const byId = Object.fromEntries(client.rows('clients').map((c) => [c.id, c]))
     expect(byId['c1'].phone).toBe('0111')

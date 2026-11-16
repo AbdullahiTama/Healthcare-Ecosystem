@@ -10,6 +10,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const h = vi.hoisted(() => ({
   open: [],
   recent: [],
+  clients: [],
   saleCreate: vi.fn(),
   saleUpdate: vi.fn(),
   updateHeld: vi.fn(),
@@ -21,7 +22,7 @@ vi.mock('../../hooks/queries', () => ({
   useOpenSales: vi.fn(() => ({ data: h.open, isLoading: false, isError: false, refetch: vi.fn() })),
   useRecentSales: vi.fn(() => ({ data: h.recent, isLoading: false, isError: false })),
   useSettings: vi.fn(() => ({ data: {} })),
-  useClients: vi.fn(() => ({ data: [], isLoading: false, isError: false, refetch: vi.fn() })),
+  useClients: vi.fn(() => ({ data: h.clients, isLoading: false, isError: false, refetch: vi.fn() })),
   useCreateClient: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useInvalidateSales: vi.fn(() => vi.fn()),
   useUpsertOpenSale: vi.fn(() => vi.fn()),
@@ -66,7 +67,7 @@ async function mount(role = 'Owner') {
 const tab = (name) => buttons().find((b) => b.textContent.trim().startsWith(name) && b.getAttribute('role') !== 'radio')
 
 beforeEach(() => {
-  h.open = [HELD]; h.recent = [DONE]
+  h.open = [HELD]; h.recent = [DONE]; h.clients = []
   h.saleCreate.mockReset().mockResolvedValue({ queued: false })
   h.saleUpdate.mockReset().mockResolvedValue(undefined)
   h.updateHeld.mockReset().mockResolvedValue(undefined)
@@ -119,6 +120,41 @@ describe('Held sales', () => {
     const sale = h.saleCreate.mock.calls[0][1]
     expect(sale).toMatchObject({ is_on_hold: false, resumed_from: 'h1' })
     expect(h.saleUpdate).not.toHaveBeenCalled()
+  })
+})
+
+// Edit Client: a held sale is linked to its client by id. Resuming it re-picks that client under their current name, so
+// a renamed client, or one sharing a name with another, stays linked when the sale is charged.
+describe('Held sales linked to a client', () => {
+  it('a client renamed since the sale was held: listed under the new name and charged to the same client', async () => {
+    h.clients = [{ id: 'c1', full_name: 'Ada Obi-Okafor', phone: '0801' }]
+    h.open = [{ ...HELD, client_id: 'c1' }]
+    await mount('Owner')
+    await click(tab('Held'))
+    expect(hasText('Ada Obi-Okafor')).toBe(true)
+    await click(button('Open & edit'))
+    await click(host.querySelector('button.pos-charge'))
+    expect(h.saleCreate.mock.calls[0][1]).toMatchObject({ client_id: 'c1', client_name: 'Ada Obi-Okafor', resumed_from: 'h1' })
+  })
+
+  it('two clients with the same name: charged to the one the held sale belongs to', async () => {
+    h.clients = [{ id: 'c1', full_name: 'Ada Obi', phone: '0801' }, { id: 'c2', full_name: 'Ada Obi', phone: '0802' }]
+    h.open = [{ ...HELD, client_id: 'c2' }]
+    await mount('Owner')
+    await click(tab('Held'))
+    await click(button('Open & edit'))
+    await click(host.querySelector('button.pos-charge'))
+    expect(h.saleCreate.mock.calls[0][1]).toMatchObject({ client_id: 'c2', client_name: 'Ada Obi' })
+  })
+
+  it('the held row itself is not rewritten by listing it under the new name', async () => {
+    h.clients = [{ id: 'c1', full_name: 'Ada Obi-Okafor' }]
+    const held = { ...HELD, client_id: 'c1' }
+    h.open = [held]
+    await mount('Owner')
+    await click(tab('Held'))
+    expect(held.client_name).toBe('Ada Obi')
+    expect(h.updateHeld).not.toHaveBeenCalled()
   })
 })
 

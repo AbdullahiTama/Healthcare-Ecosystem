@@ -199,6 +199,19 @@ export function useCreateClient(brandId) {
 
 // Saves bulk-edit groups ({ ids, updates }) for clients and puts the saved rows into the shared client list at once
 // (Clients, POS, Debts and every picker read it), then re-reads it. Resolves to runBulkUpdates' { saved, failed }.
+// Edit Client: saves one client's details and puts the saved row into the shared client list at once, so the POS
+// customer picker, credit accounts, Debts and reports show the new name straight away; then the list is re-read.
+export function useUpdateClient(brandId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, changes }) => clientRepository.update(id, brandId, changes),
+    onSuccess: (saved) => {
+      if (saved?.id) qc.setQueryData(keys.clients(brandId), (prev) => (Array.isArray(prev) ? prev.map((c) => (String(c.id) === String(saved.id) ? { ...c, ...saved } : c)) : prev))
+      qc.invalidateQueries({ queryKey: keys.clients(brandId) })
+    },
+  })
+}
+
 export function useUpdateManyClients(brandId) {
   const qc = useQueryClient()
   return async (groups, onProgress) => {

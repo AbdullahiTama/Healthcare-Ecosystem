@@ -8,7 +8,8 @@ import {
 import { theme } from '../../styles/theme'
 import { Card, Pill, Empty, ErrorState, Loading, Sel, SearchSelect, Inp, StatCard, Toast, useToast } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useSettings } from '../../hooks/queries'
+import { useSettings, useClients } from '../../hooks/queries'
+import { clientsById, withCurrentClientNames } from '../../lib/clientNames'
 import { fmt, todayDate } from '../../lib/utils'
 import { auditRepository } from '../audit/repositories'
 import {
@@ -76,8 +77,18 @@ export default function SalesReport({ brand, role, perms, staffName }) {
   const businessToday = useBusinessToday()
   const range = useMemo(() => periodRange(period, { from, to }), [period, from, to, businessToday])
   // Today's figures keep in step with the other tills and the dashboard.
-  const { data, isLoading, isError, error, refetch, isFetching } = useSalesReportData(brand?.id, range,
+  const { data: loaded, isLoading, isError, error, refetch, isFetching } = useSalesReportData(brand?.id, range,
     { refetchInterval: period === 'today' ? LIVE_REFRESH_MS : false })
+  // Sales linked to a client show the client's current name (Edit Client) in the lists, the customer filter, search,
+  // the export and the sale; each sale keeps client_name as recorded (lib/clientNames.js).
+  const clientsQuery = useClients(brand?.id)
+  const clientIndex = useMemo(() => clientsById(clientsQuery.data), [clientsQuery.data])
+  const data = useMemo(() => {
+    if (!loaded || !clientIndex.size) return loaded
+    const ids = Object.keys(loaded.salesById || {})
+    const named = withCurrentClientNames(ids.map((id) => loaded.salesById[id]), clientIndex, 'client_name')
+    return { ...loaded, sales: withCurrentClientNames(loaded.sales, clientIndex, 'client_name'), salesById: Object.fromEntries(ids.map((id, i) => [id, named[i]])) }
+  }, [loaded, clientIndex])
 
   // A cashier's view is pinned to their own transactions.
   const effective = useMemo(() => (seeAll ? filters : { ...filters, cashier: userId || 'none' }), [seeAll, filters, userId])
@@ -379,7 +390,7 @@ export default function SalesReport({ brand, role, perms, staffName }) {
       )}
 
       <SaleDetailModal show={!!openSaleId} sale={openSaleId ? (data?.salesById[openSaleId] || lookupById[openSaleId] || null) : null} onClose={() => setOpenSaleId(null)}
-        shiftsById={view?.shiftsById} brand={brand} settings={settings} ledgerAvailable={!!data?.ledgerAvailable}
+        shiftsById={view?.shiftsById} brand={brand} settings={settings} clients={clientsQuery.data || []} ledgerAvailable={!!data?.ledgerAvailable}
         showToast={showToast} onChanged={invalidate} />
       <Toast msg={toastMsg} type={toastType} />
     </div>

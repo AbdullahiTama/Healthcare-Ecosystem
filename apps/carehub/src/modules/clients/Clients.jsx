@@ -8,10 +8,11 @@ import { fmt, todayDate } from '../../lib/utils'
 import { getModulesForType } from '../../lib/permissions'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, DataTable, RedBtn, useToast, Toast } from '../../components/ui'
-import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients, useOpenDebts, useUpdateManyClients, useDeleteClients } from '../../hooks/queries'
+import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients, useOpenDebts, useUpdateManyClients, useDeleteClients, useUpdateClient } from '../../hooks/queries'
 import SelectionBar from '../../components/SelectionBar'
 import ClientBulkEditModal from './components/ClientBulkEditModal'
 import ClientDeleteModal from './components/ClientDeleteModal'
+import ClientEditModal from './components/ClientEditModal'
 import RecentlyDeletedModal from '../../components/RecentlyDeletedModal'
 import PeriodFilter from '../../components/PeriodFilter'
 import { FilterPanel, FilterSelect, AmountRangeFilter } from '../../components/RecordFilters'
@@ -147,6 +148,10 @@ export default function Clients({ brand, role, perms }) {
   const deleteClients = useDeleteClients(brand?.id)
   const canDeleteClients = role === 'Owner' || !!perms?.canDelete
   const [showDelete, setShowDelete] = useState(false)
+  // Edit Client: anyone who can add clients can edit one (the same rule as bulk edit). The profile closes while the
+  // edit dialog is open (one dialog at a time) and reopens with the saved details.
+  const updateClient = useUpdateClient(brand?.id)
+  const [editing, setEditing] = useState(false)
   const [showDeleted, setShowDeleted] = useState(false)
   const toggleMarked = (id) => setMarked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const importing = createManyClients.isPending
@@ -558,10 +563,16 @@ export default function Clients({ brand, role, perms }) {
       </Modal>
 
       {/* Client Detail Modal */}
-      <Modal show={!!selected} onClose={() => setSelected(null)} title='Client Details'>
+      {editing && selected && (
+        <ClientEditModal client={selected} clients={clients}
+          save={(changes) => updateClient.mutateAsync({ id: selected.id, changes })}
+          onSaved={(saved, what) => { setSelected((prev) => ({ ...prev, ...saved })); showToast(`${saved?.full_name || 'Client'} updated${what ? ': ' + what : ''}.`, { type: 'success' }) }}
+          onClose={() => setEditing(false)} />
+      )}
+      <Modal show={!!selected && !editing} onClose={() => setSelected(null)} title='Client Details'>
         {selected && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px', padding: '16px', borderRadius: theme.radius.lg, background: bg }}>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px', padding: '16px', borderRadius: theme.radius.lg, background: bg }}>
               <Avatar name={selected.full_name} size={56} />
               <div>
                 <div style={{ fontSize: '20px', fontWeight: '900', color: navy }}>{selected.full_name}</div>
@@ -571,12 +582,18 @@ export default function Clients({ brand, role, perms }) {
                   <div><div style={{ fontSize: '18px', fontWeight: '900', color: navy }}>{selected.visit_count || 0}</div><div style={{ fontSize: '11px', color: gray400 }}>Visits</div></div>
                 </div>
               </div>
-              {canConsult && (
-                <button onClick={() => navigate('/dashboard/consultation?client=' + selected.id)} title='Start a new consultation for this client'
-                  style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: theme.radius.md, background: tealDeep, color: 'white', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '700', whiteSpace: 'nowrap' }}>
-                  <Clipboard size={13} /> New Consultation
+              <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
+                <button type='button' onClick={() => setEditing(true)} aria-label={'Edit ' + (selected.full_name || 'client')}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 13px', minHeight: 36, borderRadius: theme.radius.md, background: 'white', color: tealDeep, border: `1px solid ${tealDeep}`, cursor: 'pointer', fontSize: '12px', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                  <Pencil size={13} aria-hidden='true' /> Edit
                 </button>
-              )}
+                {canConsult && (
+                  <button onClick={() => navigate('/dashboard/consultation?client=' + selected.id)} title='Start a new consultation for this client'
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 13px', minHeight: 36, borderRadius: theme.radius.md, background: tealDeep, color: 'white', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                    <Clipboard size={13} /> New Consultation
+                  </button>
+                )}
+              </div>
             </div>
             {[['Email', selected.email || 'Not set'], ['Gender', selected.gender || 'Not set'], ['Date of Birth', selected.date_of_birth || 'Not set'], ['Address', selected.address || 'Not set'], ['Notes', selected.notes || 'Not set'], ['Joined', selected.created_at?.split('T')[0] || 'Not set']].map(([l, v]) => (
               <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${gray100}`, fontSize: '13px', gap: 16 }}>

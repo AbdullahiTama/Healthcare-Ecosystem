@@ -33,6 +33,7 @@ import { paymentErrorMessage } from '../../lib/dbErrors'
 // services/supabase read used by POS too — repoint it when that call is
 // consolidated; it is unrelated to this module's own aggregate.
 import { useClients, useSettings, useInvalidateSales, useInvalidateDebts } from '../../hooks/queries'
+import { clientsById, withCurrentClientNames } from '../../lib/clientNames'
 import ClientsLoadNote from '../clients/components/ClientsLoadNote'
 // A debt raised by a credit sale is settled against that sale, through the
 // sales aggregate's own collection function, so the two never disagree.
@@ -77,6 +78,9 @@ export default function Debts({ brand, role, perms, staffName }) {
   // A repayment moves the sale's balance and today's money received.
   const invalidateSales = useInvalidateSales(brand?.id)
   const clients = clientsQuery.data || []
+  // What the screen shows: a debt linked to a client carries the client's CURRENT name (Edit Client is reflected here
+  // at once); `party_name` saved on the debt is never rewritten. Linking and supplier matching read the saved names.
+  const shownDebts = useMemo(() => withCurrentClientNames(debts, clientsById(clients), 'party_name'), [debts, clients])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   // Every filter in one object (debtFilters.js). With several locations loaded the default view is the location in
@@ -125,7 +129,7 @@ export default function Debts({ brand, role, perms, staffName }) {
 
   useEffect(() => { load() }, [brand?.id])
   // Opened from the Owner's activity feed: ?debt=<id> shows that debt once the list is in.
-  useQueryParamAction('debt', (id) => { const d = debts.find((x) => String(x.id) === id); if (d) setDetail(d) }, !loading && !loadError)
+  useQueryParamAction('debt', (id) => { const d = shownDebts.find((x) => String(x.id) === id); if (d) setDetail(d) }, !loading && !loadError)
 
   // Typing or picking the party. The link itself is worked out by resolveDebtParty (exact name, phone, or the client
   // chosen when two share a name); typing a different name drops an earlier choice.
@@ -289,7 +293,7 @@ export default function Debts({ brand, role, perms, staffName }) {
   // A debt of another location is shown and counted, but settled from that location (switch to it first): its
   // sale, purchase, receipt settings and staff attribution all belong there.
   const isHere = (d) => !d.business_id || String(d.business_id) === String(brand?.id)
-  const filtered = useMemo(() => filterDebts(debts, { ...filters, direction: tab }), [debts, filters, tab])
+  const filtered = useMemo(() => filterDebts(shownDebts, { ...filters, direction: tab }), [shownDebts, filters, tab])
   const activeCount = activeDebtFilterCount({ ...filters, direction: '' }, defaultLocation)
   const isFiltered = activeCount > 0
   // The cards always total the rows on screen: the tab and every filter (including location) recalculate them.
@@ -312,7 +316,7 @@ export default function Debts({ brand, role, perms, staffName }) {
   const [showDeleted, setShowDeleted] = useState(false)
   const canBulkDelete = role === 'Owner' || !!perms?.canDelete
   const markable = useMemo(() => filtered.filter(isHere), [filtered, brand?.id])
-  const markedDebts = debts.filter(d => marked.has(d.id) && isHere(d))
+  const markedDebts = shownDebts.filter(d => marked.has(d.id) && isHere(d))
   const allShownMarked = markable.length > 0 && markable.every(d => marked.has(d.id))
   const toggleMarked = (id) => setMarked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
   useEffect(() => { setMarked(new Set()) }, [brand?.id])
@@ -505,6 +509,7 @@ export default function Debts({ brand, role, perms, staffName }) {
                     style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', fontWeight: '700', fontSize: '13px', color: navy, cursor: 'pointer', textAlign: 'left', textDecoration: 'underline', textDecorationColor: theme.gray100, textUnderlineOffset: 3 }}>
                     {d.party_name}
                   </button>
+                  {d.recorded_name && <div style={{ fontSize: '11px', color: gray500, marginTop: '2px' }}>Recorded as {d.recorded_name}</div>}
                   {d.client_id && <div style={{ marginTop: '4px' }}><Pill label={<> <UserCheck size={10} /> Client record</>} type='teal' /></div>}
                 </>
               ),
@@ -659,7 +664,7 @@ export default function Debts({ brand, role, perms, staffName }) {
         <DebtPaymentModal brand={brand} debt={detail} staffName={staffName} showToast={showToast} onClose={() => setDetail(null)} onPaid={load} />
       )}
       {detail && isHere(detail) && !isManual(detail) && (
-        <DebtDetail debt={detail} brand={brand} settings={settings} canRefund={role === 'Owner' || isManagerRole(role)} showToast={showToast}
+        <DebtDetail debt={detail} brand={brand} settings={settings} clients={clients} canRefund={role === 'Owner' || isManagerRole(role)} showToast={showToast}
           onClose={() => setDetail(null)} onChanged={load} onMarkPaid={markPaid}
           onPay={(purchase) => { setDetail(null); setPayingPurchase(purchase) }} />
       )}

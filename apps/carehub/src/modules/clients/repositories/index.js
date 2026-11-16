@@ -80,15 +80,16 @@ export function createClientRepository(request = sbFetch) {
       return { added, skipped, failed }
     },
 
-    // No UI calls this yet — it replaces a dead `updateClient` in
-    // services/supabase.js that PATCHed by id alone, so any future edit screen
-    // reaches for a tenant-scoped write instead of an unscoped one.
+    // Edit Client: saves one client's changed details, tenant-scoped, and returns the saved row. Nothing matched (a
+    // client of another business, or deleted meanwhile) is an error, not a silent "saved".
     async update(clientId, businessId, updates) {
-      return request(`clients?id=eq.${clientId}&business_id=eq.${businessId}`, {
+      const rows = await request(`clients?id=eq.${clientId}&business_id=eq.${businessId}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
-        prefer: 'return=minimal',
+        prefer: 'return=representation',
       })
+      if (Array.isArray(rows) && rows.length === 0) throw new Error('This client could not be found. They may have been deleted.')
+      return Array.isArray(rows) ? rows[0] : rows
     },
 
     // The same changes for many clients, one request per 100 (bulk edit on the Clients page). Tenant-scoped like
