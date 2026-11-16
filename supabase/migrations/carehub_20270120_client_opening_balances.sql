@@ -1,8 +1,14 @@
 -- ============================================================================
 -- Clients: what each client owes, or is owed, and opening balances
 --
--- STATUS: NOT YET APPLIED. Apply with owner approval, then record the version
--- and the live probe here.
+-- STATUS: APPLIED 2026-11-16 as version 20261116092716, with owner approval.
+--   Probed before committing (the whole migration inside a rolled-back
+--   transaction) and after, both rolled back: every business's supplier
+--   accounts identical before and after (md5 of all rows); a member adds a
+--   "we owe" opening balance for a client; it is not listed as a supplier and
+--   record_supplier_payment refuses it ("Nothing is owed"); a second opening
+--   balance for the client is refused by the index. Predicates fixed 1/2/3;
+--   grants and SECURITY settings of the functions unchanged.
 --
 -- WHY (requested 2026-11-15, items 4 and 5)
 -- ---
