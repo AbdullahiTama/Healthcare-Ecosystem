@@ -20,6 +20,7 @@ import { yearsOf } from '../../lib/recordFilters'
 import { DEFAULT_CLIENT_FILTERS, CLIENT_PAYMENT_STATUSES, CLIENT_ACTIVITY, GENDERS, clientPositions, positionOf, describePosition, filterClients, clientTotals, activeClientFilterCount, describeClientFilters } from './clientFilters'
 import ClientImportModal from './components/ClientImportModal'
 import ClientPosition from './components/ClientPosition'
+import ClientAccount from './components/ClientAccount'
 
 const { tealDeep, navy, gray600, gray500, gray400, gray100, border, bg, danger, success } = theme
 
@@ -153,6 +154,9 @@ export default function Clients({ brand, role, perms }) {
   // edit dialog is open (one dialog at a time) and reopens with the saved details.
   const updateClient = useUpdateClient(brand?.id)
   const [editing, setEditing] = useState(false)
+  // The profile shows the Overview (details and history) or the Client Account (summary, ledger, statements).
+  const [profileView, setProfileView] = useState('overview')
+  const canExportStatements = role === 'Owner' || !!perms?.canExportReports
   const [showDeleted, setShowDeleted] = useState(false)
   const toggleMarked = (id) => setMarked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
@@ -480,7 +484,7 @@ export default function Clients({ brand, role, perms }) {
           onSaved={(saved, what) => { setSelected((prev) => ({ ...prev, ...saved })); showToast(`${saved?.full_name || 'Client'} updated${what ? ': ' + what : ''}.`, { type: 'success' }) }}
           onClose={() => setEditing(false)} />
       )}
-      <Modal show={!!selected && !editing} onClose={() => setSelected(null)} title='Client Details'>
+      <Modal show={!!selected && !editing} onClose={() => { setSelected(null); setProfileView('overview') }} title='Client Details' wide={profileView === 'account'}>
         {selected && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px', padding: '16px', borderRadius: theme.radius.lg, background: bg }}>
@@ -508,6 +512,18 @@ export default function Clients({ brand, role, perms }) {
             </div>
             <ClientPosition brand={brand} client={selected} position={balancesKnown ? positionOf(balances, selected.id) : null} failed={openDebts.isError}
               canRecordOpening={canRecordOpening} showToast={showToast} />
+            <div role='tablist' aria-label='Client profile' style={{ display: 'flex', gap: 20, borderBottom: `1px solid ${border}`, marginBottom: 16 }}>
+              {[['overview', 'Overview'], ['account', 'Client Account']].map(([v, label]) => (
+                <button key={v} type='button' role='tab' aria-selected={profileView === v} onClick={() => setProfileView(v)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px 2px', marginBottom: -1, fontSize: 14, fontWeight: profileView === v ? 800 : 600, color: profileView === v ? tealDeep : gray600, borderBottom: profileView === v ? `2px solid ${tealDeep}` : '2px solid transparent' }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {profileView === 'account' ? (
+              <ClientAccount brand={brand} client={selected} position={balancesKnown ? positionOf(balances, selected.id) : null} canExport={canExportStatements} showToast={showToast} />
+            ) : (
+            <>
             {[['Email', selected.email || 'Not set'], ['Gender', selected.gender || 'Not set'], ['Date of Birth', selected.date_of_birth || 'Not set'], ['Address', selected.address || 'Not set'], ['Notes', selected.notes || 'Not set'], ['Joined', selected.created_at?.split('T')[0] || 'Not set']].map(([l, v]) => (
               <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${gray100}`, fontSize: '13px', gap: 16 }}>
                 <span style={{ color: gray500, fontWeight: '600' }}>{l}</span>
@@ -625,6 +641,8 @@ export default function Clients({ brand, role, perms }) {
                 </div>
               )}
             </div>
+            </>
+            )}
           </div>
         )}
       </Modal>

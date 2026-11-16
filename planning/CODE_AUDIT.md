@@ -44,6 +44,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A29 | Medium | Clients / POS (defect) | Resuming a held sale restored only the customer's name: a renamed client, or one sharing a name, was charged without (or to the wrong) client record | **Closed 2026-11-16**: re-picked by `client_id`; tested (fails on the old code) |
 | A30 | Low | Clients (data integrity) | Any member can overwrite `clients.visit_count` / `total_spend` through the API (no guard); `anon` holds table grants on `clients` (RLS denies every row) | Open: guard the two columns (trigger) and revoke anon grants |
 | A31 | Medium | Clients / suppliers (opening balances) | A "we owe" debt linked to a client would have been listed and paid as a supplier; opening balances need one per client | **Closed 2026-11-16**: applied with owner approval (version 20261116092716), probed, then the app change deployed |
+| A32 | Low | Debts (data hygiene) | 8 credit-sale debts have no `client_id`, some although their sale is linked to a client; Debts' Link to clients covers hand-recorded debts only | Open: backfill `debts.client_id` from the sale (owner approval) |
 
 ## 2. Items
 
@@ -359,6 +360,15 @@ The new POS switch ([POS-Cost-Visibility.md](../docs/architecture/POS-Cost-Visib
 column-level revoke on `products.cost_price` for non-cost roles with a cost-free read for them (view or RPC), and every
 cost reader (Inventory, Purchases, reports, transfers, POS) switched over. The second changes access for existing roles
 and needs a plan before implementing.
+
+### A32. Credit-sale debts without their client (Low)
+
+**Found 2026-11-16 (live, read-only)** while checking the Client Account against Debt Management: 8 `credit_sale`
+debts have no `client_id`. For one client both credit sales are linked to the client but their debts are not (₦22,600).
+The Clients page still counts them by exact name, so nothing shown is wrong today, but a renamed client, or two
+clients sharing the name, would lose them from the position. **Close by:** a data fix setting `debts.client_id` from
+the sale (`source = 'credit_sale' and source_ref = sales.txn_no`, same business) where the sale has a client, and
+checking why those debts were created without it. Needs owner approval (changes data).
 
 ### A31. Client opening balances: supplier functions and one per client (Medium) — closed 2026-11-16
 

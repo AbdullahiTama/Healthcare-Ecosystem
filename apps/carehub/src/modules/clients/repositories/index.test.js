@@ -214,3 +214,26 @@ describe('clientRepository: bulk delete and restore', () => {
     await expect(missing.deleteMany('biz-A', ['c1'])).rejects.toMatchObject({ code: 'DELETE_UNAVAILABLE' })
   })
 })
+
+describe('clientRepository.getAccountRecords', () => {
+  it('reads the client\'s sales, debts and their payments, scoped by client and business, ids in chunks', async () => {
+    const calls = []
+    const sales = Array.from({ length: 150 }, (_, i) => ({ id: 's' + i }))
+    const request = async (path) => {
+      calls.push(path)
+      if (path.startsWith('sales?')) return path.includes('offset=0') ? sales : []
+      if (path.startsWith('debts?')) return [{ id: 'd1', source: 'manual' }, { id: 'd2', source: 'credit_sale' }]
+      return []
+    }
+    const repo = createClientRepository(request)
+    const r = await repo.getAccountRecords('c1', 'biz-A')
+    expect(r.sales).toHaveLength(150)
+    expect(calls.find((p) => p.startsWith('sales?'))).toMatch(/^sales\?client_id=eq\.c1&business_id=eq\.biz-A&/)
+    expect(calls.find((p) => p.startsWith('debts?'))).toMatch(/^debts\?client_id=eq\.c1&business_id=eq\.biz-A&/)
+    const pay = calls.filter((p) => p.startsWith('sale_payments?'))
+    expect(pay.length).toBeGreaterThanOrEqual(2)
+    expect(pay.every((p) => p.includes('business_id=eq.biz-A'))).toBe(true)
+    // Payments of hand-recorded debts only: a credit-sale debt's payments are the sale's.
+    expect(calls.find((p) => p.startsWith('debt_payments?'))).toMatch(/debt_id=in\.\(d1\)/)
+  })
+})

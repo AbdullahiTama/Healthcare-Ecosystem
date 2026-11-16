@@ -37,6 +37,8 @@ export const keys = {
   clientSales: (clientId, brandId) => ['clients', 'sales', clientId, brandId],
   clientConsults: (clientId, brandId) => ['clients', 'consults', clientId, brandId],
   clientHistory: (clientId, brandId, tab) => ['clients', 'history', clientId, brandId, tab],
+  // Under keys.clients(brandId): every refresh of the client list (a sale, payment, debt or edit) refreshes it too.
+  clientAccount: (clientId, brandId) => ['clients', brandId, 'account', clientId],
 }
 
 // ── Dashboard Queries ─────────────────────────────────────────────────────────
@@ -201,6 +203,17 @@ export function useCreateClient(brandId) {
 // (Clients, POS, Debts and every picker read it), then re-reads it. Resolves to runBulkUpdates' { saved, failed }.
 // Edit Client: saves one client's details and puts the saved row into the shared client list at once, so the POS
 // customer picker, credit accounts, Debts and reports show the new name straight away; then the list is re-read.
+// The Client Account's records (clientRepository.getAccountRecords). Its key sits under keys.clients(brandId), so
+// every sale, payment, debt or client change that refreshes the client list refreshes the account as well.
+export function useClientAccount(clientId, brandId) {
+  return useQuery({
+    queryKey: keys.clientAccount(clientId, brandId),
+    queryFn: () => clientRepository.getAccountRecords(clientId, brandId),
+    enabled: !!clientId && !!brandId,
+    staleTime: 15_000,
+  })
+}
+
 export function useUpdateClient(brandId) {
   const qc = useQueryClient()
   return useMutation({
@@ -336,6 +349,9 @@ export function useRecordSalePayment(brandId) {
           .filter((s) => s.is_on_hold || (s.is_credit && Number(s.balance) > 0))
       })
       invalidateSalesFigures(qc)
+      // The sale's debt and its client's position and account move with the payment.
+      qc.invalidateQueries({ queryKey: ['debts'] })
+      qc.invalidateQueries({ queryKey: keys.clients(brandId) })
     },
   })
 }

@@ -166,6 +166,28 @@ export function createClientRepository(request = sbFetch) {
       return request(`debts?client_id=eq.${clientId}&business_id=eq.${businessId}&order=created_at.desc&select=*`)
     },
 
+    // ── Client Account (clientLedger.js) ─────────────────────────────────────────
+    // Everything the account is built from, scoped by client AND business: the client's sales (every status; the
+    // ledger keeps completed ones), the payments ledger rows of those sales, the client's debts, and the payments on
+    // them. Ids go into `in.(...)` lists of at most 100 to keep URLs short.
+    async getAccountRecords(clientId, businessId) {
+      const sales = await pagedQuery(request, `sales?client_id=eq.${clientId}&business_id=eq.${businessId}&order=created_at.asc,id.asc&select=id,txn_no,created_at,total,amount_paid,balance,refunded_amount,status,is_on_hold,payment_method,items,client_name`)
+      const debts = await pagedQuery(request, `debts?client_id=eq.${clientId}&business_id=eq.${businessId}&order=created_at.asc,id.asc&select=id,direction,party_name,amount,amount_paid,balance,status,description,source,source_ref,created_at,due_date`)
+      const inChunks = async (table, column, ids, select) => {
+        const rows = []
+        for (let i = 0; i < ids.length; i += 100) {
+          rows.push(...await pagedQuery(request, `${table}?business_id=eq.${businessId}&${column}=in.(${ids.slice(i, i + 100).join(',')})&order=id.asc&select=${select}`))
+        }
+        return rows
+      }
+      const manualIds = debts.filter((d) => (d.source || 'manual') === 'manual').map((d) => d.id)
+      const [salePayments, debtPayments] = await Promise.all([
+        inChunks('sale_payments', 'sale_id', sales.map((x) => x.id), 'id,sale_id,kind,method,amount,received_at,note'),
+        inChunks('debt_payments', 'debt_id', manualIds, 'id,debt_id,kind,method,amount,paid_on,created_at,note'),
+      ])
+      return { sales, salePayments, debts, debtPayments }
+    },
+
     // `consultation_forms` is the skincare/pharmacy consultation table. The
     // hospital module owns a separate `consultations` table keyed by patient_id
     // — the two workflows never share a table.
