@@ -15,6 +15,8 @@ vi.mock('../repositories', () => ({
   masterCatalogRepository: { getPage: vi.fn(), getCategories: vi.fn(), carry: vi.fn(), push: vi.fn(), archive: vi.fn(), restore: vi.fn(), create: vi.fn(), update: vi.fn(), deactivate: vi.fn() },
 }))
 vi.mock('../../locations/repositories', () => ({ locationsRepository: { getAll: vi.fn() } }))
+const lib = vi.hoisted(() => ({ linkMatches: vi.fn(), link: vi.fn(), unlink: vi.fn(), suggest: vi.fn(), search: vi.fn() }))
+vi.mock('../../product-library/repositories', () => ({ libraryRepository: lib }))
 vi.mock('../../settings/repositories', () => ({ settingsRepository: { getPlanStatus: vi.fn(async () => ({ plan: 'growth', state: plan.state, limits: {} })) } }))
 
 import MasterCatalog from '../MasterCatalog.jsx'
@@ -49,6 +51,7 @@ beforeEach(() => {
   repo.push.mockResolvedValue(3)
   repo.archive.mockResolvedValue(null)
   locationsRepository.getAll.mockResolvedValue([MAIN, YABA])
+  lib.linkMatches.mockResolvedValue({ matches: [], total: 0, available: false })
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -144,5 +147,95 @@ describe('MasterCatalog', () => {
     await show('Cashier')
     expect(text()).toContain('managed by the business owner')
     expect(repo.getPage).not.toHaveBeenCalled()
+  })
+})
+
+// Catalogue phase 4: the CareHub product library.
+describe('MasterCatalog and the CareHub library', () => {
+  const LIB_AMOX = { id: 'c1', brand_name: 'Amoxil', strength: '500mg', generic_name: 'Amoxicillin', dose_form: 'Capsule', barcodes: ['5012345'], category_code: 'antibiotics', rx_status: 'prescription_only' }
+  const LIB_PCM = { id: 'c2', brand_name: 'Paracetamol 500mg', rx_status: 'pharmacy_only' }
+  const typeInto = async (el, v) => { await act(async () => { Object.getOwnPropertyDescriptor(el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })) }) }
+  const wait = () => act(async () => { await new Promise((r) => setTimeout(r, 300)) })
+
+  beforeEach(() => {
+    lib.linkMatches.mockResolvedValue({ available: true, total: 1, matches: [{ master: { id: 'm2', name: 'Paracetamol 500mg', rx_status: 'otc' }, library: LIB_PCM, match_by: 'name' }] })
+    lib.link.mockResolvedValue(1)
+    lib.search.mockResolvedValue([LIB_AMOX])
+    repo.getPage.mockResolvedValue({ items: [{ ...AMOXIL, library: LIB_AMOX }, { ...PCM, suggestion: null }], total: 2, upgraded: true })
+  })
+
+  it('hides library features until the library is installed', async () => {
+    lib.linkMatches.mockResolvedValue({ matches: [], total: 0, available: false })
+    await show()
+    expect(button('CareHub library for Amoxil 500')).toBeUndefined()
+    expect(text()).not.toContain('match the CareHub product library')
+    expect(document.getElementById('mc-filter-library')).toBeNull()
+  })
+
+  it('shows linked items, filters by link, and reviews matches in bulk', async () => {
+    await show()
+    expect(text()).toContain('CareHub library')
+    expect(text()).toContain('1 item in your catalogue matches the CareHub product library')
+    const filter = document.getElementById('mc-filter-library')
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(filter, 'unlinked'); filter.dispatchEvent(new Event('change', { bubbles: true })) })
+    await flush()
+    expect(repo.getPage).toHaveBeenLastCalledWith('main', expect.objectContaining({ library: 'unlinked' }))
+
+    await click(button('Review matches'))
+    expect(text()).toContain('Paracetamol 500mg')
+    expect(text()).toContain('Same name and strength')
+    expect(text()).toContain('Becomes Pharmacy only (now Over the counter)')
+    await click(button('Link 1 item'))
+    expect(lib.link).toHaveBeenCalledWith('main', [{ master_product_id: 'm2', catalog_item_id: 'c2' }])
+    expect(text()).toContain('1 item linked to the CareHub library.')
+  })
+
+  it('links one item from its Library button, or suggests it', async () => {
+    lib.search.mockResolvedValue([LIB_PCM])
+    await show()
+    await click(button('CareHub library for Paracetamol 500mg'))
+    await typeInto(document.body.querySelector('input[type="search"][aria-controls]'), 'parac')
+    await wait(); await flush()
+    await click([...document.body.querySelectorAll('ul[aria-label="Library results"] button')][0])
+    expect(text()).toContain('the prescription status becomes at least Pharmacy only')
+    await click(button('Link'))
+    expect(lib.link).toHaveBeenCalledWith('main', [{ master_product_id: 'm2', catalog_item_id: 'c2' }])
+
+    await click(button('CareHub library for Paracetamol 500mg'))
+    await click(button('Suggest it'))
+    await typeInto(document.getElementById('suggest-note'), 'Made by Emzor')
+    await click(button('Send suggestion'))
+    expect(lib.suggest).toHaveBeenCalledWith('main', 'm2', 'Made by Emzor')
+    expect(text()).toContain('CareHub will review Paracetamol 500mg')
+  })
+
+  it('shows the database refusal when linking fails, and unlinks a linked item', async () => {
+    lib.unlink.mockRejectedValueOnce(new Error('Supabase error (403): Only the owner or a manager of the business can change its catalogue.'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await show()
+    await click(button('CareHub library for Amoxil 500'))
+    expect(text()).toContain('Linked to Amoxil 500mg')
+    await click(button('Unlink'))
+    expect(text()).toContain('Only the owner or a manager of the business can change its catalogue.')
+    await click(button('Unlink'))
+    expect(lib.unlink).toHaveBeenLastCalledWith('main', 'm1')
+    expect(text()).toContain('Amoxil 500 is no longer linked')
+  })
+
+  it('starts a new item from the library: details fill in, it is linked, and the status cannot be looser', async () => {
+    repo.create.mockResolvedValue([{ id: 'm9' }])
+    await show()
+    await click(button('+ Add item'))
+    await typeInto(document.body.querySelector('input[type="search"][aria-controls]'), 'amox')
+    await wait(); await flush()
+    await click([...document.body.querySelectorAll('ul[aria-label="Library results"] button')][0])
+    expect(text()).toContain('Linked to the CareHub library: Amoxil 500mg')
+    expect(document.getElementById('mc-name').value).toBe('Amoxil 500mg')
+    expect(document.getElementById('mc-generic').value).toBe('Amoxicillin')
+    expect(document.getElementById('mc-barcode').value).toBe('5012345')
+    expect([...document.getElementById('mc-rx').options].map((o) => o.value)).toEqual(['', 'prescription_only', 'controlled'])
+    await typeInto(document.getElementById('mc-price'), '1500')
+    await click(button('Add item'))
+    expect(repo.create).toHaveBeenCalledWith('main', expect.objectContaining({ name: 'Amoxil 500mg', catalog_item_id: 'c1', rx_status: 'prescription_only', default_price: 1500 }))
   })
 })
