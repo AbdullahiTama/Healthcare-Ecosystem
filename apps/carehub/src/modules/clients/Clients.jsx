@@ -157,6 +157,8 @@ export default function Clients({ brand, role, perms }) {
   // The profile shows the Overview (details and history) or the Client Account (summary, ledger, statements).
   const [profileView, setProfileView] = useState('overview')
   const canExportStatements = role === 'Owner' || !!perms?.canExportReports
+  // Visits and total spent: the Owner or staff given access (the database enforces it: can_adjust_client_totals).
+  const canAdjustTotals = role === 'Owner' || !!perms?.canAdjustClientTotals
   const [showDeleted, setShowDeleted] = useState(false)
   const toggleMarked = (id) => setMarked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
@@ -479,7 +481,7 @@ export default function Clients({ brand, role, perms }) {
 
       {/* Client Detail Modal */}
       {editing && selected && (
-        <ClientEditModal client={selected} clients={clients}
+        <ClientEditModal client={selected} clients={clients} canAdjustTotals={canAdjustTotals}
           save={(changes) => updateClient.mutateAsync({ id: selected.id, changes })}
           onSaved={(saved, what) => { setSelected((prev) => ({ ...prev, ...saved })); showToast(`${saved?.full_name || 'Client'} updated${what ? ': ' + what : ''}.`, { type: 'success' }) }}
           onClose={() => setEditing(false)} />

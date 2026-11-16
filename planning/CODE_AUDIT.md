@@ -42,7 +42,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A27 | High | POS (production defect) | An Owner's sales at a branch location are refused: "This sale is not authorized for your account." | **Closed 2026-11-15**: `carehub_20270118_sale_guard_branch_owner` applied with owner approval (version 20261115222717) and probed; a first version refused every sale for 72 s and was rolled back (see item) |
 | A28 | Low | Suppliers (contact list) | Supplier list with contact details, import and export needs `carehub_20270119_supplier_directory` (new table; nothing existing changes); until applied the screen is as before | **Closed 2026-11-15**: applied with owner approval (version 20261115224942) and probed |
 | A29 | Medium | Clients / POS (defect) | Resuming a held sale restored only the customer's name: a renamed client, or one sharing a name, was charged without (or to the wrong) client record | **Closed 2026-11-16**: re-picked by `client_id`; tested (fails on the old code) |
-| A30 | Low | Clients (data integrity) | Any member can overwrite `clients.visit_count` / `total_spend` through the API (no guard); `anon` holds table grants on `clients` (RLS denies every row) | Open: guard the two columns (trigger) and revoke anon grants |
+| A30 | Low | Clients (data integrity) | Any member can overwrite `clients.visit_count` / `total_spend` through the API (no guard); `anon` holds table grants on `clients` (RLS denies every row) | **Closed 2026-11-16**: `carehub_20270122_client_totals_guard` applied with owner approval (version 20261116104753); Owner or staff given access only |
 | A31 | Medium | Clients / suppliers (opening balances) | A "we owe" debt linked to a client would have been listed and paid as a supplier; opening balances need one per client | **Closed 2026-11-16**: applied with owner approval (version 20261116092716), probed, then the app change deployed |
 | A32 | Low | Debts (data hygiene) | 8 credit-sale debts have no `client_id`, some although their sale is linked to a client; Debts' Link to clients covers hand-recorded debts only | **Closed 2026-11-16**: `carehub_20270121_link_credit_sale_debts` applied with owner approval (version 20261116102618); 3 linked, 5 have no client to link |
 
@@ -403,13 +403,24 @@ having no customer. **Fixed:** the client is re-picked by the held sale's `clien
 "Held sales linked to a client" (the same-name case fails on the previous code). Details:
 [Client-Edit.md](../docs/architecture/Client-Edit.md) §3.
 
-### A30. Client totals writable by members; anon grants on clients (Low)
+### A30. Client totals writable by members; anon grants on clients (Low) — closed 2026-11-16
 
 **Verified live 2026-11-16 (read-only):** `clients` has no triggers; the only policy is "clients of own business" (ALL,
 `current_business_ids()`); `authenticated` and `anon` hold every table privilege. So any member can PATCH
 `visit_count` and `total_spend`, which are meant to come from sales (`refresh_client_totals`). Edit Client never sends
 them. **Close by:** a BEFORE UPDATE trigger keeping both columns unless the caller is the totals function or a trusted
 role, and revoking `anon`'s grants (RLS already denies it). Needs owner approval (changes access for existing roles).
+
+**Closed** (owner's decision 2026-11-16: the Owner or staff given access): `carehub_20270122_client_totals_guard`,
+applied with owner approval as version 20261116104753 after a probe in a rolled-back transaction, and probed again.
+`can_adjust_client_totals(business)` (Owner, or a role with the new **canAdjustClientTotals** switch in Staff › Roles)
+gates a BEFORE INSERT OR UPDATE trigger on `clients`: without it, a change to visits or total spent is refused and a
+new client starts at 0; the database's own recalculation after each sale (`refresh_client_totals`, run as postgres) is
+unaffected. `anon` lost every privilege on `clients`; `authenticated` lost TRUNCATE, REFERENCES and TRIGGER. Edit
+Client shows the two figures to the Owner and permitted staff, noting the next sale recalculates them. Tests:
+`apps/carefind/src/test/clients/clientTotalsGuard.db.test.js` (6, live helpers and grants; fails if the helper is not
+executable by authenticated), `clientEdit.test.js`, `Clients.edit.test.jsx`. Advisor: the helper's SECURITY DEFINER +
+EXECUTE warning is intended (it answers only for the caller), as `caller_owns_business`.
 
 ### A28. Supplier list: migration to apply (Low) — closed 2026-11-15
 

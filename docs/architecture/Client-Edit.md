@@ -18,7 +18,10 @@ or financial history. No database change was needed.
 - **Who:** anyone who can open Clients, which is the same rule as Add Client and bulk edit. There is no separate
   permission; adding one would be a new role setting (owner decision).
 - **Fields:** full name and phone (required), email, address, gender, date of birth, notes. Only changed fields are
-  sent. Visits and total spent (kept from sales) and the business are never sent.
+  sent. The business is never sent.
+- **Visits and total spent** are kept from sales. Only the Owner, or staff whose role has **Adjust client visits and
+  total spent** (Staff › Roles, `canAdjustClientTotals`), see and can correct them here; the client's next sale
+  recalculates both. The database enforces this (`carehub_20270122_client_totals_guard`, CODE_AUDIT A30).
 - **Checks:** name required; phone 7 to 15 digits and not used by another client of the business (compared by digits,
   exactly like the database's `clients_phone_unique_per_business`); email format; date of birth valid and not in the
   future; gender one of Male / Female / Other; address 300 and notes 2,000 characters at most. A duplicate phone the
@@ -58,8 +61,8 @@ same-name case fails on the previous code.
 
 No access changes. The edit is the existing members-only `clients` policy (`current_business_ids()`), filtered by
 business as well as id; nothing matched is reported, not shown as saved. Found while reading the live grants, not
-changed here (CODE_AUDIT A30): `visit_count` and `total_spend` can be overwritten by any member through the API (no
-guard), and `anon` holds table grants on `clients` (RLS denies it every row).
+fixed since (CODE_AUDIT A30, 2026-11-16): `visit_count` and `total_spend` change only for the Owner, staff given
+access, or the database's recalculation; `anon` has no privileges on `clients`.
 
 ## 5. Tests
 

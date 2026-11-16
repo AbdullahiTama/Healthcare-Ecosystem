@@ -8,7 +8,7 @@ const form = (patch = {}) => ({ ...clientEditForm(ada), ...patch })
 
 describe('Edit Client rules', () => {
   it('starts from the client and changes only what was edited, never visits or spend', () => {
-    expect(clientEditForm(ada)).toEqual({ full_name: 'Ada Okafor', phone: '0803 111 2222', email: '', address: '12 Broad St', gender: 'Female', date_of_birth: '1990-05-12', notes: '' })
+    expect(clientEditForm(ada)).toEqual({ full_name: 'Ada Okafor', phone: '0803 111 2222', email: '', address: '12 Broad St', gender: 'Female', date_of_birth: '1990-05-12', notes: '', visit_count: '3', total_spend: '5000' })
     expect(clientEditChanges(ada, form())).toEqual({})
     expect(clientEditChanges(ada, form({ full_name: '  Ada   Okafor-Bello ', address: '4 Marina ' }))).toEqual({ full_name: 'Ada Okafor-Bello', address: '4 Marina' })
     expect(Object.keys(clientEditChanges(ada, { ...form(), total_spend: 0, visit_count: 0, business_id: 'x' }))).toEqual([])
@@ -43,5 +43,16 @@ describe('Edit Client rules', () => {
   it('describes the changes for the confirmation', () => {
     expect(describeClientChanges({ full_name: 'x' })).toBe('name')
     expect(describeClientChanges({ full_name: 'x', phone: 'y', address: 'z' })).toBe('name, phone number and address')
+  })
+
+  it('visits and total spent change only when allowed, and must be numbers of 0 or more', () => {
+    const f = form({ visit_count: '4', total_spend: '5,250.5' })
+    expect(clientEditChanges(ada, f)).toEqual({})
+    expect(clientEditChanges(ada, f, { totals: true })).toEqual({ visit_count: 4, total_spend: 5250.5 })
+    expect(clientEditChanges(ada, form(), { totals: true })).toEqual({})
+    expect(validateClientEdit(form({ visit_count: '-1', total_spend: 'abc' }), { client: ada, clients: [ada], today, totals: true }))
+      .toEqual({ visit_count: 'Enter a whole number of visits (0 or more).', total_spend: 'Enter an amount of 0 or more, in naira.' })
+    expect(validateClientEdit(form({ visit_count: '-1' }), { client: ada, clients: [ada], today })).toEqual({})
+    expect(describeClientChanges({ visit_count: 4, total_spend: 1 })).toBe('visits and total spent')
   })
 })

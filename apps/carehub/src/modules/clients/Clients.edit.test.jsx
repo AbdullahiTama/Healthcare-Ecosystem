@@ -38,6 +38,12 @@ const text = () => document.body.textContent
 const openProfile = async (name) => click([...document.querySelectorAll('div')].reverse().find((d) => d.textContent === name))
 const openEdit = async () => click(btn((b) => b.getAttribute('aria-label')?.startsWith('Edit '), dialog()))
 
+async function remount(role) {
+  await act(async () => root.unmount())
+  await act(async () => { root = createRoot(host); root.render(<QueryClientProvider client={qc}><MemoryRouter><Clients brand={{ id: 'b1', business_type: 'pharmacy' }} role={role} perms={{}} /></MemoryRouter></QueryClientProvider>) })
+  await flush(); await flush()
+}
+
 beforeEach(async () => {
   vi.clearAllMocks()
   db = [
@@ -113,5 +119,19 @@ describe('Clients: Edit Client', () => {
     await click(btn((b) => b.textContent === 'Cancel', dialog()))
     expect(dialog().textContent).toContain('Client Details')
     expect(repo.update).not.toHaveBeenCalled()
+  })
+
+  it('visits and total spent: hidden from staff without access; the Owner can correct them', async () => {
+    await openProfile('Ada Obi')
+    await openEdit()
+    expect(document.querySelector('#client-edit-visits')).toBeNull()
+    await click(btn((b) => b.textContent === 'Cancel', dialog()))
+    await remount('Owner')
+    await openProfile('Ada Obi')
+    await openEdit()
+    expect(dialog().textContent).toContain('the client\'s next sale recalculates both')
+    await type(document.querySelector('#client-edit-spend'), '4500')
+    await click(btn((b) => b.textContent === 'Save changes', dialog()))
+    expect(repo.update).toHaveBeenCalledWith('c1', 'b1', { total_spend: 4500 })
   })
 })
