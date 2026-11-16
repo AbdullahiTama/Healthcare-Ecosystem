@@ -38,6 +38,11 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A23 | Low | Purchases (import / export) | Bulk upload and Excel/CSV export; the export audit needed `purchases.*` in `record_export_audit`'s allow-list | **Closed 2026-11-11**: `carehub_20270115_purchase_export_audit` applied with owner approval and probed |
 | A24 | Medium | Expenses (set new budget) | A used-up budget could only be edited (history rewritten, old spending counted against the new amount) | **Closed 2026-11-11**: `carehub_20270116_expense_new_budget` applied with owner approval and probed |
 | A25 | Medium | Data exposure (cost price) | `products.cost_price` is readable by every member of a business; the new POS cost switch is display-only | Open: owner decision |
+| A26 | High | Hospital (clinical data access) | Every member of a business, in any role, can read, change and delete all clinical records through the API; deleting a patient cascades away their history; no clinical audit | Open |
+| A27 | High | Hospital (model boundary) | Hospital tables accept any business type; an owner can change their own `business_type` through the API | Open |
+| A28 | High | Hospital (production defect) | Doctor → Lab / Imaging send fails (unknown `patient_name` column) and leaves partial records; jsonb read with `JSON.parse`; dispensing discharges the patient | Open |
+| A29 | Medium | Hospital (schema) | The eight hospital tables, their policies and grants are not in `supabase/migrations/`; `anon` holds full grants including TRUNCATE | Open |
+| A30 | Medium | Hospital (data model) | Two patient identities: Reception writes `patients`, the hospital "Patients" menu and the rest of CareHub use `clients` | Open: owner decision |
 
 ## 2. Items
 
@@ -353,6 +358,39 @@ The new POS switch ([POS-Cost-Visibility.md](../docs/architecture/POS-Cost-Visib
 column-level revoke on `products.cost_price` for non-cost roles with a cost-free read for them (view or RPC), and every
 cost reader (Inventory, Purchases, reports, transfers, POS) switched over. The second changes access for existing roles
 and needs a plan before implementing.
+
+### A26–A30. Hospital Model findings (verified 2026-11-16)
+
+Found while auditing the Hospital Model against the hospital upgrade specification. Full evidence, the gap matrix and the
+recommended sequence are in
+[Hospital-Model-Current-State-and-Gap-Analysis.md](../docs/architecture/Hospital-Model-Current-State-and-Gap-Analysis.md)
+(§3.5 and §4). Verified against `main` at `7eadd23` and the live database (read-only).
+
+- **A26 (High): clinical data is open to every role.** Each of `patients`, `triage`, `consultations`,
+  `prescriptions`, `lab_requests`, `lab_results`, `imaging_requests` and `patient_messages` has one `FOR ALL`
+  policy scoped only by business membership, so a Cashier can read every diagnosis and delete a patient. Every
+  clinical foreign key is `ON DELETE CASCADE`, so deleting a patient deletes their clinical history. There is no audit trail.
+  **Close by:** role-scoped read and write through checked functions, no client DELETE on clinical tables,
+  retention-safe deletion, an append-only clinical audit. This changes access for existing roles and needs a plan
+  approved first.
+- **A27 (High): the Hospital Model boundary is UI-only.** No policy checks the business type (3 live patients belong to
+  non-hospital businesses). `businesses.business_type` can be changed by the owner through the API: the `own business
+  row` policy allows the update, `authenticated` holds column UPDATE, and neither `guard_business_privileged_columns`
+  nor `businesses_operating_model_guard` checks the column. **Close by:** guarding `business_type` (platform-only,
+  audited change), and hospital-only writes on the clinical tables.
+- **A28 (High, production defect): the Doctor screen cannot send to Lab or Imaging.** `Doctor.jsx` writes
+  `patient_name` to `lab_requests` and `imaging_requests`, which have no such column. The consultation and prescription
+  are saved first, so a failure leaves partial records, and a retry duplicates the consultation. Also: `Lab.jsx` and
+  `RxInbox.jsx` `JSON.parse` jsonb values that the live rows hold as arrays; Rx Inbox discharges the patient on dispense
+  whatever is pending, without a stock deduction. Not reproduced through the API (read-only audit); the evidence is the code
+  and the live columns. **Close by:** fixing the writes and reads, one atomic consultation function, with tests.
+- **A29 (Medium): hospital schema not under version control.** None of the eight tables is created by a migration
+  file. `anon` and `authenticated` hold every privilege, TRUNCATE included (same over-breadth closed for `export_logs`
+  in A2). **Close by:** a baseline migration reproducing the live schema, verified on PGlite, then revoking the
+  unneeded grants.
+- **A30 (Medium, owner decision): two patient identities.** Reception writes `patients`; the "Patients" menu, POS,
+  debts and appointments use `clients`. The specification requires one identity, reused. **Close by:** an owner
+  decision on the identity of record, then a migration plan. This blocks the encounter model (Phase 1).
 
 ## 3. Open items recorded in other audits
 
