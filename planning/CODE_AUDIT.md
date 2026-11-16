@@ -43,6 +43,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A28 | Low | Suppliers (contact list) | Supplier list with contact details, import and export needs `carehub_20270119_supplier_directory` (new table; nothing existing changes); until applied the screen is as before | **Closed 2026-11-15**: applied with owner approval (version 20261115224942) and probed |
 | A29 | Medium | Clients / POS (defect) | Resuming a held sale restored only the customer's name: a renamed client, or one sharing a name, was charged without (or to the wrong) client record | **Closed 2026-11-16**: re-picked by `client_id`; tested (fails on the old code) |
 | A30 | Low | Clients (data integrity) | Any member can overwrite `clients.visit_count` / `total_spend` through the API (no guard); `anon` holds table grants on `clients` (RLS denies every row) | Open: guard the two columns (trigger) and revoke anon grants |
+| A31 | Medium | Clients / suppliers (opening balances) | A "we owe" debt linked to a client would have been listed and paid as a supplier; opening balances need one per client | Open: `carehub_20270120_client_opening_balances` written and tested; apply with owner approval before the app change deploys |
 
 ## 2. Items
 
@@ -358,6 +359,17 @@ The new POS switch ([POS-Cost-Visibility.md](../docs/architecture/POS-Cost-Visib
 column-level revoke on `products.cost_price` for non-cost roles with a cost-free read for them (view or RPC), and every
 cost reader (Inventory, Purchases, reports, transfers, POS) switched over. The second changes access for existing roles
 and needs a plan before implementing.
+
+### A31. Client opening balances: supplier functions and one per client (Medium)
+
+**What (2026-11-16):** "We owe client" opening balances are manual `we_owe` debts linked to the client. Read live:
+`get_supplier_accounts`, `get_supplier_activity` and `record_supplier_payment` take every manual `we_owe` debt as a
+supplier's supply record, so such a balance would have shown as a supplier named after the client and could have
+taken a supplier payment (reproduced on PGlite). `carehub_20270120_client_opening_balances` adds `client_id IS NULL`
+to those predicates (checked edit of the live definitions; aborts on mismatch or a second run) and a unique index for
+one opening balance per client. Details: [Client-Position-and-Opening-Balances.md](../docs/architecture/Client-Position-and-Opening-Balances.md).
+Tests: 8 PGlite. **To close:** apply with owner approval, probe (supplier accounts unchanged; a client credit not
+listed or payable as a supplier; second opening balance refused), then deploy the app change.
 
 ### A29. Resuming a held sale lost its client (Medium) — closed 2026-11-16
 

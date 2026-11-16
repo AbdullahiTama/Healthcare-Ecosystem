@@ -46,7 +46,11 @@ async function openFilters() {
 beforeEach(() => {
   vi.clearAllMocks()
   clientsRepo.getAll.mockResolvedValue(CLIENTS)
-  debtsRepo.getOpen.mockResolvedValue([{ client_id: 'c1', direction: 'owes_us', balance: 2500, status: 'pending' }])
+  debtsRepo.getOpen.mockResolvedValue([
+    { client_id: 'c1', direction: 'owes_us', balance: 2500, status: 'pending' },
+    // Musa paid in advance: the business owes him (his opening balance).
+    { client_id: 'c2', direction: 'we_owe', balance: 1000, status: 'pending', source: 'manual', source_ref: 'opening_balance' },
+  ])
 })
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); qc.clear() })
 
@@ -55,19 +59,30 @@ describe('Clients: filters and totals', () => {
     await mount()
     expect(stat('Total clients').textContent).toContain('3')
     expect(stat('Lifetime spend').textContent).toContain('₦15,000')
-    expect(stat('Owed to you').textContent).toContain('₦2,500')
-    expect(host.textContent).toContain('Owes ₦2,500')
+    expect(stat('Clients owe us').textContent).toContain('₦2,500')
+    expect(stat('We owe clients').textContent).toContain('₦1,000')
+    expect(host.textContent).toContain('Client owes us ₦2,500')
+    expect(host.textContent).toContain('We owe client ₦1,000')
     expect(summary()).toBeNull()
   })
 
-  it('payment status "Owes money" leaves the debtors and recalculates the totals', async () => {
+  it('account position "Client owes us" leaves the debtors and recalculates the totals', async () => {
     await mount()
     await openFilters()
-    await choose('Payment status', 'owes')
+    await choose('Account position', 'owes')
     expect(stat('Matching clients').textContent).toContain('1of 3')
     expect(stat('Lifetime spend').textContent).toContain('₦12,000')
-    expect(summary().textContent).toContain('1 client for Owes money')
+    expect(summary().textContent).toContain('1 client for Client owes us')
     expect(host.textContent).not.toContain('Musa Bello')
+  })
+
+  it('account position "We owe client" leaves the clients in credit', async () => {
+    await mount()
+    await openFilters()
+    await choose('Account position', 'credit')
+    expect(stat('Matching clients').textContent).toContain('1of 3')
+    expect(summary().textContent).toContain('We owe them: ₦1,000')
+    expect(host.textContent).not.toContain('Ada Obi')
   })
 
   it('gender + date joined combine; no match offers to clear', async () => {
@@ -92,7 +107,7 @@ describe('Clients: filters and totals', () => {
   it('if debts cannot be read, the owed total says so and the payment filter is unavailable', async () => {
     debtsRepo.getOpen.mockRejectedValue(new Error('offline'))
     await mount()
-    expect(stat('Owed to you').textContent).toContain("Couldn't load debts")
+    expect(stat('Clients owe us').textContent).toContain("Couldn't load debts")
     await openFilters()
     expect(host.textContent).toContain('Unavailable: debts did not load')
   })

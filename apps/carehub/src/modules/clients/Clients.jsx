@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useKeyboardScanner, fieldSnapshot, restoreField } from '../../hooks/useKeyboardScanner'
-import { Users, UserPlus, DollarSign, Search, Download, Upload, ShoppingCart, Calendar, Landmark, Clipboard, History, FileUp, CheckCircle, AlertTriangle, Loader2, Pencil, Trash2, RotateCcw } from 'lucide-react'
+import { Users, UserPlus, DollarSign, Search, Download, Upload, ShoppingCart, Calendar, Landmark, Clipboard, History, Pencil, Trash2, RotateCcw, Wallet } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { clientRepository, isDuplicateError } from './repositories'
 import { PHARMACY_TYPE_LABEL } from '../consultation/PharmacyForm'
 import { fmt, todayDate } from '../../lib/utils'
-import { getModulesForType } from '../../lib/permissions'
+import { getModulesForType, isManagerRole } from '../../lib/permissions'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, DataTable, RedBtn, useToast, Toast } from '../../components/ui'
 import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients, useOpenDebts, useUpdateManyClients, useDeleteClients, useUpdateClient } from '../../hooks/queries'
@@ -17,9 +17,11 @@ import RecentlyDeletedModal from '../../components/RecentlyDeletedModal'
 import PeriodFilter from '../../components/PeriodFilter'
 import { FilterPanel, FilterSelect, AmountRangeFilter } from '../../components/RecordFilters'
 import { yearsOf } from '../../lib/recordFilters'
-import { DEFAULT_CLIENT_FILTERS, CLIENT_PAYMENT_STATUSES, CLIENT_ACTIVITY, GENDERS, clientBalances, filterClients, clientTotals, activeClientFilterCount, describeClientFilters } from './clientFilters'
+import { DEFAULT_CLIENT_FILTERS, CLIENT_PAYMENT_STATUSES, CLIENT_ACTIVITY, GENDERS, clientPositions, positionOf, describePosition, filterClients, clientTotals, activeClientFilterCount, describeClientFilters } from './clientFilters'
+import ClientImportModal from './components/ClientImportModal'
+import ClientPosition from './components/ClientPosition'
 
-const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, bg, danger, dangerBg, warning, warningBg, success } = theme
+const { tealDeep, navy, gray600, gray500, gray400, gray100, border, bg, danger, success } = theme
 
 const HISTORY_TABS = [
   ['timeline', History, 'Timeline'],
@@ -124,19 +126,16 @@ export default function Clients({ brand, role, perms }) {
   const setF = (k, v) => setFilters(p => ({ ...p, [k]: v }))
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
-  // Bulk upload state — mirrors the Inventory CSV flow (download template,
-  // fill in Excel, save as CSV, upload here).
+  // Upload clients (with opening balances) from Excel / CSV: components/ClientImportModal.jsx.
   const [showUpload, setShowUpload] = useState(false)
-  const [uploadData, setUploadData] = useState([])
-  const [uploadError, setUploadError] = useState('')
 
   // React Query hooks
   const clientsQuery = useClients(brand?.id)
   const { data: clients = [], isLoading: loading, isError: loadFailed } = clientsQuery
-  // What each client still owes, from the open debts. If they cannot be read, the page says so and the
-  // payment-status filter and the "Owed to you" total are not offered rather than showing ₦0.
+  // Each client's position (Client owes us / We owe client), from the open debts Debt Management shows. If they
+  // cannot be read, the page says so and the position filter and totals are not offered rather than showing ₦0.
   const openDebts = useOpenDebts(brand?.id)
-  const balances = useMemo(() => clientBalances(clients, openDebts.data || []), [clients, openDebts.data])
+  const balances = useMemo(() => clientPositions(clients, openDebts.data || []), [clients, openDebts.data])
   const balancesKnown = openDebts.isSuccess
   const createClient = useCreateClient(brand?.id)
   const createManyClients = useCreateManyClients(brand?.id)
@@ -147,6 +146,8 @@ export default function Clients({ brand, role, perms }) {
   // Bulk delete (delete_clients): the Owner, or a role allowed to delete, as on Inventory.
   const deleteClients = useDeleteClients(brand?.id)
   const canDeleteClients = role === 'Owner' || !!perms?.canDelete
+  // Opening balances are financial entries: the Owner or a manager records them (as Record Debt, on the Debts page).
+  const canRecordOpening = role === 'Owner' || isManagerRole(role)
   const [showDelete, setShowDelete] = useState(false)
   // Edit Client: anyone who can add clients can edit one (the same rule as bulk edit). The profile closes while the
   // edit dialog is open (one dialog at a time) and reopens with the saved details.
@@ -154,7 +155,6 @@ export default function Clients({ brand, role, perms }) {
   const [editing, setEditing] = useState(false)
   const [showDeleted, setShowDeleted] = useState(false)
   const toggleMarked = (id) => setMarked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
-  const importing = createManyClients.isPending
 
   useEffect(() => { setPage(0) }, [listFilters, clients.length])
 
@@ -188,9 +188,11 @@ export default function Clients({ brand, role, perms }) {
 
   // Exports the clients shown: with filters on, only the ones that match.
   function exportCsv() {
-    const rows = [['Name', 'Phone', 'Email', 'Gender', 'Date of Birth', 'Address', 'Total Spend', 'Visits', 'Owes', 'Joined']]
+    const rows = [['Name', 'Phone', 'Email', 'Gender', 'Date of Birth', 'Address', 'Total Spend', 'Visits', 'Client Owes Us', 'We Owe Client', 'Position', 'Joined']]
     filtered.forEach(c => {
-      rows.push([c.full_name || '', c.phone || '', c.email || '', c.gender || '', c.date_of_birth || '', c.address || '', c.total_spend || 0, c.visit_count || 0, balancesKnown ? (balances.get(c.id) || 0) : '', c.created_at?.split('T')[0] || ''])
+      const pos = describePosition(positionOf(balances, c.id))
+      rows.push([c.full_name || '', c.phone || '', c.email || '', c.gender || '', c.date_of_birth || '', c.address || '', c.total_spend || 0, c.visit_count || 0,
+        balancesKnown ? (pos.status === 'owes' ? pos.amount : 0) : '', balancesKnown ? (pos.status === 'credit' ? pos.amount : 0) : '', balancesKnown ? pos.label : '', c.created_at?.split('T')[0] || ''])
     })
     const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -198,106 +200,6 @@ export default function Clients({ brand, role, perms }) {
     const a = document.createElement('a'); a.href = url; a.download = 'CareHub_Clients.csv'; a.click()
     URL.revokeObjectURL(url)
     showToast((isFiltered ? filtered.length + ' matching clients' : 'Clients') + ' exported as CSV!', { type: 'success' })
-  }
-
-  // ── Bulk upload (CSV) ───────────────────────────────────────────────────────
-  // Mirrors the Inventory product upload: download a template, fill it in
-  // Excel, save as CSV, upload here. Phone number is the dedupe key — the
-  // point of the feature is importing an existing customer/patient database
-  // without creating duplicates.
-  const normPhone = (p) => String(p || '').replace(/[^0-9]/g, '')
-
-  function downloadClientTemplate() {
-    const rows = [
-      ['First Name', 'Last Name', 'Phone', 'Email', 'Gender', 'Date of Birth', 'Address', 'Notes'],
-      ['Ada', 'Okafor', '08012345678', 'ada@email.com', 'Female', '1990-05-12', '12 Broad Street, Lagos', 'VIP customer'],
-      ['Musa', 'Bello', '08098765432', '', 'Male', '1985-01-30', '', ''],
-    ]
-    const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'CareHub_Clients_Template.csv'; a.click()
-    URL.revokeObjectURL(url)
-    showToast('Template downloaded! Fill in Excel, save as CSV, then upload.', { type: 'success' })
-  }
-
-  function handleClientFileUpload(e) {
-    const file = e.target.files[0]; if (!file) return
-    setUploadError(''); setUploadData([])
-    const reader = new FileReader()
-    reader.onload = ev => {
-      try {
-        const lines = ev.target.result.split('\n').filter(l => l.trim())
-        if (lines.length < 2) { setUploadError('File is empty or has no clients.'); return }
-        const parsed = lines.slice(1).map(line => {
-          const cols = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim())
-          if (!cols[0] && !cols[1] && !cols[2]) return null
-          const firstName = cols[0] || ''
-          const lastName = cols[1] || ''
-          return {
-            full_name: [firstName, lastName].filter(Boolean).join(' '),
-            phone: cols[2] || '',
-            email: cols[3] || '',
-            gender: cols[4] || '',
-            date_of_birth: cols[5] || '',
-            address: cols[6] || '',
-            notes: cols[7] || '',
-          }
-        }).filter(Boolean)
-        if (parsed.length === 0) { setUploadError('No valid clients found.'); return }
-        setUploadData(parsed)
-      } catch (err) { setUploadError('Error reading file. Use the downloaded template.') }
-    }
-    reader.readAsText(file); e.target.value = ''
-  }
-
-  async function importClients() {
-    if (uploadData.length === 0) return
-    showToast('Importing ' + uploadData.length + ' clients…', { type: 'info' })
-    const existingPhones = new Set(clients.map(c => normPhone(c.phone)))
-    const fresh = []
-    let skipped = 0
-    let invalid = 0
-    const invalidNames = []
-    for (const c of uploadData) {
-      if (!normPhone(c.phone)) {
-        invalid++
-        if (invalidNames.length < 5) invalidNames.push((c.full_name || 'Unknown') + ' (no phone)')
-        continue
-      }
-      if (existingPhones.has(normPhone(c.phone))) { skipped++; continue }
-      existingPhones.add(normPhone(c.phone))
-      fresh.push({
-        full_name: c.full_name || c.phone,
-        phone: c.phone,
-        email: c.email || '',
-        address: c.address || '',
-        date_of_birth: c.date_of_birth || '',
-        gender: c.gender || '',
-        notes: c.notes || '',
-        total_spend: 0,
-        visit_count: 0,
-      })
-    }
-    // Server-side duplicates (a phone added after the list loaded — concurrent
-    // upload, a single add, a direct API write) are rejected by the unique
-    // index and counted as skipped here, not as failures.
-    const { added, skipped: serverSkipped, failed } = await createManyClients.mutateAsync(fresh)
-    setUploadData([])
-    setShowUpload(false)
-    skipped += serverSkipped
-    const parts = [added + ' imported']
-    if (skipped > 0) parts.push(skipped + ' skipped (already exist)')
-    if (invalid > 0) parts.push(invalid + ' invalid')
-    if (failed.length > 0) parts.push(failed.length + ' failed')
-    const summary = parts.join(' · ')
-    if (failed.length > 0) {
-      showToast(summary + ': ' + failed.slice(0, 3).map(x => x.full_name + ' (' + x.message + ')').join(', '), { type: 'warning' })
-    } else if (invalid > 0) {
-      showToast(summary + ': ' + invalidNames.join(', '), { type: 'warning' })
-    } else {
-      showToast(summary + '!', { type: 'success' })
-    }
   }
 
   // Exports whatever the client-detail History tab is currently showing
@@ -442,7 +344,7 @@ export default function Clients({ brand, role, perms }) {
     <div ref={rootRef}>
       <SectionHead title='Clients' sub='All your client and patient records' btn='+ Add Client' onBtn={() => setShowAdd(true)}
         extraBtns={[
-          { label: 'Upload CSV', icon: <Upload size={14} />, onClick: () => setShowUpload(true) },
+          { label: 'Upload clients', icon: <Upload size={14} />, onClick: () => setShowUpload(true) },
           { label: 'Export CSV', icon: <Download size={14} />, onClick: exportCsv },
           ...(canDeleteClients ? [{ label: 'Recently deleted', icon: <RotateCcw size={14} />, onClick: () => setShowDeleted(true) }] : []),
         ]} />
@@ -451,8 +353,11 @@ export default function Clients({ brand, role, perms }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Users />} label={isFiltered ? 'Matching clients' : 'Total clients'} value={loadFailed ? '—' : shownTotals.count} sub={isFiltered && !loadFailed ? 'of ' + clients.length : undefined} />
         <StatCard icon={<DollarSign />} label='Lifetime spend' value={loadFailed ? '—' : fmt(shownTotals.spend)} sub={loadFailed ? undefined : 'Average ' + fmt(shownTotals.averageSpend)} />
-        <StatCard icon={<Landmark />} label='Owed to you' value={loadFailed || !balancesKnown ? '—' : fmt(shownTotals.owed)}
-          sub={openDebts.isError ? "Couldn't load debts" : balancesKnown ? shownTotals.owing + ' client' + (shownTotals.owing !== 1 ? 's' : '') + ' owing' : 'Loading…'} />
+        <StatCard icon={<Landmark />} label='Clients owe us' value={loadFailed || !balancesKnown ? '—' : fmt(shownTotals.owed)}
+          sub={openDebts.isError ? "Couldn't load debts" : balancesKnown ? shownTotals.owing + ' client' + (shownTotals.owing !== 1 ? 's' : '') : 'Loading…'} />
+        {balancesKnown && shownTotals.credit > 0 && (
+          <StatCard icon={<Wallet />} label='We owe clients' value={fmt(shownTotals.credit)} sub={shownTotals.inCredit + ' client' + (shownTotals.inCredit !== 1 ? 's' : '')} />
+        )}
         <StatCard icon={<ShoppingCart />} label='Visits' value={loadFailed ? '—' : shownTotals.visits} />
       </div>
 
@@ -466,7 +371,7 @@ export default function Clients({ brand, role, perms }) {
         <div style={{ gridColumn: '1 / -1' }}>
           <PeriodFilter value={listFilters.period} onChange={v => setLF('period', v)} years={years} label='Date joined' />
         </div>
-        <FilterSelect label='Payment status' value={balancesKnown ? listFilters.paymentStatus : ''} onChange={v => setLF('paymentStatus', v)} options={balancesKnown ? CLIENT_PAYMENT_STATUSES : []}
+        <FilterSelect label='Account position' value={balancesKnown ? listFilters.paymentStatus : ''} onChange={v => setLF('paymentStatus', v)} options={balancesKnown ? CLIENT_PAYMENT_STATUSES : []}
           allLabel={openDebts.isError ? 'Unavailable: debts did not load' : balancesKnown ? 'All' : 'Loading…'} />
         <FilterSelect label='Purchase activity' value={listFilters.activity} onChange={v => setLF('activity', v)} options={CLIENT_ACTIVITY} />
         <FilterSelect label='Gender' value={listFilters.gender} onChange={v => setLF('gender', v)} options={GENDERS} />
@@ -478,7 +383,8 @@ export default function Clients({ brand, role, perms }) {
         <div role='status' aria-live='polite' style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 18px', padding: '12px 16px', marginBottom: '14px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}` }}>
           <span style={{ fontSize: '12.5px', color: gray600 }}>{shownTotals.count} client{shownTotals.count !== 1 ? 's' : ''} for {filterLabel}</span>
           <span style={{ fontSize: '13px', color: gray600 }}>Spent: <strong style={{ color: navy }}>{fmt(shownTotals.spend)}</strong></span>
-          {balancesKnown && <span style={{ fontSize: '13px', color: gray600 }}>Owe you: <strong style={{ color: shownTotals.owed > 0 ? danger : success }}>{fmt(shownTotals.owed)}</strong></span>}
+          {balancesKnown && <span style={{ fontSize: '13px', color: gray600 }}>Owe us: <strong style={{ color: shownTotals.owed > 0 ? danger : success }}>{fmt(shownTotals.owed)}</strong></span>}
+          {balancesKnown && shownTotals.credit > 0 && <span style={{ fontSize: '13px', color: gray600 }}>We owe them: <strong style={{ color: tealDeep }}>{fmt(shownTotals.credit)}</strong></span>}
         </div>
       )}
 
@@ -517,7 +423,12 @@ export default function Clients({ brand, role, perms }) {
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
               <div style={{ fontSize: '16px', fontWeight: '900', color: navy }}>{fmt(c.total_spend || 0)}</div>
               <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{c.visit_count || 0} visit(s)</div>
-              {(balances.get(c.id) || 0) > 0 && <div style={{ fontSize: '11px', fontWeight: '700', color: danger, marginTop: '2px' }}>Owes {fmt(balances.get(c.id))}</div>}
+              {(() => {
+                const pos = describePosition(positionOf(balances, c.id))
+                return pos.status === 'clear' ? null : (
+                  <div style={{ fontSize: '11px', fontWeight: '700', color: pos.status === 'owes' ? danger : tealDeep, marginTop: '2px' }}>{pos.label} {fmt(pos.amount)}</div>
+                )
+              })()}
             </div>
           </div>
         )}
@@ -595,6 +506,8 @@ export default function Clients({ brand, role, perms }) {
                 )}
               </div>
             </div>
+            <ClientPosition brand={brand} client={selected} position={balancesKnown ? positionOf(balances, selected.id) : null} failed={openDebts.isError}
+              canRecordOpening={canRecordOpening} showToast={showToast} />
             {[['Email', selected.email || 'Not set'], ['Gender', selected.gender || 'Not set'], ['Date of Birth', selected.date_of_birth || 'Not set'], ['Address', selected.address || 'Not set'], ['Notes', selected.notes || 'Not set'], ['Joined', selected.created_at?.split('T')[0] || 'Not set']].map(([l, v]) => (
               <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${gray100}`, fontSize: '13px', gap: 16 }}>
                 <span style={{ color: gray500, fontWeight: '600' }}>{l}</span>
@@ -716,60 +629,10 @@ export default function Clients({ brand, role, perms }) {
         )}
       </Modal>
 
-      {/* Upload Clients from Excel / CSV — same flow as the Inventory upload */}
-      <Modal show={showUpload} onClose={() => { setShowUpload(false); setUploadData([]); setUploadError('') }} title='Upload Clients from Excel / CSV'>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ padding: '14px', borderRadius: '12px', background: tealMist, border: `1px solid ${tealDeep}`, fontSize: '13px', color: tealDeep, lineHeight: '1.9' }}>
-            1. Tap <strong>Download Template</strong><br />
-            2. Open in <strong>Microsoft Excel</strong> or Google Sheets<br />
-            3. Fill in your existing clients / patients row by row<br />
-            4. Save as <strong>CSV</strong><br />
-            5. Upload here. Clients are matched by <strong>phone number</strong>, so repeat customers from the file are skipped, not duplicated
-          </div>
-          <label style={{ display: 'block', padding: '24px', borderRadius: '12px', border: `2px dashed ${border}`, textAlign: 'center', cursor: 'pointer', background: bg }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', color: gray500 }}><FileUp size={36} /></div>
-            <div style={{ fontWeight: '700', color: gray600, fontSize: '14px' }}>Tap to select CSV file</div>
-            <input type='file' accept='.csv,.xlsx,.xls,.txt' onChange={handleClientFileUpload} style={{ display: 'none' }} />
-          </label>
-          {uploadError && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px', borderRadius: '10px', background: dangerBg, border: `1px solid ${danger}`, fontSize: '13px', color: danger }}><AlertTriangle size={15} /> {uploadError}</div>}
-          {uploadData.length > 0 && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: success, fontSize: '13px', marginBottom: '8px' }}>
-                <CheckCircle size={15} /> {uploadData.length} clients in file
-                {uploadData.filter(c => !normPhone(c.phone)).length > 0 && (
-                  <span style={{ color: warning, fontWeight: '600' }}> · {uploadData.filter(c => !normPhone(c.phone)).length} missing a phone (will be skipped)</span>
-                )}
-              </div>
-              <div style={{ maxHeight: '180px', overflowY: 'auto', borderRadius: '10px', border: `1px solid ${gray100}` }}>
-                {uploadData.map((c, i) => {
-                  const missingPhone = !normPhone(c.phone)
-                  const isDupe = clients.some(x => normPhone(x.phone) === normPhone(c.phone))
-                  return (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 12px', borderBottom: `1px solid ${gray100}`, fontSize: '12px', background: missingPhone || isDupe ? warningBg : 'transparent' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600', color: missingPhone || isDupe ? warning : navy }}>
-                        {(missingPhone || isDupe) && <AlertTriangle size={12} />}{c.full_name || '(no name)'}
-                      </span>
-                      <span style={{ color: missingPhone || isDupe ? warning : gray500 }}>
-                        {missingPhone ? 'No phone' : isDupe ? 'Already exists' : c.phone + (c.gender ? ' · ' + c.gender : '')}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <GhostBtn onClick={downloadClientTemplate} style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><Download size={14} /> Download Template</GhostBtn>
-            {uploadData.length > 0 && (
-              <button onClick={importClients} disabled={importing} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.7 : 1 }}>
-                {importing
-                  ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Loader2 size={16} className="spin" aria-hidden="true" /> Importing…</span>
-                  : 'Import ' + uploadData.length + ' Clients'}
-              </button>
-            )}
-          </div>
-        </div>
-      </Modal>
+      {showUpload && (
+        <ClientImportModal brand={brand} clients={clients} createMany={(rows) => createManyClients.mutateAsync(rows)} allowOpenings={canRecordOpening}
+          onClose={() => setShowUpload(false)} onDone={(r) => showToast(`${r.added} client${r.added === 1 ? '' : 's'} added${r.openings.recorded.length ? `, ${r.openings.recorded.length} opening balance${r.openings.recorded.length === 1 ? '' : 's'} recorded` : ''}.`, { type: 'success' })} />
+      )}
 
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
     </div>

@@ -57,27 +57,29 @@ export function createClientRepository(request = sbFetch) {
     //              surfacing a raw constraint error.
     //   failed   — [{ full_name, message }] for every other kind of write
     //              failure. The page reports the counts and the first few.
+    //   created  — the saved rows (with their ids), for anything the import links to them (opening balances).
     async createMany(businessId, clients, batchSize = 20) {
       let added = 0
       let skipped = 0
       const failed = []
+      const created = []
       for (let i = 0; i < clients.length; i += batchSize) {
         const batch = clients.slice(i, i + batchSize)
         const results = await Promise.all(batch.map(c =>
           create(businessId, c)
-            .then(() => true)
+            .then((rows) => ({ row: Array.isArray(rows) ? rows[0] : rows }))
             .catch(err => {
               if (isDuplicateError(err)) return 'skipped'
               return { full_name: c.full_name || 'Unknown', message: err.message || 'error' }
             })
         ))
         results.forEach(r => {
-          if (r === true) added++
+          if (r && typeof r === 'object' && 'row' in r) { added++; if (r.row) created.push(r.row) }
           else if (r === 'skipped') skipped++
           else failed.push(r)
         })
       }
-      return { added, skipped, failed }
+      return { added, skipped, failed, created }
     },
 
     // Edit Client: saves one client's changed details, tenant-scoped, and returns the saved row. Nothing matched (a

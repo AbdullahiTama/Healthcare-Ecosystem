@@ -82,7 +82,7 @@ describe('clientRepository', () => {
   it('createMany is a no-op for an empty list', async () => {
     const { repo, client } = build()
     const result = await repo.createMany(A, [])
-    expect(result).toEqual({ added: 0, skipped: 0, failed: [] })
+    expect(result).toEqual({ added: 0, skipped: 0, failed: [], created: [] })
     expect(client.rows('clients')).toHaveLength(0)
   })
 

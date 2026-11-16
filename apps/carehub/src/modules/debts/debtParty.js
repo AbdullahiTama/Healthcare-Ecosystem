@@ -85,7 +85,8 @@ export function describeParty(r) {
 export function knownSuppliers(directory = [], debts = []) {
   const byKey = new Map((directory || []).filter((s) => s?.key).map((s) => [s.key, { key: s.key, name: s.name }]))
   for (const d of debts || []) {
-    if (d?.direction !== 'we_owe' || d.source === 'purchase' || d.source === 'credit_sale') continue
+    // A "we owe" debt linked to a client is what the business owes that client (an opening balance), not a supplier.
+    if (d?.direction !== 'we_owe' || d.source === 'purchase' || d.source === 'credit_sale' || d.client_id) continue
     const key = supplierKey(d.party_name)
     if (key && !byKey.has(key)) byKey.set(key, { key, name: String(d.party_name).trim() })
   }

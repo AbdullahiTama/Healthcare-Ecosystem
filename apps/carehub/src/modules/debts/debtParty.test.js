@@ -74,6 +74,8 @@ describe('knownSuppliers', () => {
       { direction: 'we_owe', party_name: 'EMZOR DISTRIBUTORS', source: null },
       { direction: 'we_owe', party_name: 'Via Purchase', source: 'purchase' },
       { direction: 'owes_us', party_name: 'Ada', source: null },
+      // What the business owes a client (their opening balance) is not a supplier.
+      { direction: 'we_owe', party_name: 'Musa Bello', source: 'manual', client_id: 'c9', source_ref: 'opening_balance' },
     ]
     expect(knownSuppliers(suppliers, debts)).toEqual([
       { key: 'emzor distributors', name: 'Emzor Distributors' }, { key: 'fidson ltd', name: 'Fidson Ltd' }, { key: 'landlord ltd', name: 'Landlord Ltd' },
