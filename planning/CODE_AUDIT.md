@@ -45,6 +45,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A30 | Low | Clients (data integrity) | Any member can overwrite `clients.visit_count` / `total_spend` through the API (no guard); `anon` holds table grants on `clients` (RLS denies every row) | **Closed 2026-11-16**: `carehub_20270122_client_totals_guard` applied with owner approval (version 20261116104753); Owner or staff given access only |
 | A31 | Medium | Clients / suppliers (opening balances) | A "we owe" debt linked to a client would have been listed and paid as a supplier; opening balances need one per client | **Closed 2026-11-16**: applied with owner approval (version 20261116092716), probed, then the app change deployed |
 | A32 | Low | Debts (data hygiene) | 8 credit-sale debts have no `client_id`, some although their sale is linked to a client; Debts' Link to clients covers hand-recorded debts only | **Closed 2026-11-16**: `carehub_20270121_link_credit_sale_debts` applied with owner approval (version 20261116102618); 3 linked, 5 have no client to link |
+| A33 | High | Uploads / debts / POS / Purchases | Inventory upload lost rows (generic-name duplicate rule, line breaks, .xlsx read as text, rows dropped uncounted); a failed purchase debt was reported as recorded; no supplier phone in Record Purchase or the purchase template; POS showed no price for out-of-stock products | **Closed 2026-11-16**: app only, no database change; tested |
 
 ## 2. Items
 
@@ -371,6 +372,19 @@ screen is limited to roles with Purchases). Tests: `modules/inventory/Inventory.
 **Still open (step 2, data-level):** the API still returns `products.cost_price` and purchase costs to every member;
 all staff share one database role, so this needs cost moved into a protected table and every reader and writer
 (14 app files, 11 database functions, purchases) switched over. To plan and approve separately.
+### A33. Incomplete uploads, unreported purchase debts, supplier phone, POS out-of-stock price (High) — closed 2026-11-16
+
+**What (verified 2026-11-16 on `main` at `56e20dd` and the live database):** the Inventory upload skipped every row
+whose *generic* name matched a product in stock, split rows on raw line breaks, read .xlsx as text and dropped nameless
+and over-limit rows uncounted. `recordUnderpayment` returned null for a failed write, so Purchases reported a lost debt
+as recorded. No supplier phone in Record Purchase or the purchase template; no price on out-of-stock products at the POS.
+Debt linking itself was checked and found complete (A26, A32).
+
+**Closed 2026-11-16 (app only):** every Inventory row is accounted for (imported / duplicate / needs fixing / over limit /
+failed, with reasons and a rows-to-fix file); failed purchase debts reported; optional supplier phone saved on the
+supplier record; POS shows the price. Details and test plan:
+[Bulk-Uploads-and-Debt-Linking.md](../docs/architecture/Bulk-Uploads-and-Debt-Linking.md).
+
 ### A32. Credit-sale debts without their client (Low) — closed 2026-11-16
 
 **Found 2026-11-16 (live, read-only)** while checking the Client Account against Debt Management: 8 `credit_sale`

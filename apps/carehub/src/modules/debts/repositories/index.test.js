@@ -142,10 +142,11 @@ describe('debtRepository', () => {
 
     // Contract: a failed debt write must never undo an already-completed sale
     // or purchase, so this swallows rather than throws.
-    it('returns null instead of throwing when the write fails', async () => {
+    it('reports a failed write instead of throwing', async () => {
       const failing = async () => { throw new Error('network down') }
       const repo = createDebtRepository(failing)
-      await expect(repo.recordUnderpayment(underpaid)).resolves.toBeNull()
+      // Reported (it used to return null, the same as "nothing owed", so a lost debt went unnoticed).
+      await expect(repo.recordUnderpayment(underpaid)).resolves.toEqual({ failed: true, message: 'network down' })
     })
   })
 

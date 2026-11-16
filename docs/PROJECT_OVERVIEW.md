@@ -140,6 +140,7 @@ and database migrations on PGlite. On 2026-11-02 CareHub had 304 test files and 
 | Client Owes Us / We Owe Client; opening balances on the client upload | [architecture/Client-Position-and-Opening-Balances.md](architecture/Client-Position-and-Opening-Balances.md) |
 | Edit Client; a client's current name on linked sales and debts | [architecture/Client-Edit.md](architecture/Client-Edit.md) |
 | Supplier list: contact details, Excel/CSV import with validation, export | [architecture/Supplier-Directory.md](architecture/Supplier-Directory.md) |
+| Inventory upload accounting for every row, purchase debts reported, supplier phone in Purchases, POS out-of-stock price | [architecture/Bulk-Uploads-and-Debt-Linking.md](architecture/Bulk-Uploads-and-Debt-Linking.md) |
 | Expense budgets, including Set new budget and budget history | [architecture/Expense-Budgets.md](architecture/Expense-Budgets.md) |
 | Cost price at the POS (who sees it, what it shows) | [architecture/POS-Cost-Visibility.md](architecture/POS-Cost-Visibility.md) |
 | Receivables / payables, debt import and export, supplier summary, customer credit accounts, POS stock limits | [architecture/Debt-Accounts-and-POS-Stock-Limits.md](architecture/Debt-Accounts-and-POS-Stock-Limits.md) |

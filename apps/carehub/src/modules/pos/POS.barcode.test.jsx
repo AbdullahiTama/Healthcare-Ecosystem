@@ -115,8 +115,20 @@ describe('POS barcode lookup', () => {
     m = await renderPOS()
     await typeSearch(m.host, '6209876543210')
     await pressEnter(searchInput(m.host))
-    expect(m.host.textContent).toContain('Paracetamol 500mg is out of stock.')
+    expect(m.host.textContent).toContain('Paracetamol 500mg is out of stock. Selling price: ₦300.')
     expect(cartHasItem(m.host)).toBe(false)
+  })
+
+  it('searching an out-of-stock product shows its selling price in the out-of-stock list', async () => {
+    m = await renderPOS()
+    await typeSearch(m.host, 'paracetamol')
+    expect(m.host.textContent).toContain('All matching products are out of stock.')
+    const badge = [...m.host.querySelectorAll('button')].find(b => b.textContent.includes('Out of Stock (1)'))
+    expect(badge).toBeTruthy()
+    await act(async () => { badge.click() })
+    const sheet = document.body.textContent
+    expect(sheet).toContain('Paracetamol 500mg')
+    expect(sheet).toContain('Selling price ₦300')
   })
 
   it('Enter on a non-barcode text search never adds a product', async () => {

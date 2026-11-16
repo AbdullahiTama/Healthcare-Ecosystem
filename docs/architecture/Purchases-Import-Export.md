@@ -26,6 +26,7 @@ One row per purchase **line**. Columns are matched by header name, in any order;
 |---|---|---|---|
 | Purchase Ref | purchase | no | Rows with the same ref are one purchase. Without it, rows with the same supplier (case and spacing ignored) and supply date are one purchase. Stored in Notes as "Ref …" when Notes is blank. |
 | Supplier | purchase | yes | |
+| Supplier Phone | purchase | no | Put on the supplier's record when it has no phone (2026-11-16, [Bulk-Uploads-and-Debt-Linking.md](Bulk-Uploads-and-Debt-Linking.md)). Not a phone number → an error for that row. |
 | Supply Date | purchase | yes | `YYYY-MM-DD`, `DD/MM/YYYY` (also `-` or `.`), an Excel date cell or serial. **Month-first dates are never guessed**: 05/11/2026 is 5 November. Not in the future (the form's rule). |
 | Product Name | line | yes | Linked to Inventory by exact (normalised) name or barcode, as the form does; never a fuzzy match. A new name creates a product. |
 | Quantity | line | yes | Whole number above 0. |

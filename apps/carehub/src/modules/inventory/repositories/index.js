@@ -104,6 +104,16 @@ export function createProductRepository(request = sbFetch) {
       })
     },
 
+    // Bulk upload: many products in one request, every row stamped with this business. Returns the saved rows in
+    // the order sent. One bad row (or going over the plan's product limit) refuses the whole request; the caller
+    // (lib/spreadsheetImport.js saveInBatches) then saves that batch row by row to find it.
+    async createMany(businessId, list) {
+      return request('products', {
+        method: 'POST',
+        body: JSON.stringify((list || []).map(p => ({ ...p, business_id: businessId }))),
+      })
+    },
+
     // Returns the saved row (or null when nothing matched — wrong tenant or a
     // deleted product) so callers can update their local list from what the
     // database actually stored instead of re-downloading the catalog.

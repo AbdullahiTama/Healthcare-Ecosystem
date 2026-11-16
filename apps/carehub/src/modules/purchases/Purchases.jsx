@@ -18,6 +18,7 @@ import EditPurchaseModal from './EditPurchase'
 import PurchaseHistory from './PurchaseHistory'
 import PurchaseForm, { formLineProblems } from './PurchaseForm'
 import { useSupplierDirectory, useProductInsights } from './hooks'
+import { useSuppliers, keys as queryKeys } from '../../hooks/queries'
 import { recordPurchase, resolveExistingProduct, NEW_PRODUCT_MARKUP } from './recordPurchase'
 import { usePlanGate } from '../../hooks/usePlanGate'
 import { restrictedMessage } from '../../lib/planStatus'
@@ -48,7 +49,7 @@ function describePurchaseRestore(r) {
   return `${r.skipped_stock} not restored because a product or batch they stocked is gone${names ? ': ' + names : ''}.`
 }
 
-const blankForm = () => ({ supplier: '', supplyDate: todayDate(), dueDate: '', amountPaid: '', notes: '', items: [blankItem()] })
+const blankForm = () => ({ supplier: '', supplierPhone: '', supplyDate: todayDate(), dueDate: '', amountPaid: '', notes: '', items: [blankItem()] })
 // The draft holds the form AND whether it was open, so a tab the browser
 // discarded in the background reopens exactly where the user left it.
 const blankDraft = () => ({ open: false, form: blankForm() })
@@ -103,6 +104,9 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const plan = usePlanGate(showToast)
   const directory = useSupplierDirectory(brand?.id)
+  // Phones on file per supplier (Supplier summary's records), shown beside Record Purchase's optional phone field.
+  const supplierRecords = useSuppliers(brand?.id)
+  const supplierPhones = useMemo(() => new Map((supplierRecords.data?.rows || []).filter(s => String(s.phone || '').trim()).map(s => [s.supplier_key, s.phone])), [supplierRecords.data])
   // The Owner always; another role only when granted "Edit purchases". The
   // database checks again (can_edit_purchases), so this only decides what is
   // offered.
@@ -350,7 +354,10 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
       }
       if (r.syncFailed.length > 0) parts.push('Not added to Inventory: ' + r.syncFailed.join(', ') + '. Add their stock from Inventory')
       if (r.balance > 0) parts.push(r.debtFailed ? 'The ' + fmt(r.balance) + ' balance could not be added to Debts: add it there' : 'Debt of ' + fmt(r.balance) + ' added to Debts automatically')
-      const warn = r.syncFailed.length > 0 || r.debtFailed
+      if (r.phone === 'kept') parts.push("A different phone is already on file for this supplier, so it was kept: change it in Supplier summary")
+      if (r.phone === 'failed' || r.phone === 'unavailable') parts.push("The supplier's phone could not be saved: add it in Supplier summary")
+      if (r.phone === 'saved' || r.phone === 'kept') queryClient.invalidateQueries({ queryKey: queryKeys.suppliers(brand.id) })
+      const warn = r.syncFailed.length > 0 || r.debtFailed || r.phone === 'failed' || r.phone === 'unavailable'
       showToast(parts.join(' · '), { type: warn ? 'warning' : 'success', duration: warn ? 10000 : 5000 })
       setShowErrors(false)
       clearDraft()
@@ -580,7 +587,8 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
 
           <PurchaseForm ref={formRef} form={form} setForm={setForm} inventory={inventory} inventoryStatus={inventoryStatus} catalog={catalog}
             canReprice={canReprice} showErrors={showErrors} brandId={brand?.id} insights={insights}
-            suppliers={directory.suppliers} suppliersStatus={directory.isLoading ? 'loading' : directory.isError ? 'error' : 'ready'} />
+            suppliers={directory.suppliers} suppliersStatus={directory.isLoading ? 'loading' : directory.isError ? 'error' : 'ready'}
+            supplierPhones={supplierPhones} />
         </div>
       </Modal>
 

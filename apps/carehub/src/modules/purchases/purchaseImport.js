@@ -11,7 +11,8 @@
 //
 // Docs: docs/architecture/Purchases-Import-Export.md
 
-import { lookupKey } from '../business-directory/services/normalize'
+import { parseImportDate, parseImportNumber, readTableByHeader } from '../../lib/spreadsheetImport'
+import { isValidPhone } from '../business-directory/services/normalize'
 import { blankItem, findProductForEntry, itemProblems, findProductByBarcode } from './lineItems'
 import { purchaseFigures } from './recordPurchase'
 import { PRODUCT_CATS } from '../../config/constants'
@@ -26,6 +27,7 @@ export const IMPORT_SHEET = 'Purchases'
 export const IMPORT_COLUMNS = [
   { key: 'ref', header: 'Purchase Ref', level: 'purchase', required: false, note: 'Optional. Rows with the same ref are one purchase (e.g. the supplier invoice number). Without it, rows with the same supplier and supply date are one purchase.', aliases: ['purchase ref', 'ref', 'reference', 'invoice', 'invoice no', 'invoice number', 'purchase id'] },
   { key: 'supplier', header: 'Supplier', level: 'purchase', required: true, note: 'Supplier name.', aliases: ['supplier', 'supplier name', 'vendor', 'vendor name'] },
+  { key: 'supplierPhone', header: 'Supplier Phone', level: 'purchase', required: false, note: "Optional. Put on the supplier's record when it has no phone (Purchases › Supplier summary).", aliases: ['supplier phone', 'phone', 'phone number', 'supplier contact', 'contact', 'telephone', 'mobile'] },
   { key: 'supplyDate', header: 'Supply Date', level: 'purchase', required: true, note: 'YYYY-MM-DD or DD/MM/YYYY. Not in the future.', aliases: ['supply date', 'date', 'purchase date', 'date supplied', 'delivery date'] },
   { key: 'name', header: 'Product Name', level: 'line', required: true, note: 'Matched to your Inventory by exact name or barcode; a new name creates a new product.', aliases: ['product name', 'product', 'item', 'item name', 'description'] },
   { key: 'qty', header: 'Quantity', level: 'line', required: true, note: 'Whole number above 0.', aliases: ['quantity', 'qty', 'units'] },
@@ -39,14 +41,12 @@ export const IMPORT_COLUMNS = [
   { key: 'dueDate', header: 'Due Date', level: 'purchase', required: false, note: 'When the balance is due.', aliases: ['due date', 'payment due', 'due'] },
   { key: 'notes', header: 'Notes', level: 'purchase', required: false, note: 'Optional.', aliases: ['notes', 'note', 'remarks', 'comment'] },
 ]
-const COLUMN_BY_ALIAS = new Map(IMPORT_COLUMNS.flatMap(c => [lookupKey(c.header), ...c.aliases.map(lookupKey)].map(a => [a, c])))
-const REQUIRED = IMPORT_COLUMNS.filter(c => c.required)
 const PURCHASE_FIELDS = IMPORT_COLUMNS.filter(c => c.level === 'purchase' && c.key !== 'ref' && c.key !== 'supplier' && c.key !== 'supplyDate')
 const LABEL = Object.fromEntries(IMPORT_COLUMNS.map(c => [c.key, c.header]))
 
 const SAMPLE_ROWS = [
-  ['INV-1042', 'Emzor Distributors', '2026-11-03', 'Paracetamol 500mg', '200', '45', '80', 'B2311', '2028-06-30', '', 'Medicines', '5000', '2026-11-30', ''],
-  ['INV-1042', 'Emzor Distributors', '2026-11-03', 'Amoxicillin 500mg', '50', '220', '350', 'AX77', '2027-12-31', '', 'Medicines', '', '', ''],
+  ['INV-1042', 'Emzor Distributors', '08031234567', '2026-11-03', 'Paracetamol 500mg', '200', '45', '80', 'B2311', '2028-06-30', '', 'Medicines', '5000', '2026-11-30', ''],
+  ['INV-1042', 'Emzor Distributors', '', '2026-11-03', 'Amoxicillin 500mg', '50', '220', '350', 'AX77', '2027-12-31', '', 'Medicines', '', '', ''],
 ]
 
 function csvEscape(v) {
@@ -80,41 +80,8 @@ export async function buildTemplateXlsx() {
 }
 
 // ── Values ────────────────────────────────────────────────────────────────────
-function realDate(y, m, d) {
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-}
-
-/**
- * A spreadsheet date as 'YYYY-MM-DD', '' when blank, or null when it cannot be
- * read for certain. Accepts ISO dates, an Excel date cell (read as an ISO
- * timestamp at UTC midnight), an Excel serial number, and day-first dates
- * (DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY: the Nigerian convention). Month-first
- * dates are not guessed: 05/11/2026 is 5 November.
- */
-export function parseImportDate(value) {
-  const v = String(value ?? '').trim()
-  if (!v) return ''
-  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:T00:00:00(?:\.000)?Z?)?$/.exec(v)
-  if (m) return realDate(+m[1], +m[2], +m[3])
-  m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(v)
-  if (m) return realDate(+m[3], +m[2], +m[1])
-  if (/^\d{5}$/.test(v)) {
-    const n = Number(v)
-    if (n < 20000 || n > 80000) return null
-    const dt = new Date(Date.UTC(1899, 11, 30) + n * 86400000)
-    return dt.toISOString().slice(0, 10)
-  }
-  return null
-}
-
-/** "₦1,250.50" → 1250.5; '' when blank; NaN when not a number. */
-export function parseImportNumber(value) {
-  const v = String(value ?? '').replace(/[₦,\s]/g, '').replace(/^NGN/i, '')
-  if (v === '') return ''
-  return /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : NaN
-}
+// Shared with the other uploads (lib/spreadsheetImport.js); re-exported for callers of this module.
+export { parseImportDate, parseImportNumber }
 
 // ── Table ─────────────────────────────────────────────────────────────────────
 /**
@@ -123,26 +90,11 @@ export function parseImportNumber(value) {
  * Throws a user-facing error for an empty or oversized file.
  */
 export function readPurchaseTable(rawRows) {
-  const indexed = (rawRows || []).map((r, i) => ({ r, n: i + 1 })).filter(x => (x.r || []).some(c => String(c ?? '').trim() !== ''))
-  if (!indexed.length) throw new Error('The file is empty.')
-  const header = indexed[0].r
-  const keyByIndex = {}
-  const ignored = []
-  header.forEach((h, i) => {
-    const col = COLUMN_BY_ALIAS.get(lookupKey(String(h ?? '').replace(/\*/g, '')))
-    if (col && !Object.values(keyByIndex).includes(col.key)) keyByIndex[i] = col.key
-    else if (String(h ?? '').trim()) ignored.push(String(h).trim())
-  })
-  const present = new Set(Object.values(keyByIndex))
-  const missing = REQUIRED.filter(c => !present.has(c.key)).map(c => c.header)
-  const rows = indexed.slice(1).map(({ r, n }) => {
-    const cells = {}
-    Object.entries(keyByIndex).forEach(([i, k]) => { cells[k] = String(r[i] ?? '').trim() })
-    return { rowNumber: n, cells }
-  })
-  if (!rows.length) throw new Error('The file has headers but no purchase rows.')
-  if (rows.length > MAX_IMPORT_ROWS) throw new Error(`The file has ${rows.length.toLocaleString()} rows; the limit is ${MAX_IMPORT_ROWS.toLocaleString()} per upload. Split it into smaller files.`)
-  return { rows, missing, ignored }
+  try {
+    return readTableByHeader(rawRows, IMPORT_COLUMNS, { maxRows: MAX_IMPORT_ROWS })
+  } catch (e) {
+    throw new Error(e.message === 'The file has headers but no rows.' ? 'The file has headers but no purchase rows.' : e.message)
+  }
 }
 
 const supplierKey = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')
@@ -207,7 +159,8 @@ export function buildImportPlan(rows, { inventory = [], today, restricted = fals
         const d = parseImportDate(raw)
         if (!d) { at(`Due date "${raw}" is not a date (use YYYY-MM-DD or DD/MM/YYYY).`); continue }
         val = d
-      } else if (k === 'notes' && raw.length > 1000) { at('Notes are too long (1,000 characters at most).'); continue }
+      } else if (k === 'notes' && raw.length > 1000) { at('Notes are too long (1,000 characters at most).'); continue
+      } else if (k === 'supplierPhone' && (raw.length > 40 || !isValidPhone(raw))) { at(`Supplier phone "${raw}" is not a phone number.`); continue }
       if (g.purchaseValues[k] === undefined) g.purchaseValues[k] = val
       else if (g.purchaseValues[k] !== val) at(`${LABEL[k]} differs from another row of the same purchase (${g.purchaseValues[k]} and ${val}). Fill it in once, or the same on every row.`)
     }
@@ -256,6 +209,7 @@ export function buildImportPlan(rows, { inventory = [], today, restricted = fals
     const g = groups.get(k)
     const form = {
       supplier: g.supplier,
+      supplierPhone: g.purchaseValues.supplierPhone || '',
       supplyDate: g.supplyDate,
       dueDate: g.purchaseValues.dueDate || '',
       amountPaid: g.purchaseValues.amountPaid || '',

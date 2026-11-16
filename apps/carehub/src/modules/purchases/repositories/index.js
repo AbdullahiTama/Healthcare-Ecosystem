@@ -234,6 +234,35 @@ export function createPurchaseRepository(request = sbFetch) {
     },
 
     // Saves changes to one supplier record (tenant-scoped). The database keeps the name's key fixed.
+    // A phone given in Record Purchase or the purchase upload, put on the supplier's record (created for a supplier
+    // that has none). A different phone already on file is never overwritten here (it is edited in Supplier summary).
+    // Returns 'saved', 'kept' (a different phone is on file) or 'unavailable' (no suppliers table yet); null when
+    // there is nothing to save.
+    async saveSupplierPhone(businessId, supplierName, phone) {
+      const name = String(supplierName || '').trim().replace(/\s+/g, ' ')
+      const value = String(phone || '').trim()
+      if (!name || !value) return null
+      try {
+        const rows = await request(`suppliers?business_id=eq.${businessId}&supplier_key=eq.${encodeURIComponent(name.toLowerCase())}&select=id,phone`)
+        const row = Array.isArray(rows) ? rows[0] : null
+        if (!row) {
+          await request('suppliers?on_conflict=business_id,supplier_key', {
+            method: 'POST', body: JSON.stringify([{ business_id: businessId, name, phone: value }]), prefer: 'resolution=ignore-duplicates,return=minimal',
+          })
+          return 'saved'
+        }
+        const onFile = String(row.phone || '').trim()
+        if (!onFile) {
+          await request(`suppliers?id=eq.${row.id}&business_id=eq.${businessId}`, { method: 'PATCH', body: JSON.stringify({ phone: value }), prefer: 'return=minimal' })
+          return 'saved'
+        }
+        return onFile.replace(/\D/g, '') === value.replace(/\D/g, '') ? 'saved' : 'kept'
+      } catch (e) {
+        if (isMissingObject(e)) return 'unavailable'
+        throw e
+      }
+    },
+
     async updateSupplier(businessId, id, changes) {
       const rows = await request(`suppliers?id=eq.${id}&business_id=eq.${businessId}`, {
         method: 'PATCH', body: JSON.stringify(changes), prefer: 'return=representation',

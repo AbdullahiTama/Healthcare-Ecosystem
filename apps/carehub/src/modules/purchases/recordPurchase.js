@@ -40,13 +40,13 @@ export function purchaseFigures(form) {
 }
 
 /**
- * Records `form` ({ supplier, supplyDate, dueDate, amountPaid, notes, items }).
+ * Records `form` ({ supplier, supplierPhone, supplyDate, dueDate, amountPaid, notes, items }).
  * Throws only when the purchase record itself could not be saved (nothing was
  * recorded). After that, stock and debt problems are reported, not thrown, so a
  * caller never retries a purchase that already exists.
  *
  * Returns { purchaseId, total, paid, balance, created, updated, syncFailed,
- * changedRows, debtFailed, newProductsAutoPriced }.
+ * changedRows, debtFailed, phone ('saved' | 'kept' | 'unavailable' | 'failed' | null), newProductsAutoPriced }.
  */
 export async function recordPurchase({ businessId, form, inventory = [], canReprice = false, repos = DEFAULT_REPOS }) {
   const { purchaseRepository: purchases, productRepository: products, debtRepository: debts } = repos
@@ -153,7 +153,7 @@ export async function recordPurchase({ businessId, form, inventory = [], canRepr
   let debtFailed = false
   if (balance > 0) {
     try {
-      await debts.recordUnderpayment({
+      const debt = await debts.recordUnderpayment({
         businessId,
         direction: 'we_owe',
         partyName: supplier,
@@ -164,14 +164,28 @@ export async function recordPurchase({ businessId, form, inventory = [], canRepr
         source: 'purchase',
         sourceRef: purchaseId,
       })
+      if (debt?.failed) throw new Error(debt.message)
     } catch (e) {
       debtFailed = true
       console.error('[purchases] debt for the balance could not be recorded:', purchaseId, e?.message)
     }
   }
 
+  // The supplier's phone (optional) is kept on the supplier's record (suppliers, Supplier summary), never on the
+  // purchase. A failure is reported, not thrown: the purchase is already recorded.
+  let phone = null
+  const supplierPhone = String(form.supplierPhone || '').trim()
+  if (supplierPhone && purchases.saveSupplierPhone) {
+    try {
+      phone = await purchases.saveSupplierPhone(businessId, supplier, supplierPhone)
+    } catch (e) {
+      phone = 'failed'
+      console.error('[purchases] the supplier phone could not be saved:', supplier, e?.message)
+    }
+  }
+
   return {
-    purchaseId, total, paid, balance, created, updated, syncFailed, changedRows, debtFailed,
+    purchaseId, total, paid, balance, created, updated, syncFailed, changedRows, debtFailed, phone,
     newProductsAutoPriced: created > 0 && !lines.some(i => !i.productId && Number(i.sell) > 0),
   }
 }

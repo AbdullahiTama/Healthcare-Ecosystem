@@ -54,6 +54,10 @@ export const GRID_PAGE = 60
 // "Supabase error (403): ..." wrapper.
 const cleanServerError = (e) => String(e?.message || e).replace(/^Supabase error \(\d{3}\):\s*/, '')
 
+// Said when a scanned or searched product cannot be sold for lack of stock. The
+// selling price is included so the cashier can still answer "how much is it?".
+export const outOfStockMessage = (p) => p.name + ' is out of stock. Selling price: ' + fmt(p.price) + '.'
+
 const PAYMENT_METHODS = [
   ['Cash', DollarSign], ['Transfer', Repeat], ['POS', CreditCard], ['Split', Divide], ['Credit', Clock],
 ]
@@ -367,7 +371,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     const match = findByBarcode(code)
     if (!match) return
     e.preventDefault()
-    if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
+    if (!isService(match) && match.stock <= 0) { showToast(outOfStockMessage(match), { type: 'warning' }); return }
     if (add(match)) showToast('Added: ' + match.name, { type: 'success' })
     setSearch('')
   }
@@ -399,7 +403,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
       return
     }
     setSearch(snap.inSearch ? '' : snap.search)
-    if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
+    if (!isService(match) && match.stock <= 0) { showToast(outOfStockMessage(match), { type: 'warning' }); return }
     if (add(match, normalizePosDraft(snap.draft).cart)) showToast('Added: ' + match.name, { type: 'success' })
   }
   useKeyboardScanner({
@@ -877,7 +881,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         onCode: (code) => {
           const match = findByBarcode(code) || products.find(p => (p.name || '').toLowerCase().includes(code.toLowerCase()))
           if (match) {
-            if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
+            if (!isService(match) && match.stock <= 0) { showToast(outOfStockMessage(match), { type: 'warning' }); return }
             if (add(match)) showToast('Added: ' + match.name, { type: 'success' })
           }
           else { setSearch(code) }
@@ -888,7 +892,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
       if (code) {
         const m = findByBarcode(code) || products.find(p => (p.name || '').toLowerCase().includes(code.toLowerCase()))
         if (m) {
-          if (!isService(m) && m.stock <= 0) { showToast(m.name + ' is out of stock.', { type: 'warning' }); return }
+          if (!isService(m) && m.stock <= 0) { showToast(outOfStockMessage(m), { type: 'warning' }); return }
           if (add(m)) showToast('Added: ' + m.name, { type: 'success' })
         } else setSearch(code)
       }
@@ -1479,7 +1483,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 14px', borderRadius: theme.radius.md, border: `1px solid ${gray100}`, background: 'white' }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                <div style={{ fontSize: '11.5px', color: gray400, marginTop: 2 }}>{p.cat || p.category || 'Product'}{p.reorder_level ? ' · reorder at ' + p.reorder_level : ''}</div>
+                <div style={{ fontSize: '11.5px', color: gray400, marginTop: 2 }}>{p.cat || p.category || 'Product'}{p.reorder_level ? ' · reorder at ' + p.reorder_level : ''} · <span style={{ color: navy, fontWeight: 700 }}>Selling price {fmt(p.price)}</span></div>
               </div>
               <Pill label='Out of stock' type='red' />
             </div>

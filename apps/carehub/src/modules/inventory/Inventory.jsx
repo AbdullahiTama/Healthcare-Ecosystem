@@ -2,10 +2,11 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Download, Upload, AlertTriangle, Package, DollarSign, Search, Camera,
-  FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2, TrendingUp, Percent, Trash2, RotateCcw, Pencil,
+  ArrowRight, Clipboard, Plus, Loader2, TrendingUp, Percent, Trash2, RotateCcw, Pencil,
 } from 'lucide-react'
 import { productRepository } from './repositories'
-import { parseInventoryCsv } from './csvImport'
+import { buildInventoryTemplateCsv } from './csvImport'
+import { downloadBlob } from '../business-directory/services/exportService'
 import { computeInventoryStats } from './inventoryStats'
 import { exportInventoryXlsx } from './inventoryExport'
 import { auditRepository } from '../audit/repositories'
@@ -16,9 +17,10 @@ import { findAllDuplicateGroups, createDuplicateIndex } from '../../lib/productM
 import { intentKey } from '../../lib/intentKey'
 import { findProductByBarcode } from '../../lib/barcodeScanner'
 import { useKeyboardScanner, useDialogKeyboardScanner as useScansInDialog } from '../../hooks/useKeyboardScanner'
-import { upsertProducts, removeProducts, toRows } from './productListState'
+import { upsertProducts, removeProducts } from './productListState'
 import { CatalogStatusBanner, CatalogSkeleton } from './components/CatalogStatus'
 import BulkEditModal from './components/BulkEditModal'
+import InventoryImportModal from './components/InventoryImportModal'
 import SelectionBar from '../../components/SelectionBar'
 import DeleteProductsModal from './components/DeleteProductsModal'
 import RecentlyDeletedModal from '../../components/RecentlyDeletedModal'
@@ -28,7 +30,7 @@ import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Text
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
 import { usePlanGate } from '../../hooks/usePlanGate'
 
-const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray300, border, danger, dangerBg, warning, warningBg, success, successBg, bg } = theme
+const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray300, border, danger, dangerBg, warning, warningBg, success, successBg, bg } = theme
 
 // One lucide icon per product row/tile — Clipboard for services, Package for
 // stock goods — replacing the per-product emoji.
@@ -53,9 +55,6 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   const [editItem, setEditItem] = useState(null)
   const [showRestock, setShowRestock] = useState(null)
   const [showUpload, setShowUpload] = useState(false)
-  const [uploadData, setUploadData] = useState([])
-  const [uploadError, setUploadError] = useState('')
-  const [importing, setImporting] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [duplicateWarning, setDuplicateWarning] = useState(null)
   const [showCleanup, setShowCleanup] = useState(false)
@@ -78,12 +77,6 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   // Built once per catalog change; the add form, CSV preview and CSV import
   // all check duplicates against it instead of scanning the catalog per row.
   const duplicateIndex = useMemo(() => createDuplicateIndex(products), [products])
-
-  // Rows in a CSV being previewed that already exist (they will be skipped).
-  const uploadDupeCount = useMemo(
-    () => uploadData.filter(p => duplicateIndex.find(p.name, p.generic_name)).length,
-    [uploadData, duplicateIndex],
-  )
 
   const cats = useMemo(() => ['All', ...Array.from(new Set(products.map(p => p.cat || p.category)))], [products])
 
@@ -472,113 +465,8 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   }
 
   function downloadTemplate() {
-    const rows = [
-      ['Product Name', 'Generic Name', 'Category', 'Selling Price (NGN)', 'Cost Price (NGN)', 'Stock Quantity', 'Reorder Level', 'Barcode', 'List on CareFind (yes/no)', 'Expiry Date'],
-      ['Amoxicillin 500mg', 'Amoxicillin', 'Medicines', '1500', '800', '100', '20', '', 'yes', '2027-06-30'],
-      ['Paracetamol 500mg', 'Paracetamol', 'Medicines', '800', '400', '200', '30', '', 'yes', '2028-01-31'],
-      ['Consultation Fee', 'Medical Consultation', 'Services', '5000', '0', '', '0', '', 'yes', ''],
-    ]
-    const csv = rows.map(r => r.map(c => '"' + c + '"').join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'CareHub_Inventory_Template.csv'; a.click()
-    URL.revokeObjectURL(url)
-    showToast('Template downloaded! Fill in Excel, save as CSV, then upload.', { type: 'success' })
-  }
-
-  function handleFileUpload(e) {
-    const file = e.target.files[0]; if (!file) return
-    setUploadError(''); setUploadData([])
-    const reader = new FileReader()
-    reader.onload = ev => {
-      try {
-        const { rows, error } = parseInventoryCsv(ev.target.result)
-        if (error) { setUploadError(error); return }
-        setUploadData(rows)
-      } catch (err) { setUploadError('Error reading file. Use the downloaded template.') }
-    }
-    reader.readAsText(file); e.target.value = ''
-  }
-
-  // Bulk CSV import — batches parallel inserts (20 at a time) instead of the
-  // old one-await-per-row loop, which took minutes and died on the first
-  // network hiccup for 2,000+ product files. Duplicates are skipped up front
-  // against the currently-loaded product list.
-  async function importProducts() {
-    if (!plan.allow('importing products')) return
-    if (uploadData.length === 0) return
-    setImporting(true)
-    showToast('Importing ' + uploadData.length + ' products…', { type: 'info' })
-    let added = 0
-    let skipped = 0
-    let failed = 0
-    const skippedNames = []
-    const failedNames = []
-    const fresh = []
-    for (const p of uploadData) {
-      if (duplicateIndex.find(p.name, p.generic_name)) {
-        skipped++
-        skippedNames.push(p.name)
-        continue
-      }
-      fresh.push({
-        name: p.name,
-        generic_name: p.generic_name || '',
-        category: p.category || 'Medicines',
-        price: parseFloat(p.price) || 0,
-        cost_price: parseFloat(p.cost_price) || 0,
-        stock: parseInt(p.stock) || 0,
-        reorder_level: parseInt(p.reorder_level) || 5,
-        barcode: p.barcode || '',
-        list_on_carefind: p.list_on_carefind !== false,
-        expiry_date: p.expiry_date || null,
-        emoji: '💊',
-        business_id: brand.id,
-      })
-    }
-    // Enforce Basic 5k cap on bulk import
-    const importLimit = planLimitsFor(brand?.plan)
-    if (importLimit.maxProducts !== Infinity) {
-      const remaining = importLimit.maxProducts - products.length
-      if (remaining <= 0) {
-        showToast(`Your ${PLAN_LABELS[brand?.plan] || 'Basic'} plan allows up to ${importLimit.maxProducts.toLocaleString()} products. Upgrade to import more.`, { type: 'warning' })
-        setImporting(false)
-        return
-      }
-      if (fresh.length > remaining) {
-        fresh.splice(remaining)
-        showToast(`Basic plan allows ${importLimit.maxProducts.toLocaleString()} products. Importing the first ${remaining} of ${fresh.length + (fresh.length - remaining)} new products. Upgrade for more.`, { type: 'warning' })
-      }
-    }
-    const BATCH = 20
-    const createdRows = []
-    for (let i = 0; i < fresh.length; i += BATCH) {
-      const batch = fresh.slice(i, i + BATCH)
-      const results = await Promise.all(batch.map(p =>
-        productRepository.create(brand.id, p).then(res => ({ ok: true, rows: toRows(res) })).catch(err => ({ ok: false, name: p.name, msg: err.message }))
-      ))
-      for (const r of results) {
-        if (r.ok) { added++; createdRows.push(...r.rows) }
-        else {
-          failed++
-          if (failedNames.length < 5) failedNames.push(r.name + ' (' + r.msg + ')')
-        }
-      }
-    }
-    // One list update for the whole file rather than one per batch.
-    applySaved(createdRows)
-    setUploadData([])
-    setShowUpload(false)
-    setImporting(false)
-    const parts = [added + ' imported']
-    if (skipped > 0) parts.push(skipped + ' skipped (already exist)')
-    if (failed > 0) parts.push(failed + ' failed')
-    const summary = parts.join(' · ')
-    if (failed > 0) {
-      showToast(summary + (failedNames.length > 0 ? ': ' + failedNames.join(', ') : ''), { type: 'warning' })
-    } else {
-      showToast(summary + '!', { type: 'success' })
-    }
+    downloadBlob(buildInventoryTemplateCsv(), 'CareHub_Inventory_Template.csv', 'text/csv;charset=utf-8')
+    showToast('Template downloaded! Fill it in with Excel or Google Sheets, then upload it as .xlsx or .csv.', { type: 'success' })
   }
 
   function startScan() {
@@ -913,60 +801,17 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         />
       )}
 
-      {/* Upload Modal */}
-      <Modal show={showUpload} onClose={() => { setShowUpload(false); setUploadData([]); setUploadError('') }} title='Upload Products from Excel / CSV'>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ padding: '14px', borderRadius: '12px', background: tealMist, border: `1px solid ${tealDeep}`, fontSize: '13px', color: tealDeep, lineHeight: '1.9' }}>
-            1. Tap <strong>Download Template</strong><br />
-            2. Open in <strong>Microsoft Excel</strong> or Google Sheets<br />
-            3. Fill in your products row by row<br />
-            4. Set <strong>Expiry Date</strong> as YYYY-MM-DD (for example 2027-06-30). Leave blank if there is none<br />
-            5. Save as <strong>CSV</strong><br />
-            6. Upload here
-          </div>
-          <label style={{ display: 'block', padding: '24px', borderRadius: '12px', border: `2px dashed ${border}`, textAlign: 'center', cursor: 'pointer', background: bg }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', color: gray500 }}><FileUp size={36} /></div>
-            <div style={{ fontWeight: '700', color: gray600, fontSize: '14px' }}>Tap to select CSV file</div>
-            <input type='file' accept='.csv,.xlsx,.xls,.txt' onChange={handleFileUpload} style={{ display: 'none' }} />
-          </label>
-          {uploadError && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px', borderRadius: '10px', background: dangerBg, border: `1px solid ${danger}`, fontSize: '13px', color: danger }}><AlertTriangle size={15} /> {uploadError}</div>}
-          {uploadData.length > 0 && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: success, fontSize: '13px', marginBottom: '8px' }}>
-                <CheckCircle size={15} /> {uploadData.length} products in file
-                {uploadDupeCount > 0 && (
-                  <span style={{ color: warning, fontWeight: '600' }}> · {uploadDupeCount} already exist (will be skipped)</span>
-                )}
-              </div>
-              <div style={{ maxHeight: '180px', overflowY: 'auto', borderRadius: '10px', border: `1px solid ${gray100}` }}>
-                {uploadData.map((p, i) => {
-                  const isDupe = !!duplicateIndex.find(p.name, p.generic_name)
-                  return (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 12px', borderBottom: `1px solid ${gray100}`, fontSize: '12px', background: isDupe ? warningBg : 'transparent' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600', color: isDupe ? warning : navy }}>
-                        {isDupe && <AlertTriangle size={12} />}{p.name}
-                      </span>
-                      <span style={{ color: isDupe ? warning : gray500 }}>
-                        {isDupe ? 'Already exists' : p.category + ' · ₦' + p.price + ' · ' + p.stock + ' units'}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <GhostBtn onClick={downloadTemplate} style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><Download size={14} /> Download Template</GhostBtn>
-            {uploadData.length > 0 && (
-              <button onClick={importProducts} disabled={importing} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.7 : 1 }}>
-                {importing
-                  ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Loader2 size={16} className="spin" aria-hidden="true" /> Importing…</span>
-                  : 'Import ' + uploadData.length + ' Products'}
-              </button>
-            )}
-          </div>
-        </div>
-      </Modal>
+      {/* Upload Modal: every row is accounted for (docs/architecture/Bulk-Uploads-and-Debt-Linking.md) */}
+      <InventoryImportModal
+        show={showUpload}
+        onClose={() => setShowUpload(false)}
+        existing={products}
+        remaining={Math.max(0, planLimitsFor(brand?.plan).maxProducts - products.length)}
+        catalogReady={catalogReady}
+        businessId={brand.id}
+        allow={plan.allow}
+        onSaved={applySaved}
+      />
 
       {/* Clean Up Duplicates Modal — review existing duplicates and merge them */}
       <Modal show={showCleanup} onClose={() => setShowCleanup(false)} title='Clean Up Duplicate Products'>

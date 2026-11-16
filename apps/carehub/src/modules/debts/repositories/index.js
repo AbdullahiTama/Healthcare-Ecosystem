@@ -168,7 +168,8 @@ export function createDebtRepository(request = sbFetch) {
     // consolidated.
     //
     // Never throws — a failed debt write must not undo an already-completed
-    // sale or purchase. Returns null when there is nothing owed.
+    // sale or purchase. Returns null when there is nothing owed, the saved row
+    // when recorded, and { failed: true, message } when it could not be.
     async recordUnderpayment({
       businessId,
       direction,
@@ -198,7 +199,10 @@ export function createDebtRepository(request = sbFetch) {
           source_ref: sourceRef,
         })
       } catch (e) {
-        return null
+        // Reported, not thrown: it used to return null here too (the same as "nothing owed"), so Purchases could not
+        // tell and reported every purchase's debt as recorded.
+        console.error('[debts] the debt for', source, sourceRef, 'could not be recorded:', e?.message)
+        return { failed: true, message: String(e?.message || e) }
       }
     },
   }
