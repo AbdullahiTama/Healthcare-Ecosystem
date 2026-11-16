@@ -37,7 +37,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A22 | Medium | Purchases (bulk edit / delete) | Purchase bulk edit through edit_purchase; delete takes stock back (kept when sold), restore puts it back | **Closed 2026-11-10**: `carehub_20270114_purchase_bulk_edit_delete` applied with owner approval and probed |
 | A23 | Low | Purchases (import / export) | Bulk upload and Excel/CSV export; the export audit needed `purchases.*` in `record_export_audit`'s allow-list | **Closed 2026-11-11**: `carehub_20270115_purchase_export_audit` applied with owner approval and probed |
 | A24 | Medium | Expenses (set new budget) | A used-up budget could only be edited (history rewritten, old spending counted against the new amount) | **Closed 2026-11-11**: `carehub_20270116_expense_new_budget` applied with owner approval and probed |
-| A25 | Medium | Data exposure (cost price) | `products.cost_price` is readable by every member of a business; the new POS cost switch is display-only | Open: owner decision |
+| A25 | Medium | Data exposure (cost price) | `products.cost_price` is readable by every member of a business; the new POS cost switch is display-only | Open: step 1 (screens) done 2026-11-16; step 2 (data-level) to plan |
 | A26 | Medium | Debts / suppliers / credit accounts | Debt payment history, guarded hand-recorded debts, supplier accounts, account payments and debt import needed `carehub_20270117_debt_and_supplier_accounts` (unapplied, it was the cause of the 2026-11-15 "debt upload not working" report); Record Debt linking added | **Closed 2026-11-15**: applied with owner approval (version 20261115205734) and probed |
 | A27 | High | POS (production defect) | An Owner's sales at a branch location are refused: "This sale is not authorized for your account." | **Closed 2026-11-15**: `carehub_20270118_sale_guard_branch_owner` applied with owner approval (version 20261115222717) and probed; a first version refused every sale for 72 s and was rolled back (see item) |
 | A28 | Low | Suppliers (contact list) | Supplier list with contact details, import and export needs `carehub_20270119_supplier_directory` (new table; nothing existing changes); until applied the screen is as before | **Closed 2026-11-15**: applied with owner approval (version 20261115224942) and probed |
@@ -361,6 +361,16 @@ column-level revoke on `products.cost_price` for non-cost roles with a cost-free
 cost reader (Inventory, Purchases, reports, transfers, POS) switched over. The second changes access for existing roles
 and needs a plan before implementing.
 
+
+**Decided 2026-11-16 (owner):** the Owner or staff given access ("See cost prices"), screens first, then data.
+**Step 1 done (screens):** Inventory shows cost price, margin, total profit and profit margin, the cost field in the
+product form and bulk edit, and Cost Price / Cost Value in the Excel export only to the Owner or `canViewCostPrice`;
+for anyone else the product's cost is saved unchanged. The POS already followed it. The permission is now labelled
+"See cost prices" (Staff › Roles). Purchases still show what was paid (entering costs is the purchase itself; the
+screen is limited to roles with Purchases). Tests: `modules/inventory/Inventory.cost.test.jsx`.
+**Still open (step 2, data-level):** the API still returns `products.cost_price` and purchase costs to every member;
+all staff share one database role, so this needs cost moved into a protected table and every reader and writer
+(14 app files, 11 database functions, purchases) switched over. To plan and approve separately.
 ### A32. Credit-sale debts without their client (Low) — closed 2026-11-16
 
 **Found 2026-11-16 (live, read-only)** while checking the Client Account against Debt Management: 8 `credit_sale`

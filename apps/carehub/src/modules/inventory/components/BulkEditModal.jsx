@@ -37,7 +37,7 @@ export default function BulkEditModal({ products, perms, categories = [], runUpd
             {check.errors.category && <div role='alert' style={{ color: danger, fontSize: 12, marginTop: 4 }}>{check.errors.category}</div>}
           </div>
 
-          {['price', 'cost_price'].map((key) => (
+          {['price', ...(perms?.canViewCostPrice ? ['cost_price'] : [])].map((key) => (
             <fieldset key={key} style={{ border: 'none', margin: 0, padding: 0 }} disabled={!canEditPrice}>
               <legend style={{ ...label, padding: 0 }}>{FIELD_NAMES[key]}</legend>
               <div style={{ display: 'flex', gap: 8 }}>

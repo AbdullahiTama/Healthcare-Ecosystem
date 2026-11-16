@@ -83,8 +83,10 @@ export async function buildInventoryXlsx(products, columns = INVENTORY_EXPORT_CO
 // Builds the file, then gives the caller one chance to veto before it is saved
 // (beforeDownload returns false to cancel). The export audit record is written
 // there: after a successful build, before the user gets the data.
-export async function exportInventoryXlsx(products, { beforeDownload } = {}) {
-  const blob = await buildInventoryXlsx(products)
+// `includeCost` false (staff without "See cost prices") leaves out Cost Price and Cost Value.
+export const INVENTORY_COST_KEYS = ['cost_price', 'cost_value']
+export async function exportInventoryXlsx(products, { beforeDownload, includeCost = true } = {}) {
+  const blob = await buildInventoryXlsx(products, includeCost ? INVENTORY_EXPORT_COLUMNS : INVENTORY_EXPORT_COLUMNS.filter((c) => !INVENTORY_COST_KEYS.includes(c.key)))
   if (beforeDownload && (await beforeDownload()) === false) return false
   const stamp = new Date().toISOString().slice(0, 10)
   downloadBlob(blob, `CareHub_Inventory_${stamp}.xlsx`)

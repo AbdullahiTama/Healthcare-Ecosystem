@@ -35,6 +35,8 @@ const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray300, b
 const productIcon = (p) => ((p.cat || p.category) === 'Services' ? Clipboard : Package)
 
 export default function Inventory({ brand, products, setProducts, role, perms, loadProducts, catalog }) {
+  // Cost price, margin and profit: the Owner or staff with "See cost prices" (CODE_AUDIT A25, step 1: screens).
+  const canSeeCost = role === 'Owner' || !!perms?.canViewCostPrice
   // Catalog load state from BusinessDashboard (hooks/useProductCatalog.js).
   // Rendered without it (tests, older callers) the list is treated as loaded.
   const catalogState = catalog || { status: 'ready', refreshing: false, stale: false, loadedCount: 0, error: null, reload: loadProducts }
@@ -147,6 +149,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     try {
       let audit = { status: 'failed' }
       saved = await exportInventoryXlsx(rowsToExport, {
+        includeCost: canSeeCost,
         beforeDownload: async () => {
           audit = await auditRepository.recordExport(brand.id, {
             exportType: 'inventory.xlsx',
@@ -674,17 +677,21 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Package />} label='Total Products' value={products.length} />
         <StatCard icon={<AlertTriangle />} label='Low Stock' value={lowStock.length} alert={lowStock.length > 0} sub={outOfStock.length + ' out of stock'} />
-        <StatCard icon={<DollarSign />} label='Stock Value' value={fmt(stockValue)} sub={'Cost: ' + fmt(costValue)} />
-        <StatCard
-          icon={<TrendingUp />} label='Total Profit' value={(profit < 0 ? '-' : '') + fmt(Math.abs(profit))}
-          tone={profit < 0 ? 'danger' : undefined}
-          sub={missingCost > 0 ? missingCost + ' item(s) have no cost price' : 'Stock value at cost'}
-        />
-        <StatCard
-          icon={<Percent />} label='Profit Margin' value={margin === null ? 'Not set' : Math.round(margin) + '%'}
-          tone={margin !== null && margin < 0 ? 'danger' : undefined}
-          sub={margin === null ? 'No stock on hand' : 'Of stock value'}
-        />
+        <StatCard icon={<DollarSign />} label='Stock Value' value={fmt(stockValue)} sub={canSeeCost ? 'Cost: ' + fmt(costValue) : 'At selling price'} />
+        {canSeeCost && (
+          <StatCard
+            icon={<TrendingUp />} label='Total Profit' value={(profit < 0 ? '-' : '') + fmt(Math.abs(profit))}
+            tone={profit < 0 ? 'danger' : undefined}
+            sub={missingCost > 0 ? missingCost + ' item(s) have no cost price' : 'Stock value at cost'}
+          />
+        )}
+        {canSeeCost && (
+          <StatCard
+            icon={<Percent />} label='Profit Margin' value={margin === null ? 'Not set' : Math.round(margin) + '%'}
+            tone={margin !== null && margin < 0 ? 'danger' : undefined}
+            sub={margin === null ? 'No stock on hand' : 'Of stock value'}
+          />
+        )}
         <StatCard icon={<Search />} label='On CareFind' value={onCareFind} sub='Visible to public' />
       </div>
 
@@ -788,7 +795,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               key: 'price', label: 'Sell Price', sortable: true, align: 'right',
               render: p => <span style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(p.price)}</span>,
             },
-            {
+            ...(canSeeCost ? [{
               key: 'cost_price', label: 'Cost Price', sortable: true, align: 'right',
               render: p => <span style={{ fontSize: '13px', color: gray500 }}>{p.cost_price ? fmt(p.cost_price) : 'Not set'}</span>,
             },
@@ -801,7 +808,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                   {margin !== null ? margin + '%' : 'Not set'}
                 </span>
               },
-            },
+            }] : []),
             {
               key: 'stock', label: 'Stock', sortable: true, align: 'right',
               render: p => {
@@ -1086,6 +1093,9 @@ function ProductModal({ product, products = [], perms, onSave, onClose, showToas
     },
   })
   const canEditPrice = !isEdit || perms?.canEditPrice
+  // Cost price and margin are shown to the Owner or staff with "See cost prices"; for anyone else the field is not
+  // shown and the product's cost is saved unchanged (it is still in `form`).
+  const canSeeCost = !!perms?.canViewCostPrice
 
   const isService = (form.cat || form.category) === 'Services'
   const hasSaleFields = !isService
@@ -1134,11 +1144,11 @@ function ProductModal({ product, products = [], perms, onSave, onClose, showToas
         <Inp label='Product Name *' value={form.name} onChange={v => f('name', v)} placeholder='e.g. Amoxicillin 500mg' required />
         <Inp label='Generic / Common Name' value={form.generic_name} onChange={v => f('generic_name', v)} placeholder='e.g. Amoxicillin' />
         <Sel label='Category' value={form.cat} onChange={v => f('cat', v)} options={PRODUCT_CATS} />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: canSeeCost ? '1fr 1fr' : '1fr', gap: '12px' }}>
           <Inp label='Selling Price (₦) *' value={form.price} onChange={v => f('price', v)} type='number' placeholder='0' required readOnly={!canEditPrice} />
-          <Inp label='Cost Price (₦)' value={form.cost_price} onChange={v => f('cost_price', v)} type='number' placeholder='0' readOnly={!canEditPrice} />
+          {canSeeCost && <Inp label='Cost Price (₦)' value={form.cost_price} onChange={v => f('cost_price', v)} type='number' placeholder='0' readOnly={!canEditPrice} />}
         </div>
-        {form.price && form.cost_price && parseFloat(form.price) > 0 && (
+        {canSeeCost && form.price && form.cost_price && parseFloat(form.price) > 0 && (
           <div style={{ padding: '8px 12px', borderRadius: '8px', background: successBg, fontSize: '12px', color: success, fontWeight: '600' }}>
             Profit margin: {Math.round(((parseFloat(form.price) - parseFloat(form.cost_price)) / parseFloat(form.price)) * 100)}%
           </div>

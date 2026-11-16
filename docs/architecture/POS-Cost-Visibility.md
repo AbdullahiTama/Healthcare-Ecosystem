@@ -68,3 +68,10 @@ A device that remembers the switch as on shows nothing to someone without the pe
 
 **Manual check after deploy:** as Owner, open the POS (costs show on the cards), add two products and a discount, charge;
 the receipt shows no cost. Tap Cost: everything hides; reload: still hidden. As a Cashier, no switch. In Staff, turn on the switch for a custom role and confirm it appears for that user.
+
+## Update 2026-11-16: Inventory follows the same permission (CODE_AUDIT A25, step 1)
+
+The switch is now "See cost prices". Inventory shows cost price, margin, total profit and profit margin (cards, list
+columns, product form, bulk edit) and Cost Price / Cost Value in its Excel export only to the Owner or staff with
+`canViewCostPrice`; a product saved by anyone else keeps its cost. This is still a screen rule: the data-level step
+(the API no longer returning cost to other staff) is planned separately.
