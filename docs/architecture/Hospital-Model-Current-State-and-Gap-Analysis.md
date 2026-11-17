@@ -1,7 +1,9 @@
 # Hospital Model: Current-State Audit and Gap Analysis
 
 **Status:** first issue, 2026-11-16. Written against `main` at `7eadd23` and the live Supabase project
-`szdybxmgmhndoytqanfb` (read-only queries on 2026-11-16; nothing was changed).
+`szdybxmgmhndoytqanfb` (read-only queries on 2026-11-16; nothing was changed). **Update 2026-11-17:** the owner
+chose `clients` as the patient identity; the Phase 0 fixes for D1–D7 are in the repository, not yet applied:
+[Hospital-Phase-0.md](Hospital-Phase-0.md). This document still describes production as it is.
 
 **Purpose:** the first two deliverables required by the *CareFind Hub Hospital Model: Upgrade & Implementation
 Specification* (§13.1 and §14): an inventory of what the Hospital Model is today and a gap matrix against the
@@ -117,8 +119,9 @@ unlike the module convention (PROJECT_OVERVIEW §3).
 | `Lab.jsx` | 302 | Lists lab requests; enters a result per test with summary; marks the request `completed`; posts a message. | Parses the `tests` column with `JSON.parse`, which fails on rows stored as JSON arrays (all current rows, see D6); no specimen, units or reference ranges from a test catalogue; no validation or release step; no critical-result handling; no report output. |
 | `Imaging.jsx` | 224 | Lists imaging requests; records a free-text report and an optional pasted URL; marks `completed`. | No modality, technique, findings/impression split, verification, or file upload (a typed URL only); shows `priority` and `patient_name`, which the table does not have. |
 
-States: every screen has a loading, error and empty state. Layout uses two-column grids that are not collapsed on
-phones in the registration and triage forms. Accessibility was not audited in this pass.
+States: every screen has a loading and empty state, and all but Imaging an error state (corrected 2026-11-17: a
+failed Imaging load showed "No pending scan requests"; fixed in Phase 0). Layout uses two-column grids that are not
+collapsed on phones in the registration and triage forms (Reception fixed in Phase 0). Accessibility was not audited in this pass.
 
 ### 3.3 Workflow as built
 

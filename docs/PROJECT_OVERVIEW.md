@@ -144,6 +144,7 @@ and database migrations on PGlite. On 2026-11-02 CareHub had 304 test files and 
 | Expense budgets, including Set new budget and budget history | [architecture/Expense-Budgets.md](architecture/Expense-Budgets.md) |
 | Cost price at the POS (who sees it, what it shows) | [architecture/POS-Cost-Visibility.md](architecture/POS-Cost-Visibility.md) |
 | Hospital Model: current state, defects and gap analysis against the hospital upgrade specification | [architecture/Hospital-Model-Current-State-and-Gap-Analysis.md](architecture/Hospital-Model-Current-State-and-Gap-Analysis.md) |
+| Hospital Model Phase 0: clinical roles and boundary in the database, clients as the patient identity, atomic clinical writes | [architecture/Hospital-Phase-0.md](architecture/Hospital-Phase-0.md) |
 | Receivables / payables, debt import and export, supplier summary, customer credit accounts, POS stock limits | [architecture/Debt-Accounts-and-POS-Stock-Limits.md](architecture/Debt-Accounts-and-POS-Stock-Limits.md) |
 | Business directory and discovery | [architecture/CareHub-Business-Directory-and-Discovery.md](architecture/CareHub-Business-Directory-and-Discovery.md) |
 | Production readiness, performance | [architecture/Production-Readiness.md](architecture/Production-Readiness.md), [architecture/Performance-and-Resilience.md](architecture/Performance-and-Resilience.md) |

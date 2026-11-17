@@ -69,6 +69,10 @@ Checklist:
 3. Ordering — reuse `default` / `hospital` / `enterprise`, or add a `NAV_ORDER` list + `familyOf` branch if it needs its own.
 4. `labelByType` if a module presents differently (e.g. `clients` → `Patients`).
 5. `ROLES_FOR_TYPE` — preset roles whose nav the type's modules can actually show (a neutralised role is worse than no role).
+   **Clinical modules are also enforced by the database** (`hospital_clinical_modules`, carehub_20270124_hospital_access): it mirrors
+   which business types have `reception`/`triage`/`doctor`/`rx_inbox`/`lab`/`imaging` and which preset role has which. Changing a
+   clinical module's `types`, or a preset role's clinical `nav`, needs the same change there in a migration, or the screen and
+   the database disagree (see [Hospital-Phase-0.md](Hospital-Phase-0.md) §2).
 6. ADR — add it to `getModuleTypeFromBusinessType` only.
 7. Tests — the `signup taxonomy (config/constants.js BUSINESS_TYPES)` block in `src/lib/__tests__/permissions.test.js` iterates `BUSINESS_TYPES` directly, so a new type is automatically held to: non-empty owner nav, wallet reachable, no clinical/enterprise leaks (`manufacturer_importer` and `wholesale` are the sign-up types allowed the enterprise set; both are still held to no clinical modules).
 
