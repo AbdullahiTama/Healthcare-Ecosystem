@@ -7,6 +7,8 @@ export const CLIENT_KEPT_REASONS = {
   debts: 'has debts',
   requests: 'has customer requests',
   linked_records: 'is linked to other client records',
+  // A patient with hospital visits (carehub_20270125_hospital_identity_and_workflow).
+  hospital: 'has hospital visits',
 }
 export const clientKeptText = (reasons) => (reasons || []).map((r) => CLIENT_KEPT_REASONS[r] || r).join(', ')
 
@@ -15,7 +17,7 @@ export default function ClientDeleteModal({ clients, onDelete, onRestore, onClos
   return (
     <BulkDeleteModal noun='client' count={clients.length} names={clients.map((c) => c.full_name)}
       notes={[
-        <>Clients with sales, appointments, consultations, debts or customer requests are <strong>kept</strong>, and you will see which and why.</>,
+        <>Clients with sales, appointments, consultations, debts, customer requests or hospital visits are <strong>kept</strong>, and you will see which and why.</>,
         <>You can <strong>restore</strong> deleted clients afterwards from Recently deleted.</>,
       ]}
       reasonText={clientKeptText} keptHeading='because their history must stay linked to them'

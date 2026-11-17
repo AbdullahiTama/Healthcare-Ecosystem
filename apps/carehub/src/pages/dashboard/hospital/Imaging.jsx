@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { ArrowLeft, Scan, CheckCircle, Bell, RefreshCw, MessageCircle, Lightbulb } from 'lucide-react'
 import { useAuth } from '../../../providers/AuthProvider'
-import { getImagingRequests, updateImagingRequest, addPatientMessage, getPatientMessages } from '../../../services/supabase'
+import { updateImagingRequest, addPatientMessage, getPatientMessages } from '../../../services/supabase'
+import { hospitalRepository } from '../../../modules/hospital/repositories'
+import { patientNameOf } from '../../../modules/hospital/services'
 import { theme } from '../../../styles/theme'
-import { Card, StatCard, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, StatusBadge, useToast, Toast } from '../../../components/ui'
+import { Card, StatCard, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, StatusBadge, useToast, Toast } from '../../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, success, warning, warningBg, info, infoBg, bg } = theme
 
@@ -15,6 +17,7 @@ export default function Imaging({ brand }) {
   const staffName = auth?.staff ? auth.staff.full_name : (auth?.brand?.owner || 'Radiographer')
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [selected, setSelected] = useState(null)
   const [messages, setMessages] = useState([])
   const [report, setReport] = useState('')
@@ -28,7 +31,7 @@ export default function Imaging({ brand }) {
 
   async function load() {
     setLoading(true)
-    try { const r = await getImagingRequests(brand.id); setRequests(r || []) } catch (e) {}
+    try { const r = await hospitalRepository.imagingRequests(brand.id); setRequests(r || []); setLoadError('') } catch (e) { setLoadError('Could not load imaging requests. Check your connection and try again.') }
     setLoading(false)
   }
 
@@ -58,7 +61,7 @@ export default function Imaging({ brand }) {
       })
       showToast('Report submitted and sent to Doctor!')
       setSelected(null); load()
-    } catch (e) { showToast('Error saving report.') }
+    } catch (e) { console.error('[Imaging] report not saved', e); showToast('Could not save the report. Please try again.', { type: 'error' }) }
     setSaving(false)
   }
 
@@ -89,7 +92,7 @@ export default function Imaging({ brand }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
         <button onClick={() => setSelected(null)} aria-label='Back' style={{ width: '38px', height: '38px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: navy, flexShrink: 0 }}><ArrowLeft size={16} /></button>
         <div>
-          <div style={{ fontWeight: '900', fontSize: '18px', color: navy }}>Imaging Request: {selected.patient_name || 'Patient'}</div>
+          <div style={{ fontWeight: '900', fontSize: '18px', color: navy }}>Imaging Request: {patientNameOf(selected)}</div>
           <div style={{ fontSize: '12px', color: gray400 }}>Requested by: {selected.requested_by} · {selected.created_at?.split('T')[0]}</div>
         </div>
       </div>
@@ -194,7 +197,7 @@ export default function Imaging({ brand }) {
         )})}
       </div>
 
-      {loading ? <Loading /> : filtered.length === 0 ? (
+      {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : filtered.length === 0 ? (
         <Empty icon={<Scan size={40} />} message={tab === 'pending' ? 'No pending scan requests' : 'No completed scans yet'} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -204,7 +207,7 @@ export default function Imaging({ brand }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div style={{ width: '44px', height: '44px', borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Scan size={20} /></div>
                   <div>
-                    <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>{req.patient_name || 'Patient'}</div>
+                    <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>{patientNameOf(req)}</div>
                     <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{req.scan_type} on {req.body_part}</div>
                     <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>Requested by: {req.requested_by} · {req.created_at?.split('T')[0]}</div>
                   </div>

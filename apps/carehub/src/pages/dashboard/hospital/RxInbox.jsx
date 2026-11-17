@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Pill as PillIcon, RefreshCw, Bell, CheckCircle, ClipboardList, AlertTriangle, Check } from 'lucide-react'
-import { getPrescriptions, updatePrescription, updatePatient } from '../../../services/supabase'
+import { getPrescriptions } from '../../../services/supabase'
+import { hospitalRepository } from '../../../modules/hospital/repositories'
+import { asList, hospitalErrorMessage, VISIT_STATUS_LABEL } from '../../../modules/hospital/services'
 import { fmt } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
 import { Card, StatCard, SectionHead, Pill, TealBtn, GhostBtn, Avatar, Loading, Empty, ErrorState, DetailHeader, useToast, Toast } from '../../../components/ui'
@@ -25,11 +27,16 @@ export default function RxInbox({ brand, products }) {
   async function markDispensed(rx) {
     setDispensing(true)
     try {
-      await updatePrescription(rx.id, { status: 'dispensed' })
-      if (rx.patient_id) await updatePatient(rx.patient_id, { status: 'discharged' })
-      showToast('Prescription dispensed! Patient discharged.')
+      // The database records who dispensed and when, and discharges the patient only when nothing else is pending
+      // for them (dispense_prescription, CODE_AUDIT A36).
+      const r = await hospitalRepository.dispensePrescription(rx.id)
+      showToast(r?.discharged ? 'Prescription dispensed. Patient discharged.'
+        : `Prescription dispensed. Patient: ${VISIT_STATUS_LABEL[r?.patient_status] || 'unchanged'} (not discharged while other work is pending or they are admitted, referred or transferred).`)
       load(); setSelected(null)
-    } catch (e) { showToast('Error. Please try again.') }
+    } catch (e) {
+      console.error('[RxInbox] dispense failed', e)
+      showToast(hospitalErrorMessage(e, 'Could not mark the prescription dispensed. Please try again.'), { type: 'error' })
+    }
     setDispensing(false)
   }
 
@@ -38,7 +45,7 @@ export default function RxInbox({ brand, products }) {
 
   if (selected) {
     let meds = []
-    try { meds = JSON.parse(selected.medicines || '[]') } catch (e) {}
+    meds = asList(selected.medicines)
     return (
       <div>
         <DetailHeader onBack={() => setSelected(null)} title='Prescription Details' sub={`Patient: ${selected.patient_name}`} />
@@ -110,7 +117,7 @@ export default function RxInbox({ brand, products }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {prescriptions.map(rx => {
-            let medCount = 0; try { medCount = JSON.parse(rx.medicines || '[]').length } catch (e) {}
+            const medCount = asList(rx.medicines).length
             return (
               <Card key={rx.id} style={{ padding: '16px', cursor: 'pointer', border: rx.status === 'pending' ? `1px solid ${tealDeep}` : `1px solid ${border}` }} onClick={() => setSelected(rx)}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>

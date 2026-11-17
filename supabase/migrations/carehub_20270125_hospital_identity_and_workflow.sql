@@ -2,10 +2,29 @@
 -- Hospital Model: clients are the patient identity, and clinical work is
 -- saved all-or-nothing (CODE_AUDIT A36, A38)
 --
--- STATUS: NOT APPLIED. Needs the owner's approval. Apply after
---   carehub_20270124_hospital_access, then deploy the app (the app in
---   production keeps working in between: a patient registered by the old
---   Reception screen is linked to a client automatically).
+-- STATUS: APPLIED 2026-11-17 as version 20261117092916, with owner approval,
+--   after carehub_20270124 (20261117092614); the app change deployed after it.
+--   Live result: 11/11 patients linked to 11 new clients (8 at hospitals, 3 at
+--   pharmacies), no visit differing from its client, 12 audit rows written
+--   by the backfill (11 links and 1 visit whose details were refreshed).
+--   Rehearsed first: 0124 and 0125 together in one transaction ending in a
+--   raised error (so rolled back), with a probe signed in as the real Owner,
+--   Receptionist, Nurse, Doctor, Lab Technician and Pharmacist of one hospital,
+--   a pharmacy owner and anon. Applied, then the same probe run again (rolled
+--   back; no probe rows remain). Both runs: each role reads only its
+--   department's records (Receptionist and Nurse see no consultations; Lab
+--   Technician sees lab requests, no consultations; Pharmacist prescriptions
+--   only); register -> at triage; nurse -> at doctor; consultation with a
+--   medicine, a test and a scan -> at lab, all four saved; the lab sees the
+--   request with the patient's name; dispensing does not discharge while the
+--   lab is pending, and records who dispensed. Refused, with their messages: a
+--   second open visit, a nurse consulting, a second consultation, member
+--   DELETE (patients, consultations), owner and pharmacy business-type
+--   changes, a pharmacy registering a patient (and it sees 0 patients), anon.
+--   anon holds no privilege on the eight tables; authenticated no DELETE or
+--   TRUNCATE. Security advisor: no new error; the new SECURITY DEFINER
+--   functions are executable by authenticated (intended: each checks the
+--   caller, as can_adjust_client_totals; accepted) and none by anon.
 --
 -- PROBLEM (read live 2026-11-16/17)
 -- -------

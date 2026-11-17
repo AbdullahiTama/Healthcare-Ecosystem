@@ -454,7 +454,8 @@ export async function updateRequisition(id, data) { return sbFetch('requisitions
 // by business_id (it was an id-only PATCH here). Reports reads purchases
 // through that repository too, so there is no second copy of the query.
 
-// PATIENTS (hospital)
+// PATIENTS (hospital). Clinical writes that must happen together (registration, consultation, dispensing) are
+// database functions called through modules/hospital/repositories; these are the remaining reads and simple writes.
 export async function getPatients(businessId, opts = {}) {
   let q = 'patients?business_id=eq.' + businessId + '&order=created_at.desc&select=*'
   if (opts.status) q += '&status=eq.' + opts.status
@@ -467,26 +468,18 @@ export async function getPatients(businessId, opts = {}) {
   }
   return sbFetch(q)
 }
-export async function addPatient(data) { return sbFetch('patients', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updatePatient(id, data) { return sbFetch('patients?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
-export async function getTriage(patientId) { const r = await sbFetch('triage?patient_id=eq.' + patientId + '&select=*'); return r[0] || null }
+// A visit's latest triage (a patients row is one visit; see docs/architecture/Hospital-Phase-0.md).
+export async function getTriage(patientId) { const r = await sbFetch('triage?patient_id=eq.' + patientId + '&order=created_at.desc&limit=1&select=*'); return r[0] || null }
 export async function addTriage(data) { return sbFetch('triage', { method: 'POST', body: JSON.stringify(data) }) }
-export async function addHospitalConsultation(data) { return sbFetch('consultations', { method: 'POST', body: JSON.stringify(data) }) }
 export async function getPrescriptions(businessId) { return sbFetch('prescriptions?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
-export async function addPrescription(data) { return sbFetch('prescriptions', { method: 'POST', body: JSON.stringify(data) }) }
-export async function updatePrescription(id, data) { return sbFetch('prescriptions?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 
 // LAB / IMAGING / PATIENT MESSAGES (hospital) — previously 3 duplicate copies
 // of these, each hardcoding its own SB_URL/SB_KEY/sbFetch, in Doctor.jsx,
 // Lab.jsx, and Imaging.jsx. Consolidated here so credential rotation and any
 // future auth changes only need to happen in one place.
-export async function addLabRequest(data) { return sbFetch('lab_requests', { method: 'POST', body: JSON.stringify(data) }) }
-export async function getLabRequests(businessId) { return sbFetch('lab_requests?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
 export async function updateLabRequest(id, data) { return sbFetch('lab_requests?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
-export async function getLabResults(requestId) { return sbFetch('lab_results?lab_request_id=eq.' + requestId + '&select=*') }
 export async function addLabResult(data) { return sbFetch('lab_results', { method: 'POST', body: JSON.stringify(data) }) }
-export async function addImagingRequest(data) { return sbFetch('imaging_requests', { method: 'POST', body: JSON.stringify(data) }) }
-export async function getImagingRequests(businessId) { return sbFetch('imaging_requests?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
 export async function updateImagingRequest(id, data) { return sbFetch('imaging_requests?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function getPatientMessages(patientId) { return sbFetch('patient_messages?patient_id=eq.' + patientId + '&order=created_at.asc&select=*') }
 export async function addPatientMessage(data) { return sbFetch('patient_messages', { method: 'POST', body: JSON.stringify(data) }) }

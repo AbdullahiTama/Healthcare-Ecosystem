@@ -2,11 +2,27 @@
 -- Hospital Model: the boundary and roles enforced by the database, clinical
 -- history kept, and a clinical audit trail (CODE_AUDIT A34, A35, A37)
 --
--- STATUS: NOT APPLIED. Needs the owner's approval. Apply after
---   carehub_20270123_hospital_schema_baseline (a no-op on production) and
---   before carehub_20270125_hospital_identity_and_workflow. The app in
---   production keeps working with it (every write it makes today is still
---   allowed for the role that makes it).
+-- STATUS: APPLIED 2026-11-17 as version 20261117092614, with owner approval,
+--   after carehub_20270123 (20261117092425) and before carehub_20270125
+--   (20261117092916).
+--   Rehearsed first: 0124 and 0125 together in one transaction ending in a
+--   raised error (so rolled back), with a probe signed in as the real Owner,
+--   Receptionist, Nurse, Doctor, Lab Technician and Pharmacist of one hospital,
+--   a pharmacy owner and anon. Applied, then the same probe run again (rolled
+--   back; no probe rows remain). Both runs: each role reads only its
+--   department's records (Receptionist and Nurse see no consultations; Lab
+--   Technician sees lab requests, no consultations; Pharmacist prescriptions
+--   only); register -> at triage; nurse -> at doctor; consultation with a
+--   medicine, a test and a scan -> at lab, all four saved; the lab sees the
+--   request with the patient's name; dispensing does not discharge while the
+--   lab is pending, and records who dispensed. Refused, with their messages: a
+--   second open visit, a nurse consulting, a second consultation, member
+--   DELETE (patients, consultations), owner and pharmacy business-type
+--   changes, a pharmacy registering a patient (and it sees 0 patients), anon.
+--   anon holds no privilege on the eight tables; authenticated no DELETE or
+--   TRUNCATE. Security advisor: no new error; the new SECURITY DEFINER
+--   functions are executable by authenticated (intended: each checks the
+--   caller, as can_adjust_client_totals; accepted) and none by anon.
 --
 -- PROBLEM (read live 2026-11-16/17)
 -- -------

@@ -46,11 +46,11 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A31 | Medium | Clients / suppliers (opening balances) | A "we owe" debt linked to a client would have been listed and paid as a supplier; opening balances need one per client | **Closed 2026-11-16**: applied with owner approval (version 20261116092716), probed, then the app change deployed |
 | A32 | Low | Debts (data hygiene) | 8 credit-sale debts have no `client_id`, some although their sale is linked to a client; Debts' Link to clients covers hand-recorded debts only | **Closed 2026-11-16**: `carehub_20270121_link_credit_sale_debts` applied with owner approval (version 20261116102618); 3 linked, 5 have no client to link |
 | A33 | High | Uploads / debts / POS / Purchases | Inventory upload lost rows (generic-name duplicate rule, line breaks, .xlsx read as text, rows dropped uncounted); a failed purchase debt was reported as recorded; no supplier phone in Record Purchase or the purchase template; POS showed no price for out-of-stock products | **Closed 2026-11-16**: app only, no database change; tested |
-| A34 | High | Hospital (clinical data access) | Every member of a business, in any role, can read, change and delete all clinical records through the API; deleting a patient cascades away their history; no clinical audit | Open. **Fix ready 2026-11-17, not applied**: `carehub_20270124_hospital_access` (owner approval to apply) |
-| A35 | High | Hospital (model boundary) | Hospital tables accept any business type; an owner can change their own `business_type` through the API | Open. **Fix ready 2026-11-17, not applied**: `carehub_20270124_hospital_access` |
-| A36 | High | Hospital (production defect) | Doctor → Lab / Imaging send fails (unknown `patient_name` column) and leaves partial records; jsonb read with `JSON.parse`; dispensing discharges the patient | Open. **Fix ready 2026-11-17, not applied**: `carehub_20270125_hospital_identity_and_workflow` + app (apply, then deploy) |
-| A37 | Medium | Hospital (schema) | The eight hospital tables, their policies and grants are not in `supabase/migrations/`; `anon` holds full grants including TRUNCATE | Open. **Fix ready 2026-11-17, not applied**: `carehub_20270123_hospital_schema_baseline` (no-op live) + `carehub_20270124` |
-| A38 | Medium | Hospital (data model) | Two patient identities: Reception writes `patients`, the hospital "Patients" menu and the rest of CareHub use `clients` | Decided 2026-11-17: `clients` is the identity. **Fix ready 2026-11-17, not applied**: `carehub_20270125` + app |
+| A34 | High | Hospital (clinical data access) | Every member of a business, in any role, can read, change and delete all clinical records through the API; deleting a patient cascades away their history; no clinical audit | **Closed 2026-11-17**: `carehub_20270124_hospital_access` applied with owner approval (version 20261117092614) and probed |
+| A35 | High | Hospital (model boundary) | Hospital tables accept any business type; an owner can change their own `business_type` through the API | **Closed 2026-11-17**: `carehub_20270124_hospital_access` applied with owner approval and probed |
+| A36 | High | Hospital (production defect) | Doctor → Lab / Imaging send fails (unknown `patient_name` column) and leaves partial records; jsonb read with `JSON.parse`; dispensing discharges the patient | **Closed 2026-11-17**: `carehub_20270125_hospital_identity_and_workflow` applied (version 20261117092916) and probed; app deployed |
+| A37 | Medium | Hospital (schema) | The eight hospital tables, their policies and grants are not in `supabase/migrations/`; `anon` holds full grants including TRUNCATE | **Closed 2026-11-17**: `carehub_20270123_hospital_schema_baseline` (version 20261117092425) + `carehub_20270124` applied |
+| A38 | Medium | Hospital (data model) | Two patient identities: Reception writes `patients`, the hospital "Patients" menu and the rest of CareHub use `clients` | **Closed 2026-11-17**: `clients` is the identity (owner); `carehub_20270125` applied; 3 test clients at pharmacies left for the owner |
 
 ## 2. Items
 
@@ -562,15 +562,17 @@ recommended sequence are in
   debts and appointments use `clients`. The specification requires one identity, reused. **Close by:** an owner
   decision on the identity of record, then a migration plan. This blocks the encounter model (Phase 1).
 
-**Phase 0 (2026-11-17): fixes ready, not applied.** The owner decided `clients` is the patient identity and asked for
-Phase 0. Three migrations and the app change close A34–A38 once applied, each with the owner's approval:
+**Phase 0 (2026-11-17): closed A34–A38.** The owner decided `clients` is the patient identity, asked for Phase 0 and
+approved applying it. Three migrations and the app change, applied in order with a rolled-back live probe before and
+after (results in each migration header):
 `carehub_20270123_hospital_schema_baseline` (a record of the live schema; a no-op on production; the eight tables leave
 the migration drift ratchet's known gap), `carehub_20270124_hospital_access` (database-enforced clinical roles and
 Hospital Model boundary, `business_type` platform-only, no client DELETE/TRUNCATE, history kept, append-only
 `clinical_audit_log`), `carehub_20270125_hospital_identity_and_workflow` (patients linked to clients, atomic
-registration, consultation and dispensing). Apply in that order; the app in production keeps working after each, and
-the app change deploys after the third. Verified by 37 PGlite tests (`apps/carefind/src/test/hospital/`) and 21 unit
-tests (`apps/carehub/src/modules/hospital/`); not yet probed live. Design, the per-role access table and what changes
+registration, consultation and dispensing). Applied as versions 20261117092425, 20261117092614 and
+20261117092916; the app change deployed after the third. Verified by 37 PGlite tests (`apps/carefind/src/test/hospital/`),
+21 unit tests (`apps/carehub/src/modules/hospital/`) and the live probes. **Left for the owner:** 3 test patients of
+2026-07-18 at pharmacies became clients in those pharmacies' lists and are kept there while their visit rows exist. Design, the per-role access table and what changes
 for existing staff: [Hospital-Phase-0.md](../docs/architecture/Hospital-Phase-0.md).
 
 ## 3. Open items recorded in other audits

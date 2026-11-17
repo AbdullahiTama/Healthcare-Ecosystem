@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { ArrowLeft, Microscope, CheckCircle, Bell, RefreshCw, MessageCircle } from 'lucide-react'
 import { useAuth } from '../../../providers/AuthProvider'
-import { getPatients, updatePatient, getLabRequests, getLabResults, addLabResult, updateLabRequest, addPatientMessage, getPatientMessages } from '../../../services/supabase'
+import { addLabResult, updateLabRequest, addPatientMessage, getPatientMessages } from '../../../services/supabase'
+import { hospitalRepository } from '../../../modules/hospital/repositories'
+import { asList, patientNameOf } from '../../../modules/hospital/services'
 import { fmt, todayDate } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, StatusBadge, useToast, Toast } from '../../../components/ui'
@@ -49,7 +51,7 @@ export default function Lab({ brand }) {
 
   async function load() {
     setLoading(true)
-    try { const r = await getLabRequests(brand.id); setRequests(r || []); setLoadError('') } catch (e) { setLoadError('Could not load lab requests. Check your connection and try again.') }
+    try { const r = await hospitalRepository.labRequests(brand.id); setRequests(r || []); setLoadError('') } catch (e) { setLoadError('Could not load lab requests. Check your connection and try again.') }
     setLoading(false)
   }
 
@@ -68,7 +70,7 @@ export default function Lab({ brand }) {
     if (!selected) return
     setSaving(true)
     try {
-      const testsOrdered = JSON.parse(selected.tests || '[]')
+      const testsOrdered = asList(selected.tests)
       const resultsList = testsOrdered.map(test => ({
         test_name: test.name || test,
         result: results[test.name || test] || '',
@@ -81,7 +83,7 @@ export default function Lab({ brand }) {
         patient_id: selected.patient_id,
         business_id: brand.id,
         performed_by: staffName,
-        results: JSON.stringify(resultsList),
+        results: resultsList,
         summary: summary,
         status: 'completed',
       })
@@ -102,7 +104,7 @@ export default function Lab({ brand }) {
       showToast('Results submitted and sent to Doctor!')
       setSelected(null)
       load()
-    } catch (e) { showToast('Error saving results. Please try again.') }
+    } catch (e) { console.error('[Lab] results not saved', e); showToast('Could not save the results. Please try again.', { type: 'error' }) }
     setSaving(false)
   }
 
@@ -131,14 +133,14 @@ export default function Lab({ brand }) {
 
   if (selected) {
     let tests = []
-    try { tests = JSON.parse(selected.tests || '[]') } catch (e) {}
+    tests = asList(selected.tests)
 
     return (
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <button onClick={() => setSelected(null)} aria-label='Back' style={{ width: '38px', height: '38px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: navy, flexShrink: 0 }}><ArrowLeft size={16} /></button>
           <div>
-            <div style={{ fontWeight: '900', fontSize: '18px', color: navy }}>Lab Request: {selected.patient_name || 'Patient'}</div>
+            <div style={{ fontWeight: '900', fontSize: '18px', color: navy }}>Lab Request: {patientNameOf(selected)}</div>
             <div style={{ fontSize: '12px', color: gray400 }}>Requested by: {selected.requested_by} · {selected.created_at?.split('T')[0]}</div>
           </div>
         </div>
@@ -251,7 +253,7 @@ export default function Lab({ brand }) {
           <Bell size={20} color={tealDeep} style={{ flexShrink: 0 }} />
           <div>
             <div style={{ fontWeight: '700', color: tealDeep, fontSize: '14px' }}>{pending.length} lab request(s) waiting!</div>
-            <div style={{ fontSize: '12px', color: gray600, marginTop: '2px' }}>{pending.map(r => r.patient_name || 'Patient').join(' · ')}</div>
+            <div style={{ fontSize: '12px', color: gray600, marginTop: '2px' }}>{pending.map(patientNameOf).join(' · ')}</div>
           </div>
         </div>
       )}
@@ -268,14 +270,14 @@ export default function Lab({ brand }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {filtered.map(req => {
             let tests = []
-            try { tests = JSON.parse(req.tests || '[]') } catch (e) {}
+            tests = asList(req.tests)
             return (
               <Card key={req.id} style={{ padding: '16px', cursor: 'pointer', border: req.status === 'pending' ? `1px solid ${tealDeep}` : `1px solid ${border}` }} onClick={() => openRequest(req)}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{ width: '44px', height: '44px', borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Microscope size={20} /></div>
                     <div>
-                      <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>{req.patient_name || 'Patient'}</div>
+                      <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>{patientNameOf(req)}</div>
                       <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{tests.length} test(s) · Requested by: {req.requested_by}</div>
                       <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{req.created_at?.replace('T', ' ').slice(0, 16)}</div>
                       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>

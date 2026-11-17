@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Stethoscope, AlertTriangle, Pill as PillIcon, Microscope, Scan, Send, MessageCircle, CheckCircle, Check, Plus, Search as SearchIcon } from 'lucide-react'
 import { useAuth } from '../../../providers/AuthProvider'
-import { getPatients, getTriage, addHospitalConsultation, addPrescription, updatePatient, addLabRequest, addImagingRequest, getPatientMessages, addPatientMessage } from '../../../services/supabase'
+import { getPatients, getTriage, getPatientMessages } from '../../../services/supabase'
+import { hospitalRepository } from '../../../modules/hospital/repositories'
+import { consultationPayload, consultationProblem, hospitalErrorMessage, VISIT_STATUS_LABEL } from '../../../modules/hospital/services'
 import { fmt } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
 import { Card, SectionHead, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, Pill, StatusBadge, DetailHeader, useToast, Toast } from '../../../components/ui'
@@ -25,6 +27,7 @@ export default function Doctor({ brand, products }) {
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
   const [sentTo, setSentTo] = useState([])
+  const [outcome, setOutcome] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   // Destinations — doctor can select multiple
   const [destinations, setDestinations] = useState({ pharmacy: false, lab: false, imaging: false })
@@ -54,7 +57,7 @@ export default function Doctor({ brand, products }) {
   }
 
   async function openPatient(p) {
-    setSelected(p); setConsult({}); setMeds([]); setDone(false); setSentTo([])
+    setSelected(p); setConsult({}); setMeds([]); setDone(false); setSentTo([]); setOutcome('')
     setDestinations({ pharmacy: false, lab: false, imaging: false })
     setLabTests([]); setLabTestInput('')
     setImagingRequests([{ scan_type: '', body_part: '', clinical_info: '' }])
@@ -69,114 +72,24 @@ export default function Doctor({ brand, products }) {
   const addMed = m => { setMeds(prev => [...prev, { ...m, dose: '', freq: '', dur: '', route: 'Oral', instructions: '' }]); setMedSearch('') }
   const updMed = (i, k, v) => setMeds(prev => prev.map((m, j) => j === i ? { ...m, [k]: v } : m))
 
+  // One request: the database saves the consultation, prescription, lab and imaging requests, the patient's next
+  // status and the thread message together, or none of them (complete_hospital_consultation, CODE_AUDIT A36).
   async function sendToPharmacy() {
-    if (!consult.dx1) { showToast('Please enter at least a primary diagnosis.', { type: 'warning' }); return }
-    if (!destinations.pharmacy && !destinations.lab && !destinations.imaging) {
-      showToast('Please select at least one destination: Pharmacy, Lab or Imaging.', { type: 'warning' }); return
-    }
+    const form = { consult, meds, labTests, imagingRequests, destinations }
+    const problem = consultationProblem(form)
+    if (problem) { showToast(problem, { type: 'warning' }); return }
     setSaving(true)
     try {
-      const sentDestinations = []
-      // Save consultation with doctor name
-      const c = await addHospitalConsultation({
-        patient_id: selected.id,
-        business_id: brand.id,
-        hpi: consult.hpi || '',
-        examination: consult.exam || '',
-        primary_diagnosis: consult.dx1 || '',
-        secondary_diagnosis: consult.dx2 || '',
-        clinical_notes: consult.notes || '',
-        disposition: consult.disposition || 'Discharge',
-        referral_dest: consult.refDest || '',
-        referral_reason: consult.refReason || '',
-        ward: consult.ward || '',
-        counselling: consult.counselling || '',
-        doctor_name: staffName,
-        performed_by: staffName,
-        status: 'completed',
-      })
-
-      // Send to Pharmacy
-      if (destinations.pharmacy && meds.length > 0) {
-        await addPrescription({
-          patient_id: selected.id,
-          consultation_id: (c[0] || {}).id || null,
-          business_id: brand.id,
-          patient_name: selected.full_name,
-          doctor_name: staffName,
-          medicines: JSON.stringify(meds),
-          lab_tests: consult.labTests || '',
-          imaging: consult.imaging || '',
-          notes: consult.prescNotes || '',
-          status: 'pending',
-        })
-        sentDestinations.push('pharmacy')
-      }
-
-      // Send to Lab
-      if (destinations.lab && labTests.length > 0) {
-        await addLabRequest({
-          patient_id: selected.id,
-          business_id: brand.id,
-          consultation_id: (c[0] || {}).id || null,
-          patient_name: selected.full_name,
-          requested_by: staffName,
-          tests: JSON.stringify(labTests.map(t => ({ name: t }))),
-          status: 'pending',
-          priority: consult.labPriority || 'routine',
-          notes: consult.labNotes || '',
-        })
-        sentDestinations.push('lab')
-      }
-
-      // Send to Imaging
-      if (destinations.imaging) {
-        for (const img of imagingRequests.filter(i => i.scan_type)) {
-          await addImagingRequest({
-            patient_id: selected.id,
-            business_id: brand.id,
-            consultation_id: (c[0] || {}).id || null,
-            patient_name: selected.full_name,
-            requested_by: staffName,
-            scan_type: img.scan_type,
-            body_part: img.body_part || '',
-            clinical_info: img.clinical_info || consult.dx1 || '',
-            status: 'pending',
-          })
-        }
-        sentDestinations.push('imaging')
-      }
-
-      // Determine patient next status — disposition (Admit/Refer/Emergency Transfer)
-      // takes priority over destination routing, since it's the actual clinical
-      // outcome; destinations still create their own department work queues above,
-      // independent of the patient's own status.
-      let nextStatus
-      if (consult.disposition === 'Admit') nextStatus = 'admitted'
-      else if (consult.disposition === 'Refer to Specialist') nextStatus = 'referred'
-      else if (consult.disposition === 'Emergency Transfer') nextStatus = 'transferred'
-      else {
-        nextStatus = 'discharged'
-        if (sentDestinations.includes('lab') || sentDestinations.includes('imaging')) nextStatus = 'at_lab'
-        else if (sentDestinations.includes('pharmacy')) nextStatus = 'at_pharmacy'
-      }
-      await updatePatient(selected.id, { status: nextStatus })
-
-      // Send message to communication thread
-      await addPatientMessage({
-        patient_id: selected.id,
-        business_id: brand.id,
-        sender_name: staffName,
-        sender_role: 'Doctor',
-        department: 'Consultation',
-        message: 'Consultation complete. Diagnosis: ' + consult.dx1 + '. Sent to: ' + sentDestinations.join(', '),
-        message_type: 'consultation',
-      })
-
-      setSentTo(sentDestinations)
+      const p = consultationPayload(form)
+      const result = await hospitalRepository.completeConsultation({ patientId: selected.id, ...p })
+      setSentTo(result?.sent || [])
+      setOutcome(result?.status || '')
       setDone(true)
       load()
-    } catch (e) { showToast('Could not save consultation. Please try again.', { type: 'error' }) }
+    } catch (e) {
+      console.error('[Doctor] consultation not saved', e)
+      showToast(hospitalErrorMessage(e, 'Could not save the consultation. Nothing was sent; please try again.'), { type: 'error' })
+    }
     setSaving(false)
   }
 
@@ -390,7 +303,7 @@ export default function Doctor({ brand, products }) {
         {sentTo.includes('pharmacy') && <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: theme.radius.full, background: tealMist, border: `1px solid ${tealMist}`, fontSize: '13px', color: tealDeep, fontWeight: '700' }}><PillIcon size={14} /> Prescription sent to Pharmacy</div>}
         {sentTo.includes('lab') && <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: theme.radius.full, background: warningBg, border: `1px solid ${warning}`, fontSize: '13px', color: warning, fontWeight: '700' }}><Microscope size={14} /> Lab request sent</div>}
         {sentTo.includes('imaging') && <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: theme.radius.full, background: infoBg, border: `1px solid ${info}`, fontSize: '13px', color: info, fontWeight: '700' }}><Scan size={14} /> Imaging request sent</div>}
-        {sentTo.length === 0 && <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: theme.radius.full, background: successBg, border: `1px solid ${success}`, fontSize: '13px', color: success, fontWeight: '700' }}><CheckCircle size={14} /> Patient discharged</div>}
+        {outcome && <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: theme.radius.full, background: successBg, border: `1px solid ${success}`, fontSize: '13px', color: success, fontWeight: '700' }}><CheckCircle size={14} /> Patient: {VISIT_STATUS_LABEL[outcome] || outcome}</div>}
       </div>
       <div><TealBtn onClick={() => { setSelected(null); setDone(false); setTriageData(null); setMessages([]); load() }}>Back to Patient List</TealBtn></div>
     </div>

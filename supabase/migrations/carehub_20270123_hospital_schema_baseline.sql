@@ -2,12 +2,12 @@
 -- Hospital Model: baseline of the eight hospital tables as they are live
 -- (CODE_AUDIT A37)
 --
--- STATUS: NOT APPLIED. A RECORD OF THE LIVE SCHEMA: applying it to production
---   changes nothing (every statement is "if not exists" or re-states a live
---   grant). Its purpose is that the schema exists in the repository, so a rebuild,
---   a branch and the PGlite tests reproduce it. Read live 2026-11-16/17 (columns,
---   defaults, keys, foreign keys, indexes, policies, grants; no triggers, no
---   CHECK or UNIQUE constraints).
+-- STATUS: APPLIED 2026-11-17 as version 20261117092425, with owner approval.
+--   A record of the live schema: it changed nothing (the policies and grants
+--   it states were already live; read 2026-11-16/17: columns, defaults, keys,
+--   foreign keys, indexes, policies, grants; no triggers, no CHECK or UNIQUE
+--   constraints). Its purpose is that the schema exists in the repository, so
+--   a rebuild, a branch and the PGlite tests reproduce it.
 --
 -- PROBLEM
 -- -------

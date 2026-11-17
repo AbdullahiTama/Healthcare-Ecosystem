@@ -2,8 +2,9 @@
 
 **Status:** first issue, 2026-11-16. Written against `main` at `7eadd23` and the live Supabase project
 `szdybxmgmhndoytqanfb` (read-only queries on 2026-11-16; nothing was changed). **Update 2026-11-17:** the owner
-chose `clients` as the patient identity; the Phase 0 fixes for D1–D7 are in the repository, not yet applied:
-[Hospital-Phase-0.md](Hospital-Phase-0.md). This document still describes production as it is.
+chose `clients` as the patient identity; the Phase 0 fixes for D1–D7 were applied to production the same day:
+[Hospital-Phase-0.md](Hospital-Phase-0.md). This document describes production as it was before Phase 0; the gap matrix
+from Phase 1 onward still stands.
 
 **Purpose:** the first two deliverables required by the *CareFind Hub Hospital Model: Upgrade & Implementation
 Specification* (§13.1 and §14): an inventory of what the Hospital Model is today and a gap matrix against the

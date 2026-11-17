@@ -1,7 +1,8 @@
 # Hospital Model Phase 0: a Safe Foundation
 
-**Status:** implemented in the repository 2026-11-17; **migrations not yet applied to production** (each needs the
-owner's approval, as every migration here does). Closes, once applied: CODE_AUDIT A34, A35, A36, A37, A38.
+**Status:** applied to production 2026-11-17 with the owner's approval (versions 20261117092425, 20261117092614,
+20261117092916), each rehearsed and probed live as real hospital roles (results in the migration headers); the app
+change deployed after the third. Closed CODE_AUDIT A34, A35, A36, A37, A38.
 
 **Background:** [Hospital-Model-Current-State-and-Gap-Analysis.md](Hospital-Model-Current-State-and-Gap-Analysis.md)
 §6 defines Phase 0 as the work that must come before the specification's Phase 1 (encounters, structured
@@ -120,7 +121,7 @@ failure shows the screen's own message (`hospitalErrorMessage`), so a raw databa
 `getTriage` now returns the visit's latest triage. The nine direct-write and read helpers the screens no longer use
 were removed from `services/supabase.js`.
 
-## 4b. Applying (owner approval for each)
+## 4b. Applying (done 2026-11-17, owner approval)
 
 1. `carehub_20270123_hospital_schema_baseline`: a no-op on production. Applying it records it in the migration
    ledger.
