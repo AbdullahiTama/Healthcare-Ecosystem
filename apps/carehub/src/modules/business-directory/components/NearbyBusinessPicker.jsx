@@ -11,8 +11,9 @@ const { navy, gray400, gray500, gray600, border, tealDeep, tealMist, danger } = 
 /**
  * Live Field Report helper: lists CareHub directory businesses near the captured
  * GPS fix and lets the representative CONFIRM which one (if any) the report is
- * about. The suggestions come from nearby_directory_businesses(): verified
- * platform listings only, no contact details (carehub_20261208).
+ * about. The suggestions come from nearby_directory_businesses(): eligible
+ * platform listings (active, not demo, not rejected; bulk imports included),
+ * each with its verification badge, and no contact details (carehub_20270126).
  *
  *   - Nothing here is saved until the rep submits the report.
  *   - Proximity is a suggestion, never proof of a visit: nothing is

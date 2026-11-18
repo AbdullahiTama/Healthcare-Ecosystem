@@ -32,11 +32,15 @@ const VERIFICATION_OPTIONS = [
 const SOURCE_OPTIONS = [
   { value: 'all', label: 'All Sources' },
   { value: 'carefind', label: 'CareFind' },
+  { value: 'directory', label: 'CareHub directory' },
   { value: 'osm', label: 'OSM' },
   { value: 'google', label: 'Google' },
   { value: 'regulatory', label: 'Regulatory' },
   { value: 'other', label: 'Other' },
 ]
+
+// Badge text per source; anything else shows its raw key.
+const SOURCE_LABEL = { carefind: 'CareFind', directory: 'CareHub directory', osm: 'OSM', google: 'Google', regulatory: 'Regulatory', other: 'Other' }
 
 const SORT_OPTIONS = [
   { value: 'distance', label: 'Distance' },
@@ -66,6 +70,7 @@ export default function FacilityDiscovery({ brand }) {
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [unavailable, setUnavailable] = useState([])
   const [exporting, setExporting] = useState(false)
   const [exportProgress, setExportProgress] = useState(null)
   const searchIdRef = useRef(0)
@@ -103,6 +108,7 @@ export default function FacilityDiscovery({ brand }) {
     }
     setLoading(true)
     setError(null)
+    setUnavailable([])
     try {
       const res = await discoverFacilities({
         mode,
@@ -128,6 +134,7 @@ export default function FacilityDiscovery({ brand }) {
       }
       setTotal(res.total)
       setHasMore(res.hasMore)
+      setUnavailable(res.unavailableSources || [])
       setPage(p)
     } catch (e) {
       if (thisSearch !== searchIdRef.current) return
@@ -177,7 +184,7 @@ export default function FacilityDiscovery({ brand }) {
     <>
       <PageHeader
         title="Facility Discovery"
-        description="Find health facilities across Nigeria by state, local government area, city or nationwide. Results from every source are merged, duplicates removed and ranked."
+        description="Find health facilities across Nigeria by state, local government area, city or nationwide, including businesses in the CareHub directory. Results from every source are merged, duplicates removed and ranked."
         primaryAction={{ label: 'Search', onClick: () => doSearch(true) }}
       />
       <div style={{ padding: '20px', maxWidth: '1100px' }}>
@@ -316,6 +323,15 @@ export default function FacilityDiscovery({ brand }) {
           </Card>
         )}
 
+        {!loading && unavailable.includes(FACILITY_SOURCE.DIRECTORY) && (
+          <Card role="alert" style={{ padding: '12px 16px', background: warningBg, border: `1px solid ${border}`, marginBottom: '16px' }}>
+            <div style={{ fontSize: '13px', fontWeight: '700', color: warning, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <AlertTriangle size={14} aria-hidden="true" /> CareHub directory businesses could not be loaded
+            </div>
+            <div style={{ fontSize: '12px', color: gray600, marginTop: '4px' }}>These results come from the other sources only. Search again in a moment.</div>
+          </Card>
+        )}
+
         {!loading && !error && facilities.length === 0 && total === 0 && (
           <Card style={{ padding: '32px', textAlign: 'center' }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}><Building2 size={36} color={gray400} /></div>
@@ -357,7 +373,7 @@ export default function FacilityDiscovery({ brand }) {
                           {f.verification === 'no_gps' && <span style={{ fontSize: '10px', color: gray400 }}>No GPS</span>}
                           {f.verification === 'regulatory' && <span style={{ fontSize: '10px', fontWeight: '700', background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: '20px' }}>Regulatory</span>}
                           {/* Source */}
-                          <span style={{ fontSize: '10px', fontWeight: '700', color: gray500, textTransform: 'uppercase', border: `1px solid ${gray100}`, padding: '2px 6px', borderRadius: '20px' }}>{f.source}</span>
+                          <span style={{ fontSize: '10px', fontWeight: '700', color: gray500, textTransform: 'uppercase', border: `1px solid ${gray100}`, padding: '2px 6px', borderRadius: '20px' }}>{SOURCE_LABEL[f.source] || f.source}</span>
                           {f.distanceM != null && !f.pendingReview && !(f.verification === 'pending') && (
                             <span style={{ fontSize: '11px', color: gray400 }}>{f.distanceM < 1000 ? f.distanceM + ' m' : (f.distanceM/1000).toFixed(1) + ' km'} away</span>
                           )}

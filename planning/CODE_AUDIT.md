@@ -51,6 +51,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A36 | High | Hospital (production defect) | Doctor → Lab / Imaging send fails (unknown `patient_name` column) and leaves partial records; jsonb read with `JSON.parse`; dispensing discharges the patient | **Closed 2026-11-17**: `carehub_20270125_hospital_identity_and_workflow` applied (version 20261117092916) and probed; app deployed |
 | A37 | Medium | Hospital (schema) | The eight hospital tables, their policies and grants are not in `supabase/migrations/`; `anon` holds full grants including TRUNCATE | **Closed 2026-11-17**: `carehub_20270123_hospital_schema_baseline` (version 20261117092425) + `carehub_20270124` applied |
 | A38 | Medium | Hospital (data model) | Two patient identities: Reception writes `patients`, the hospital "Patients" menu and the rest of CareHub use `clients` | **Closed 2026-11-17**: `clients` is the identity (owner); `carehub_20270125` applied; 3 test clients at pharmacies left for the owner |
+| A39 | High | Business directory (visibility) | 215 bulk-imported directory listings never reached Manufacturer / Importer companies: Field Report showed verified listings only, the report link refused them, Facility Discovery never read the directory | Open: `carehub_20270126_directory_listings_in_field_and_discovery` written, PGlite-tested and live-probed (rolled back); app change ready; needs owner approval to apply |
 
 ## 2. Items
 
@@ -574,6 +575,37 @@ registration, consultation and dispensing). Applied as versions 20261117092425, 
 21 unit tests (`apps/carehub/src/modules/hospital/`) and the live probes. **Left for the owner:** 3 test patients of
 2026-07-18 at pharmacies became clients in those pharmacies' lists and are kept there while their visit rows exist. Design, the per-role access table and what changes
 for existing staff: [Hospital-Phase-0.md](../docs/architecture/Hospital-Phase-0.md).
+
+### A39. Bulk-imported directory listings invisible to companies (High) — open 2026-11-18
+
+**What (verified live 2026-11-18):** 215 businesses (124 pharmacies, 91 hospitals) were bulk-imported by the platform
+admin into the platform Business Directory on 2026-11-17, all with address, state, LGA, city and Nigerian
+coordinates, all `unverified` (every import arrives unverified). Manufacturer / Importer companies saw none of them:
+1. Field Report's "Possible nearby businesses" (`nearby_directory_businesses()`) returned verified listings only.
+2. `field_activities_directory_link_guard()` refused to link an unverified listing to a report.
+3. Facility Discovery, the companies' business directory, read registered `businesses` (plus map data) only; since
+   `carehub_20261208` companies cannot read directory tables, so there was no path at all.
+
+The records themselves were saved correctly, with no missing coordinates or places. The cause was the read paths.
+
+**Fix (written, not applied):** `supabase/migrations/carehub_20270126_directory_listings_in_field_and_discovery.sql`
+defines one eligibility rule (platform, active, not demo, not rejected; unverified kept and labelled) for the
+suggestion, the link guard and a new read-only `discover_directory_listings()` (name / category / type text,
+state / LGA / city, radius). Callers must belong to a Manufacturer / Importer or Wholesale business, or be platform staff. The
+CareHub Discovery engine adds the directory as a source, keeps its recorded verification, and reports when the
+directory could not be read. **Security:** widens company access from "verified listings within 1 km, no contact" to
+every eligible listing with business phone and coordinates (no e-mail, contact person or notes); tightens who may call
+the nearby function. Details: [CareHub-Business-Directory-and-Discovery.md](../docs/architecture/CareHub-Business-Directory-and-Discovery.md).
+
+**Verified:** 34 PGlite tests (the defect reproduced first), 7 engine tests (fail on the old code), the full CareHub
+suite and build. A rolled-back live probe as a real Manufacturer / Importer account found the following.
+Field suggestion at the first import's position: 4 listings including it. Discovery nationwide: 216 (215 imports + 1
+verified OSM listing). Keyword "pharmacy": 124. Keyword "hospital": 95. Within 5 km: 48, nearest first. Name search
+finds it. A report linking an import is refused before the change and accepted after. Direct table reads: 0 rows.
+A pharmacy account is refused. Production was confirmed unchanged afterwards.
+
+**Close by:** owner approval → apply the migration → re-run the probe → deploy the app change (the app degrades safely
+before the migration: Discovery shows "CareHub directory businesses could not be loaded" and keeps its other sources).
 
 ## 3. Open items recorded in other audits
 
