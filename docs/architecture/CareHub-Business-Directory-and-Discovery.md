@@ -1,6 +1,6 @@
 # CareHub Business Directory and Discovery
 
-> **CURRENT STATE, 2026-11-18: imported listings reach the Field Report and Facility Discovery** (`carehub_20270126_directory_listings_in_field_and_discovery`, status in its header). This supersedes the "verified only" part of the 2026-10-22 note below; tables stay platform-admin only.
+> **CURRENT STATE, 2026-11-18: imported listings reach the Field Report and Facility Discovery** (`carehub_20270126_directory_listings_in_field_and_discovery`, applied 2026-11-18 as version 20261118114804). This supersedes the "verified only" part of the 2026-10-22 note below; tables stay platform-admin only.
 >
 > **Why.** 215 pharmacies and hospitals bulk-imported into the platform directory (unverified, as every import is) were invisible to Manufacturer / Importer companies. The Field Report suggestion returned verified listings only, the report link guard refused unverified listings, and Facility Discovery never read the directory at all (its internal source was `businesses`, i.e. registered accounts only).
 >

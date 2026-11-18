@@ -51,7 +51,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A36 | High | Hospital (production defect) | Doctor → Lab / Imaging send fails (unknown `patient_name` column) and leaves partial records; jsonb read with `JSON.parse`; dispensing discharges the patient | **Closed 2026-11-17**: `carehub_20270125_hospital_identity_and_workflow` applied (version 20261117092916) and probed; app deployed |
 | A37 | Medium | Hospital (schema) | The eight hospital tables, their policies and grants are not in `supabase/migrations/`; `anon` holds full grants including TRUNCATE | **Closed 2026-11-17**: `carehub_20270123_hospital_schema_baseline` (version 20261117092425) + `carehub_20270124` applied |
 | A38 | Medium | Hospital (data model) | Two patient identities: Reception writes `patients`, the hospital "Patients" menu and the rest of CareHub use `clients` | **Closed 2026-11-17**: `clients` is the identity (owner); `carehub_20270125` applied; 3 test clients at pharmacies left for the owner |
-| A39 | High | Business directory (visibility) | 215 bulk-imported directory listings never reached Manufacturer / Importer companies: Field Report showed verified listings only, the report link refused them, Facility Discovery never read the directory | Open: `carehub_20270126_directory_listings_in_field_and_discovery` written, PGlite-tested and live-probed (rolled back); app change ready; needs owner approval to apply |
+| A39 | High | Business directory (visibility) | 215 bulk-imported directory listings never reached Manufacturer / Importer companies: Field Report showed verified listings only, the report link refused them, Facility Discovery never read the directory | **Closed 2026-11-18**: `carehub_20270126_directory_listings_in_field_and_discovery` applied with owner approval (version 20261118114804) and probed; app deployed |
 
 ## 2. Items
 
@@ -576,7 +576,7 @@ registration, consultation and dispensing). Applied as versions 20261117092425, 
 2026-07-18 at pharmacies became clients in those pharmacies' lists and are kept there while their visit rows exist. Design, the per-role access table and what changes
 for existing staff: [Hospital-Phase-0.md](../docs/architecture/Hospital-Phase-0.md).
 
-### A39. Bulk-imported directory listings invisible to companies (High) — open 2026-11-18
+### A39. Bulk-imported directory listings invisible to companies (High) — closed 2026-11-18
 
 **What (verified live 2026-11-18):** 215 businesses (124 pharmacies, 91 hospitals) were bulk-imported by the platform
 admin into the platform Business Directory on 2026-11-17, all with address, state, LGA, city and Nigerian
@@ -604,8 +604,16 @@ verified OSM listing). Keyword "pharmacy": 124. Keyword "hospital": 95. Within 5
 finds it. A report linking an import is refused before the change and accepted after. Direct table reads: 0 rows.
 A pharmacy account is refused. Production was confirmed unchanged afterwards.
 
-**Close by:** owner approval → apply the migration → re-run the probe → deploy the app change (the app degrades safely
-before the migration: Discovery shows "CareHub directory businesses could not be loaded" and keeps its other sources).
+**Closed by:** the app change deployed (`a5b183a`), then the migration applied with the owner's approval (version
+`20261118114804`). The post-apply probe repeated every result above against production (the report insert rolled
+back; no probe row left), and confirmed the grants: both functions executable by `authenticated` only, the link guard
+by no API role. **Verified 2026-11-18 (owner instruction):** all 215 imports set to `verified` in one statement, scoped to platform,
+active, unverified `import` rows; `verified_at` stamped by the trigger, `verified_by` set to "owner-approved bulk
+verification of 2026-11-17 import (Claude Code session, 2026-11-18)" because no admin session was signed in; one
+`admin_audit_log` entry (id 11, action `directory.bulk_verify`) lists all 215 ids. After: directory 216 verified
+(215 imports + 1 external), none unstamped; a Manufacturer / Importer account sees all 216 as verified in Discovery
+and Field Report. **Note:** this was a bulk owner decision, not a per-business check; to undo, set the ids in audit
+entry 11 back to `unverified` (the trigger clears the stamp).
 
 ## 3. Open items recorded in other audits
 
