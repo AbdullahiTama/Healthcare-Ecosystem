@@ -1,144 +1,105 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { X } from 'lucide-react';
+import { openMap } from '@care-ecosystem/design-system/components/maps/mapEngine';
 import { theme } from '../../../styles/theme';
 import { businessCoords } from '../../utils/marketplace.js';
+import { GOOGLE_MAPS_KEY, loadLeaflet } from '../../../components/maps/mapProvider';
 
-// Escape a value before interpolating it into the HTML string Leaflet's
-// bindPopup takes. Business names, categories and addresses are admin/import
-// sourced, so an unescaped `<img src=x onerror=...>` in any of them would
-// execute in the visitor's session. The previous version interpolated them raw.
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+const BUSINESS_COLOR = '#0E6F5A';
+const YOU_COLOR = '#2563eb';
+
+// A marker's popup, built from text nodes. Business names, categories and addresses are admin/import sourced, so
+// they must never be parsed as HTML (an `<img src=x onerror=...>` in a name would run in the visitor's session).
+export function businessPopup(business) {
+  const box = document.createElement('div');
+  box.style.minWidth = '180px';
+  const title = document.createElement('strong');
+  title.textContent = business.name || '';
+  box.appendChild(title);
+  [business.category?.name, business.address].filter(Boolean).forEach((line) => {
+    const div = document.createElement('div');
+    div.style.fontSize = '12px';
+    div.style.color = '#666';
+    div.textContent = line;
+    box.appendChild(div);
+  });
+  return box;
 }
 
+function textPopup(text) {
+  const el = document.createElement('strong');
+  el.textContent = text;
+  return el;
+}
+
+// Search results on a map: Google Maps when a key is configured, OpenStreetMap otherwise (the shared map engine
+// chooses, and falls back if Google is unavailable). Clicking a marker opens the business card below the map.
 export default function ResultsMap({
   businesses,
   isLoading,
   error,
   onBusinessClick,
   center,
+  open = openMap,
 }) {
   const mapRef = useRef(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
+  const handleRef = useRef(null);
+  const [mapStatus, setMapStatus] = useState('loading'); // loading | ready | failed
   const [selectedBusiness, setSelectedBusiness] = useState(null);
+  const showMap = !isLoading && !error;
+  const centerLat = center?.lat;
+  const centerLng = center?.lng;
 
-  // Initialize map
+  // Open the map once its element exists.
   useEffect(() => {
-    if (!mapRef.current || mapLoaded) return;
-
-    // Dynamic import of Leaflet
-    const loadMap = async () => {
+    if (!showMap || !mapRef.current || handleRef.current) return undefined;
+    let cancelled = false;
+    (async () => {
       try {
-        const L = await import('leaflet');
-        await import('leaflet/dist/leaflet.css');
-
-        // Create map
-        const map = L.map(mapRef.current, {
-          center: center || [6.5244, 3.3792], // Default to Lagos
+        const handle = await open(mapRef.current, {
+          googleApiKey: GOOGLE_MAPS_KEY,
+          loadLeaflet,
+          center: centerLat != null && centerLng != null ? { lat: centerLat, lng: centerLng } : undefined,
           zoom: 12,
-          zoomControl: false,
         });
-
-        // Add zoom control to bottom right
-        L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-        // Add tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        }).addTo(map);
-
-        // Store map instance
-        mapRef.current._map = map;
-        setMapLoaded(true);
+        if (cancelled) { handle.destroy(); return; }
+        handleRef.current = handle;
+        setMapStatus('ready');
       } catch (err) {
         console.error('Failed to load map:', err);
+        if (!cancelled) setMapStatus('failed');
       }
+    })();
+    return () => {
+      cancelled = true;
+      if (handleRef.current) { handleRef.current.destroy(); handleRef.current = null; }
+      setMapStatus('loading');
     };
+  }, [showMap, open]); // center is read once, when the map opens; later changes are drawn as a marker
 
-    loadMap();
-  }, [center, mapLoaded]);
-
-  // Update markers when businesses change
+  // Draw the results (and the searcher's position) and fit the view to them.
   useEffect(() => {
-    if (!mapRef.current?._map || !mapLoaded) return;
-
-    const updateMarkers = async () => {
-      const L = await import('leaflet');
-      const map = mapRef.current._map;
-
-    // Clear existing markers
-    map.eachLayer((layer) => {
-      if (layer instanceof L.Marker) {
-        map.removeLayer(layer);
-      }
-    });
-
-    // Add markers for each business
+    const handle = handleRef.current;
+    if (mapStatus !== 'ready' || !handle) return;
     const markers = [];
-    businesses.forEach((business) => {
+    const points = [];
+    (businesses || []).forEach((business) => {
       const coords = businessCoords(business);
-      if (coords) {
-        const marker = L.marker([coords.lat, coords.lng])
-          .addTo(map)
-          .bindPopup(`
-            <div style="min-width: 200px;">
-              <h4 style="margin: 0 0 4px 0; font-size: 14px;">${escapeHtml(business.name)}</h4>
-              ${business.category?.name ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #666;">${escapeHtml(business.category.name)}</p>` : ''}
-              ${business.address ? `<p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">${escapeHtml(business.address)}</p>` : ''}
-              <a
-                href="/business/${encodeURIComponent(business.id)}"
-                style="
-                  display: inline-block;
-                  padding: 8px 12px;
-                  background: #0E6F5A;
-                  color: white;
-                  text-decoration: none;
-                  border-radius: 6px;
-                  font-size: 12px;
-                  min-height: 44px;
-                  line-height: 28px;
-                "
-              >
-                View Details
-              </a>
-            </div>
-          `);
-
-        marker.on('click', () => {
-          setSelectedBusiness(business);
-        });
-
-        markers.push(marker);
-      }
+      if (!coords) return;
+      markers.push({
+        lat: coords.lat, lng: coords.lng, color: BUSINESS_COLOR, radius: 8, fillOpacity: 0.85,
+        title: business.name, popup: businessPopup(business),
+        onClick: () => setSelectedBusiness(business),
+      });
+      points.push(coords);
     });
-
-    // Fit map to markers if we have any
-    if (markers.length > 0) {
-      const group = L.featureGroup(markers);
-      map.fitBounds(group.getBounds().pad(0.1));
+    if (centerLat != null && centerLng != null) {
+      markers.push({ lat: centerLat, lng: centerLng, color: YOU_COLOR, radius: 7, fillOpacity: 1, title: 'Your location', popup: textPopup('Your location') });
     }
-
-    // Add user location marker if center provided
-    if (center) {
-      L.circleMarker([center.lat, center.lng], {
-        radius: 8,
-        color: '#0d9488',
-        fillColor: '#0d9488',
-        fillOpacity: 1,
-        weight: 2,
-      })
-        .addTo(map)
-        .bindPopup('Your location');
-    }
-    };
-    updateMarkers();
-  }, [businesses, center, mapLoaded]);
+    handle.setMarkers(markers);
+    if (points.length > 0) handle.fitTo(points, { padding: 40, maxZoom: 16, singleZoom: 15 });
+  }, [businesses, centerLat, centerLng, mapStatus]);
 
   // Loading state
   if (isLoading) {
@@ -161,9 +122,19 @@ export default function ResultsMap({
     );
   }
 
+  if (mapStatus === 'failed') {
+    return (
+      <div style={styles.errorContainer} role="status">
+        <ErrorIcon />
+        <p style={styles.errorText}>The map could not be loaded</p>
+        <p style={styles.errorHint}>Switch to the list view to see the same results.</p>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
-      <div ref={mapRef} style={styles.map} />
+      <div ref={mapRef} style={styles.map} role="region" aria-label="Search results map" aria-busy={mapStatus === 'loading'} />
 
       {/* Selected Business Card */}
       {selectedBusiness && (

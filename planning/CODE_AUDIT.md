@@ -52,6 +52,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A37 | Medium | Hospital (schema) | The eight hospital tables, their policies and grants are not in `supabase/migrations/`; `anon` holds full grants including TRUNCATE | **Closed 2026-11-17**: `carehub_20270123_hospital_schema_baseline` (version 20261117092425) + `carehub_20270124` applied |
 | A38 | Medium | Hospital (data model) | Two patient identities: Reception writes `patients`, the hospital "Patients" menu and the rest of CareHub use `clients` | **Closed 2026-11-17**: `clients` is the identity (owner); `carehub_20270125` applied; 3 test clients at pharmacies left for the owner |
 | A39 | High | Business directory (visibility) | 215 bulk-imported directory listings never reached Manufacturer / Importer companies: Field Report showed verified listings only, the report link refused them, Facility Discovery never read the directory | **Closed 2026-11-18**: `carehub_20270126_directory_listings_in_field_and_discovery` applied with owner approval (version 20261118114804) and probed; app deployed |
+| A40 | Medium | CareFind delivery map (XSS) | The delivery-tracking map put the pickup station's name and the delivery address into popup HTML unescaped | **Closed 2026-11-18**: popups built from text nodes during the Google Maps switch; tested |
 
 ## 2. Items
 
@@ -614,6 +615,17 @@ verification of 2026-11-17 import (Claude Code session, 2026-11-18)" because no 
 (215 imports + 1 external), none unstamped; a Manufacturer / Importer account sees all 216 as verified in Discovery
 and Field Report. **Note:** this was a bulk owner decision, not a per-business check; to undo, set the ids in audit
 entry 11 back to `unverified` (the trigger clears the stamp).
+
+### A40. Delivery map popups rendered names as HTML (Medium) — closed 2026-11-18
+
+**What:** `apps/carefind/src/components/shop/DeliveryTrackingMap.jsx` built its Leaflet popups as
+`<strong>${pickupStation.name}</strong><br/>${pickupStation.address}` and the same for the delivery address, unescaped.
+A station name or an address containing `<img src=x onerror=...>` would run in the customer's (or public tracking
+page visitor's) session when the marker was opened.
+
+**Closed by:** the map switch to the shared engine ([Maps.md](../docs/architecture/Maps.md)): every popup is a DOM node
+built with `textContent`. Test: `apps/carefind/src/components/maps/__tests__/maps.test.jsx` ("a station name or
+address with HTML stays text").
 
 ## 3. Open items recorded in other audits
 

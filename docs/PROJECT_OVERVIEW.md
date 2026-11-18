@@ -147,6 +147,7 @@ and database migrations on PGlite. On 2026-11-02 CareHub had 304 test files and 
 | Hospital Model Phase 0: clinical roles and boundary in the database, clients as the patient identity, atomic clinical writes | [architecture/Hospital-Phase-0.md](architecture/Hospital-Phase-0.md) |
 | Receivables / payables, debt import and export, supplier summary, customer credit accounts, POS stock limits | [architecture/Debt-Accounts-and-POS-Stock-Limits.md](architecture/Debt-Accounts-and-POS-Stock-Limits.md) |
 | Business directory and discovery | [architecture/CareHub-Business-Directory-and-Discovery.md](architecture/CareHub-Business-Directory-and-Discovery.md) |
+| Maps: Google Maps display with OpenStreetMap fallback, the browser key and its restrictions | [architecture/Maps.md](architecture/Maps.md) |
 | Production readiness, performance | [architecture/Production-Readiness.md](architecture/Production-Readiness.md), [architecture/Performance-and-Resilience.md](architecture/Performance-and-Resilience.md) |
 | Linting | [architecture/Linting.md](architecture/Linting.md) |
 | Held draft migrations | [architecture/pending-migrations/README.md](architecture/pending-migrations/README.md) |

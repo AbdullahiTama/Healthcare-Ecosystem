@@ -38,7 +38,7 @@ export default function BusinessProfile({ business, categoryName, subcategoryNam
     : b.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent([b.name, b.address, b.state].filter(Boolean).join(', '))}` : null
 
   async function share() {
-    const text = [b.name, b.address, b.phone].filter(Boolean).join(' · ') + (hasCoords ? `\nhttps://www.openstreetmap.org/?mlat=${b.latitude}&mlon=${b.longitude}#map=18/${b.latitude}/${b.longitude}` : '')
+    const text = [b.name, b.address, b.phone].filter(Boolean).join(' · ') + (hasCoords ? `\nhttps://www.google.com/maps/search/?api=1&query=${b.latitude},${b.longitude}` : '')
     try {
       if (navigator.share) await navigator.share({ title: b.name, text })
       else { await navigator.clipboard.writeText(text); onToast && onToast('Copied to clipboard', { type: 'success' }) }
