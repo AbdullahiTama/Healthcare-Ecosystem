@@ -18,6 +18,8 @@ on:
       - 'packages/**'
       - 'supabase/**'
       - '.github/workflows/carefind-ci.yml'
+      - 'scripts/audit-gate*.mjs'
+      - '.github/audit-exceptions.json'
   pull_request:
     paths:
       - 'apps/carefind/**'
@@ -25,6 +27,8 @@ on:
       - 'packages/**'
       - 'supabase/**'
       - '.github/workflows/carefind-ci.yml'
+      - 'scripts/audit-gate*.mjs'
+      - '.github/audit-exceptions.json'
 
 concurrency:
   group: carefind-ci-${{ github.ref }}
@@ -58,9 +62,10 @@ jobs:
         working-directory: apps/carefind
         run: npm run lint:undef
 
+      # Same gate as CareHub CI (scripts/audit-gate.mjs, exceptions in .github/audit-exceptions.json).
       - name: Security audit
         working-directory: apps/carefind
-        run: npm audit --audit-level=high
+        run: node ../../scripts/audit-gate.mjs
 
       - name: Run tests
         working-directory: apps/carefind
