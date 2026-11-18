@@ -1,7 +1,13 @@
 -- ============================================================================
 -- Imported directory listings reach the Field Report and Facility Discovery.
 --
--- Status: NOT YET APPLIED (awaiting owner approval). Tested on PGlite
+-- Status: APPLIED 2026-11-18 with owner approval to szdybxmgmhndoytqanfb as version 20261118114804.
+--   Post-apply probe (as a real Manufacturer / Importer owner; the one report insert rolled back): field
+--   suggestion at the first import 4 rows incl. it; nationwide 216; 'pharmacy' 124; 'hospital' 95; by name
+--   found; within 5 km 48; report link to an import accepted; direct table read 0 rows; pharmacy owner
+--   Not authorized. Grants: both functions authenticated only (not anon); link guard not executable by API roles.
+--
+-- Before applying: tested on PGlite
 -- (apps/carefind/src/test/directory/directoryListingsVisibility.db.test.js, 34 tests) and by a
 -- rolled-back live probe against the 215 imported listings.
 --
