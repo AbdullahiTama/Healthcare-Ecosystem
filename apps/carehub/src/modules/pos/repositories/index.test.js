@@ -535,8 +535,10 @@ describe('saleRepository', () => {
 
 // ── Held sales never count as sales; corrections are owner RPCs ───────────────
 describe('saleRepository: held, deleted and resumed rows are not sales', () => {
-  const today = new Date().toISOString().split('T')[0]
-  const at = `${today}T09:00:00`
+  // A fixed clock: "today" is the Lagos business day, so a date taken from the real UTC clock fell on the wrong day
+  // between 23:00 and 24:00 UTC and the test failed every night.
+  const NOW = new Date('2026-03-10T12:00:00Z')
+  const at = '2026-03-10T09:00:00Z'
   const seed = {
     sales: [
       { id: 'done', business_id: A, is_on_hold: false, status: null, created_at: at },
@@ -553,7 +555,7 @@ describe('saleRepository: held, deleted and resumed rows are not sales', () => {
   it('getToday and getRecent count only completed sales (the dashboard leak)', async () => {
     const { repo } = build({ seed })
     const ids = (rows) => rows.map((r) => r.id).sort()
-    expect(ids(await repo.getToday(A))).toEqual(['credit-live', 'done', 'done2'])
+    expect(ids(await repo.getToday(A, { now: NOW }))).toEqual(['credit-live', 'done', 'done2'])
     expect(ids(await repo.getRecent(A, 50))).toEqual(['credit-live', 'done', 'done2'])
   })
 
