@@ -139,7 +139,7 @@ Each phase is shippable, keeps today's workflows working, and has its own migrat
 | **2. Prescription-only safety** | CareFind and online orders enforce availability-only for Rx and controlled items | 1 |
 | **3. Moving stock between branches** | Transfers (send, in transit, receive with shortfall, cancel), on the Master Catalog and in each branch's Inventory | 1 |
 | **4. Shared library** | `catalog_items`, seeding from clustered business data, admin review queue, NAFDAC list import (CSV/Excel), business suggestions, link suggestions; add a product by search or barcode from the library | 1 |
-| **5. Catalogue health** | Score, duplicate merge, bulk category fixes, missing-data flags, CareFind hiding unpriced items | 1, 4 |
+| **5. Catalogue health** | Score, duplicate merge, bulk category fixes, missing-data flags, CareFind hiding unpriced items (built, §10; migration not applied yet) | 1, 4 |
 
 ## 5. Risks and open points
 
@@ -481,3 +481,134 @@ else is added, approved. Rows without a name are skipped and reported. Prescript
   3. Suggest an unlinked item; approve it as admin; check the owner's notification and the item's library badge.
   4. Import a small official list (.csv) and check the counts.
 
+
+## 10. Phase 5 as built: catalogue health
+
+**Finding (live, 2026-11-18):** 10,368 current master items. 1,202 have no price, 9,170 no generic name, 6,864 no
+barcode, and 7,335 (71%) are in "Other medicines". 1,211 of the 9,828 products listed on CareFind have no price. Exact
+duplicate names cannot exist (unique name key), but 3 groups share a barcode, 8 differ only by spaces or punctuation,
+and near-identical spellings exist. In the largest catalogue (3,228 items) most trigram matches are size variants
+("… b/s" and "… s/s"), so those are not suggested.
+
+**Owner's decisions:** a merge keeps history (stock and batches move through the ledger; the dropped product is
+stopped, not deleted). CareFind hides items with no price; prescription-only items stay listed as "ask the
+pharmacist".
+
+### Database (`supabase/migrations/carehub_20270127_catalogue_health.sql`)
+
+**Not applied to live yet.** Applying it hides about 1,200 unpriced products from CareFind at once.
+
+| Object | What it does |
+|---|---|
+| `catalogue_issue(item, issue)` | The one definition of each flag: `no_price` (default price 0 or none), `no_generic` (medicines only: not devices, personal care, food, general retail or services), `no_barcode` (anything but a service), `other_category` (none or "Other medicines"), `unlinked` (not linked to the library), `hidden` (listed on CareFind at a location with no price, and not prescription-only). |
+| `catalogue_pairs(business)` | Possible duplicates among current items: the same barcode; the same letters and digits; or trigram similarity ≥ 0.8 (index `master_products_name_trgm`) with the same numbers ("500mg" never pairs with "250mg") and no size or pack word between them (`catalogue_size_variants`). Dismissed pairs are left out. |
+| `catalogue_duplicate_pairs(business, offset, limit)` | A page of pairs, barcode matches first, each side with its details, number of locations and stock. |
+| `catalogue_duplicate_dismissals`, `dismiss_duplicate_pair` | "Not duplicates": that pair is not suggested again. Owner or manager. Members read; nobody writes the table directly. |
+| `catalogue_health(business)` | `{ total, score, counts, duplicate_items }`. The score is 100 minus each flag's weight times the share of items with it: no price 25, "Other medicines" 20, duplicates 15 (items in a pair), no generic 10, no barcode 10, not linked 10, hidden on CareFind 10. An empty catalogue has no score. |
+| `master_catalog_page` | Gains `p_health` (one flag at a time). Old calls work unchanged. |
+| `set_master_category(business, ids, code)` | Up to 500 items. With no code, a linked item takes its library category. Only `category_code` changes: the category text locations sell under (which the stock ledger reads for Services) and prescription status are untouched. Owner or manager. |
+| `merge_master_items(business, keep, drop)` | Owner only, one transaction, described below. |
+| `is_carefind_unpriced(rx, price)`, `carefind_products`, policy "public can view listed products" | CareFind leaves out non-prescription items with no price (≤ 0). The business's members, the listing's owner and an approved claimant still read them. |
+
+**Merging** (`merge_master_items`), per location:
+
+- **Only the dropped item is carried there.** Its products are linked to the kept item and take its name; the carrying
+  moves over and keeps its state and price override.
+- **Both are carried.** Each dropped product's stock above zero moves into the kept product through
+  `apply_stock_change` ('correction', source `catalogue_merge`, one movement on each side). Its batches move with it.
+  It is stopped (`branch_products.active = false`) and taken off CareFind. It is **not deleted**: its sales, orders,
+  movements and reviews stay on it.
+- **Stock below zero** is not moved, since that would take the kept product below zero. It stays on the stopped product
+  and the result counts it (`negative_left`), so the owner can count it.
+
+What the kept item takes from the dropped one:
+
+- it fills its empty details from it (generic name, strength, form, pack, barcode, description, price, cost);
+- it takes the dropped item's category when its own is empty or "Other medicines";
+- it takes the stricter prescription status;
+- it takes the dropped item's library link when it has none.
+
+Its products then receive that status, generic name and barcode through `catalog_mirror_products` (never looser).
+Prices are not changed; Push sets them.
+
+The dropped item is archived, its pending library suggestion is withdrawn, and its dismissals are removed.
+
+**Refused merges**, as Inventory's "Clean up duplicates" refuses them:
+
+- batch-tracked products;
+- a service against a stocked product at the same location.
+
+**Known limit:** like any archived item, a product later added at a location under the dropped item's exact name
+creates a new catalogue item with that name.
+
+### App (`apps/carehub/src/modules/master-catalog`)
+
+- **Health panel** (`CatalogueHealthPanel.jsx`): the score (good from 80, fair from 50) and every flag above zero.
+  - A flag filters the list; pressing it again clears the filter.
+  - "Possible duplicates" opens the duplicates review.
+  - The panel is hidden before the migration.
+  - A failed health check never blocks the list.
+- **Possible duplicates** (`DuplicatesModal.jsx`):
+  - Each pair shows why it was found, and both items with their details, locations and stock.
+  - The item at more locations is kept by default (then the one with more stock, then the linked one).
+  - **Merge…** asks for confirmation and reports what moved; **Not duplicates** dismisses the pair.
+  - The database's refusal is shown as written.
+- **Set category** in the bulk bar (`CategoryDialog.jsx`): a standard category, or "Use each item's CareHub library
+  category".
+- The score refreshes after save, carry, push, archive, restore, library links, category changes and merges.
+- Repository: `getHealth`, `duplicatePairs`, `dismissPair`, `merge`, `setCategory`, `getPage({ health })`.
+- Rules: `HEALTH_ISSUES`, `scoreTone`, `duplicateReason`, `mergeSummary`.
+
+### Security implications
+
+- No permission is widened. Reads are SECURITY INVOKER under the existing RLS and also check membership.
+- Writes are SECURITY DEFINER and check the caller first:
+  - **owner or manager** of the main business for categories and dismissals;
+  - **the owner only** for merges, which move stock at every location.
+- Every statement is scoped to the business, and the dismissals table refuses direct writes.
+- A merge goes through the stock ledger, so it is journalled with the caller's identity. Nothing is deleted.
+- CareFind only loses rows: unpriced items stop being public. Owners, claimants and members still see them. The view
+  still exposes only CareFind's columns, never cost.
+
+### Test plan
+
+- **PGlite:** `apps/carefind/src/test/catalogue/catalogueHealth.db.test.js` (19 tests).
+  - Setup: pg_trgm; phases 1 and 4; the live stock ledger; phase 2; the live owner and manager functions.
+  - Flags and the score; an empty catalogue; outsiders and the public refused; the page's flag filter and the old
+    call.
+  - Pairs: barcode, name and similar; never different strengths, size variants or another business's items; the page
+    with details.
+  - Dismiss: managers can; cashiers and outsiders cannot; no direct writes.
+  - Bulk category: by code and from the library; refusals; the 500 limit.
+  - Merge:
+    - only the owner;
+    - stock through the ledger and batches move;
+    - the dropped product is stopped and kept;
+    - relinking at a location carrying only the dropped item;
+    - details filled and the stricter status;
+    - the library link carried over;
+    - stock below zero left and counted;
+    - refusals for tracked products and services.
+  - CareFind: unpriced items hidden from the view and the policy; prescription-only items stay; the business still
+    sees them.
+  - Re-running the migration.
+- **Unit and UI (CareHub):**
+  - `repositories/index.test.js`: call shapes, the fallback before the migration, and `p_health` sent only when set;
+  - `catalogueRules.test.js`: flags, score tone, reasons and merge summary;
+  - `MasterCatalog.health.test.jsx`:
+    - the panel and its hidden state;
+    - filtering and clearing;
+    - a failed health check;
+    - merge with confirmation, refusal and dismiss;
+    - pair load error;
+    - bulk category with validation;
+    - `defaultKeep`.
+- **Manual, after applying the migration:**
+  1. Master Catalog (as the owner): the health panel shows a score. Press "No price" and check that the list filters.
+  2. Open "Possible duplicates". Merge a pair at a location that stocks both, then check:
+     - the kept product's stock and the two 'correction' movements;
+     - that the dropped product is stopped;
+     - that its sales history is still there.
+  3. Select items and choose "Set category"; check that the "Other medicines" count drops.
+  4. On CareFind, check that a listed product with price 0 is gone and that a prescription-only item still shows
+     "ask the pharmacist".

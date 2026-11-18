@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateMasterForm, formFromMaster, parseBranchPrice, carryingByLocation, carryingSummary, rxStatus, locationName, rxOptionsFor, applyLibraryToForm } from '../catalogueRules'
+import { validateMasterForm, formFromMaster, parseBranchPrice, carryingByLocation, carryingSummary, rxStatus, locationName, rxOptionsFor, applyLibraryToForm, HEALTH_ISSUES, healthIssue, scoreTone, duplicateReason, mergeSummary } from '../catalogueRules'
 
 const CATS = [
   { code: 'antibiotics', label: 'Antibiotics & anti-infectives', rx_default: 'prescription_only' },
@@ -93,5 +93,31 @@ describe('the CareHub library (phase 4)', () => {
     expect(out).toMatchObject({ name: 'My Amoxil', generic_name: 'Amoxicillin', strength: '500mg', barcode: '501', category_code: 'antibiotics',
       rx_status: 'prescription_only', default_price: '1200', catalog_item_id: 'c1' })
     expect(applyLibraryToForm(formFromMaster(null), { id: 'c2', brand_name: 'Amoxil 500mg caps', strength: '500mg', rx_status: 'otc' }).name).toBe('Amoxil 500mg caps')
+  })
+})
+
+describe('catalogue health (phase 5)', () => {
+  it('names every flag the database counts, and only duplicates has no list filter', () => {
+    expect(HEALTH_ISSUES.map((i) => i.key)).toEqual(['no_price', 'hidden', 'duplicates', 'other_category', 'no_generic', 'no_barcode', 'unlinked'])
+    expect(HEALTH_ISSUES.filter((i) => !i.filter).map((i) => i.key)).toEqual(['duplicates'])
+    expect(healthIssue('no_price').label).toBe('No price')
+    expect(healthIssue('nope')).toBe(null)
+  })
+
+  it('reads the score: good from 80, fair from 50, none for an empty catalogue', () => {
+    expect([scoreTone(80), scoreTone(79), scoreTone(50), scoreTone(49), scoreTone(null)].map((t) => t.label))
+      .toEqual(['Good', 'Fair', 'Fair', 'Needs attention', 'No items yet'])
+  })
+
+  it('explains why two items were paired', () => {
+    expect(duplicateReason('barcode')).toBe('Same barcode')
+    expect(duplicateReason('name')).toMatch(/spaces or punctuation/)
+    expect(duplicateReason('similar')).toBe('Very similar names')
+  })
+
+  it('summarises a merge, including stock below zero left behind', () => {
+    expect(mergeSummary({ relinked: 0, merged_locations: 0, units_moved: 0, negative_left: 0 }, 'Panadol')).toBe('Merged into Panadol.')
+    expect(mergeSummary({ relinked: 2, merged_locations: 2, units_moved: 1, negative_left: 1 }, 'Panadol'))
+      .toBe('Merged into Panadol. 1 unit moved at 2 locations. 2 products now sold as Panadol. 1 product had stock below zero, left on the stopped product: count it.')
   })
 })

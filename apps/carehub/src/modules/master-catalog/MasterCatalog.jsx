@@ -17,10 +17,13 @@ import CarryDialog from './CarryDialog'
 import ItemLocationsModal from './ItemLocationsModal'
 import LibraryMatchesModal from './LibraryMatchesModal'
 import LibraryItemModal from './LibraryItemModal'
+import CatalogueHealthPanel from './CatalogueHealthPanel'
+import DuplicatesModal from './DuplicatesModal'
+import CategoryDialog from './CategoryDialog'
 
 const { tealBright, navy, gray500, border } = theme
 const log = (what, e) => console.error(`[master-catalog] ${what}:`, e)
-const NO_FILTERS = { search: '', category: '', rx: '', library: '', archived: false }
+const NO_FILTERS = { search: '', category: '', rx: '', library: '', health: '', archived: false }
 const reason = (e) => String(e?.message || e || '').replace(/^Supabase error \(\d+\):\s*/, '')
 
 // The business's master catalogue: the home of every product (Product-Catalogue-Design.md, phase 1). Every product at
@@ -29,6 +32,8 @@ const reason = (e) => String(e?.message || e || '').replace(/^Supabase error \(\
 // sold. Pages of 50 come from master_catalog_page; before carehub_20261215 the page shows the plain list.
 // With the CareHub library (carehub_20261223) the owner also links items to the shared library (in bulk from the
 // matches it finds, or one by one), suggests items for it, and can start a new item from it.
+// Catalogue health (carehub_20270127): a score and missing-data counts that filter the list, a review of possible
+// duplicates (merge or dismiss), and a bulk category for the selection.
 export default function MasterCatalog({ brand, role }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const { allow } = usePlanGate(showToast)
@@ -54,6 +59,10 @@ export default function MasterCatalog({ brand, role }) {
   const [library, setLibrary] = useState({ available: false, matches: 0 })
   const [showMatches, setShowMatches] = useState(false)
   const [libraryItemId, setLibraryItemId] = useState(null)
+  const [health, setHealth] = useState({ available: false })
+  const [healthStatus, setHealthStatus] = useState('loading')
+  const [showDuplicates, setShowDuplicates] = useState(false)
+  const [categoryTargets, setCategoryTargets] = useState(null)
   const request = useRef(0)
 
   // Categories and locations change rarely: loaded once per business.
@@ -97,6 +106,15 @@ export default function MasterCatalog({ brand, role }) {
   }, [mainId, isOwner])
   useEffect(() => { loadLibrary() }, [loadLibrary])
 
+  // The health score and counts. Refreshed after anything that changes items; hidden before the migration.
+  const loadHealth = useCallback(async () => {
+    if (!isOwner || !mainId) return
+    setHealthStatus('loading')
+    try { setHealth(await masterCatalogRepository.getHealth(mainId)); setHealthStatus('ready') } catch (e) { log('health', e); setHealthStatus('error') }
+  }, [mainId, isOwner])
+  useEffect(() => { loadHealth() }, [loadHealth])
+  const reload = () => { load(); loadHealth() }
+
   const categoryLabel = (item) => categories.find((c) => c.code === item.category_code)?.label || item.category || ''
   const selectedItems = page.items.filter((i) => selected.includes(i.id))
   const locationsItem = page.items.find((i) => i.id === locationsItemId) || null
@@ -116,7 +134,7 @@ export default function MasterCatalog({ brand, role }) {
         showToast('Item added to the catalogue. Use Carry to stock it at your locations.', { type: 'success' })
       }
       setFormItem(undefined)
-      load()
+      reload()
     } catch (e) {
       log('save', e)
       showToast(isDuplicateError(e) ? 'An item with this name is already in the catalogue. Search for it instead.' : 'Could not save the item: ' + reason(e), { type: 'error' })
@@ -140,7 +158,7 @@ export default function MasterCatalog({ brand, role }) {
     else showToast(`${ids.length === 1 ? items[0].name : ids.length + ' items'} carried at ${locationIds.length} location${locationIds.length === 1 ? '' : 's'}.`, { type: 'success' })
     setCarryItems(null)
     setSelected([])
-    load()
+    reload()
   }
 
   async function stopAt(locationId) {
@@ -159,7 +177,7 @@ export default function MasterCatalog({ brand, role }) {
     try {
       const n = await masterCatalogRepository.push(item.id, mainId)
       showToast(typeof n === 'number' ? `${item.name} updated at ${n} product${n === 1 ? '' : 's'} across your locations.` : 'Pushed to your locations.', { type: 'success' })
-      load()
+      reload()
     } catch (e) { log('push', e); showToast('Could not push: ' + reason(e), { type: 'error' }) }
   }
 
@@ -173,14 +191,14 @@ export default function MasterCatalog({ brand, role }) {
     failed.forEach((r) => log('archive', r.reason))
     showToast(failed.length ? `${failed.length} of ${items.length} items could not be archived.` : `${items.length === 1 ? items[0].name : items.length + ' items'} archived.`, { type: failed.length ? 'error' : 'success' })
     setSelected([])
-    load()
+    reload()
   }
 
   async function restore(item) {
     try {
       await masterCatalogRepository.restore(item.id, mainId)
       showToast(`${item.name} restored.`, { type: 'success' })
-      load()
+      reload()
     } catch (e) {
       log('restore', e)
       showToast(isDuplicateError(e) ? 'Another item with this name is in the catalogue. Rename one of them first.' : 'Could not restore: ' + reason(e), { type: 'error' })
@@ -195,7 +213,7 @@ export default function MasterCatalog({ brand, role }) {
   // does nothing. The item form and the carry / location dialogs handle their
   // own scans, so this one is off while they are open (the library dialogs too).
   const rootRef = useRef(null)
-  const ownDialogOpen = formItem !== undefined || !!carryItems || !!locationsItemId || !!libraryItemId || showMatches
+  const ownDialogOpen = formItem !== undefined || !!carryItems || !!locationsItemId || !!libraryItemId || showMatches || showDuplicates || !!categoryTargets
   useKeyboardScanner({
     ignore: (e) => {
       const t = e.target
@@ -220,7 +238,7 @@ export default function MasterCatalog({ brand, role }) {
   // ── The CareHub library ───────────────────────────────────────────────────
   async function libraryAction(fn, done) {
     setBusy(true)
-    try { await fn(); done(); load(); loadLibrary() } catch (e) {
+    try { await fn(); done(); reload(); loadLibrary() } catch (e) {
       log('library', e)
       showToast(refusalMessage(e, 'That did not work. Check your connection and try again.'), { type: 'error', duration: 8000 })
     }
@@ -239,6 +257,21 @@ export default function MasterCatalog({ brand, role }) {
     showToast(`Thanks. CareHub will review ${item.name} and let you know.`, { type: 'success' })
   })
 
+  // ── Catalogue health ──────────────────────────────────────────────────────
+  async function setCategory(code) {
+    const items = categoryTargets
+    setBusy(true)
+    try {
+      const n = await masterCatalogRepository.setCategory(mainId, items.map((i) => i.id), code)
+      const what = code ? `set to ${categories.find((c) => c.code === code)?.label || code}` : 'given their library category'
+      showToast(n ? `${n} item${n === 1 ? '' : 's'} ${what}.` : 'No item needed a change.', { type: 'success' })
+      setCategoryTargets(null)
+      setSelected([])
+      reload()
+    } catch (e) { log('category', e); showToast(refusalMessage(e, 'Could not set the category. Check your connection and try again.'), { type: 'error', duration: 8000 }) }
+    setBusy(false)
+  }
+
   const select = (id, on) => setSelected((s) => (on ? [...s, id] : s.filter((x) => x !== id)))
   const allOnPage = page.items.filter((i) => !i.archived_at)
   const allSelected = allOnPage.length > 0 && allOnPage.every((i) => selected.includes(i.id))
@@ -250,7 +283,7 @@ export default function MasterCatalog({ brand, role }) {
     </div>
   )
 
-  const filtered = filters.search || filters.category || filters.rx || filters.library
+  const filtered = filters.search || filters.category || filters.rx || filters.library || filters.health
   const from = page.total ? offset + 1 : 0
   const to = Math.min(offset + page.items.length, page.total)
 
@@ -278,6 +311,11 @@ export default function MasterCatalog({ brand, role }) {
           <span style={{ flex: '1 1 220px' }}>{library.matches === 1 ? '1 item in your catalogue matches' : `${library.matches.toLocaleString()} items in your catalogue match`} the CareHub product library. Linking fills in missing details and keeps prescription status correct.</span>
           <TealBtn onClick={() => setShowMatches(true)} style={{ padding: '8px 14px', fontSize: '12px' }}>Review matches</TealBtn>
         </div>
+      )}
+
+      {!filters.archived && (
+        <CatalogueHealthPanel health={health} status={healthStatus} active={filters.health}
+          onIssue={(key) => setFilters((f) => ({ ...f, health: key }))} onDuplicates={() => setShowDuplicates(true)} />
       )}
 
       {/* Search and filters */}
@@ -313,6 +351,9 @@ export default function MasterCatalog({ brand, role }) {
             <TealBtn onClick={() => setCarryItems(selectedItems)} disabled={!selected.length || busy} style={{ padding: '8px 14px', fontSize: '12px' }}>
               <Building2 size={13} aria-hidden='true' style={{ marginRight: 5 }} /> Carry at locations
             </TealBtn>
+            {categories.length > 0 && (
+              <GhostBtn onClick={() => setCategoryTargets(selectedItems)} disabled={!selected.length || busy}>Set category</GhostBtn>
+            )}
             <GhostBtn onClick={() => setArchiveTargets(selectedItems)} disabled={!selected.length || busy}>Archive</GhostBtn>
           </div>
         </div>
@@ -322,7 +363,7 @@ export default function MasterCatalog({ brand, role }) {
         : status === 'error' ? <ErrorState message="We couldn't load the catalogue. Check your connection and try again." onRetry={load} />
         : page.items.length === 0 ? (
           filtered || filters.archived
-            ? <Empty icon={<Search size={40} aria-hidden='true' />} message={filters.archived ? 'No archived items' : 'No items match your search'} cause='filtered'
+            ? <Empty icon={<Search size={40} aria-hidden='true' />} message={filters.archived ? 'No archived items' : filters.health ? 'No items have this flag any more' : 'No items match your search'} cause='filtered'
                 action={filters.archived ? 'Show current items' : 'Clear search and filters'}
                 onAction={() => { setSearchText(''); setFilters(NO_FILTERS) }} />
             : <Empty icon={<Layers size={40} aria-hidden='true' />} title='Your catalogue is empty'
@@ -351,10 +392,15 @@ export default function MasterCatalog({ brand, role }) {
         libraryAvailable={library.available} saving={busy} onSave={saveItem} onClose={() => setFormItem(undefined)} />
 
       <LibraryMatchesModal show={showMatches} businessId={mainId} onClose={() => setShowMatches(false)}
-        onLinked={(n) => { showToast(`${n} item${n === 1 ? '' : 's'} linked to the CareHub library.`, { type: 'success' }); load(); loadLibrary() }} />
+        onLinked={(n) => { showToast(`${n} item${n === 1 ? '' : 's'} linked to the CareHub library.`, { type: 'success' }); reload(); loadLibrary() }} />
       {libraryItem && (
         <LibraryItemModal item={libraryItem} busy={busy} onLink={linkTo} onUnlink={unlink} onSuggest={suggest} onClose={() => setLibraryItemId(null)} />
       )}
+
+      <DuplicatesModal show={showDuplicates} businessId={mainId} isOwner={isOwner} onChanged={reload}
+        categoryLabel={(code) => categories.find((c) => c.code === code)?.label || ''} onClose={() => setShowDuplicates(false)} />
+      <CategoryDialog show={!!categoryTargets} count={categoryTargets?.length || 0} categories={categories} libraryAvailable={library.available}
+        busy={busy} onApply={setCategory} onClose={() => setCategoryTargets(null)} />
 
       <CarryDialog show={!!carryItems} items={carryItems || []} locations={locations} busy={busy}
         onCarry={(locIds, price) => carry(locIds, price)} onClose={() => setCarryItems(null)} />
