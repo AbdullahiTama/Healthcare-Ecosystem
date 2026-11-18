@@ -62,13 +62,15 @@ export function createMasterCatalogRepository(request = sbFetch) {
     // plain list is filtered here, and branch details are not available.
     // `library` ('linked' | 'unlinked') needs carehub_20261223 and is sent only when set; each item then also has
     // `library` (its CareHub library entry or null) and `suggestion` (its latest suggestion or null).
-    async getPage(businessId, { search = '', category = null, rx = null, archived = false, library = null, offset = 0, limit = PAGE_SIZE } = {}) {
+    // `health` (one missing-data flag, see HEALTH_ISSUES) needs carehub_20270127 and is sent only when set too.
+    async getPage(businessId, { search = '', category = null, rx = null, archived = false, library = null, health = null, offset = 0, limit = PAGE_SIZE } = {}) {
       try {
         const rows = (await request('rpc/master_catalog_page', {
           method: 'POST',
           body: JSON.stringify({
             p_business_id: businessId, p_search: search || null, p_category: category || null, p_rx: rx || null,
             p_archived: !!archived, p_offset: offset, p_limit: limit, ...(library ? { p_library: library } : {}),
+            ...(health ? { p_health: health } : {}),
           }),
         })) || []
         return {
@@ -78,11 +80,55 @@ export function createMasterCatalogRepository(request = sbFetch) {
         }
       } catch (e) {
         if (!isMissingObject(e)) throw e
-        if (archived || category || rx || library) return { items: [], total: 0, upgraded: false }
+        if (archived || category || rx || library || health) return { items: [], total: 0, upgraded: false }
         const term = search.trim().toLowerCase()
         const all = (await repo.getAll(businessId)).filter((m) => !term || m.name?.toLowerCase().includes(term))
         return { items: all.slice(offset, offset + limit).map((m) => ({ ...m, carried: [] })), total: all.length, upgraded: false }
       }
+    },
+
+    // ── Catalogue health (carehub_20270127) ──────────────────────────────────
+    // { available, score (0-100, null for an empty catalogue), total, counts: { no_price, other_category, duplicates,
+    // no_generic, no_barcode, unlinked, hidden } }. available is false before the migration.
+    async getHealth(businessId) {
+      try {
+        const h = await rpc('catalogue_health', { p_business_id: businessId })
+        return { available: true, score: h?.score ?? null, total: Number(h?.total) || 0, counts: h?.counts || {} }
+      } catch (e) {
+        if (isMissingObject(e)) return { available: false, score: null, total: 0, counts: {} }
+        throw e
+      }
+    },
+
+    // One page of possible duplicates: { pairs: [{ a, b, reason ('barcode' | 'name' | 'similar'), score }], total }.
+    // Each side has id, name, generic_name, strength, barcode, category_code, default_price, rx_status,
+    // catalog_item_id, locations and stock.
+    async duplicatePairs(businessId, { offset = 0, limit = PAGE_SIZE } = {}) {
+      const rows = (await request('rpc/catalogue_duplicate_pairs', {
+        method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_offset: offset, p_limit: limit }),
+      })) || []
+      return {
+        pairs: rows.map((r) => ({ a: r.item_a, b: r.item_b, reason: r.reason, score: Number(r.score) })),
+        total: rows.length ? Number(rows[0].total) : 0,
+      }
+    },
+
+    // "These are not duplicates": the pair is not suggested again. Owner or manager.
+    async dismissPair(businessId, itemA, itemB) {
+      return rpc('dismiss_duplicate_pair', { p_business_id: businessId, p_item_a: itemA, p_item_b: itemB })
+    },
+
+    // Keeps one item and archives the other, in one transaction (owner only). Returns { kept, archived, relinked,
+    // merged_locations, units_moved, negative_left }.
+    async merge(businessId, keepId, dropId) {
+      return rpc('merge_master_items', { p_business_id: businessId, p_keep_id: keepId, p_drop_id: dropId })
+    },
+
+    // Sets the standard category of up to 500 items. With no code, each item linked to the CareHub library takes the
+    // library's category. Returns how many items changed.
+    async setCategory(businessId, ids, categoryCode = null) {
+      const n = await rpc('set_master_category', { p_business_id: businessId, p_ids: ids, p_category_code: categoryCode || null })
+      return Number(n) || 0
     },
 
     // The standard categories (code, label, default prescription status), in
