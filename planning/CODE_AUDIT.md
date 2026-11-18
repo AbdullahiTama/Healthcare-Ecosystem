@@ -607,8 +607,13 @@ A pharmacy account is refused. Production was confirmed unchanged afterwards.
 **Closed by:** the app change deployed (`a5b183a`), then the migration applied with the owner's approval (version
 `20261118114804`). The post-apply probe repeated every result above against production (the report insert rolled
 back; no probe row left), and confirmed the grants: both functions executable by `authenticated` only, the link guard
-by no API role. **Owner follow-up:** verifying listings stays a platform-admin action (Admin console > Directory);
-until then the 215 imports show with an "Unverified" badge.
+by no API role. **Verified 2026-11-18 (owner instruction):** all 215 imports set to `verified` in one statement, scoped to platform,
+active, unverified `import` rows; `verified_at` stamped by the trigger, `verified_by` set to "owner-approved bulk
+verification of 2026-11-17 import (Claude Code session, 2026-11-18)" because no admin session was signed in; one
+`admin_audit_log` entry (id 11, action `directory.bulk_verify`) lists all 215 ids. After: directory 216 verified
+(215 imports + 1 external), none unstamped; a Manufacturer / Importer account sees all 216 as verified in Discovery
+and Field Report. **Note:** this was a bulk owner decision, not a per-business check; to undo, set the ids in audit
+entry 11 back to `unverified` (the trigger clears the stamp).
 
 ## 3. Open items recorded in other audits
 
