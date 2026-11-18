@@ -11,11 +11,15 @@ on:
       - 'apps/carehub/**'
       - 'packages/**'
       - '.github/workflows/carehub-ci.yml'
+      - 'scripts/audit-gate*.mjs'
+      - '.github/audit-exceptions.json'
   pull_request:
     paths:
       - 'apps/carehub/**'
       - 'packages/**'
       - '.github/workflows/carehub-ci.yml'
+      - 'scripts/audit-gate*.mjs'
+      - '.github/audit-exceptions.json'
 
 concurrency:
   group: carehub-ci-${{ github.ref }}
@@ -47,9 +51,14 @@ jobs:
         working-directory: apps/carehub
         run: npm run lint:undef
 
+      # High/critical advisories fail: always in production dependencies; in build and test tools unless listed,
+      # with a reason and an expiry date, in .github/audit-exceptions.json (only for advisories with no fixed version).
       - name: Security audit
         working-directory: apps/carehub
-        run: npm audit --audit-level=high
+        run: node ../../scripts/audit-gate.mjs
+
+      - name: Security audit gate tests
+        run: node --test scripts/audit-gate.test.mjs
 
       - name: Run tests
         working-directory: apps/carehub
