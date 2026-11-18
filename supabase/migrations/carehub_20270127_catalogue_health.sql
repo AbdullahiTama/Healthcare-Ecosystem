@@ -1,5 +1,6 @@
 -- Product catalogue, phase 5: catalogue health.
 -- Design: docs/architecture/Product-Catalogue-Design.md §3.7 and §10 (owner's decisions, 2026-10-27 and 2026-11-18).
+-- APPLIED to live 2026-11-18 (with the follow-up carehub_20270128_catalogue_pairs_speed, which replaces catalogue_pairs and drops the trigram index).
 --
 -- Written against the LIVE schema read on 2026-11-18:
 --   * 10,368 current master items at 12 businesses (the largest has 3,228). 1,202 have no price, 9,170 no generic

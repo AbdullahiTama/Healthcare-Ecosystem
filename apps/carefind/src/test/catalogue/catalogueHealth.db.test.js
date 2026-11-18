@@ -18,6 +18,7 @@ const ANON_READ = repoFile('supabase/migrations/carehub_20261224_catalog_items_a
 const LEDGER_LIVE = repoFile('docs/architecture/stock-ledger-live-snapshot.sql')
 const RX_SAFETY = repoFile('supabase/migrations/carehub_20261221_prescription_safety.sql')
 const HEALTH = repoFile('supabase/migrations/carehub_20270127_catalogue_health.sql')
+const SPEED = repoFile('supabase/migrations/carehub_20270128_catalogue_pairs_speed.sql')
 
 const A = 'a0000000-0000-4000-8000-000000000001'   // Allen Pharmacy (main)
 const A1 = 'a0000000-0000-4000-8000-000000000011'  // its Ikeja branch
@@ -30,6 +31,7 @@ const M = {
   chipsS: 'c0000000-0000-4000-8000-000000000009', consult: 'c0000000-0000-4000-8000-00000000000a',
   theirs: 'c0000000-0000-4000-8000-00000000000b', theirs2: 'c0000000-0000-4000-8000-00000000000c',
   tram: 'c0000000-0000-4000-8000-00000000000d',
+  clinda: 'c0000000-0000-4000-8000-00000000000e', clindaShort: 'c0000000-0000-4000-8000-00000000000f',
 }
 const P = {
   pan1A: 'e0000000-0000-4000-8000-000000000001', pan2A: 'e0000000-0000-4000-8000-000000000002',
@@ -166,6 +168,7 @@ beforeAll(async () => {
   await db.exec(LEDGER_LIVE)
   await db.exec(RX_SAFETY)
   await db.exec(HEALTH)
+  await db.exec(SPEED)
   await db.exec(`
     insert into catalog_items (id, brand_name, generic_name, category_code, rx_status, status, source)
       values ('${LIB}', 'Amoxil', 'Amoxicillin', 'antibiotics', 'prescription_only', 'active', 'admin');
@@ -182,7 +185,9 @@ beforeAll(async () => {
       ('${M.consult}', '${A}', 'Consultation', null, null, 0, 'services', 'otc', 'Services'),
       ('${M.tram}', '${A}', 'Tramadol', 'Tramadol', '9001', 2500, 'analgesics', 'controlled', 'Analgesics'),
       ('${M.theirs}', '${B}', 'Panadol Extra', null, '6001', 380, 'analgesics', 'otc', ''),
-      ('${M.theirs2}', '${B}', 'Panadol  Extra.', null, null, 380, 'analgesics', 'otc', '');
+      ('${M.theirs2}', '${B}', 'Panadol  Extra.', null, null, 380, 'analgesics', 'otc', ''),
+      ('${M.clinda}', '${B}', 'Clindamycin 300mg', null, null, 900, 'antibiotics', 'prescription_only', ''),
+      ('${M.clindaShort}', '${B}', 'Clinda 300mg (clindamycin)', null, null, 900, 'antibiotics', 'prescription_only', '');
     update master_products set catalog_item_id = '${LIB}' where id = '${M.amox}';
     insert into products (id, business_id, name, generic_name, category, price, stock, barcode, master_product_id, rx_status, list_on_carefind) values
       ('${P.pan1A}', '${A}', 'Panadol Extra', null, 'Medicines', 400, 5, '6001', '${M.pan1}', 'otc', true),
@@ -256,7 +261,11 @@ describe('possible duplicates', () => {
     expect(keys).not.toContain(pairOf(M.chipsB, M.chipsS))
     expect(await outsider((q) => q('select * from catalogue_pairs($1)', [A]))).toEqual([])
     const theirs = await outsider((q) => q('select * from catalogue_pairs($1)', [B]))
-    expect(theirs.map(pairKey)).toEqual([pairOf(M.theirs, M.theirs2)])
+    // A near-identical name is found even when the first words differ, as long as a word of 4+ letters is shared.
+    expect(Object.fromEntries(theirs.map((p) => [pairKey(p), p.reason]))).toEqual({
+      [pairOf(M.theirs, M.theirs2)]: 'name',
+      [pairOf(M.clinda, M.clindaShort)]: 'similar',
+    })
   })
 
   it('lists each side with its details, locations and stock, barcode matches first', async () => {
@@ -403,6 +412,7 @@ describe('re-running the migration', () => {
   it('changes nothing and keeps dismissals', async () => {
     const before = await one('select count(*)::int n from catalogue_duplicate_dismissals')
     await db.exec(HEALTH)
+    await db.exec(SPEED)
     expect(await one('select count(*)::int n from catalogue_duplicate_dismissals')).toEqual(before)
     expect((await owner((q) => q('select catalogue_health($1) h', [A])))[0].h.total).toBeGreaterThan(0)
   })

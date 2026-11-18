@@ -139,7 +139,7 @@ Each phase is shippable, keeps today's workflows working, and has its own migrat
 | **2. Prescription-only safety** | CareFind and online orders enforce availability-only for Rx and controlled items | 1 |
 | **3. Moving stock between branches** | Transfers (send, in transit, receive with shortfall, cancel), on the Master Catalog and in each branch's Inventory | 1 |
 | **4. Shared library** | `catalog_items`, seeding from clustered business data, admin review queue, NAFDAC list import (CSV/Excel), business suggestions, link suggestions; add a product by search or barcode from the library | 1 |
-| **5. Catalogue health** | Score, duplicate merge, bulk category fixes, missing-data flags, CareFind hiding unpriced items (built, §10; migration not applied yet) | 1, 4 |
+| **5. Catalogue health** | Score, duplicate merge, bulk category fixes, missing-data flags, CareFind hiding unpriced items (built and live, §10) | 1, 4 |
 
 ## 5. Risks and open points
 
@@ -496,12 +496,41 @@ pharmacist".
 
 ### Database (`supabase/migrations/carehub_20270127_catalogue_health.sql`)
 
-**Not applied to live yet.** Applying it hides about 1,200 unpriced products from CareFind at once.
+**Applied to live 2026-11-18**, with the follow-up `carehub_20270128_catalogue_pairs_speed.sql`.
+
+Verified on live:
+
+- **CareFind:** `carefind_products` went from 11,471 to 10,269 rows. That is exactly the 1,202 unpriced items; none is
+  left, and 558 prescription-only items are still listed with no price.
+- **Permissions:** functions and grants as planned (the write functions are SECURITY DEFINER; nothing is executable by
+  anon except the pure helpers). The dismissals table has RLS on, with no anon read and no direct insert.
+- **Real owners:** `catalogue_health` run as the owners of the three largest catalogues, and refused for an outsider,
+  who also gets no pairs.
+
+**Follow-up (`carehub_20270128`):** the first version's health check took **13 s** on the largest catalogue (3,228
+items), 8.8 s of it in `catalogue_pairs`. There were two causes:
+
+- most names have no number, so "same numbers" put nearly every item in one group (the trigram index join was slower
+  still, at 17 s);
+- as SECURITY INVOKER, every candidate went through the RLS policies.
+
+Near-identical names are now compared only when they share a word of four or more letters. Comparing only the first
+word was faster (57 ms) but lost half the real pairs. Both read functions are now SECURITY DEFINER: they check
+membership once and read only that business. The unused trigram index was dropped. Results:
+
+| Catalogue | Items | Health check | Possible-duplicate pairs |
+|---|---|---|---|
+| Largest | 3,228 | 1.2 s (was 13 s) | 34 (unchanged) |
+| Next | 1,705 | 0.45 s | 15 |
+| Third | 1,643 | 0.35 s | 10 |
+
+The largest catalogue scores **46/100**: 3,210 of its items are in "Other medicines" and 405 are hidden on CareFind for
+having no price.
 
 | Object | What it does |
 |---|---|
 | `catalogue_issue(item, issue)` | The one definition of each flag: `no_price` (default price 0 or none), `no_generic` (medicines only: not devices, personal care, food, general retail or services), `no_barcode` (anything but a service), `other_category` (none or "Other medicines"), `unlinked` (not linked to the library), `hidden` (listed on CareFind at a location with no price, and not prescription-only). |
-| `catalogue_pairs(business)` | Possible duplicates among current items: the same barcode; the same letters and digits; or trigram similarity ≥ 0.8 (index `master_products_name_trgm`) with the same numbers ("500mg" never pairs with "250mg") and no size or pack word between them (`catalogue_size_variants`). Dismissed pairs are left out. |
+| `catalogue_pairs(business)` | Possible duplicates among current items: the same barcode; the same letters and digits; or trigram similarity ≥ 0.8 between names that share a word of 4+ letters (`carehub_20270128`), with the same numbers ("500mg" never pairs with "250mg") and no size or pack word between them (`catalogue_size_variants`). Dismissed pairs are left out. |
 | `catalogue_duplicate_pairs(business, offset, limit)` | A page of pairs, barcode matches first, each side with its details, number of locations and stock. |
 | `catalogue_duplicate_dismissals`, `dismiss_duplicate_pair` | "Not duplicates": that pair is not suggested again. Owner or manager. Members read; nobody writes the table directly. |
 | `catalogue_health(business)` | `{ total, score, counts, duplicate_items }`. The score is 100 minus each flag's weight times the share of items with it: no price 25, "Other medicines" 20, duplicates 15 (items in a pair), no generic 10, no barcode 10, not linked 10, hidden on CareFind 10. An empty catalogue has no score. |
