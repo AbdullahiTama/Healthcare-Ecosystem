@@ -1,0 +1,11 @@
+{
+  "_comment": "Dated exceptions for scripts/audit-gate.mjs. Only for high/critical advisories in DEVELOPMENT dependencies (build and test tools) that have no fixed version. Production dependencies are never excused. Remove an entry once a fix ships; an expired entry fails CI.",
+  "exceptions": [
+    {
+      "advisory": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "reason": "ReDoS in extglob patterns. picomatch <=4.0.7 is affected and 4.0.7 is the latest release, so there is no fixed version. Reached only through vite, vitest, @vitest/coverage-v8, tinyglobby and fdir (build and test tools), which match patterns from our own config, not user input; nothing ships to users (npm audit --omit=dev is clean). npm's only suggested fix downgrades vite or vitest, which would reintroduce older advisories.",
+      "expires": "2026-12-18"
+    }
+  ]
+}
