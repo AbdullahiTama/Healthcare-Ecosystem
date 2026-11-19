@@ -51,6 +51,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A36 | High | Hospital (production defect) | Doctor → Lab / Imaging send fails (unknown `patient_name` column) and leaves partial records; jsonb read with `JSON.parse`; dispensing discharges the patient | **Closed 2026-11-17**: `carehub_20270125_hospital_identity_and_workflow` applied (version 20261117092916) and probed; app deployed |
 | A37 | Medium | Hospital (schema) | The eight hospital tables, their policies and grants are not in `supabase/migrations/`; `anon` holds full grants including TRUNCATE | **Closed 2026-11-17**: `carehub_20270123_hospital_schema_baseline` (version 20261117092425) + `carehub_20270124` applied |
 | A38 | Medium | Hospital (data model) | Two patient identities: Reception writes `patients`, the hospital "Patients" menu and the rest of CareHub use `clients` | **Closed 2026-11-17**: `clients` is the identity (owner); `carehub_20270125` applied; 3 test clients at pharmacies left for the owner |
+| A39 | Low | POS (usability defect) | The product search text stayed in the box after a product was picked from the grid; the cashier deleted it by hand | **Closed 2026-11-19**: app only, `pickProduct` clears it on a successful add; tested (fails on the old code). See POS-Barcode-Scanning.md |
 
 ## 2. Items
 

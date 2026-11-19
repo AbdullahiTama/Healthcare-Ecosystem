@@ -359,6 +359,18 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
       : [...cart, { ...p, qty: 1 }])
     return true
   }, [setCart, showToast])
+  // Picking a product from the grid: the search is done with, so it is cleared and the full list returns; the
+  // cashier no longer deletes the text by hand before the next item. Kept when the add is refused (stock limit), so
+  // the product searched for stays on screen next to the warning. With a mouse or keyboard, focus goes back to the
+  // search box for the next item; not on touch screens, where focusing would open the on-screen keyboard over the
+  // grid. Stable, like `add`, so the memoised cards are not redrawn.
+  const pickProduct = useCallback((p) => {
+    if (!add(p)) return
+    setSearch('')
+    const el = productSearchRef.current
+    const finePointer = typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)')?.matches
+    if (el && finePointer) el.focus({ preventScroll: true })
+  }, [add])
   const qtyInCart = useMemo(() => Object.fromEntries(cart.map(c => [c.id, c.qty])), [cart])
   // Hardware scanners type the code into the focused field and press Enter.
   // When the whole query is a registered barcode, treat it as a scan and add
@@ -882,7 +894,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
           const match = findByBarcode(code) || products.find(p => (p.name || '').toLowerCase().includes(code.toLowerCase()))
           if (match) {
             if (!isService(match) && match.stock <= 0) { showToast(outOfStockMessage(match), { type: 'warning' }); return }
-            if (add(match)) showToast('Added: ' + match.name, { type: 'success' })
+            if (add(match)) { showToast('Added: ' + match.name, { type: 'success' }); setSearch('') }
           }
           else { setSearch(code) }
         },
@@ -893,7 +905,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
         const m = findByBarcode(code) || products.find(p => (p.name || '').toLowerCase().includes(code.toLowerCase()))
         if (m) {
           if (!isService(m) && m.stock <= 0) { showToast(outOfStockMessage(m), { type: 'warning' }); return }
-          if (add(m)) showToast('Added: ' + m.name, { type: 'success' })
+          if (add(m)) { showToast('Added: ' + m.name, { type: 'success' }); setSearch('') }
         } else setSearch(code)
       }
     }
@@ -1218,7 +1230,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
             </div>
           ) : (
             <>
-              {sellable.slice(0, gridLimit).map(p => <ProductCard key={p.id} p={p} qty={qtyInCart[p.id] || 0} onAdd={add} showCost={showCost} />)}
+              {sellable.slice(0, gridLimit).map(p => <ProductCard key={p.id} p={p} qty={qtyInCart[p.id] || 0} onAdd={pickProduct} showCost={showCost} />)}
               {sellable.length > gridLimit && (
                 <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap', padding: '6px 0 4px', fontSize: 12, color: gray500 }}>
                   <span>Showing {gridLimit.toLocaleString()} of {sellable.length.toLocaleString()} products. Type more of the name to narrow the list.</span>

@@ -91,7 +91,55 @@ describe('POS search on a large catalogue', () => {
     const host = await renderPOS()
     await type(host, 'amoxicillin')
     await act(async () => { cards(host)[0].click() })
+    await type(host, 'amoxicillin')
     await act(async () => { cards(host)[0].click() })
+    await type(host, 'amoxicillin')
     expect(cards(host)[0].getAttribute('aria-label')).toBe('Add Amoxicillin 500mg (2 in sale)')
+  })
+})
+
+// Cashiers had to delete the search text by hand after every pick before looking up the next item.
+describe('POS search clears after a product is picked', () => {
+  afterEach(() => { delete window.matchMedia })
+  const pointer = (fine) => { window.matchMedia = vi.fn((q) => ({ matches: q === '(pointer: fine)' ? fine : false })) }
+
+  it('clears the box and shows the full list again once the product is in the sale', async () => {
+    const host = await renderPOS()
+    await type(host, 'amoxicillin')
+    await act(async () => { cards(host)[0].click() })
+    expect(input(host).value).toBe('')
+    expect(cards(host)).toHaveLength(GRID_PAGE)
+    expect(host.textContent).toContain('Showing ' + GRID_PAGE + ' of 2,001 products')
+  })
+
+  it('keeps the text when the add is refused (stock limit), so the product stays on screen', async () => {
+    const host = await renderPOS()
+    await type(host, 'amoxicillin')
+    for (let i = 0; i < 5; i++) {
+      await act(async () => { cards(host)[0].click() })
+      await type(host, 'amoxicillin')
+    }
+    await act(async () => { cards(host)[0].click() })
+    expect(input(host).value).toBe('amoxicillin')
+    expect(cards(host)[0].getAttribute('aria-label')).toBe('Add Amoxicillin 500mg (5 in sale)')
+  })
+
+  it('puts focus back in the search box with a mouse or keyboard, ready for the next item', async () => {
+    pointer(true)
+    const host = await renderPOS()
+    await type(host, 'amoxicillin')
+    await act(async () => { cards(host)[0].click() })
+    expect(document.activeElement).toBe(input(host))
+  })
+
+  it('does not focus the search box on a touch screen (no on-screen keyboard over the grid)', async () => {
+    pointer(false)
+    const host = await renderPOS()
+    await type(host, 'amoxicillin')
+    const card = cards(host)[0]
+    card.focus()
+    await act(async () => { card.click() })
+    expect(input(host).value).toBe('')
+    expect(document.activeElement).not.toBe(input(host))
   })
 })

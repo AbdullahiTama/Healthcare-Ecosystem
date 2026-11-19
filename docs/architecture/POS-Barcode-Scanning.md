@@ -88,6 +88,27 @@ Discount, Cash received with a Tab suffix, a focused button, nothing focused, te
 unknown and out-of-stock codes, no-suffix scanner; hand typing and fields outside the POS untouched).
 9 of its 11 tests fail against the previous POS; the other 2 check what must not change.
 
+## Search clears after a product is picked (2026-11-19)
+
+**Symptom:** after a cashier searched (for example "amox") and picked the product from the grid, the text stayed in
+the search box, so they deleted it by hand before looking up the next item.
+
+**Cause:** the grid cards called the cart's `add` directly; only the barcode paths (Enter on a code in the search
+box, the USB scanner) cleared the search. A camera or typed-prompt scan also left any earlier unmatched code in the box.
+
+**Fix (`POS.jsx`, app only):** cards call `pickProduct`, which adds the product and, when the add succeeds, clears the
+search so the full list returns. When the add is refused (all units already in the sale), the text stays, so the
+product is still on screen next to the warning. With a mouse or keyboard (`(pointer: fine)`), focus goes back to the
+search box for the next item; on touch screens it does not, so the on-screen keyboard does not open over the grid.
+A successful camera or prompt scan clears the box too. The layout is unchanged.
+
+**Tests:** `POS.search.test.jsx` "POS search clears after a product is picked": cleared with the full list back, kept
+on a stock-limit refusal, focus returned with a fine pointer, not focused on touch. 3 of the 4 fail against the
+previous POS; the fourth checks what must not change.
+
+**Manual check:** search "para", tap a product: the box is empty and the full grid shows; on a desktop, type the next
+name straight away. Add a product until its stock is used up, search it, tap Add: the warning shows and the text stays.
+
 ## If you hit this in the wild
 
 Update to a build containing the fix — no data is affected, the barcode was
