@@ -61,6 +61,14 @@ App (`CompanySelector.jsx`, `AdrReportPage.jsx`):
   (`routing_routed`, `auto: true`). Facility reporters are signed-in registered businesses.
 - No grants change. API roles still cannot write routing state (guard trigger from 20261113 / 20261114).
 
+## Status
+
+Applied 2026-11-19 with the owner's approval (version `20261119085426`; the owner chose auto-routing for facilities
+over reviewer approval), live bodies verified against this repository, and probed live as a real pharmacy owner in a
+rolled-back block: company list shown, a changed choice replaced the first, the submitted report was routed to the
+final choice only, that company was alerted and saw the case with the reporter's details masked. Production unchanged
+afterwards. The app was deployed after the migration.
+
 ## Deployment order
 
 Apply the migration, probe it, then deploy the app: the picker's new wording promises delivery at submission, which is

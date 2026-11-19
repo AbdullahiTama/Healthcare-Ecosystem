@@ -1,7 +1,14 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- ADR: facility reports reach the manufacturer / importer the facility selects.
 -- 2026-11-19. Docs: docs/architecture/ADR-Facility-Company-Routing.md
--- Status: NOT APPLIED. Tested on PGlite (apps/carefind/src/test/adr/facilityCompanyRouting.db.test.js).
+-- Status: APPLIED to the live carehub project 2026-11-19 with owner approval (version 20261119085426); owner chose
+-- auto-routing for facilities. Live bodies match this file (md5 of prosrc: create_adr_product_route fd8805a9…,
+-- adr_auto_route_report 5b78e6a8…, adr_notify_reviewers_on_submit ce3f9903…, list_adr_route_review_queue 4af252a1…);
+-- grants unchanged; trg_adr_auto_route still fires before trg_adr_notify_reviewers. Live probe as a real pharmacy
+-- owner inside a rolled-back block: 7 companies listed; picking company A then B left one route; submit_adr_report
+-- valid; route routed to B with an auto routing_routed event; B alerted; B sees the case with reporter name, facility
+-- and phone masked; A sees nothing. Afterwards routes / reports / notifications unchanged (14 / 67 / 922), no probe
+-- rows. Tested first on PGlite (apps/carefind/src/test/adr/facilityCompanyRouting.db.test.js).
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY (verified live 2026-11-19)
