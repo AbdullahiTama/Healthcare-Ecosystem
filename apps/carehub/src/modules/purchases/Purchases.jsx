@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Truck, CreditCard, Hourglass, Search, ChevronDown, History, CheckCircle, Pencil, Trash2, RotateCcw, Upload, Download } from 'lucide-react'
+import { Truck, CreditCard, Hourglass, Search, ChevronDown, History, CheckCircle, Pencil, Trash2, RotateCcw, Upload, Download, Receipt } from 'lucide-react'
 import { purchaseRepository } from './repositories'
 import { useQueryParamAction } from '../../hooks/useQueryParamAction'
 // Recording a purchase composes three aggregates (the purchase record, inventory
@@ -41,6 +41,11 @@ import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, GhostBtn, Teal
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, warning, warningBg, success } = theme
 
 const PAGE_SIZE = 50
+
+export const EMPTY_TOTALS = { purchase_count: 0, total_amount: 0, total_paid: 0, total_owed: 0 }
+// The purchases' own total. A database without total_amount (before carehub_20270131) gives paid + owed, which is
+// the same figure: every purchase stores balance = total - paid.
+export const totalAmount = (t) => Number(t?.total_amount ?? (Number(t?.total_paid) || 0) + (Number(t?.total_owed) || 0)) || 0
 
 // A restore that could not put some purchases back (a product or batch they stocked was deleted since).
 function describePurchaseRestore(r) {
@@ -96,7 +101,10 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
   // Set when the database predates the date / supplier filters and the list
   // was loaded without them (carehub_20261229 not applied yet).
   const [filtersUnavailable, setFiltersUnavailable] = useState(false)
-  const [totals, setTotals] = useState({ purchase_count: 0, total_paid: 0, total_owed: 0 })
+  const [totals, setTotals] = useState(EMPTY_TOTALS)
+  // 'list': the figures describe the purchases listed (same period, supplier, search). 'all': the database predates
+  // filtered totals (carehub_20270131 not applied), so they are all purchases and say so.
+  const [totalsScope, setTotalsScope] = useState('list')
   const [saving, setSaving] = useState(false)
   const [showErrors, setShowErrors] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
@@ -137,6 +145,10 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
   const setForm = (updater) => setDraft(d => ({ ...d, form: typeof updater === 'function' ? updater(d.form) : updater }))
 
   const { from: periodFrom, to: periodTo, label: periodLabel } = periodBounds(period)
+  // What the figures above the list cover, in words; the same selection as the list and History & analytics.
+  const totalsLabel = totalsScope === 'all'
+    ? 'All purchases'
+    : [periodLabel, supplierFilter ? (directory.suppliers.find(s => s.key === supplierFilter)?.name || supplierFilter) : '', search ? '"' + search + '"' : ''].filter(Boolean).join(' · ')
   useEffect(() => { load() }, [brand?.id, periodFrom, periodTo, supplierFilter, search])
 
   function openForm() { setDraft(d => ({ ...d, open: true })) }
@@ -173,6 +185,24 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
     }
   }
 
+  // The figures above the list, for the same selection as the list. A database without filtered totals
+  // (carehub_20270131 not applied) answers "function not found" for the filtered call: the all-time figures are
+  // shown instead, labelled as such, rather than figures that silently disagree with the list.
+  async function fetchTotals() {
+    const f = pageFilters()
+    const filtered = !!(f.search || f.from || f.to || f.supplierKey)
+    try {
+      const rows = await purchaseRepository.getTotals(brand.id, f)
+      setTotalsScope('list')
+      return rows
+    } catch (e) {
+      if (!filtered || !isMissingObject(e)) throw e
+      console.warn('[purchases] filtered totals not deployed yet; showing all purchases')
+      setTotalsScope('all')
+      return purchaseRepository.getTotals(brand.id)
+    }
+  }
+
   async function load() {
     if (!brand?.id) return
     setLoading(true)
@@ -182,10 +212,10 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
     try {
       const [page, totalData] = await Promise.all([
         fetchPage(0),
-        purchaseRepository.getTotals(brand.id),
+        fetchTotals(),
       ])
       setPurchases(page || [])
-      setTotals(totalData?.[0] || { purchase_count: 0, total_paid: 0, total_owed: 0 })
+      setTotals(totalData?.[0] || EMPTY_TOTALS)
       setHasMore((page || []).length === PAGE_SIZE)
     } catch (e) {
       console.error('[purchases] load failed:', e)
@@ -396,7 +426,8 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
-        <StatCard icon={<Truck />} label='Total Purchases' value={totals.purchase_count || 0} />
+        <StatCard icon={<Truck />} label='Total Purchases' value={totals.purchase_count || 0} sub={totalsLabel} />
+        <StatCard icon={<Receipt />} label='Total Amount' value={fmt(totalAmount(totals))} sub='Paid + balance owed' />
         <StatCard icon={<CreditCard />} label='Total Paid' value={fmt(Number(totals.total_paid) || 0)} />
         <StatCard icon={<Hourglass />} label='Balance Owed' value={fmt(Number(totals.total_owed) || 0)} alert={(Number(totals.total_owed) || 0) > 0} />
       </div>
@@ -416,7 +447,8 @@ export default function Purchases({ brand, role, perms, products = [], setProduc
       {view === 'suppliers' ? (
         <SupplierAccounts brand={brand} role={role} perms={perms} staffName={staffName} showToast={showToast} onPaid={load} />
       ) : view === 'history' ? (
-        <PurchaseHistory brand={brand} suppliers={directory.suppliers} onOpenPurchase={(id) => setViewing({ id })} />
+        <PurchaseHistory brand={brand} suppliers={directory.suppliers} onOpenPurchase={(id) => setViewing({ id })}
+          period={period} onPeriodChange={setPeriod} supplierKey={supplierFilter} onSupplierChange={setSupplierFilter} />
       ) : (<>
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 220px', display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>

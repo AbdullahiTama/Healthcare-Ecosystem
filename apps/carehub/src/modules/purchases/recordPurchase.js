@@ -15,8 +15,8 @@ import { debtRepository } from '../debts/repositories'
 import { todayDate } from '../../lib/utils'
 import { findDuplicate } from '../../lib/productMatches'
 import { purchaseExpirySummary } from './expirySummary'
-import { isBlankItem, findProductByBarcode, groupLinesByProduct } from './lineItems'
-import { purchaseItemsFromForm } from './purchaseInvoice'
+import { isBlankItem, findProductByBarcode, groupLinesByProduct, lineAmount } from './lineItems'
+import { purchaseItemsFromForm, isAmountOnly } from './purchaseInvoice'
 
 // Margin applied to newly created products from a purchase so they are
 // immediately sellable. Existing products keep their own selling price.
@@ -32,11 +32,15 @@ export function resolveExistingProduct(inventory, line) {
 
 // Totals as the purchase record stores them. Overpaying a supplier never
 // stores a negative balance.
+// An amount-only line (uploaded without a quantity) counts its amount and no units; `stocked` are the lines that
+// add stock, `stockedTotal` what they cost (the purchase's average unit cost is worked out from them).
 export function purchaseFigures(form) {
-  const lines = (form.items || []).filter(i => !isBlankItem(i))
-  const total = lines.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.cost) || 0), 0)
+  const lines = (form.items || []).filter(i => i.noQty || !isBlankItem(i))
+  const stocked = lines.filter(i => !isAmountOnly(i))
+  const total = lines.reduce((s, i) => s + lineAmount(isAmountOnly(i) ? i : { ...i, noQty: false }), 0)
+  const stockedTotal = stocked.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.cost) || 0), 0)
   const paid = parseFloat(form.amountPaid) || 0
-  return { lines, total, paid, balance: Math.max(0, total - paid), qty: lines.reduce((s, i) => s + Number(i.qty), 0) }
+  return { lines, stocked, total, stockedTotal, paid, balance: Math.max(0, total - paid), qty: stocked.reduce((s, i) => s + Number(i.qty), 0) }
 }
 
 /**
@@ -50,7 +54,7 @@ export function purchaseFigures(form) {
  */
 export async function recordPurchase({ businessId, form, inventory = [], canReprice = false, repos = DEFAULT_REPOS }) {
   const { purchaseRepository: purchases, productRepository: products, debtRepository: debts } = repos
-  const { lines, total, paid, balance, qty } = purchaseFigures(form)
+  const { lines, stocked, total, stockedTotal, paid, balance, qty } = purchaseFigures(form)
   if (!lines.length) throw new Error('A purchase needs at least one item.')
   const productNames = lines.map(i => String(i.name).trim())
   const supplier = String(form.supplier || '').trim()
@@ -61,7 +65,7 @@ export async function recordPurchase({ businessId, form, inventory = [], canRepr
     supplier_name: supplier,
     product_name: productNames.join(', '),
     quantity: qty,
-    cost_price: qty > 0 ? total / qty : 0,
+    cost_price: qty > 0 ? stockedTotal / qty : 0,
     total_cost: total,
     amount_paid: paid,
     balance,
@@ -86,7 +90,8 @@ export async function recordPurchase({ businessId, form, inventory = [], canRepr
   const syncFailed = []
   const changedRows = []
   const keyBase = purchaseId || ('unsaved-' + Date.now().toString(36))
-  for (const group of groupLinesByProduct(lines, l => resolveExistingProduct(inventory, l))) {
+  // Only lines with a quantity reach Inventory: an amount-only line has no units to receive.
+  for (const group of groupLinesByProduct(stocked, l => resolveExistingProduct(inventory, l))) {
     const { existing, name, cost, sell, cat, barcode, lines: groupLines } = group
     // A barcode entered on the line is saved onto a product that has none,
     // unless another product already uses it (validation blocks that).

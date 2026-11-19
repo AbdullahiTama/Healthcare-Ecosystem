@@ -68,7 +68,7 @@ export default function PurchaseDetailModal({ brand, purchase: row, onClose, onP
                 <div style={{ minWidth: 0 }}>
                   <div style={{ color: navy, fontWeight: 600, overflowWrap: 'anywhere' }}>{l.name}</div>
                   <div style={{ fontSize: 12, color: gray500 }}>
-                    {l.qty || '—'} × {l.cost ? fmt(l.cost) : '—'}{itemised ? '' : ' average'}
+                    {l.noQty ? 'Quantity not recorded: no stock was added (Edit to add it)' : <>{l.qty || '—'} × {l.cost ? fmt(l.cost) : '—'}{itemised ? '' : ' average'}</>}
                   </div>
                   {(l.batch || l.expiry || l.sell) && (
                     <div style={{ fontSize: 11.5, color: gray500 }}>

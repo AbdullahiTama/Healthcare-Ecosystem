@@ -3,7 +3,8 @@ import { normalize } from '../../lib/productMatches'
 // Purchase line items — the pure rules behind Purchases.jsx's bulk stock entry,
 // kept out of the component so they can be tested without rendering it.
 //
-// A line is { id, productId, name, qty, cost, sell, batch, expiry, barcode, cat }. All
+// A line is { id, productId, name, qty, cost, sell, batch, expiry, barcode, cat }. An uploaded row without a
+// quantity becomes an amount-only line: { ..., qty: '', cost: '', noQty: true, amount } (carehub_20270131). All
 // inputs are kept as the strings the user typed; numbers are parsed at the
 // edges (validation and save). `productId` links the line to an existing
 // catalogue product once it has been picked, so the save restocks that exact
@@ -13,6 +14,12 @@ let seq = 0
 const lineId = () => 'l' + Date.now().toString(36) + (seq++).toString(36)
 
 export const blankItem = () => ({ id: lineId(), productId: null, name: '', qty: '', cost: '', sell: '', batch: '', expiry: '', barcode: '', cat: 'Medicines' })
+
+// What a line costs: quantity x unit cost, or the amount of an amount-only line (recorded without a quantity).
+export function lineAmount(item) {
+  if (item?.noQty) return Number(item.amount) || 0
+  return (Number(item?.qty) || 0) * (Number(item?.cost) || 0)
+}
 
 // A line the user has not touched at all. Ignored at save, never an error —
 // the form always keeps a trailing empty line ready for the next product.
@@ -72,9 +79,17 @@ export function applyProduct(item, product) {
 //                 already sold cannot be taken back);
 //   locked        when editing, the line's product and quantity cannot change.
 export function itemProblems(item, product = null, { barcodeOwner = null, minQty = null, locked = false } = {}) {
-  if (isBlankItem(item)) return {}
+  if (isBlankItem(item) && !item.noQty) return {}
   const problems = {}
   if (!String(item.name || '').trim()) problems.name = 'Enter the product name'
+  // An amount-only line (uploaded without a quantity) adds no stock: it needs its amount, and nothing about units,
+  // batches or expiry. Entering a quantity turns it back into a normal line (checked below).
+  if (item.noQty && !String(item.qty ?? '').trim()) {
+    if (!(Number(item.amount) > 0)) problems.amount = 'Enter the amount, or the quantity and unit cost'
+    const code = String(item.barcode || '').trim()
+    if (code.length > 64) problems.barcode = 'Too long'
+    return problems
+  }
   const qty = Number(item.qty)
   if (item.qty === '' || item.qty == null) problems.qty = 'Enter the quantity'
   else if (!Number.isInteger(qty) || qty <= 0) problems.qty = 'Whole number above 0'

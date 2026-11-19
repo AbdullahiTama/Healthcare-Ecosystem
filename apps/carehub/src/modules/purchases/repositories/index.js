@@ -143,9 +143,16 @@ export function createPurchaseRepository(request = sbFetch) {
       })
     },
 
-    // Purchase totals — use for stat cards
-    async getTotals(businessId) {
-      return request(`rpc/get_purchase_totals?p_business_id=${businessId}`)
+    // The figures above the Purchases list, for exactly the purchases the list shows: the same supply-date range,
+    // supplier and search as getPage (carehub_20270131). With no filters, all purchases. Returns
+    // [{ purchase_count, total_amount, total_paid, total_owed }].
+    async getTotals(businessId, { from = '', to = '', supplierKey = '', search = '' } = {}) {
+      const params = [`p_business_id=${businessId}`]
+      if (from) params.push(`p_from=${from}`)
+      if (to) params.push(`p_to=${to}`)
+      if (supplierKey) params.push(`p_supplier_key=${encodeURIComponent(supplierKey)}`)
+      if (search) params.push(`p_search=${encodeURIComponent(search)}`)
+      return request(`rpc/get_purchase_totals?${params.join('&')}`)
     },
 
     // Records a payment to the supplier against a purchase (full or part). The

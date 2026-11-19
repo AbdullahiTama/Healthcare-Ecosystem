@@ -9,7 +9,10 @@
 // (any order; common alternative names accepted), so the Excel export of
 // purchases can be edited and uploaded again.
 //
-// Docs: docs/architecture/Purchases-Import-Export.md
+// A row without a quantity is still recorded (owner decision 2026-11-19): its amount (Line Total, else Unit Cost)
+// counts in the purchase, no stock is added, and the preview says so; Edit Purchase can add the quantity later.
+//
+// Docs: docs/architecture/Purchases-Import-Export.md, docs/architecture/Purchases-Totals-Reconciliation.md
 
 import { parseImportDate, parseImportNumber, readTableByHeader } from '../../lib/spreadsheetImport'
 import { isValidPhone } from '../business-directory/services/normalize'
@@ -30,8 +33,9 @@ export const IMPORT_COLUMNS = [
   { key: 'supplierPhone', header: 'Supplier Phone', level: 'purchase', required: false, note: "Optional. Put on the supplier's record when it has no phone (Purchases › Supplier summary).", aliases: ['supplier phone', 'phone', 'phone number', 'supplier contact', 'contact', 'telephone', 'mobile'] },
   { key: 'supplyDate', header: 'Supply Date', level: 'purchase', required: true, note: 'YYYY-MM-DD or DD/MM/YYYY. Not in the future.', aliases: ['supply date', 'date', 'purchase date', 'date supplied', 'delivery date'] },
   { key: 'name', header: 'Product Name', level: 'line', required: true, note: 'Matched to your Inventory by exact name or barcode; a new name creates a new product.', aliases: ['product name', 'product', 'item', 'item name', 'description'] },
-  { key: 'qty', header: 'Quantity', level: 'line', required: true, note: 'Whole number above 0.', aliases: ['quantity', 'qty', 'units'] },
-  { key: 'cost', header: 'Unit Cost (NGN)', level: 'line', required: true, note: 'Cost of one unit, above 0.', aliases: ['unit cost ngn', 'unit cost', 'cost', 'cost price', 'cost price ngn', 'unit price'] },
+  { key: 'qty', header: 'Quantity', level: 'line', required: false, note: 'Whole number above 0. If you do not know it, leave it blank and fill Line Total: the amount is recorded and no stock is added (add the quantity later in Edit Purchase).', aliases: ['quantity', 'qty', 'units'] },
+  { key: 'cost', header: 'Unit Cost (NGN)', level: 'line', required: false, note: 'Cost of one unit, above 0. Needed with a quantity (or give Line Total instead).', aliases: ['unit cost ngn', 'unit cost', 'cost', 'cost price', 'cost price ngn', 'unit price'] },
+  { key: 'lineTotal', header: 'Line Total (NGN)', level: 'line', required: false, note: 'Optional. What the whole line cost. Used when Quantity is blank; with a quantity and no unit cost, the unit cost is worked out from it.', aliases: ['line total ngn', 'line total', 'line amount', 'amount ngn', 'amount'] },
   { key: 'sell', header: 'Selling Price (NGN)', level: 'line', required: false, note: 'Optional. Sets the price of a new product; changes an existing product\'s price only if your role may edit prices.', aliases: ['selling price ngn', 'selling price', 'sell price', 'price', 'retail price'] },
   { key: 'batch', header: 'Batch No.', level: 'line', required: false, note: 'Needed for products tracked by batch.', aliases: ['batch no', 'batch', 'batch number', 'lot', 'lot number'] },
   { key: 'expiry', header: 'Expiry Date', level: 'line', required: false, note: 'YYYY-MM-DD or DD/MM/YYYY. Needed for products tracked by expiry.', aliases: ['expiry date', 'expiry', 'exp date', 'expiration date'] },
@@ -44,9 +48,11 @@ export const IMPORT_COLUMNS = [
 const PURCHASE_FIELDS = IMPORT_COLUMNS.filter(c => c.level === 'purchase' && c.key !== 'ref' && c.key !== 'supplier' && c.key !== 'supplyDate')
 const LABEL = Object.fromEntries(IMPORT_COLUMNS.map(c => [c.key, c.header]))
 
+// In IMPORT_COLUMNS order. The third row has no quantity: its Line Total is recorded, no stock is added.
 const SAMPLE_ROWS = [
-  ['INV-1042', 'Emzor Distributors', '08031234567', '2026-11-03', 'Paracetamol 500mg', '200', '45', '80', 'B2311', '2028-06-30', '', 'Medicines', '5000', '2026-11-30', ''],
-  ['INV-1042', 'Emzor Distributors', '', '2026-11-03', 'Amoxicillin 500mg', '50', '220', '350', 'AX77', '2027-12-31', '', 'Medicines', '', '', ''],
+  ['INV-1042', 'Emzor Distributors', '08031234567', '2026-11-03', 'Paracetamol 500mg', '200', '45', '', '80', 'B2311', '2028-06-30', '', 'Medicines', '5000', '2026-11-30', ''],
+  ['INV-1042', 'Emzor Distributors', '', '2026-11-03', 'Amoxicillin 500mg', '50', '220', '', '350', 'AX77', '2027-12-31', '', 'Medicines', '', '', ''],
+  ['INV-1042', 'Emzor Distributors', '', '2026-11-03', 'Cotton wool 500g', '', '', '3500', '', '', '', '', 'Medicines', '', '', ''],
 ]
 
 function csvEscape(v) {
@@ -73,7 +79,8 @@ export async function buildTemplateXlsx() {
   ins.getRow(1).font = { bold: true }
   IMPORT_COLUMNS.forEach(c => ins.addRow({ c: c.header, r: c.required ? 'Yes' : 'No', n: c.note }))
   ins.addRow({})
-  ins.addRow({ c: 'One row per product line. Replace the two example rows with your own before uploading.' })
+  ins.addRow({ c: 'One row per product line. Replace the three example rows with your own before uploading.' })
+  ins.addRow({ c: 'A row without a quantity is recorded as its Line Total, with no stock added; add the quantity later in Edit Purchase.' })
   ins.addRow({ c: 'Each purchase is recorded like one typed into Record Purchase: stock is added to Inventory and any balance goes to Debts.' })
   const buf = await wb.xlsx.writeBuffer()
   return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
@@ -89,9 +96,16 @@ export { parseImportDate, parseImportNumber }
  * rows: [{ rowNumber, cells: { key: text } }]; rowNumber is the spreadsheet row.
  * Throws a user-facing error for an empty or oversized file.
  */
+// What a line costs must be readable from the file: Quantity with Unit Cost, or Line Total. Each is optional on
+// its own, but a file with none of the three cannot price anything.
+export const AMOUNT_COLUMNS_MISSING = 'Quantity and Unit Cost (NGN), or Line Total (NGN)'
+
 export function readPurchaseTable(rawRows) {
   try {
-    return readTableByHeader(rawRows, IMPORT_COLUMNS, { maxRows: MAX_IMPORT_ROWS })
+    const t = readTableByHeader(rawRows, IMPORT_COLUMNS, { maxRows: MAX_IMPORT_ROWS })
+    const present = new Set(Object.keys(t.rows[0]?.cells || {}))
+    if (!present.has('qty') && !present.has('cost') && !present.has('lineTotal')) return { ...t, missing: [...t.missing, AMOUNT_COLUMNS_MISSING] }
+    return t
   } catch (e) {
     throw new Error(e.message === 'The file has headers but no rows.' ? 'The file has headers but no purchase rows.' : e.message)
   }
@@ -167,11 +181,27 @@ export function buildImportPlan(rows, { inventory = [], today, restricted = fals
 
     // The line, as the form keeps it (strings), then the form's own line rules.
     const qty = parseImportNumber(cells.qty)
-    const cost = parseImportNumber(cells.cost)
+    let cost = parseImportNumber(cells.cost)
+    const lineTotal = parseImportNumber(cells.lineTotal)
     const sell = parseImportNumber(cells.sell)
     const expiry = parseImportDate(cells.expiry)
     if (Number.isNaN(qty)) at(`Quantity "${cells.qty}" is not a number.`)
     if (Number.isNaN(cost)) at(`Unit cost "${cells.cost}" is not a number.`)
+    if (Number.isNaN(lineTotal) || (lineTotal !== '' && lineTotal < 0)) at(`Line total "${cells.lineTotal}" is not a valid amount.`)
+    // No quantity: the line is recorded as its amount, with no stock (amount-only). The amount is the Line Total,
+    // else the Unit Cost (the only figure given, read as what the line cost).
+    const lineName = String(cells.name || '').trim()
+    const noQty = qty === '' && !Number.isNaN(lineTotal) && !Number.isNaN(cost)
+    let amount = ''
+    if (noQty) {
+      amount = lineTotal !== '' ? lineTotal : cost
+      if (amount === '' || !(amount > 0)) at(`${lineName || 'This product'} has no quantity and no amount: fill Quantity and Unit Cost, or Line Total.`)
+      else g.warnings.push(`Row ${rowNumber}: no quantity for ${lineName || 'this product'}, so ₦${money(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })} is recorded for it` +
+        (lineTotal === '' ? ' (its Unit Cost, read as the line\'s amount)' : '') + ' and no stock is added. Add the quantity later in Edit Purchase.')
+    } else if (qty !== '' && !Number.isNaN(qty) && qty > 0 && lineTotal !== '' && !Number.isNaN(lineTotal)) {
+      if (cost === '') cost = lineTotal / qty
+      else if (!Number.isNaN(cost) && Math.abs(qty * cost - lineTotal) > 1) g.warnings.push(`Row ${rowNumber}: Line Total ${money(lineTotal)} is not Quantity x Unit Cost (${money(qty * cost)}); Quantity x Unit Cost is used.`)
+    }
     if (Number.isNaN(sell) || (sell !== '' && sell < 0)) at(`Selling price "${cells.sell}" is not a valid amount.`)
     if (expiry === null) at(`Expiry date "${cells.expiry}" is not a date (use YYYY-MM-DD or DD/MM/YYYY).`)
     const name = String(cells.name || '').trim()
@@ -182,7 +212,8 @@ export function buildImportPlan(rows, { inventory = [], today, restricted = fals
       productId: product ? product.id : null,
       name: product ? product.name : name,
       qty: qty === '' || Number.isNaN(qty) ? '' : String(qty),
-      cost: cost === '' || Number.isNaN(cost) ? '' : String(cost),
+      cost: noQty || cost === '' || Number.isNaN(cost) ? '' : String(cost),
+      ...(noQty ? { noQty: true, amount: amount === '' ? '' : String(amount) } : {}),
       sell: sell === '' || Number.isNaN(sell) ? '' : String(sell),
       batch: String(cells.batch || '').trim(),
       expiry: expiry || '',
@@ -196,12 +227,14 @@ export function buildImportPlan(rows, { inventory = [], today, restricted = fals
       // Unreadable numbers were already reported above.
       if (Number.isNaN(qty)) delete problems.qty
       if (Number.isNaN(cost)) delete problems.cost
+      if (noQty) delete problems.amount   // reported above, naming the product
       for (const [field, msg] of Object.entries(problems)) at(`${LABEL[field] || field}: ${msg}.`)
     }
     // Recording applies a different selling price to an existing product (as the form does), so say so before.
     if (product && canReprice && Number(line.sell) > 0 && Number(line.sell) !== Number(product.price)) g.warnings.push(`Row ${rowNumber}: the selling price of ${product.name} will change from ${money(product.price)} to ${money(line.sell)}.`)
     if (line.expiry && today && line.expiry < today) g.warnings.push(`Row ${rowNumber}: ${name || 'this product'} expired on ${line.expiry}.`)
-    g.lines.push({ line, isNew: !product && !!name })
+    // An amount-only line stocks nothing, so it never creates a product.
+    g.lines.push({ line, isNew: !product && !!name && !noQty })
     g.errors.push(...rowErrors)
   }
 

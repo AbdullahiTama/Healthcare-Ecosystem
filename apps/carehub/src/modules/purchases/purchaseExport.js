@@ -14,7 +14,6 @@ const MONEY_KEYS = new Set(['cost', 'sell', 'amountPaid', 'lineTotal', 'purchase
 
 export const PURCHASE_EXPORT_COLUMNS = [
   ...IMPORT_COLUMNS.map(c => ({ key: c.key, header: c.header })),
-  { key: 'lineTotal', header: 'Line Total (NGN)' },
   { key: 'purchaseTotal', header: 'Purchase Total (NGN)' },
   { key: 'balance', header: 'Balance (NGN)' },
   { key: 'status', header: 'Status' },
@@ -48,8 +47,10 @@ export function purchaseExportRows(p) {
   return lines.map(l => ({
     ...head,
     name: l.name || '',
-    qty: num(l.qty),
-    cost: num(l.cost),
+    // A line recorded without a quantity exports with Quantity and Unit Cost blank and its Line Total, so the file
+    // uploads again as the same amount-only line.
+    qty: l.noQty ? '' : num(l.qty),
+    cost: l.noQty ? '' : num(l.cost),
     sell: l.sell != null ? num(l.sell) : '',
     batch: l.batch || '',
     expiry: day(l.expiry),

@@ -136,7 +136,7 @@ describe('upload', () => {
     await mount()
     await click(btn((b) => b.textContent.trim() === 'Upload'))
     await upload('Supplier,Product\nEmzor,ORS\n')
-    expect(text()).toMatch(/missing the columns Supply Date, Quantity, Unit Cost \(NGN\)/)
+    expect(text()).toMatch(/missing the columns Supply Date, Quantity and Unit Cost \(NGN\), or Line Total \(NGN\)/)
     expect(repo.create).not.toHaveBeenCalled()
   })
 

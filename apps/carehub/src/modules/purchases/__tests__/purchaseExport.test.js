@@ -46,7 +46,8 @@ describe('files', () => {
     expect(csv).toContain(`"'=HYPERLINK(""x"")"`)
     const t = readPurchaseTable(parseCsv(csv))
     expect(t.missing).toEqual([])
-    expect(t.ignored).toEqual(['Line Total (NGN)', 'Purchase Total (NGN)', 'Balance (NGN)', 'Status', 'Recorded On'])
+    // Line Total is read on upload (a line without a quantity is priced by it); the purchase-level figures are not.
+    expect(t.ignored).toEqual(['Purchase Total (NGN)', 'Balance (NGN)', 'Status', 'Recorded On'])
     const plan = buildImportPlan(t.rows, { inventory: [], today: '2026-11-10' })
     expect(plan.purchases).toHaveLength(1)
     expect(plan.purchases[0]).toMatchObject({ total: 5500, paid: 2000, errors: [] })

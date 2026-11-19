@@ -96,3 +96,8 @@ Text cells are neutralised against spreadsheet formula injection (`neutraliseFor
 **Manual check after deploy:** download both templates; upload the Excel template unchanged (one purchase, two lines);
 upload a CSV with a bad row (the others record); upload the same file again (skipped as duplicate); export with a supplier
 filter as CSV and Excel, open both, upload the export again (skipped as duplicates); as a Cashier, no Export button.
+
+## Rows without a quantity (2026-11-19)
+
+Quantity and Unit Cost are optional, and an optional **Line Total (NGN)** column is read. A row without a quantity is
+recorded at its amount with no stock added; see [Purchases-Totals-Reconciliation.md](Purchases-Totals-Reconciliation.md).

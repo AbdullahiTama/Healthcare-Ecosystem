@@ -12,6 +12,7 @@ import SupplierField from './SupplierField'
 import { supplierKey } from './suppliers'
 import { isValidPhone } from '../business-directory/services/normalize'
 import ProductInsight from './ProductInsight'
+import { isAmountOnly } from './purchaseInvoice'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, dangerBg, warning, success, bg } = theme
 
@@ -31,7 +32,9 @@ function LineField({ id, label, error, children }) {
   )
 }
 
-export const formTotal = (form) => form.items.filter(i => !isBlankItem(i)).reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.cost) || 0), 0)
+// A line without a quantity (uploaded so) counts its amount until a quantity is entered (purchaseInvoice.isAmountOnly).
+const lineSubtotal = (i) => isAmountOnly(i) ? (Number(i.amount) || 0) : (Number(i.qty) || 0) * (Number(i.cost) || 0)
+export const formTotal = (form) => form.items.filter(i => i.noQty || !isBlankItem(i)).reduce((s, i) => s + lineSubtotal(i), 0)
 
 // Field problems for every started line of the form ([{ idx, problems }],
 // empty when it can be saved). One definition for what the form outlines and
@@ -288,7 +291,8 @@ const PurchaseForm = forwardRef(function PurchaseForm({
             const hasProblems = Object.keys(problems).length > 0
             const qtyNum = Number(item.qty)
             const qtyValid = Number.isInteger(qtyNum) && qtyNum > 0
-            const sub = (Number(item.qty) || 0) * (Number(item.cost) || 0)
+            const sub = lineSubtotal(item)
+            const amountOnly = isAmountOnly(item)
             const priceLocked = !!product && (!canReprice || editing)
             const isService = (product?.category || product?.cat) === 'Services'
             const tracking = product?.tracking_mode || 'none'
@@ -355,14 +359,28 @@ const PurchaseForm = forwardRef(function PurchaseForm({
                   </div>
                 ) : null}
 
+                {item.noQty && (
+                  <p id={fid('amount') + '-note'} style={{ margin: '8px 0 0 32px', fontSize: 11.5, color: amountOnly ? warning : gray500, fontWeight: 600 }}>
+                    {amountOnly
+                      ? 'Uploaded without a quantity: its amount counts in the purchase, but it added no stock. Enter the quantity and unit cost to add it to stock.'
+                      : 'With a quantity and unit cost, saving adds this line to stock.'}
+                  </p>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '8px', marginTop: '10px', marginLeft: '32px' }}>
-                  <LineField id={fid('qty')} label='Quantity *' error={problems.qty}>
+                  {amountOnly && (
+                    <LineField id={fid('amount')} label='Amount (₦) *' error={problems.amount}>
+                      <input id={fid('amount')} ref={reg('amount')} value={item.amount} onChange={e => setItem(item.id, 'amount', e.target.value)}
+                        type='number' inputMode='decimal' min='0' placeholder='0'
+                        aria-invalid={!!problems.amount} aria-describedby={[described('amount'), fid('amount') + '-note'].filter(Boolean).join(' ')} style={lineInput(problems.amount)} />
+                    </LineField>
+                  )}
+                  <LineField id={fid('qty')} label={amountOnly ? 'Quantity' : 'Quantity *'} error={problems.qty}>
                     <input id={fid('qty')} ref={reg('qty')} value={item.qty} onChange={e => setItem(item.id, 'qty', e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'qty')}
                       type='number' inputMode='numeric' min={sameProduct ? info.min_qty || 1 : 1} step='1' placeholder='0' readOnly={locked}
                       aria-invalid={!!problems.qty} aria-describedby={[described('qty'), sameProduct && info.min_qty > 1 ? fid('qty') + '-min' : null].filter(Boolean).join(' ') || undefined}
                       style={lineInput(problems.qty, locked)} />
                   </LineField>
-                  <LineField id={fid('cost')} label='Unit cost (₦) *' error={problems.cost}>
+                  <LineField id={fid('cost')} label={amountOnly ? 'Unit cost (₦)' : 'Unit cost (₦) *'} error={problems.cost}>
                     <input id={fid('cost')} ref={reg('cost')} value={item.cost} onChange={e => setItem(item.id, 'cost', e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'cost')}
                       type='number' inputMode='decimal' min='0' placeholder='0'
                       aria-invalid={!!problems.cost} aria-describedby={described('cost')} style={lineInput(problems.cost)} />

@@ -13,7 +13,21 @@ const num = (v) => {
 // `id` is the line's stock-receipt key and `product_id` the product it stocks,
 // so an edit can find exactly what each line added (carehub_20261229).
 export function purchaseItemsFromForm(validItems) {
-  return (validItems || []).map((i) => ({
+  return (validItems || []).map((i) => isAmountOnly(i) ? {
+    // Recorded without a quantity (upload): its amount counts, it adds no stock (carehub_20270131).
+    id: i.id || null,
+    product_id: i.productId || null,
+    name: String(i.name || '').trim(),
+    qty: null,
+    cost: null,
+    amount: Math.round(num(i.amount) * 100) / 100,
+    no_qty: true,
+    sell: null,
+    batch: i.batch ? String(i.batch).trim() : null,
+    expiry: i.expiry || null,
+    barcode: String(i.barcode || '').trim() || null,
+    cat: i.cat || null,
+  } : ({
     id: i.id || null,
     product_id: i.productId || null,
     name: String(i.name || '').trim(),
@@ -26,6 +40,9 @@ export function purchaseItemsFromForm(validItems) {
     cat: i.cat || null,
   }))
 }
+
+// An amount-only line that is still without a quantity (entering one makes it a normal line again).
+export const isAmountOnly = (i) => !!i?.noQty && !String(i.qty ?? '').trim()
 
 // The edit form from a purchase and get_purchase_for_edit's lines. The amount
 // paid is a string like every other field; dates are trimmed to 'YYYY-MM-DD'.
@@ -42,8 +59,9 @@ export function formFromPurchase(purchase, editItems) {
       id: e.id,
       productId: e.product_id || null,
       name: e.name || '',
-      qty: str(e.qty),
-      cost: str(e.cost),
+      qty: e.no_qty ? '' : str(e.qty),
+      cost: e.no_qty ? '' : str(e.cost),
+      ...(e.no_qty ? { noQty: true, amount: str(e.amount) } : {}),
       sell: Number(e.sell) > 0 ? String(e.sell) : '',
       batch: e.batch || '',
       expiry: day(e.expiry),
@@ -55,7 +73,19 @@ export function formFromPurchase(purchase, editItems) {
 
 // What edit_purchase takes for each line. Blank lines are the caller's to drop.
 export function editItemsFromForm(items) {
-  return (items || []).map((i) => ({
+  return (items || []).map((i) => isAmountOnly(i) ? {
+    id: i.id,
+    product_id: i.productId || null,
+    name: String(i.name || '').trim(),
+    qty: null,
+    cost: null,
+    amount: Number(i.amount),
+    no_qty: true,
+    batch: String(i.batch || '').trim() || null,
+    expiry: i.expiry || null,
+    barcode: String(i.barcode || '').trim() || null,
+    cat: i.cat || null,
+  } : ({
     id: i.id,
     product_id: i.productId || null,
     name: String(i.name || '').trim(),
@@ -84,9 +114,11 @@ export function purchaseLines(purchase) {
       itemised: true,
       lines: items.map((i) => ({
         name: i.name || 'Item',
-        qty: num(i.qty),
-        cost: num(i.cost),
-        total: Math.round(num(i.qty) * num(i.cost) * 100) / 100,
+        // An amount-only line has no quantity or unit cost (null), only its amount.
+        qty: i.no_qty ? null : num(i.qty),
+        cost: i.no_qty ? null : num(i.cost),
+        total: i.no_qty ? Math.round(num(i.amount) * 100) / 100 : Math.round(num(i.qty) * num(i.cost) * 100) / 100,
+        noQty: !!i.no_qty,
         sell: i.sell != null && num(i.sell) > 0 ? num(i.sell) : null,
         batch: i.batch || null,
         expiry: i.expiry || null,

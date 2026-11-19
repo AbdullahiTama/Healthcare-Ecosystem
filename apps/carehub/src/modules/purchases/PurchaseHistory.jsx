@@ -30,10 +30,19 @@ function useDebounced(value, ms = 300) {
 // it and shows its own summary. All figures are worked out by the database
 // (get_purchase_summary / _supplier_stats / _product_stats / _history), dated
 // by each purchase's supply date.
-export default function PurchaseHistory({ brand, suppliers = [], onOpenPurchase }) {
-  const [period, setPeriod] = useState(() => presetPeriod('this_month', todayDate()))
+//
+// Inside Purchases the period and supplier are shared with the Purchases tab (`period`, `supplierKey` and their
+// setters), so both show the same purchases and the same figures: with whole purchases selected, "Total spent"
+// is the purchases' own totals, which is the Purchases tab's Total Amount (carehub_20270131). Without them (on its
+// own) it keeps its own selection, opening on this month.
+export default function PurchaseHistory({ brand, suppliers = [], onOpenPurchase, period: sharedPeriod, onPeriodChange, supplierKey: sharedSupplier, onSupplierChange }) {
+  const [ownPeriod, setOwnPeriod] = useState(() => presetPeriod('this_month', todayDate()))
+  const [ownSupplier, setOwnSupplier] = useState('')
+  const period = sharedPeriod && onPeriodChange ? sharedPeriod : ownPeriod
+  const setPeriod = sharedPeriod && onPeriodChange ? onPeriodChange : setOwnPeriod
+  const supplierKey = onSupplierChange ? (sharedSupplier || '') : ownSupplier
+  const setSupplierKey = onSupplierChange || setOwnSupplier
   const [searchText, setSearchText] = useState('')
-  const [supplierKey, setSupplierKey] = useState('')
   const [product, setProduct] = useState(null)        // { key, id, name } of the product picked
   const [sort, setSort] = useState('spend')
   const [productLimit, setProductLimit] = useState(PRODUCT_PAGE)
@@ -114,7 +123,7 @@ export default function PurchaseHistory({ brand, suppliers = [], onOpenPurchase 
             action={narrowed ? 'Clear filters' : undefined} onAction={narrowed ? clearAll : undefined} />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-            <StatCard icon={<Wallet />} label={product ? 'Spent on this product' : 'Total spent'} value={fmt(s.total_spent)}
+            <StatCard icon={<Wallet />} label={product ? 'Spent on this product' : search ? 'Spent on matching lines' : 'Total spent'} value={fmt(s.total_spent)}
               sub={Number(s.units) > 0 ? Number(s.units).toLocaleString() + ' units in ' + Number(s.line_count) + ' line' + (Number(s.line_count) === 1 ? '' : 's') : undefined} />
             <StatCard icon={<Receipt />} label='Purchases' value={Number(s.purchase_count)} sub={frequency || undefined} />
             <StatCard icon={<CreditCard />} label={product ? 'Paid on these purchases' : 'Paid'} value={fmt(s.amount_paid)} />

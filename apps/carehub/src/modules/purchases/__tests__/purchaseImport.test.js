@@ -45,8 +45,9 @@ describe('reading the table', () => {
     expect(t.rows).toEqual([{ rowNumber: 2, cells: { qty: '3', supplier: 'Emzor', name: 'ORS', supplyDate: '2026-11-01', cost: '50' } }])
   })
 
-  it('names the required columns a file lacks', () => {
-    expect(readPurchaseTable([['Supplier', 'Product'], ['A', 'B']]).missing).toEqual(['Supply Date', 'Quantity', 'Unit Cost (NGN)'])
+  it('names the required columns a file lacks (an amount needs Quantity and Unit Cost, or Line Total)', () => {
+    expect(readPurchaseTable([['Supplier', 'Product'], ['A', 'B']]).missing).toEqual(['Supply Date', 'Quantity and Unit Cost (NGN), or Line Total (NGN)'])
+    expect(readPurchaseTable([['Supplier', 'Supply Date', 'Product', 'Line Total'], ['A', '2026-11-01', 'B', '500']]).missing).toEqual([])
   })
 
   it('refuses an empty file, headers without rows, and too many rows', () => {
@@ -55,11 +56,12 @@ describe('reading the table', () => {
     expect(() => readPurchaseTable([HEAD, ...Array.from({ length: MAX_IMPORT_ROWS + 1 }, () => ['x'])])).toThrow(/limit is 2,000/)
   })
 
-  it('the template uploads as-is: its two example rows are one ready purchase', () => {
+  it('the template uploads as-is: its three example rows are one ready purchase (one line without a quantity)', () => {
     const t = readPurchaseTable(parseCsv(buildTemplateCsv()))
     expect(t.missing).toEqual([])
     const plan = buildImportPlan(t.rows, ctx)
-    expect(plan.summary).toMatchObject({ rows: 2, purchases: 1, ready: 1, withErrors: 0 })
+    expect(plan.summary).toMatchObject({ rows: 3, purchases: 1, ready: 1, withErrors: 0 })
+    expect(plan.purchases[0].total).toBe(200 * 45 + 50 * 220 + 3500)
     expect(t.rows[0].cells).toHaveProperty('ref', 'INV-1042')
     expect(Object.keys(t.rows[0].cells)).toHaveLength(IMPORT_COLUMNS.length)
   })
