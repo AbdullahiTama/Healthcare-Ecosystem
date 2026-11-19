@@ -62,6 +62,19 @@ Stored shape of an amount-only line in `purchases.items`:
 No new access. `get_purchase_totals` keeps its ownership check and grants; analytics stay SECURITY INVOKER under
 purchases' RLS; `edit_purchase` keeps its membership and "Edit purchases" checks. An amount-only line cannot move stock.
 
+## Status
+
+Applied 2026-11-19 with the owner's approval, in three parts (analytics, edit_purchase, totals + grants), each live
+body verified against this repository. Live probe (rolled back) as a business owner: the Purchases figures, the
+Purchase Summary and the list agree exactly for all time, the latest month, a supplier and both; the amount-only
+line records, edits, completes into stock, and a new one is refused. Production unchanged afterwards. App deployed
+after the migration.
+
+**Known, not changed:** some stored purchases carry sub-kobo fractions in their totals (long-decimal unit costs such as
+4,666.66667 x 6 = 28,000.00002), so paid + owed can differ from the total by under ₦0.01, and `fmt` shows up to three
+decimals. All sections show the same figures. Rounding stored totals to the kobo would be a data correction: owner
+decision.
+
 ## Deployment order
 
 Apply the migration, probe it, then deploy the app. An app deployed first would record amount-only lines that the old

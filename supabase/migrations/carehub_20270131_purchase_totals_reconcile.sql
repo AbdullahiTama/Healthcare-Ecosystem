@@ -2,7 +2,19 @@
 -- Purchases: the Purchases totals and the Purchase Summary always reconcile; uploaded lines without a quantity
 -- are recorded and counted.
 -- 2026-11-19. Docs: docs/architecture/Purchases-Totals-Reconciliation.md
--- Status: NOT APPLIED. Tested on PGlite (scripts/db-tests/purchaseTotalsReconcile.pglite.mjs).
+-- Status: APPLIED to the live carehub project 2026-11-19 with owner approval, in three parts (versions
+-- 20261119110201 analytics, 20261119110347 edit_purchase, 20261119110416 get_purchase_totals + grants). Every live
+-- body matches this file (md5 of prosrc: purchase_line_rows ebc00807…, get_purchase_summary eb43c0ad…,
+-- get_purchase_supplier_stats cf578bfa…, get_purchase_product_stats 4bfca5c4…, edit_purchase 8ee24db2…,
+-- get_purchase_totals 6e0cba4c…); grants unchanged; only the five-argument get_purchase_totals exists.
+-- Live probe as the owner of the business with most purchases, in a rolled-back block: for all time, the latest
+-- month, the main supplier and both, get_purchase_totals = get_purchase_summary = the page's sums (count, total, paid,
+-- owed). An amount-only line counted (3,500), its amount edited (4,000, no stock change), completed with a quantity
+-- (one purchase_receipt of 5, stock +5), a new amount-only line refused. Afterwards purchases / movements / debts /
+-- audit unchanged (67 / 9,709 / 2,179 / 46), no probe rows.
+-- Note: stored totals carry sub-kobo fractions from long-decimal unit costs (e.g. 28000.00002), so for that
+-- business paid + owed differs from the total by under 0.01 naira (all three sections show the same figures).
+-- Tested first on PGlite (scripts/db-tests/purchaseTotalsReconcile.pglite.mjs).
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY (verified against the code and the live database, 2026-11-19)
