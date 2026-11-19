@@ -1,7 +1,12 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Stock counts (Stock Management ▸ Stock Validation) can correct expiry dates.
 -- 2026-11-19. Docs: docs/architecture/Stock-Ledger.md ("Expiry dates in a stock count")
--- Status: NOT APPLIED. Tested on PGlite (apps/carefind/src/test/stock-count/stockCountExpiry.db.test.js).
+-- Status: APPLIED to the live carehub project 2026-11-19 with owner approval (version 20261119081658). The live body
+-- matches this file (md5 of prosrc 1b199ee63e81a4b3fb8274fe03d020bd). Probed live as a business owner inside a
+-- rolled-back block: expiry-only correction set and recorded before/after, quantity + expiry saved together with one
+-- ledger row, 2027-02-30 refused (COUNT_INVALID), another business refused (COUNT_FORBIDDEN), history not writable;
+-- session and line counts unchanged afterwards (14 / 42). Tested first on PGlite
+-- (apps/carefind/src/test/stock-count/stockCountExpiry.db.test.js).
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY
