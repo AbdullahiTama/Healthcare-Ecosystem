@@ -3,6 +3,7 @@ import { History, ArrowLeft, Loader2 } from 'lucide-react'
 import { stockValidationRepository } from './repositories'
 import { theme } from '../../styles/theme'
 import { DataTable, Pill, Empty } from '../../components/ui'
+import { formatExpiry } from './StockValidation'
 
 export default function StockHistory({ brand }) {
   const [sessions, setSessions] = useState([])
@@ -140,6 +141,20 @@ function SessionDetail({ session, onBack }) {
             )
           },
           { key: 'new_stock', label: 'New', align: 'right', render: i => i.new_stock },
+          // Expiry as saved by the count; "was …" when the count corrected it. Counts saved before 2026-11-19 recorded none.
+          {
+            key: 'expiry', label: 'Expiry',
+            render: i => {
+              if (!i.new_expiry_date) return <span style={{ color: theme.gray500 }}>Not recorded</span>
+              const changed = i.previous_expiry_date !== i.new_expiry_date
+              return (
+                <>
+                  <div style={{ fontWeight: changed ? '700' : '400', color: changed ? theme.tealDeep : theme.navy }}>{formatExpiry(i.new_expiry_date)}</div>
+                  {changed && <div style={{ fontSize: '12px', color: theme.gray500 }}>was {i.previous_expiry_date ? formatExpiry(i.previous_expiry_date) : 'not set'}</div>}
+                </>
+              )
+            }
+          },
           { key: 'reason', label: 'Reason', render: i => i.reason || 'Not set' },
           { key: 'unit_price', label: 'Unit Price', align: 'right', render: i => fmt(i.unit_price) }
         ]}

@@ -42,9 +42,53 @@ export function removesTooMuch(item) {
   return item.direction === '-' && previewStock(item).next < 0
 }
 
+// Expiry dates (carehub_20270129_stock_count_expiry). A count can correct a product's expiry: the date is saved with
+// the quantity, in one transaction, and the count history keeps the date before and after. Services have no expiry;
+// a batch-tracked product's dates live on its batches, so neither shows the field.
+export function toDateInput(value) {
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(value || ''))
+  return m ? m[1] : ''
+}
+
+export function expiryEditable(product) {
+  const cat = product?.cat || product?.category || ''
+  return cat !== 'Services' && (product?.tracking_mode || 'none') === 'none'
+}
+
+// The date to save for this line, or null when the expiry is unchanged (or was emptied: clearing is done in
+// Inventory, a count only sets a date).
+export function expiryChange(item) {
+  if (!expiryEditable(item.product)) return null
+  const next = toDateInput(item.expiryDate)
+  return next && next !== toDateInput(item.product.expiry_date) ? next : null
+}
+
+// A line counts as changed when it adjusts the quantity or corrects the expiry.
+export function lineChanged(item) {
+  return parseAdjustmentQty(item.adjustmentQty) > 0 || expiryChange(item) !== null
+}
+
+// Today as YYYY-MM-DD in the device's time zone (an expiry is a calendar date).
+function todayInput() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function formatExpiry(value) {
+  const v = toDateInput(value)
+  if (!v) return 'not set'
+  const [y, m, d] = v.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function worksheetLine(product) {
+  return { product, currentStock: product.stock, adjustmentQty: 0, direction: '+', reason: '', expiryDate: toDateInput(product.expiry_date) }
+}
+
 export function buildValidationItems(worksheet) {
   return worksheet.map(w => {
     const { prev, qty, next: newStock } = previewStock(w)
+    const newExpiry = expiryChange(w)
     return {
       product_id: w.product.id,
       product_name: w.product.name,
@@ -55,6 +99,7 @@ export function buildValidationItems(worksheet) {
       new_stock: newStock,
       reason: w.reason || null,
       unit_price: w.product.price,
+      ...(newExpiry ? { new_expiry_date: newExpiry } : {}),
     }
   })
 }
@@ -110,13 +155,7 @@ export default function StockValidation({ brand, products, loadProducts }) {
       return rowIndex
     }
     requestKey.current = null
-    setWorksheet([...base, {
-      product,
-      currentStock: product.stock,
-      adjustmentQty: 0,
-      direction: '+',
-      reason: '',
-    }])
+    setWorksheet([...base, worksheetLine(product)])
     return base.length
   }
 
@@ -162,13 +201,7 @@ export default function StockValidation({ brand, products, loadProducts }) {
   function addAllInCategory() {
     const newItems = filteredProducts.filter(p =>
       !worksheet.some(w => w.product.id === p.id)
-    ).map(p => ({
-      product: p,
-      currentStock: p.stock,
-      adjustmentQty: 0,
-      direction: '+',
-      reason: '',
-    }))
+    ).map(worksheetLine)
     if (newItems.length === 0) {
       showToast('All products in this category are already on the worksheet', { type: 'info' })
       return
@@ -204,7 +237,8 @@ export default function StockValidation({ brand, products, loadProducts }) {
       return
     }
     setInlineError('')
-    const items = buildValidationItems(worksheet).filter(it => it.adjustment_qty !== 0)
+    // Lines that change something: a quantity adjustment, an expiry correction, or both.
+    const items = buildValidationItems(worksheet).filter(it => it.adjustment_qty !== 0 || it.new_expiry_date)
     if (!requestKey.current) requestKey.current = intentKey('stock-count:' + brand.id)
 
     // No session check here: the save goes through sbFetch, which renews a token the server refuses and retries
@@ -217,7 +251,7 @@ export default function StockValidation({ brand, products, loadProducts }) {
         {
           user_name: auth.staff?.full_name || 'Owner',
           products_checked: worksheet.length,
-          products_adjusted: worksheet.filter(w => parseAdjustmentQty(w.adjustmentQty) > 0).length,
+          products_adjusted: worksheet.filter(lineChanged).length,
         },
         items,
         auth.staff?.id || null,
@@ -298,7 +332,13 @@ export default function StockValidation({ brand, products, loadProducts }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
             {worksheet.map((item, index) => {
               const hasChange = parseAdjustmentQty(item.adjustmentQty) > 0
-              const bg = !hasChange ? 'white' : item.direction === '+' ? theme.successBg : theme.dangerBg
+              const expiryChanged = expiryChange(item) !== null
+              const bg = hasChange ? (item.direction === '+' ? theme.successBg : theme.dangerBg) : expiryChanged ? theme.tealMist : 'white'
+              const canEditExpiry = expiryEditable(item.product)
+              const shownExpiry = toDateInput(item.expiryDate)
+              const expiryId = `expiry-date-${index}`
+              const expiryNoteId = `expiry-note-${index}`
+              const expired = shownExpiry && shownExpiry < todayInput()
               const { qty: qtyParsed, next: computedNewStock } = previewStock(item)
               const isNegative = removesTooMuch(item)
               const errorId = `stock-validation-error-${index}`
@@ -344,6 +384,22 @@ export default function StockValidation({ brand, products, loadProducts }) {
                       <option value="-">Remove</option>
                     </select>
                   </div>
+                  {canEditExpiry && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                      <label htmlFor={expiryId} style={{ fontSize: '13px', fontWeight: '700', color: theme.navy }}>Expiry date</label>
+                      <input id={expiryId} type="date" value={shownExpiry}
+                        onChange={e => updateWorksheetItem(index, { expiryDate: e.target.value })}
+                        onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+                        aria-label={`Expiry date for ${item.product.name}`}
+                        aria-describedby={expiryNoteId}
+                        style={{ padding: '8px', borderRadius: theme.radius.md, border: `1px solid ${expiryChanged ? theme.tealDeep : theme.border}`, fontSize: '14px', minWidth: 0 }} />
+                      <span id={expiryNoteId} style={{ fontSize: '12px', fontWeight: '600', color: expired ? theme.danger : expiryChanged ? theme.tealDeep : theme.gray500 }}>
+                        {expiryChanged
+                          ? `Was ${formatExpiry(item.product.expiry_date)}${expired ? ' · this date has passed' : ''}`
+                          : !shownExpiry ? 'Not set' : expired ? 'Expired' : ''}
+                      </span>
+                    </div>
+                  )}
                   {isNegative && (
                     <div id={errorId} role="alert" style={{ color: theme.danger, fontSize: '12px', fontWeight: '700', marginBottom: '8px' }}>{inlineError || 'Cannot go below 0'}</div>
                   )}
@@ -380,7 +436,7 @@ export default function StockValidation({ brand, products, loadProducts }) {
             </div>
             <div style={{ padding: '12px', borderRadius: theme.radius.md, background: theme.gray50 }}>
               <div style={{ fontSize: '12px', color: theme.gray500 }}>Products adjusted</div>
-              <div style={{ fontSize: '24px', fontWeight: '900', color: theme.navy }}>{worksheet.filter(w => parseAdjustmentQty(w.adjustmentQty) > 0).length}</div>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: theme.navy }}>{worksheet.filter(lineChanged).length}</div>
             </div>
             <div style={{ padding: '12px', borderRadius: theme.radius.md, background: theme.successBg }}>
               <div style={{ fontSize: '12px', color: theme.gray500 }}>Excess</div>
@@ -389,6 +445,10 @@ export default function StockValidation({ brand, products, loadProducts }) {
             <div style={{ padding: '12px', borderRadius: theme.radius.md, background: theme.dangerBg }}>
               <div style={{ fontSize: '12px', color: theme.gray500 }}>Shortage</div>
               <div style={{ fontSize: '24px', fontWeight: '900', color: theme.danger }}>{worksheet.filter(w => w.direction === '-' && parseAdjustmentQty(w.adjustmentQty) > 0).length}</div>
+            </div>
+            <div style={{ padding: '12px', borderRadius: theme.radius.md, background: theme.tealMist, gridColumn: '1 / -1' }}>
+              <div style={{ fontSize: '12px', color: theme.gray500 }}>Expiry dates updated</div>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: theme.tealDeep }}>{worksheet.filter(w => expiryChange(w) !== null).length}</div>
             </div>
           </div>
           {inlineError && (

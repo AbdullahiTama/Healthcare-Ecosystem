@@ -70,6 +70,43 @@ Verified live: a rolled-back probe as a business's signed-in owner (a sale durin
 
 Rollback: `DROP FUNCTION public.save_stock_validation_session(uuid, uuid, text, integer, integer, jsonb, text)`, then run the snapshot.
 
+## Expiry dates in a stock count (2026-11-19)
+
+**Problem:** Stock Management ▸ Stock Validation adjusted quantities only. A count is when staff handle every pack, so it
+is when a wrong or missing expiry is found, but the date had to be corrected separately in Inventory ▸ Edit, and that
+correction left no trace in the count history.
+
+**Change:** `carehub_20270129_stock_count_expiry` (database) and `StockValidation.jsx` / `StockHistory.jsx` (app).
+
+- Each worksheet line shows an **Expiry date** field with the product's current date ("Not set" when there is none,
+  "Expired" when it has passed). Changing it marks the line ("Was 31 Jan 2027"), and warns when the new date has passed.
+  The summary counts **Expiry dates updated**. No field for services or batch-tracked products (their dates live on
+  their batches; none is tracked live).
+- A line whose only change is its expiry is saved (quantity 0). Unchanged dates are not sent.
+- `save_stock_validation_session` sets `products.expiry_date` from the line's `new_expiry_date` in the **same
+  transaction** as the quantity adjustment, so the count saves whole or not at all, and is idempotent on the request
+  key as before. Lines without `new_expiry_date` leave the expiry alone (older screens keep working). Clearing an
+  expiry is not done from a count (Inventory ▸ Edit).
+- Refusals: `COUNT_INVALID` for a date that is not a real `YYYY-MM-DD` between 2000 and 2100 (for example 2027-02-30),
+  `BATCH_REQUIRED` for an expiry change on a batch-tracked product; a date sent for a service is ignored.
+- `stock_validation_items` gains `previous_expiry_date` and `new_expiry_date`; Stock History shows the saved date and
+  "was …" when the count corrected it ("Not recorded" for counts saved before this change).
+
+**Security:** no new access. Stock Management already requires the `inventory` permission, the same as Inventory ▸
+Edit, and the "products of own business" policy already lets members change `expiry_date`. The function keeps its
+membership check and business-scoped product match; the history tables stay SELECT-only for clients.
+
+**Deployment order:** apply the migration, probe it, then deploy the app. An app deployed first would send
+`new_expiry_date` to the old function, which ignores it: the count would save its quantities but not the dates.
+
+**Tests:** `apps/carefind/src/test/stock-count/stockCountExpiry.db.test.js` (10, on PGlite over the live-matching
+previous body; 9 fail without the migration) and `apps/carehub/src/modules/stock-management/StockValidation.expiry.test.jsx`
+(13; 11 fail against the previous screen).
+
+**Manual check:** Stock Validation ▸ add a product ▸ change only its expiry ▸ Save ▸ the summary shows "Expiry dates
+updated 1" ▸ Inventory shows the new date ▸ Stock History ▸ View Details shows it with "was …". Repeat with a quantity
+change on the same line: both are saved. Enter 2027-02-30 (typed on a desktop browser that allows it): refused, nothing saved.
+
 ## Shop orders on the ledger (2026-10-30)
 
 `carehub_20261225_shop_order_stock_ledger` (applied live as version 20261030141913). Tests: `scripts/db-tests/shopOrderStock.pglite.mjs` (23 checks), which first places orders with the live pre-ledger code (`docs/architecture/shop-stock-pre-ledger-snapshot.sql`, md5 checked against production) and then upgrades.

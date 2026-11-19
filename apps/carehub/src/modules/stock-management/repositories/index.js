@@ -45,6 +45,13 @@ export function createStockValidationRepository(request = sbFetch) {
         if ('reason' in copy) copy.reason = copy.reason || null
         // Ensure shelf_label null if empty
         if ('shelf_label' in copy) copy.shelf_label = copy.shelf_label || null
+        // An expiry correction travels only as a calendar date (YYYY-MM-DD); anything else is left off the line, so the
+        // server keeps the product's expiry as it is (it refuses an impossible date such as 2027-02-30 by name).
+        if ('new_expiry_date' in copy) {
+          const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(copy.new_expiry_date || ''))
+          if (m) copy.new_expiry_date = m[1]
+          else delete copy.new_expiry_date
+        }
         // Normalize direction to strict enum only if present
         if ('adjustment_direction' in copy) {
           if (copy.adjustment_direction !== '+' && copy.adjustment_direction !== '-') copy.adjustment_direction = '+'

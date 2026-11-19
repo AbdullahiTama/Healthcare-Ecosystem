@@ -54,6 +54,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A39 | High | Business directory (visibility) | 215 bulk-imported directory listings never reached Manufacturer / Importer companies: Field Report showed verified listings only, the report link refused them, Facility Discovery never read the directory | **Closed 2026-11-18**: `carehub_20270126_directory_listings_in_field_and_discovery` applied with owner approval (version 20261118114804) and probed; app deployed |
 | A40 | Medium | CareFind delivery map (XSS) | The delivery-tracking map put the pickup station's name and the delivery address into popup HTML unescaped | **Closed 2026-11-18**: popups built from text nodes during the Google Maps switch; tested |
 | A41 | Low | POS (usability defect) | The product search text stayed in the box after a product was picked from the grid; the cashier deleted it by hand | **Closed 2026-11-19**: app only, `pickProduct` clears it on a successful add; tested (fails on the old code). See POS-Barcode-Scanning.md |
+| A42 | Medium | Stock Validation (expiry dates) | A stock count could adjust quantities but not correct expiry dates; corrections were made elsewhere with no trace in the count history | Open: `carehub_20270129_stock_count_expiry` written and tested on PGlite, **not applied**; apply (owner approval), probe, then deploy the app (see Stock-Ledger.md) |
 
 ## 2. Items
 
