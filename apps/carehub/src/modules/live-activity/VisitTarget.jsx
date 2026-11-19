@@ -8,7 +8,7 @@ const { gray400, gray500, border, bg, danger, tealDeep } = theme
 
 // The ONE place a rep says what the report is about. Two sources can suggest a
 // place, and they are labelled as such:
-//   - the CareHub directory (verified businesses kept by the platform team)
+//   - the CareHub directory (businesses kept by the platform team, imports included; each shows its verification)
 //   - map data (OpenStreetMap health facilities, or one a colleague added)
 // A suggestion is just that. Nothing is recorded as the place visited until the
 // rep chooses it, and choosing one replaces the other: a report names at most one

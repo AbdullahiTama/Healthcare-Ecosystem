@@ -167,3 +167,47 @@ export function applyLibraryToForm(form, lib) {
     catalog_item_id: lib.id,
   }
 }
+
+// ── Catalogue health (carehub_20270127) ──────────────────────────────────────
+// The missing-data flags, in the order the health panel shows them. `filter` is
+// false where the flag has no list filter (duplicates open their own review).
+// The database defines each flag once (catalogue_issue); these are its words.
+export const HEALTH_ISSUES = [
+  { key: 'no_price', label: 'No price', hint: 'No default selling price.', filter: true },
+  { key: 'hidden', label: 'Hidden on CareFind', hint: 'Listed on CareFind with no price at a location, so customers cannot see it.', filter: true },
+  { key: 'duplicates', label: 'Possible duplicates', hint: 'Pairs that may be the same product.', filter: false },
+  { key: 'other_category', label: 'In "Other medicines"', hint: 'No specific category yet.', filter: true },
+  { key: 'no_generic', label: 'No generic name', hint: 'Medicines without their generic name.', filter: true },
+  { key: 'no_barcode', label: 'No barcode', hint: 'Cannot be found by scanning.', filter: true },
+  { key: 'unlinked', label: 'Not linked to the library', hint: 'Not matched to the CareHub product library.', filter: true },
+]
+
+export const healthIssue = (key) => HEALTH_ISSUES.find((i) => i.key === key) || null
+
+// How the score reads: good from 80, fair from 50.
+export function scoreTone(score) {
+  if (score == null) return { label: 'No items yet', tone: 'neutral' }
+  if (score >= 80) return { label: 'Good', tone: 'good' }
+  if (score >= 50) return { label: 'Fair', tone: 'fair' }
+  return { label: 'Needs attention', tone: 'poor' }
+}
+
+// Why two items were paired, in words.
+export function duplicateReason(reason) {
+  if (reason === 'barcode') return 'Same barcode'
+  if (reason === 'name') return 'Same name, apart from spaces or punctuation'
+  return 'Very similar names'
+}
+
+// A sentence for the result of merge_master_items.
+export function mergeSummary(result, keptName) {
+  const r = result || {}
+  const parts = [`Merged into ${keptName}.`]
+  const units = Number(r.units_moved) || 0
+  const places = Number(r.merged_locations) || 0
+  const relinked = Number(r.relinked) || 0
+  if (units) parts.push(`${units.toLocaleString()} unit${units === 1 ? '' : 's'} moved at ${places} location${places === 1 ? '' : 's'}.`)
+  if (relinked) parts.push(`${relinked} product${relinked === 1 ? '' : 's'} now sold as ${keptName}.`)
+  if (Number(r.negative_left)) parts.push(`${r.negative_left} product${r.negative_left === 1 ? ' had' : 's had'} stock below zero, left on the stopped product: count it.`)
+  return parts.join(' ')
+}

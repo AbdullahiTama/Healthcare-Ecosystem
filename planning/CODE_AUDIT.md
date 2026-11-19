@@ -51,7 +51,9 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A36 | High | Hospital (production defect) | Doctor → Lab / Imaging send fails (unknown `patient_name` column) and leaves partial records; jsonb read with `JSON.parse`; dispensing discharges the patient | **Closed 2026-11-17**: `carehub_20270125_hospital_identity_and_workflow` applied (version 20261117092916) and probed; app deployed |
 | A37 | Medium | Hospital (schema) | The eight hospital tables, their policies and grants are not in `supabase/migrations/`; `anon` holds full grants including TRUNCATE | **Closed 2026-11-17**: `carehub_20270123_hospital_schema_baseline` (version 20261117092425) + `carehub_20270124` applied |
 | A38 | Medium | Hospital (data model) | Two patient identities: Reception writes `patients`, the hospital "Patients" menu and the rest of CareHub use `clients` | **Closed 2026-11-17**: `clients` is the identity (owner); `carehub_20270125` applied; 3 test clients at pharmacies left for the owner |
-| A39 | Low | POS (usability defect) | The product search text stayed in the box after a product was picked from the grid; the cashier deleted it by hand | **Closed 2026-11-19**: app only, `pickProduct` clears it on a successful add; tested (fails on the old code). See POS-Barcode-Scanning.md |
+| A39 | High | Business directory (visibility) | 215 bulk-imported directory listings never reached Manufacturer / Importer companies: Field Report showed verified listings only, the report link refused them, Facility Discovery never read the directory | **Closed 2026-11-18**: `carehub_20270126_directory_listings_in_field_and_discovery` applied with owner approval (version 20261118114804) and probed; app deployed |
+| A40 | Medium | CareFind delivery map (XSS) | The delivery-tracking map put the pickup station's name and the delivery address into popup HTML unescaped | **Closed 2026-11-18**: popups built from text nodes during the Google Maps switch; tested |
+| A41 | Low | POS (usability defect) | The product search text stayed in the box after a product was picked from the grid; the cashier deleted it by hand | **Closed 2026-11-19**: app only, `pickProduct` clears it on a successful add; tested (fails on the old code). See POS-Barcode-Scanning.md |
 
 ## 2. Items
 
@@ -575,6 +577,56 @@ registration, consultation and dispensing). Applied as versions 20261117092425, 
 21 unit tests (`apps/carehub/src/modules/hospital/`) and the live probes. **Left for the owner:** 3 test patients of
 2026-07-18 at pharmacies became clients in those pharmacies' lists and are kept there while their visit rows exist. Design, the per-role access table and what changes
 for existing staff: [Hospital-Phase-0.md](../docs/architecture/Hospital-Phase-0.md).
+
+### A39. Bulk-imported directory listings invisible to companies (High) — closed 2026-11-18
+
+**What (verified live 2026-11-18):** 215 businesses (124 pharmacies, 91 hospitals) were bulk-imported by the platform
+admin into the platform Business Directory on 2026-11-17, all with address, state, LGA, city and Nigerian
+coordinates, all `unverified` (every import arrives unverified). Manufacturer / Importer companies saw none of them:
+1. Field Report's "Possible nearby businesses" (`nearby_directory_businesses()`) returned verified listings only.
+2. `field_activities_directory_link_guard()` refused to link an unverified listing to a report.
+3. Facility Discovery, the companies' business directory, read registered `businesses` (plus map data) only; since
+   `carehub_20261208` companies cannot read directory tables, so there was no path at all.
+
+The records themselves were saved correctly, with no missing coordinates or places. The cause was the read paths.
+
+**Fix (written, not applied):** `supabase/migrations/carehub_20270126_directory_listings_in_field_and_discovery.sql`
+defines one eligibility rule (platform, active, not demo, not rejected; unverified kept and labelled) for the
+suggestion, the link guard and a new read-only `discover_directory_listings()` (name / category / type text,
+state / LGA / city, radius). Callers must belong to a Manufacturer / Importer or Wholesale business, or be platform staff. The
+CareHub Discovery engine adds the directory as a source, keeps its recorded verification, and reports when the
+directory could not be read. **Security:** widens company access from "verified listings within 1 km, no contact" to
+every eligible listing with business phone and coordinates (no e-mail, contact person or notes); tightens who may call
+the nearby function. Details: [CareHub-Business-Directory-and-Discovery.md](../docs/architecture/CareHub-Business-Directory-and-Discovery.md).
+
+**Verified:** 34 PGlite tests (the defect reproduced first), 7 engine tests (fail on the old code), the full CareHub
+suite and build. A rolled-back live probe as a real Manufacturer / Importer account found the following.
+Field suggestion at the first import's position: 4 listings including it. Discovery nationwide: 216 (215 imports + 1
+verified OSM listing). Keyword "pharmacy": 124. Keyword "hospital": 95. Within 5 km: 48, nearest first. Name search
+finds it. A report linking an import is refused before the change and accepted after. Direct table reads: 0 rows.
+A pharmacy account is refused. Production was confirmed unchanged afterwards.
+
+**Closed by:** the app change deployed (`a5b183a`), then the migration applied with the owner's approval (version
+`20261118114804`). The post-apply probe repeated every result above against production (the report insert rolled
+back; no probe row left), and confirmed the grants: both functions executable by `authenticated` only, the link guard
+by no API role. **Verified 2026-11-18 (owner instruction):** all 215 imports set to `verified` in one statement, scoped to platform,
+active, unverified `import` rows; `verified_at` stamped by the trigger, `verified_by` set to "owner-approved bulk
+verification of 2026-11-17 import (Claude Code session, 2026-11-18)" because no admin session was signed in; one
+`admin_audit_log` entry (id 11, action `directory.bulk_verify`) lists all 215 ids. After: directory 216 verified
+(215 imports + 1 external), none unstamped; a Manufacturer / Importer account sees all 216 as verified in Discovery
+and Field Report. **Note:** this was a bulk owner decision, not a per-business check; to undo, set the ids in audit
+entry 11 back to `unverified` (the trigger clears the stamp).
+
+### A40. Delivery map popups rendered names as HTML (Medium) — closed 2026-11-18
+
+**What:** `apps/carefind/src/components/shop/DeliveryTrackingMap.jsx` built its Leaflet popups as
+`<strong>${pickupStation.name}</strong><br/>${pickupStation.address}` and the same for the delivery address, unescaped.
+A station name or an address containing `<img src=x onerror=...>` would run in the customer's (or public tracking
+page visitor's) session when the marker was opened.
+
+**Closed by:** the map switch to the shared engine ([Maps.md](../docs/architecture/Maps.md)): every popup is a DOM node
+built with `textContent`. Test: `apps/carefind/src/components/maps/__tests__/maps.test.jsx` ("a station name or
+address with HTML stays text").
 
 ## 3. Open items recorded in other audits
 

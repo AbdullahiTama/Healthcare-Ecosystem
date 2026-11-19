@@ -16,7 +16,7 @@ vi.mock('../../repositories', () => ({ liveActivityRepository: { getFieldActivit
 vi.mock('../../customers/repository.js', () => ({ customerRepository: { list: vi.fn() } }))
 vi.mock('../../../territories/repositories', () => ({ territoryRepository: { getAll: vi.fn(async () => [{ id: 't1', name: 'Lagos Island' }]) } }))
 vi.mock('../../../staff/repositories', () => ({ staffRepository: { getAll: vi.fn(async () => [{ id: 'ada', full_name: 'Ada' }]) } }))
-vi.mock('../../../../components/maps/LeafletMap.jsx', () => ({
+vi.mock('../../../../components/maps/MapView.jsx', () => ({
   TONE_COLOR: { current: '#0', earlier: '#1', out: '#2', visit: '#3', quiet: '#4' },
   default: ({ pins }) => <ul data-testid='map'>{pins.map((p) => <li key={p.id} data-pin={p.id} data-tone={p.tone}>{p.title}</li>)}</ul>,
 }))
@@ -28,12 +28,17 @@ import { customerRepository } from '../../customers/repository.js'
 import { watchTable } from '../../../../lib/realtime'
 
 const ago = (m) => new Date(Date.now() - m * 60000).toISOString()
+// A fixed local midday: "today" starts at local midnight, so a check-in "10 minutes ago" was yesterday when the
+// suite ran just after midnight. Only Date is faked; real timers keep rendering and flushing as before.
+const NOON = new Date(2026, 2, 10, 12, 0, 0)
+const atNoon = () => vi.setSystemTime(NOON)
 const BRAND = { id: 'biz-1', business_type: 'manufacturer_importer' }
-const CHECKINS = { rows: [
+// Built after the clock is set, so their times are relative to it.
+const checkins = () => ({ rows: [
   { staff_id: 'ada', name: 'Ada', role: 'Medical sales rep', last_checkin: { event_type: 'workday_checkin', at: ago(10), latitude: 6.5, longitude: 3.4, location_label: 'Ikeja' } },
   { staff_id: 'bola', name: 'Bola', role: 'Medical sales rep', last_checkin: null },
-] }
-const VISITS = [{ id: 'v1', created_at: ago(5), rep_name: 'Ada', staff_id: 'ada', facility_name: 'Allen Pharmacy', facility_lat: 6.45, facility_lng: 3.39, facility_verified: true, lat: 6.45, lng: 3.39 }]
+] })
+const visits = () => [{ id: 'v1', created_at: ago(5), rep_name: 'Ada', staff_id: 'ada', facility_name: 'Allen Pharmacy', facility_lat: 6.45, facility_lng: 3.39, facility_verified: true, lat: 6.45, lng: 3.39 }]
 
 let root, host
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)) })
@@ -46,12 +51,14 @@ async function show() {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  atNoon()
   vi.clearAllMocks()
   live.onInsert = null; live.onStatus = null; live.stopped = 0
   visibility = 'visible'
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility })
-  checkinRepository.overview.mockResolvedValue(CHECKINS)
-  liveActivityRepository.getFieldActivities.mockResolvedValue(VISITS)
+  checkinRepository.overview.mockResolvedValue(checkins())
+  liveActivityRepository.getFieldActivities.mockResolvedValue(visits())
   customerRepository.list.mockResolvedValue([{ key: 'f:old', name: 'Old Friend', lat: 6.7, lng: 3.5, last_visit_at: ago(60 * 24 * 40) }])
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -87,6 +94,7 @@ describe('Team map', () => {
 
   it('refreshes check-ins every 5 minutes while the page is visible, not while hidden, and stops when closed', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    atNoon()
     await show()
     expect(checkinRepository.overview).toHaveBeenCalledTimes(1)
     await act(async () => { vi.advanceTimersByTime(300000) })

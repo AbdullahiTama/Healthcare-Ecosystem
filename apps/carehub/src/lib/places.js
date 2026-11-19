@@ -314,6 +314,34 @@ export function discoverFacilitiesPath({ state, lga, city, category, keyword, li
   return 'rpc/discover_facilities_cursor?' + [...params, 'p_limit=' + limit, 'p_cursor=' + offset].join('&')
 }
 
+// Platform Business Directory listings (bulk imports and admin-added) for Facility Discovery, through
+// discover_directory_listings (carehub_20270126): companies cannot read the directory tables, so this
+// SECURITY DEFINER function is their only path. It returns eligible listings only (active, not demo, not
+// rejected), with each listing's recorded verification status. Text, state/LGA/city and radius filters run
+// in the database; a blank filter is sent as NULL ("no filter"), for the same reason as discoverFacilitiesPath.
+// Returns raw rows; normalising and ranking stay in facilityDiscovery.js. Throws on failure so the caller can
+// say the directory is unavailable instead of silently showing fewer results.
+export const DIRECTORY_FETCH_LIMIT = 500
+export async function fetchDirectoryFacilities({ state, lga, city, keyword, centre, radiusKm, limit = DIRECTORY_FETCH_LIMIT } = {}) {
+  const text = (v) => { const s = String(v ?? '').trim(); return s === '' ? null : s }
+  const hasPlace = !!(text(state) || text(lga) || text(city))
+  const usePoint = !hasPlace && centre && Number.isFinite(Number(centre.lat)) && Number.isFinite(Number(centre.lng))
+  const body = {
+    p_keyword: text(keyword),
+    p_state: text(state),
+    p_lga: text(lga),
+    p_city: text(city),
+    p_lat: usePoint ? Number(centre.lat) : null,
+    p_lng: usePoint ? Number(centre.lng) : null,
+    p_radius_km: usePoint && Number.isFinite(radiusKm) && radiusKm > 0 ? radiusKm : null,
+    p_limit: limit,
+    p_offset: 0,
+  }
+  const res = await sbFetch('rpc/discover_directory_listings', { method: 'POST', body: JSON.stringify(body) })
+  const rows = Array.isArray(res) ? res : (res && Array.isArray(res.rows) ? res.rows : [])
+  return rows.filter(function (r) { return r && r.name })
+}
+
 // Internal CareFind facilities fetch — paged (state,lga,city) with optional category/keyword
 // Uses sbFetch pagedQuery internally; called by facilityDiscovery engine.
 // Kept in places.js as transport layer (no ranking/dedupe), intelligence lives in facilityDiscovery.js.

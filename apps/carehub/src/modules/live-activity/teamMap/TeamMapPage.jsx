@@ -8,7 +8,7 @@ import { staffRepository } from '../../staff/repositories'
 import { watchTable } from '../../../lib/realtime'
 import { isRep } from '../../dashboard-home/fieldTeamToday'
 import { buildTeamMap, rangeStart, RANGES } from './teamMapModel.js'
-import LeafletMap, { TONE_COLOR } from '../../../components/maps/LeafletMap.jsx'
+import MapView, { TONE_COLOR } from '../../../components/maps/MapView.jsx'
 
 const { navy, gray500, gray400, border, danger, tealDeep, bg } = theme
 
@@ -160,7 +160,7 @@ export default function TeamMapPage({ brand, customRoles = NO_CUSTOM_ROLES }) {
         <div role='status' style={{ padding: '24px', fontSize: '13px', color: gray500 }}>Loading the team map…</div>
       ) : (
         <>
-          <LeafletMap pins={model.pins} height={typeof window !== 'undefined' && window.innerWidth < 640 ? 320 : 440} />
+          <MapView label='Team map' pins={model.pins} height={typeof window !== 'undefined' && window.innerWidth < 640 ? 320 : 440} />
           <div aria-label='Map key' style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '11.5px', color: gray500, margin: '8px 0' }}>
             {['current', 'earlier', 'out', 'visit'].concat(showQuiet ? ['quiet'] : []).map((t) => <span key={t}>{dot(t)}{TONE_TEXT[t]}</span>)}
           </div>

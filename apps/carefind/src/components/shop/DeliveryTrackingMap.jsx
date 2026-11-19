@@ -1,139 +1,97 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { openMap } from '@care-ecosystem/design-system/components/maps/mapEngine'
 import { theme } from '../../styles/theme'
+import { GOOGLE_MAPS_KEY, loadLeaflet } from '../maps/mapProvider'
 
-// Dynamic import for Leaflet (client-side only)
-let L = null
+const NIGERIA_CENTER = { lat: 9.082, lng: 8.6753 }
+const COLORS = { pickup: '#7c3aed', delivery: theme.tealDeep || '#0E6F5A', current: '#2196F3' }
 
-async function getLeaflet() {
-  if (typeof window === 'undefined') return null
-  if (!L) {
-    L = await import('leaflet')
-    await import('leaflet/dist/leaflet.css')
-    // Fix default marker icon paths
-    delete L.Icon.Default.prototype._getIconUrl
-    L.Icon.Default.mergeOptions({
-      iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-      iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png'
-    })
+// A popup built from text nodes: the station name and the delivery address are typed by people, and the previous
+// version interpolated them into an HTML string (a planted <img onerror> would have run for the customer).
+export function trackingPopup(title, detail) {
+  const box = document.createElement('div')
+  const strong = document.createElement('strong')
+  strong.textContent = title || ''
+  box.appendChild(strong)
+  if (detail) {
+    const div = document.createElement('div')
+    div.textContent = detail
+    box.appendChild(div)
   }
-  return L
+  return box
 }
 
-const NIGERIA_CENTER = [9.082, 8.6753]
+const valid = (p) => p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)) && !(Number(p.lat) === 0 && Number(p.lng) === 0)
 
+// Pickup station, delivery address and the rider's last position on one map: Google Maps when a key is configured,
+// OpenStreetMap otherwise (the shared map engine chooses, and falls back if Google is unavailable).
 export default function DeliveryTrackingMap({
   pickupStation = null,
   deliveryAddress = null,
   currentLocation = null,
   height = 300,
-  style = {}
+  style = {},
+  open = openMap,
 }) {
   const mapRef = useRef(null)
-  const mapInstanceRef = useRef(null)
-  const markersRef = useRef([])
+  const handleRef = useRef(null)
+  const [status, setStatus] = useState('loading') // loading | ready | failed
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return
-
-    const initMap = async () => {
-      const Leaflet = await getLeaflet()
-      if (!Leaflet) return
-
-      const map = Leaflet.map(mapRef.current, {
-        center: NIGERIA_CENTER,
-        zoom: 6,
-        zoomControl: true,
-        scrollWheelZoom: false,
-        attributionControl: true
-      })
-
-      Leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        maxZoom: 18
-      }).addTo(map)
-
-      mapInstanceRef.current = map
-    }
-    initMap()
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove()
-        mapInstanceRef.current = null
+    let cancelled = false
+    ;(async () => {
+      try {
+        const handle = await open(mapRef.current, {
+          googleApiKey: GOOGLE_MAPS_KEY, loadLeaflet, center: NIGERIA_CENTER, zoom: 6, scrollWheelZoom: false,
+        })
+        if (cancelled) { handle.destroy(); return }
+        handleRef.current = handle
+        setStatus('ready')
+      } catch (e) {
+        console.error('[maps] delivery map could not be loaded', e)
+        if (!cancelled) setStatus('failed')
       }
+    })()
+    return () => {
+      cancelled = true
+      if (handleRef.current) { handleRef.current.destroy(); handleRef.current = null }
     }
-  }, [])
+  }, [open])
+
+  const pLat = pickupStation?.lat, pLng = pickupStation?.lng
+  const dLat = deliveryAddress?.lat, dLng = deliveryAddress?.lng
+  const cLat = currentLocation?.lat, cLng = currentLocation?.lng
 
   useEffect(() => {
-    const map = mapInstanceRef.current
-    if (!map) return
-
-    const updateMarkers = async () => {
-      const Leaflet = await getLeaflet()
-      if (!Leaflet) return
-
-      // Clear existing markers
-      markersRef.current.forEach(m => map.removeLayer(m))
-      markersRef.current = []
-
-      const bounds = []
-
-    // Pickup station marker
-    if (pickupStation?.lat && pickupStation?.lng) {
-      const marker = Leaflet.marker([pickupStation.lat, pickupStation.lng])
-        .addTo(map)
-        .bindPopup(`<strong>${pickupStation.name}</strong><br/>${pickupStation.address || ''}`)
-      markersRef.current.push(marker)
-      bounds.push([pickupStation.lat, pickupStation.lng])
+    const handle = handleRef.current
+    if (status !== 'ready' || !handle) return
+    const markers = []
+    if (valid(pickupStation)) {
+      markers.push({ lat: Number(pLat), lng: Number(pLng), color: COLORS.pickup, radius: 8, title: pickupStation.name || 'Pickup station',
+        popup: trackingPopup(pickupStation.name || 'Pickup station', pickupStation.address) })
     }
-
-    // Delivery address marker (if coordinates available)
-    if (deliveryAddress?.lat && deliveryAddress?.lng) {
-      const marker = Leaflet.circleMarker([deliveryAddress.lat, deliveryAddress.lng], {
-        radius: 8,
-        color: theme.tealDeep || '#0E6F5A',
-        fillColor: theme.tealDeep || '#0E6F5A',
-        fillOpacity: 0.8
-      })
-        .addTo(map)
-        .bindPopup(`<strong>Delivery Address</strong><br/>${deliveryAddress.address || ''}`)
-      markersRef.current.push(marker)
-      bounds.push([deliveryAddress.lat, deliveryAddress.lng])
+    if (valid(deliveryAddress)) {
+      markers.push({ lat: Number(dLat), lng: Number(dLng), color: COLORS.delivery, radius: 8, title: 'Delivery address',
+        popup: trackingPopup('Delivery address', deliveryAddress.address) })
     }
-
-    // Current location marker (for in-transit)
-    if (currentLocation?.lat && currentLocation?.lng) {
-      const marker = Leaflet.circleMarker([currentLocation.lat, currentLocation.lng], {
-        radius: 10,
-        color: '#2196F3',
-        fillColor: '#2196F3',
-        fillOpacity: 0.9
-      })
-        .addTo(map)
-        .bindPopup('<strong>Current Location</strong>')
-      markersRef.current.push(marker)
-      bounds.push([currentLocation.lat, currentLocation.lng])
+    if (valid(currentLocation)) {
+      markers.push({ lat: Number(cLat), lng: Number(cLng), color: COLORS.current, radius: 10, fillOpacity: 0.9, title: 'Current location',
+        popup: trackingPopup('Current location') })
     }
+    handle.setMarkers(markers)
+    if (markers.length) handle.fitTo(markers.map((m) => ({ lat: m.lat, lng: m.lng })), { padding: 40, maxZoom: 14, singleZoom: 14 })
+  }, [status, pLat, pLng, dLat, dLng, cLat, cLng]) // redraw on a moved position, not on every new object from the parent
 
-    // Fit map to markers
-    if (bounds.length > 0) {
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 })
-    }
-    };
-    updateMarkers();
-  }, [pickupStation, deliveryAddress, currentLocation])
-
+  const frame = { width: '100%', height, borderRadius: 8, border: `1px solid ${theme.border || '#e5e7eb'}`, overflow: 'hidden', ...style }
+  if (status === 'failed') {
+    return <div role='status' style={{ ...frame, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: theme.textMid || '#6b7280', padding: 12, textAlign: 'center', boxSizing: 'border-box' }}>The map could not be loaded. The delivery details below are up to date.</div>
+  }
   return (
-    <div
-      ref={mapRef}
-      style={{
-        width: '100%',
-        height,
-        borderRadius: 8,
-        border: `1px solid ${theme.border || '#e5e7eb'}`,
-        overflow: 'hidden',
-        ...style
-      }}
-    />
+    <div style={{ position: 'relative' }}>
+      <div ref={mapRef} role='region' aria-label='Delivery map' aria-busy={status === 'loading'} style={frame} />
+      {status === 'loading' && (
+        <div role='status' style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: theme.textMid || '#6b7280', pointerEvents: 'none' }}>Loading map…</div>
+      )}
+    </div>
   )
 }

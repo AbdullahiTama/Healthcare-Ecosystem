@@ -1,21 +1,24 @@
 // Shared Facility Discovery engine — single source for Live Field Activity
 // (Nearby/Expanded/Area modes) and Smart Facility Discovery tab.
-// Pipeline: resolveLocation → fetchSources (CareFind + Overpass + optional
+// Pipeline: resolveLocation → fetchSources (CareFind + CareHub directory + Overpass + optional
 // Google Places New via Edge Function tiled) → normalize → dedupe → score → rank → paginate/export
 //
 // Business rules (spec boundaries):
 // - CareFind `businesses` is primary internal source; keep business_id+RLS
+// - The platform Business Directory (bulk imports included) is the second internal source, read only through
+//   discover_directory_listings(); a listing keeps the verification status recorded by the platform team
 // - Keep 3-state verification logic (≤150m verified, pending rep-added never verifies) as base, extended to 6-level for transparency
 // - Keep manager review + facilities_cache UNIQUE; respect provider limits/billing/attribution
 // - Normalize→dedupe→score before display; never present external as officially verified
 
 import { sbFetch } from '../services/supabase.js'
 import { haversineMeters, FACILITY_CATEGORY, categoryFromAmenity, FACILITY_VERIFICATION, matchesCategory } from './geo.js'
-import { fetchOverpass, fetchOverpassTiled, fetchCareFindFacilities, PROGRESSIVE_RADII } from './places.js'
+import { fetchOverpass, fetchOverpassTiled, fetchCareFindFacilities, fetchDirectoryFacilities, PROGRESSIVE_RADII } from './places.js'
 import { resolveLocation, normalizeState, centreForState } from './nigeriaGeo.js'
 
 export const FACILITY_SOURCE = {
   CAREFIND: 'carefind',
+  DIRECTORY: 'directory', // platform Business Directory (imports and admin-added listings)
   OSM: 'osm',
   GOOGLE: 'google',
   REGULATORY: 'regulatory',
@@ -35,6 +38,11 @@ export const VERIFICATION_LEVEL = {
 }
 
 export function verificationStatus(facility, gps) {
+  // A directory listing's status is a fact recorded by the platform team, not a guess from the searcher's
+  // distance to it: only a listing the team verified shows as verified, wherever the searcher stands.
+  if (facility && facility.source === FACILITY_SOURCE.DIRECTORY && facility.recordedVerification) {
+    return facility.recordedVerification === 'verified' ? VERIFICATION_LEVEL.VERIFIED : VERIFICATION_LEVEL.UNVERIFIED
+  }
   if (!gps || gps.lat == null || gps.lng == null) return VERIFICATION_LEVEL.NO_GPS
   if (!facility || !Number.isFinite(facility.lat) || !Number.isFinite(facility.lng)) return VERIFICATION_LEVEL.NO_GPS
   if (facility.pendingReview) return VERIFICATION_LEVEL.PENDING
@@ -208,17 +216,19 @@ export function normalizeFacility(raw, source) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     if (raw.name == null) return null
   }
-  const bt = typeof raw.business_type === 'string' ? raw.business_type : String(raw.business_type || '')
+  const isDirectory = source === FACILITY_SOURCE.DIRECTORY
+  // Directory rows carry free-text types from spreadsheets ("Pharmacy", "Manufacturer / Importer"); their
+  // directory category name is the fallback when the type is blank.
+  const btRaw = raw.business_type || (isDirectory ? raw.category : '') || ''
+  const bt = typeof btRaw === 'string' ? btRaw : String(btRaw)
   let category = raw.category || FACILITY_CATEGORY.OTHER
   if (bt) {
     const mapped = categoryFromAmenity(bt)
+    const key = bt.toLowerCase()
     if (mapped !== FACILITY_CATEGORY.OTHER) category = mapped
-    else if (['manufacturer','importer','distributor'].includes(bt.toLowerCase())) {
-      const key = bt.toLowerCase()
-      if (key === 'manufacturer') category = FACILITY_CATEGORY.MANUFACTURER
-      else if (key === 'importer') category = FACILITY_CATEGORY.IMPORTER
-      else if (key === 'distributor') category = FACILITY_CATEGORY.DISTRIBUTOR
-    }
+    else if (key.includes('manufactur')) category = FACILITY_CATEGORY.MANUFACTURER
+    else if (key.includes('import')) category = FACILITY_CATEGORY.IMPORTER
+    else if (key.includes('distribut')) category = FACILITY_CATEGORY.DISTRIBUTOR
   }
   return {
     id: raw.id || raw.business_id || (source + ':' + (raw.name || '') + ':' + lat + ',' + lng),
@@ -239,12 +249,15 @@ export function normalizeFacility(raw, source) {
     sourceUrl: raw.url || null,
     fetched_at: raw.fetched_at || new Date().toISOString(),
     pendingReview: raw.pendingReview || false,
+    recordedVerification: isDirectory ? (raw.verification_status || 'unverified') : null,
   }
 }
 
 // Fetch all sources (CareFind + Overpass + optional Google via Edge Function)
 // Partition large areas per provider limits; degrade to cache+internal on failure
-export async function fetchSources({ centre, boundary, state, lga, city, category, keyword, businessId, mode = 'nearby' } = {}) {
+// `failures`, when given, collects the internal sources that could not be read, so the screen can say its results
+// are incomplete instead of looking like an empty area.
+export async function fetchSources({ centre, boundary, state, lga, city, category, keyword, businessId, mode = 'nearby', radiusKm = null, failures = null } = {}) {
   const promises = []
   // 1. CareFind internal — paged by (state,lga,city)
   // For Nigeria-wide mode, partition state-by-state
@@ -307,13 +320,34 @@ export async function fetchSources({ centre, boundary, state, lga, city, categor
   // 4. Regulatory enrichment stub (PCN/MLSCN/NAFDAC) — future, return []
   promises.push(Promise.resolve([]))
 
-  const [carefind, overpass, google, regulatory] = await Promise.all(promises)
+  // 5. CareHub platform directory (bulk-imported and admin-added listings). Nationwide, by place, or around the
+  // search centre; the database applies the filters and returns only eligible listings.
+  const directoryPromise = fetchDirectoryFacilities({
+    state: mode === 'nigeria' ? null : state,
+    lga: mode === 'nigeria' ? null : lga,
+    city: mode === 'nigeria' ? null : city,
+    keyword,
+    centre: mode === 'nigeria' ? null : centre,
+    radiusKm,
+  }).then(
+    rows => rows.map(r => normalizeFacility({ ...r, id: 'directory:' + r.id }, FACILITY_SOURCE.DIRECTORY)).filter(Boolean),
+    e => {
+      console.error('Directory source failed, degrading:', e)
+      if (Array.isArray(failures)) failures.push(FACILITY_SOURCE.DIRECTORY)
+      return []
+    },
+  )
+  promises.push(directoryPromise)
+
+  const [carefind, overpass, google, regulatory, directory] = await Promise.all(promises)
 
   // Tag sources
   const taggedCarefind = (carefind || []).map(r => r.source ? r : normalizeFacility(r, FACILITY_SOURCE.CAREFIND)).filter(Boolean)
   // overpass/google already normalized
 
-  return [...taggedCarefind, ...overpass, ...google, ...regulatory]
+  // Internal sources first: dedupe keeps the first record it sees as the primary, so a directory listing that
+  // OpenStreetMap also knows keeps its directory identity and recorded verification.
+  return [...taggedCarefind, ...directory, ...overpass, ...google, ...regulatory]
 }
 
 // Main discovery entry — shared by LiveActivity and FacilityDiscovery tab
@@ -343,7 +377,9 @@ export async function discoverFacilities(params = {}) {
   const boundary = resolved.boundary || null
 
   // 2. Fetch sources (partition large areas per provider limits inside fetchSources)
-  const rawSources = await fetchSources({ centre, boundary, state: normalizeState(state) || resolved.state, lga: lga || resolved.lga, city: city || area || resolved.city, category, keyword, businessId, mode })
+  const unavailableSources = []
+  const radiusKm = Number.isFinite(radius) && radius > 0 ? radius / 1000 : null
+  const rawSources = await fetchSources({ centre, boundary, state: normalizeState(state) || resolved.state, lga: lga || resolved.lga, city: city || area || resolved.city, category, keyword, businessId, mode, radiusKm, failures: unavailableSources })
 
   // For Nigeria-wide mode without boundary, partition state-by-state if we got limited results
   // The initial fetchSources for nigeria was single; if pageSize suggests we need more, fetch per state chunk
@@ -443,6 +479,7 @@ export async function discoverFacilities(params = {}) {
     pageSize,
     resolvedLocation: resolved,
     fromCache: false,
+    unavailableSources,
   }
 }
 

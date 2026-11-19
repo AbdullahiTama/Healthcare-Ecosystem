@@ -67,3 +67,17 @@ CI stopped at the audit step before the tests ran, so some CareFind tests had go
 * Shared packages: 1,170 tests; `npm audit`: 0.
 
 Manual checks before release: sign in, make a POS sale, export Inventory to Excel (CareHub), import a directory `.xlsx` and try an `.xls` (CareFind), open a deep link, reload while offline.
+
+## Security audit gate (2026-11-18)
+
+GHSA-fc5q-39xc-vjpf (picomatch ReDoS, high) made `npm audit --audit-level=high` fail in both apps with no way out: picomatch 4.0.7 is the latest release and is affected, and npm's only suggested fix downgrades vite or vitest, which would bring back older advisories. picomatch is reached only through vite, vitest, `@vitest/coverage-v8`, tinyglobby and fdir (build and test tools); `npm audit --omit=dev` is clean in both apps.
+
+Both app workflows now run `scripts/audit-gate.mjs` instead (tests: `node --test scripts/audit-gate.test.mjs`, run in CareHub CI):
+
+* A high or critical advisory in a **production** dependency always fails. There are no exceptions for these.
+* A high or critical advisory in a **development** dependency fails unless `.github/audit-exceptions.json` lists it with a reason and an expiry date. An expired entry fails, so it is looked at again.
+* Moderate advisories do not fail, as before.
+
+Current exception: GHSA-fc5q-39xc-vjpf, until **2026-12-18**. When picomatch ships a fix, update the lockfiles and delete the entry. If it has not shipped by then, check again and renew the date on purpose.
+
+Security implications: the bar for production code is unchanged and now explicit. For build and test tools, one named advisory is waived for a limited time instead of the whole gate being red, which had hidden the tests and the build behind it. Shared packages keep `npm audit --omit=dev --audit-level=high`.

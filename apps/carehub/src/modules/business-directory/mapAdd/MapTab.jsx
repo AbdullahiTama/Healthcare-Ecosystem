@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { theme } from '../../../styles/theme'
-import LeafletMap from '../../../components/maps/LeafletMap.jsx'
+import MapView from '../../../components/maps/MapView.jsx'
 import { fetchOsmBusinesses, safeWebsite } from './osmBusinesses.js'
 import { matchToDirectory, OSM_SOURCE_PREFIX } from './matchListings.js'
 
@@ -102,7 +102,7 @@ export default function MapTab({ repo, scopeId, categories, onAdd, reloadKey = 0
         </div>
       )}
 
-      <LeafletMap pins={pins} fit={false} height={typeof window !== 'undefined' && window.innerWidth < 640 ? 320 : 460}
+      <MapView label='Directory map' pins={pins} fit={false} height={typeof window !== 'undefined' && window.innerWidth < 640 ? 320 : 460}
         onViewChange={(bounds, zoom) => setView({ bounds, zoom })} onPinClick={(p) => setSelected(p.id)} />
       <div style={{ fontSize: '11px', color: gray500, margin: '6px 0 12px' }}>
         Business data © <a href='https://www.openstreetmap.org/copyright' target='_blank' rel='noopener noreferrer' style={{ color: gray500 }}>OpenStreetMap contributors</a> (ODbL). Added businesses come in unverified.

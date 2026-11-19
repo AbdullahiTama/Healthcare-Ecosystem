@@ -188,8 +188,9 @@ export function createDirectoryRepository(request = sbFetch) {
 
     // ── Live Field Report suggestion (the one thing a company keeps) ────────
     // Directory tables are platform-admin only (carehub_20261208). This is a bounded
-    // SECURITY DEFINER function: verified platform listings within 1 km, at most 10,
-    // name / address / type / verification / distance and no contact details.
+    // SECURITY DEFINER function: eligible platform listings (active, not demo, not
+    // rejected; carehub_20270126) within 1 km, at most 10, name / address / type /
+    // verification / distance and no contact details.
     async nearbyBusinesses({ lat, lng, radiusKm, limit }) {
       return request('rpc/nearby_directory_businesses', {
         method: 'POST', body: JSON.stringify({ p_lat: lat, p_lng: lng, p_radius_km: radiusKm, p_limit: limit }),

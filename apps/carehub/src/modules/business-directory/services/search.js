@@ -5,7 +5,8 @@
 //
 // The Business Directory itself is platform-admin only (Admin console > Directory). A company can
 // no longer read directory tables, so the suggestion comes from nearby_directory_businesses(), which
-// returns a handful of verified listings with no contact details (carehub_20261208).
+// returns a handful of eligible listings (unverified imports included, labelled as such) with no contact
+// details (carehub_20261208, widened by carehub_20270126).
 
 const byName = (a, b) => String(a.name_normalized || a.name).localeCompare(String(b.name_normalized || b.name))
 

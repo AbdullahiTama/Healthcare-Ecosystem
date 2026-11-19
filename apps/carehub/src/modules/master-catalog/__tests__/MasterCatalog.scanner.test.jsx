@@ -12,7 +12,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 vi.mock('../repositories', () => ({
   PAGE_SIZE: 50,
-  masterCatalogRepository: { getPage: vi.fn(), getCategories: vi.fn(), carry: vi.fn(), push: vi.fn(), archive: vi.fn(), restore: vi.fn(), create: vi.fn(), update: vi.fn(), deactivate: vi.fn() },
+  masterCatalogRepository: { getPage: vi.fn(), getHealth: vi.fn(async () => ({ available: false, counts: {} })), getCategories: vi.fn(), carry: vi.fn(), push: vi.fn(), archive: vi.fn(), restore: vi.fn(), create: vi.fn(), update: vi.fn(), deactivate: vi.fn() },
 }))
 vi.mock('../../locations/repositories', () => ({ locationsRepository: { getAll: vi.fn() } }))
 vi.mock('../../settings/repositories', () => ({ settingsRepository: { getPlanStatus: vi.fn(async () => ({ plan: 'growth', state: 'active', limits: {} })) } }))

@@ -231,3 +231,52 @@ describe('masterCatalogRepository', () => {
     })
   })
 })
+
+describe('catalogue health (phase 5)', () => {
+  const MISSING = (name) => new Error(`Supabase error (404): Could not find the function public.${name} in the schema cache`)
+  const recording = (reply) => {
+    const calls = []
+    const repo = createMasterCatalogRepository(async (path, o) => {
+      calls.push({ path, body: o?.body ? JSON.parse(o.body) : null })
+      return typeof reply === 'function' ? reply(path) : reply
+    })
+    return { calls, repo }
+  }
+
+  it('getHealth reads catalogue_health for the main business, and reports unavailable before the migration', async () => {
+    const { calls, repo } = recording({ score: 71, total: 11, counts: { no_price: 2 } })
+    expect(await repo.getHealth(PARENT)).toEqual({ available: true, score: 71, total: 11, counts: { no_price: 2 } })
+    expect(calls).toEqual([{ path: 'rpc/catalogue_health', body: { p_business_id: PARENT } }])
+    const missing = createMasterCatalogRepository(async () => { throw MISSING('catalogue_health') })
+    expect(await missing.getHealth(PARENT)).toEqual({ available: false, score: null, total: 0, counts: {} })
+    const down = createMasterCatalogRepository(async () => { throw new Error('Supabase error (500): down') })
+    await expect(down.getHealth(PARENT)).rejects.toThrow('down')
+  })
+
+  it('getPage sends p_health only when set, and returns nothing for it before the migration', async () => {
+    const { calls, repo } = recording([])
+    await repo.getPage(PARENT, { health: 'no_price' })
+    await repo.getPage(PARENT, {})
+    expect(calls[0].body.p_health).toBe('no_price')
+    expect('p_health' in calls[1].body).toBe(false)
+    const old = createMasterCatalogRepository(async (path) => { if (path.startsWith('rpc/')) throw MISSING('master_catalog_page'); return [] })
+    expect(await old.getPage(PARENT, { health: 'no_price' })).toEqual({ items: [], total: 0, upgraded: false })
+  })
+
+  it('duplicatePairs, dismissPair, merge and setCategory send the business with every call', async () => {
+    const { calls, repo } = recording((path) => (path === 'rpc/catalogue_duplicate_pairs'
+      ? [{ item_a: { id: 'm1' }, item_b: { id: 'm2' }, reason: 'barcode', score: '1', total: '3' }] : path === 'rpc/set_master_category' ? 4 : { kept: 'm1' }))
+    expect(await repo.duplicatePairs(PARENT, { offset: 20, limit: 20 })).toEqual({ pairs: [{ a: { id: 'm1' }, b: { id: 'm2' }, reason: 'barcode', score: 1 }], total: 3 })
+    await repo.dismissPair(PARENT, 'm1', 'm2')
+    expect(await repo.merge(PARENT, 'm1', 'm2')).toEqual({ kept: 'm1' })
+    expect(await repo.setCategory(PARENT, ['m1'], 'analgesics')).toBe(4)
+    await repo.setCategory(PARENT, ['m1'])
+    expect(calls.map((c) => [c.path, c.body])).toEqual([
+      ['rpc/catalogue_duplicate_pairs', { p_business_id: PARENT, p_offset: 20, p_limit: 20 }],
+      ['rpc/dismiss_duplicate_pair', { p_business_id: PARENT, p_item_a: 'm1', p_item_b: 'm2' }],
+      ['rpc/merge_master_items', { p_business_id: PARENT, p_keep_id: 'm1', p_drop_id: 'm2' }],
+      ['rpc/set_master_category', { p_business_id: PARENT, p_ids: ['m1'], p_category_code: 'analgesics' }],
+      ['rpc/set_master_category', { p_business_id: PARENT, p_ids: ['m1'], p_category_code: null }],
+    ])
+  })
+})

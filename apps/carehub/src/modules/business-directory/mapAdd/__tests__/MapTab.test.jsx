@@ -7,7 +7,7 @@ import { act } from 'react'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const view = vi.hoisted(() => ({ bounds: { south: 6.4, west: 3.3, north: 6.5, east: 3.4 }, zoom: 15, report: null }))
-vi.mock('../../../../components/maps/LeafletMap.jsx', async () => {
+vi.mock('../../../../components/maps/MapView.jsx', async () => {
   const React = await import('react')
   return {
     default: function MockMap({ pins, onPinClick, onViewChange, fit }) {

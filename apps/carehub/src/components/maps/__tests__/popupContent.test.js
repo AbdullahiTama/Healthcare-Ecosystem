@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { popupContent, TONE_COLOR } from '../LeafletMap.jsx'
+import { popupContent, TONE_COLOR } from '../MapView.jsx'
 
 // Names and places in a popup are typed by people (reps, the platform team). They must stay text: a popup built from
 // an HTML string would run an <img onerror> planted in a name in the manager's session.
@@ -23,16 +23,3 @@ describe('popupContent', () => {
   })
 })
 
-import { resolveLeaflet } from '../LeafletMap.jsx'
-
-describe('resolveLeaflet', () => {
-  // Leaflet is a CommonJS bundle; depending on the bundler the dynamic import yields the library under .default or
-  // its functions directly. Either way the map must get the library, not undefined.
-  it('accepts the library under default, or the module itself', () => {
-    const lib = { map() {}, tileLayer() {} }
-    expect(resolveLeaflet({ default: lib })).toBe(lib)
-    expect(resolveLeaflet(lib)).toBe(lib)
-    const both = { ...lib, default: lib }
-    expect(resolveLeaflet(both)).toBe(lib)
-  })
-})
