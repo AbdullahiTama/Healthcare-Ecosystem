@@ -20,11 +20,13 @@ function render(el) {
 }
 
 describe('describeRoute', () => {
-  it('labels a verified route with the business name and status', () => {
-    // Copy normalized by the parallel UI-copy pass (parentheses over em-dash);
-    // meaning pinned here: name + status, no access implications.
+  it('labels a verified route with the business name and what has happened to it', () => {
     expect(describeRoute({ selection_kind: 'verified', status: 'routed' }, 'Acme Ltd'))
-      .toBe('Acme Ltd (routed)')
+      .toBe('Acme Ltd (sent to the company)')
+    expect(describeRoute({ selection_kind: 'verified', status: 'pending' }, 'Acme Ltd'))
+      .toBe('Acme Ltd (will be sent when you submit)')
+    expect(describeRoute({ selection_kind: 'verified', status: 'pending' }, 'Acme Ltd', { submitted: true }))
+      .toBe('Acme Ltd (awaiting review)')
   })
 
   it('labels unknown and candidate selections without implying access', () => {

@@ -138,9 +138,9 @@ export default function AdrReportPage({ reportId }) {
     }
   }
 
-  // Persists one company selection for a saved product. Hub rows may carry
-  // more than one selection (multi-company cardinality preserved) — this
-  // appends; it never edits or removes existing routes.
+  // Persists the company selection for a saved product. On a draft the server
+  // replaces the product's earlier pending selection, so only the final choice
+  // receives the case at submission (carehub_20270130).
   async function handleSaveRoute(productId, selection) {
     const check = validateRouteInput({
       reportId,
@@ -166,8 +166,8 @@ export default function AdrReportPage({ reportId }) {
       }
       await loadRoutes()
       showToast(
-        created && created.status === 'pending'
-          ? 'Company selection saved (pending verification)'
+        selection.kind === 'verified' && created && created.status === 'pending'
+          ? `Company saved. The report goes to ${selection.businessName || 'this company'} when you submit it`
           : 'Company selection saved',
         { type: 'success' }
       )
@@ -756,10 +756,11 @@ function groupRoutesByProduct(routes) {
   return map
 }
 
-function routeToSelection(route) {
+function routeToSelection(route, companyNames = {}) {
   if (!route) return { ...BLANK_COMPANY }
   if (route.selection_kind === 'verified') {
-    return { kind: 'verified', businessId: route.responsible_business_id || '', businessName: '', candidateName: '' }
+    const businessId = route.responsible_business_id || ''
+    return { kind: 'verified', businessId, businessName: companyNames[businessId] || '', candidateName: '' }
   }
   if (route.selection_kind === 'unverified_candidate') {
     return { kind: 'unverified_candidate', businessId: '', businessName: '', candidateName: route.candidate_name || '' }
@@ -777,8 +778,10 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
   function startEdit(p) {
     setEditing(p.product_id)
     setDraft({ ...p })
-    const existing = (routesByProduct[p.product_id] || [])[0]
-    setCompany(existing ? routeToSelection(existing) : { ...BLANK_COMPANY })
+    // The product's current selection (the newest: on a draft a new choice replaces the old one).
+    const list = routesByProduct[p.product_id] || []
+    const existing = list[list.length - 1]
+    setCompany(existing ? routeToSelection(existing, companyNames) : { ...BLANK_COMPANY })
     setCompanyTouched(false)
   }
   function startNew() {
@@ -841,7 +844,7 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
                   <div style={{ fontSize: 12, color: theme.textLight, marginTop: 2, lineHeight: 1.6 }}>
                     {[p.product_generic_name, p.manufacturer, p.batch_lot_number, p.dose, p.route, p.indication].filter(Boolean).join(' · ') || 'No details yet'}
                   </div>
-                  <ProductRouteChips routes={routesByProduct[p.product_id] || []} companyNames={companyNames} />
+                  <ProductRouteChips routes={routesByProduct[p.product_id] || []} companyNames={companyNames} submitted={disabled} />
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {!disabled && <Button variant="ghost" size="sm" onClick={() => startEdit(p)}>Edit</Button>}
@@ -862,7 +865,7 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
   )
 }
 
-function ProductRouteChips({ routes, companyNames }) {
+function ProductRouteChips({ routes, companyNames, submitted }) {
   if (!routes || routes.length === 0) return null
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
@@ -872,7 +875,7 @@ function ProductRouteChips({ routes, companyNames }) {
           title={`Selection: ${r.selection_kind}; status: ${r.status}`}
           style={{ fontSize: 11.5, fontWeight: 600, color: theme.textDark, background: theme.gray100, borderRadius: 999, padding: '2px 10px', whiteSpace: 'nowrap' }}
         >
-          {describeRoute(r, companyNames[r.responsible_business_id])}
+          {describeRoute(r, companyNames[r.responsible_business_id], { submitted })}
         </span>
       ))}
     </div>
@@ -895,7 +898,7 @@ function ProductForm({ draft, set, industry, onSave, onCancel, company, setCompa
         <Input label="Stop date" type="date" value={draft.stop_date} onChange={v => set('stop_date', v)} />
         <Input label="Indication" value={draft.indication} onChange={v => set('indication', v)} placeholder="Why it was given" />
       </div>
-      <CompanySelector value={company} onChange={setCompany} searchCompanies={searchCompanies} disabled={disabled} />
+      <CompanySelector value={company} onChange={setCompany} searchCompanies={searchCompanies} disabled={disabled} suggestedQuery={draft.manufacturer || ''} />
       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
         <Button variant="primary" size="sm" onClick={onSave}>Save product</Button>
         <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
