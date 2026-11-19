@@ -30,18 +30,24 @@ export function parseSaleItems(items) {
 
 const DAY_MS = 86400000
 
-/**
- * Classifies stocked products by units sold over the trailing window:
- *   fast   — 10+ units
- *   medium — 1–9 units
- *   slow   — 0 units (stocked but not selling)
- * Out-of-stock and service rows are never classified. Returns
- * { fast: [{id,name,units}], medium: [...], slow: [...] } sorted by units.
- */
-export function classifySalesVelocity(products, sales, { days = 30 } = {}) {
-  const cutoff = Date.now() - days * DAY_MS
-  const unitsById = {}
+// Units sold in the window (30 days by default) that put a product in each group. One rule for the owner's daily
+// notification and the Sales velocity breakdown (Stock Management), so their counts always agree.
+export const VELOCITY_WINDOW_DAYS = 30
+export const VELOCITY_BANDS = { fast: 10, steady: 4, slow: 1 }
+export const VELOCITY_GROUPS = [
+  { key: 'fast', label: 'Fast-moving', rule: VELOCITY_BANDS.fast + '+ units sold' },
+  { key: 'steady', label: 'Steady-moving', rule: VELOCITY_BANDS.steady + ' to ' + (VELOCITY_BANDS.fast - 1) + ' units sold' },
+  { key: 'slow', label: 'Slow-moving', rule: VELOCITY_BANDS.slow + ' to ' + (VELOCITY_BANDS.steady - 1) + ' units sold' },
+  { key: 'none', label: 'Not moving', rule: 'none sold, still in stock' },
+]
 
+/**
+ * Units sold per product id in the trailing window. Pass completed sales only
+ * (held or refunded sales are the caller's to leave out).
+ */
+export function unitsSoldById(sales, { days = VELOCITY_WINDOW_DAYS, now = Date.now() } = {}) {
+  const cutoff = now - days * DAY_MS
+  const unitsById = {}
   for (const sale of sales || []) {
     const t = new Date(sale.created_at || 0).getTime()
     if (!Number.isFinite(t) || t < cutoff) continue
@@ -51,21 +57,40 @@ export function classifySalesVelocity(products, sales, { days = 30 } = {}) {
       unitsById[id] = (unitsById[id] || 0) + item.qty
     }
   }
+  return unitsById
+}
 
-  const groups = { fast: [], medium: [], slow: [] }
+/**
+ * Classifies products by units sold over the trailing window:
+ *   fast   — 10+ units
+ *   steady — 4–9 units
+ *   slow   — 1–3 units
+ *   none   — 0 units, still in stock (not moving)
+ * Services are never classified. A product that sold is classified even when it
+ * is now out of stock (a fast mover that sold out is the one to reorder); one
+ * that neither sold nor has stock is not a concern and is left out.
+ * Returns { fast, steady, slow, none }: [{ id, name, units, stock }], movers by
+ * units sold (most first), not moving by stock (most first).
+ */
+export function classifySalesVelocity(products, sales, { days = VELOCITY_WINDOW_DAYS, now = Date.now() } = {}) {
+  const unitsById = unitsSoldById(sales, { days, now })
+  const groups = { fast: [], steady: [], slow: [], none: [] }
   for (const prod of products || []) {
     const cat = prod.cat || prod.category || ''
     if (cat === 'Services') continue
-    if (!(prod.stock > 0)) continue
     const units = unitsById[prod.id] || 0
-    const entry = { id: prod.id, name: prod.name, units: units }
-    if (units >= 10) groups.fast.push(entry)
-    else if (units >= 1) groups.medium.push(entry)
-    else groups.slow.push(entry)
+    const stock = Number(prod.stock) || 0
+    if (units <= 0 && !(stock > 0)) continue
+    const entry = { id: prod.id, name: prod.name, units, stock }
+    if (units >= VELOCITY_BANDS.fast) groups.fast.push(entry)
+    else if (units >= VELOCITY_BANDS.steady) groups.steady.push(entry)
+    else if (units >= VELOCITY_BANDS.slow) groups.slow.push(entry)
+    else groups.none.push(entry)
   }
-
-  const byUnits = (a, b) => b.units - a.units
+  const byUnits = (a, b) => b.units - a.units || String(a.name).localeCompare(String(b.name))
   groups.fast.sort(byUnits)
-  groups.medium.sort(byUnits)
+  groups.steady.sort(byUnits)
+  groups.slow.sort(byUnits)
+  groups.none.sort((a, b) => b.stock - a.stock || String(a.name).localeCompare(String(b.name)))
   return groups
 }

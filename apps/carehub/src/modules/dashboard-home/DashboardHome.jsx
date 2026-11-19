@@ -13,7 +13,9 @@ import {
 // keeping a second copy of either query. Same shape as Reports.
 import { notificationRepository } from '../notifications/repositories'
 import { saleRepository } from '../pos/repositories'
-import { classifySalesVelocity } from '../../lib/velocity'
+import { classifySalesVelocity, VELOCITY_WINDOW_DAYS } from '../../lib/velocity'
+import { expiryGroups, EXPIRY_SOON_DAYS } from '../../lib/expiry'
+import { ALERT_PATHS } from '../../lib/notificationCategories'
 import { fmt, businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Avatar, Empty, ErrorState, Loading, StatCard, PageHeader, MetricGrid, SectionCard, ActivityList, QuickAction, Toast, useToast } from '../../components/ui'
@@ -131,14 +133,8 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
   // expiry conditions it can see into the notification center — once per kind,
   // per business, per day (localStorage dedupe). Owner-only: staff dashboards
   // must not write owner notifications as a side effect of being viewed.
-  const daysToExpiry = (p) => {
-    if (!p.expiry_date) return null
-    const d = new Date(p.expiry_date)
-    if (Number.isNaN(d.getTime())) return null
-    return Math.ceil((d - new Date()) / 86400000)
-  }
-  const expiringSoon = products.filter(p => { const t = daysToExpiry(p); return t !== null && t >= 0 && t <= 60 })
-  const expiredProducts = products.filter(p => { const t = daysToExpiry(p); return t !== null && t < 0 })
+  // The same rule the Expiry breakdown lists by (lib/expiry.js), so a notification's count is its breakdown's.
+  const { expiring: expiringSoon, expired: expiredProducts } = expiryGroups(products)
 
   useEffect(() => {
     if (role !== 'Owner' || !brand?.id || loading || !catalogFresh) return
@@ -166,14 +162,14 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
         }
         if (expiringSoon.length > 0 && !sentToday('product_expiring_soon')) {
           await notificationRepository.notify(brand.id, alertTo, 'product_expiring_soon',
-            expiringSoon.length + ' product' + (expiringSoon.length === 1 ? '' : 's') + ' expire within 60 days',
-            names(expiringSoon), '/dashboard/inventory?expiry=expiring')
+            expiringSoon.length + ' product' + (expiringSoon.length === 1 ? '' : 's') + ' expire within ' + EXPIRY_SOON_DAYS + ' days',
+            names(expiringSoon), ALERT_PATHS.product_expiring_soon)
           markSent('product_expiring_soon')
         }
         if (expiredProducts.length > 0 && !sentToday('product_expired')) {
           await notificationRepository.notify(brand.id, alertTo, 'product_expired',
             expiredProducts.length + ' product' + (expiredProducts.length === 1 ? '' : 's') + ' have expired',
-            names(expiredProducts), '/dashboard/inventory?expiry=expired')
+            names(expiredProducts), ALERT_PATHS.product_expired)
           markSent('product_expired')
         }
         // Velocity digest — only when something actually sold in the window;
@@ -182,18 +178,20 @@ export default function DashboardHome({ brand, products, catalog, role, perms, s
         // sales, not the whole history.
         const recentSales = sentToday('sales_velocity')
           ? []
-          : (await saleRepository.getSince(brand.id, new Date(Date.now() - 30 * 86400000).toISOString()) || []).filter(isCompletedSale)
+          : (await saleRepository.getSince(brand.id, new Date(Date.now() - VELOCITY_WINDOW_DAYS * 86400000).toISOString()) || []).filter(isCompletedSale)
         if (recentSales.length > 0 && !sentToday('sales_velocity')) {
-          const v = classifySalesVelocity(products, recentSales, { days: 30 })
+          // Four groups, the same rule as the Sales velocity breakdown the notification opens.
+          const v = classifySalesVelocity(products, recentSales, { days: VELOCITY_WINDOW_DAYS })
           const parts = []
-          if (v.fast.length > 0) parts.push(v.fast.length + ' fast mover' + (v.fast.length === 1 ? '' : 's'))
-          if (v.medium.length > 0) parts.push(v.medium.length + ' steady seller' + (v.medium.length === 1 ? '' : 's'))
-          if (v.slow.length > 0) parts.push(v.slow.length + ' not moving')
+          if (v.fast.length > 0) parts.push(v.fast.length + ' fast-moving')
+          if (v.steady.length > 0) parts.push(v.steady.length + ' steady')
+          if (v.slow.length > 0) parts.push(v.slow.length + ' slow')
+          if (v.none.length > 0) parts.push(v.none.length + ' not moving')
           if (parts.length > 0) {
             await notificationRepository.notify(brand.id, alertTo, 'sales_velocity',
-              '30-day sales velocity: ' + parts.join(', '),
+              VELOCITY_WINDOW_DAYS + '-day sales velocity: ' + parts.join(', '),
               v.fast.length > 0 ? 'Top mover: ' + v.fast[0].name : null,
-              '/dashboard/reports')
+              ALERT_PATHS.sales_velocity)
             markSent('sales_velocity')
           }
         }

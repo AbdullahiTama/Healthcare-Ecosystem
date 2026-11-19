@@ -13,6 +13,7 @@ const KIND_TO_CATEGORY = {
   product_expired: 'inventory',
   low_stock: 'inventory',
   out_of_stock: 'inventory',
+  sales_velocity: 'inventory',
   // CareFind social
   contact_lead: 'social',
   review_created: 'social',
@@ -40,4 +41,18 @@ export function notificationPath(link) {
   if (!value) return null
   if (value.startsWith('/') && !value.startsWith('//')) return value
   return '/dashboard/' + value.replace(/^\/+/, '')
+}
+
+// Where each owner stock alert opens: its own breakdown in Stock Management (the products, quantities and dates
+// behind the notification), whatever link an older copy of the notification was stored with (sales velocity used to
+// open the general Reports page).
+export const ALERT_PATHS = {
+  sales_velocity: '/dashboard/inventory?tab=velocity',
+  product_expiring_soon: '/dashboard/inventory?tab=expiry&expiry=expiring',
+  product_expired: '/dashboard/inventory?tab=expiry&expiry=expired',
+}
+
+/** The in-app path a notification opens: its kind's breakdown when it has one, else its stored link. */
+export function notificationTarget(n) {
+  return ALERT_PATHS[n?.kind] || notificationPath(n?.link)
 }

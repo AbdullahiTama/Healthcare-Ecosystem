@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bell } from 'lucide-react'
 import { notificationRepository } from '../../modules/notifications/repositories'
 import { watchTable } from '../../lib/realtime'
-import { categoryForKind, notificationPath, NOTIFICATION_CATEGORIES } from '../../lib/notificationCategories'
+import { categoryForKind, notificationTarget, NOTIFICATION_CATEGORIES } from '../../lib/notificationCategories'
 import { theme } from '../../styles/theme'
 import { useToast, Toast } from '../ui'
 
@@ -105,7 +105,7 @@ export default function NotificationBell({ brand }) {
       }
     }
     setOpen(false)
-    const path = notificationPath(n.link)
+    const path = notificationTarget(n)
     if (path) navigate(path)
   }
 
