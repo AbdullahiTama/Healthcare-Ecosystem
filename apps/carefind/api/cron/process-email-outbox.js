@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
-import { createBudget } from '@care-ecosystem/shared-payments'
+import { createBudget, runScheduled } from '@care-ecosystem/shared-payments'
 import { runFinanceJobs } from '../_lib/financeJobs.js'
+import { submitChangedPages } from '../_lib/indexNow.js'
 import { EmailService } from '@care-ecosystem/shared-email'
 
 // One deadline for the whole invocation (email drain + the finance steps). vercel.json gives this function 60 s; the budget leaves room
@@ -68,5 +69,15 @@ export default async function handler(req, res) {
     finance = { error: e.message }
   }
 
-  return res.status(200).json({ ok: true, ...result, finance })
+  // Search engines: once a day, new and changed public pages are sent to IndexNow (_lib/indexNow.js). Same slot gate and
+  // deadline as the finance steps; a failure is reported and never affects the work above.
+  let seo
+  try {
+    seo = await runScheduled(supabase, [{ name: 'seo_indexnow', everyMinutes: 1440, run: () => submitChangedPages() }], { budget })
+  } catch (e) {
+    console.error('[cron/process-email-outbox] seo step failed', e)
+    seo = { error: e.message }
+  }
+
+  return res.status(200).json({ ok: true, ...result, finance, seo })
 }

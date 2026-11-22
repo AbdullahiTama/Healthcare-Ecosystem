@@ -13,6 +13,7 @@ import { REPORT_REASONS } from './postSelectors.js'
 import { markPostsDirty } from './postSync.js'
 import PostDetailModal from './PostDetailModal.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
+import { idFromParam } from '../../lib/seo/slugs.js'
 
 // The members of usePostEngagement's `engagementProps` that CANNOT make Feed's
 // copy of a post stale — the only ones this overlay hands to PostCard
@@ -77,7 +78,9 @@ const READ_ONLY_ENGAGEMENT_MEMBERS = new Set([
 // controls visible and dead, so every one of them is wired for real, same as
 // PostPage.
 export default function PostModalRoute() {
-  const { id } = useParams()
+  // A readable URL ("<name>-<id>", lib/seo/slugs.js) and a bare id open the same record.
+  const { id: idParam } = useParams()
+  const id = idFromParam(idParam) || idParam
   const { user } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()

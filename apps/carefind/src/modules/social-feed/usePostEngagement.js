@@ -13,6 +13,7 @@ import { exportImage, exportVideo, canExportVideo, shareOrDownload } from '../..
 import { shareOrCopy, mediaToFile } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
 import { loadActiveCreatorIds } from '../subscriptions-monetization/subscriptions.js'
+import { normaliseSiteUrl } from '../../lib/seo/site.js'
 
 // Merge-by-key for the array slices. `merge:false` replaces outright (a feed
 // refetch must drop rows belonging to posts that fell out of the batch);
@@ -603,7 +604,7 @@ export function usePostEngagement({
     // WhatsApp recipients always get the media, never just the caption.
     const mediaUrl = post.image_url || post.video_url || null
     const file = mediaUrl ? await mediaToFile(mediaUrl) : null
-    const result = await shareOrCopy({ title: 'CareFind', text, url: `https://carefind.app/post/${post.id}`, files: file ? [file] : undefined, mediaUrl })
+    const result = await shareOrCopy({ title: 'CareFind', text, url: `${normaliseSiteUrl(import.meta.env.VITE_SITE_URL)}/post/${post.id}`, files: file ? [file] : undefined, mediaUrl })
     if (result === 'copied') toast.show('Post copied: paste it anywhere to share.', { type: 'success' })
     if (result === 'failed') toast.show("This browser won't let us share or copy from here.", { type: 'error' })
 

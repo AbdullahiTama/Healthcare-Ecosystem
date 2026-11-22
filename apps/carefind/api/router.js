@@ -18,6 +18,9 @@ export const config = { api: { bodyParser: false } }
 
 import { isCrawlerUserAgent } from '../src/lib/openGraph.js'
 import ogHandler from './_handlers/og.js'
+import seoHandler from './_handlers/seo.js'
+import sitemapHandler from './_handlers/sitemap.js'
+import { isSearchOrAiCrawler } from '../src/lib/seo/crawlers.js'
 import adminAuthHandler from './_handlers/admin-auth.js'
 import banksHandler from './_handlers/banks.js'
 import bookingHandler from './_handlers/booking.js'
@@ -151,11 +154,15 @@ export default async function handler(req, res) {
     //  - the User-Agent is re-checked rather than trusted from the rewrite
     //    alone: this is the only thing standing between a normal visitor and
     //    a page that is not the app.
-    const isApiPath = /^\/api(\/|$)/.test((req.url || '').split('?')[0])
-    if (!isApiPath
-      && (req.method === 'GET' || req.method === 'HEAD')
-      && isCrawlerUserAgent(req.headers['user-agent'])) {
-      return ogHandler(req, res)
+    const pathOnly = (req.url || '').split('?')[0]
+    const isApiPath = /^\/api(\/|$)/.test(pathOnly)
+    if (!isApiPath && (req.method === 'GET' || req.method === 'HEAD')) {
+      // Sitemaps are for anyone (vercel.json rewrites /sitemap.xml and /sitemaps/* here).
+      if (pathOnly === '/sitemap.xml' || pathOnly.startsWith('/sitemaps/')) return sitemapHandler(req, res)
+      // Search engines and AI crawlers: the server-rendered page for this URL (api/_handlers/seo.js).
+      if (isSearchOrAiCrawler(req.headers['user-agent'])) return seoHandler(req, res)
+      // Link-preview bots: the item's preview card.
+      if (isCrawlerUserAgent(req.headers['user-agent'])) return ogHandler(req, res)
     }
     return res.status(404).json({ error: `No handler for /api/${route}` })
   }

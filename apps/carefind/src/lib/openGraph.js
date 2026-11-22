@@ -24,6 +24,8 @@
 // subscriber-only and premium posts, unapproved news. `buildPostMeta` enforces
 // that here rather than trusting each caller to remember.
 
+import { idFromParam } from './seo/slugs.js'
+
 export const SITE_NAME = 'CareFind'
 export const DEFAULT_TITLE = 'CareFind'
 export const DEFAULT_DESCRIPTION = 'CareFind. Discover healthcare providers, medicines, and services near you.'
@@ -70,21 +72,23 @@ export function parseShareTarget(rawUrl) {
   const segments = path.split('/').filter(Boolean)
   const params = new URLSearchParams(query)
 
+  // Item pages accept a bare id or a readable "<slug>-<id>" (src/lib/seo/slugs.js).
+  const itemId = (seg) => idFromParam(seg)
   if (segments[0] === 'post' && segments[1]) {
-    return UUID.test(segments[1]) ? { kind: 'post', id: segments[1] } : null
+    return itemId(segments[1]) ? { kind: 'post', id: itemId(segments[1]) } : null
   }
   if (segments[0] === 'feed') {
     const postId = params.get('post')
     return UUID.test(postId || '') ? { kind: 'post', id: postId } : null
   }
   if (segments[0] === 'u' && segments[1]) {
-    return UUID.test(segments[1]) ? { kind: 'profile', id: segments[1] } : null
+    return itemId(segments[1]) ? { kind: 'profile', id: itemId(segments[1]) } : null
   }
   if (segments[0] === 'news' && segments[1]) {
-    return UUID.test(segments[1]) ? { kind: 'news', id: segments[1] } : null
+    return itemId(segments[1]) ? { kind: 'news', id: itemId(segments[1]) } : null
   }
   if (segments[0] === 'business' && segments[1]) {
-    return UUID.test(segments[1]) ? { kind: 'business', id: segments[1] } : null
+    return itemId(segments[1]) ? { kind: 'business', id: itemId(segments[1]) } : null
   }
   return null
 }

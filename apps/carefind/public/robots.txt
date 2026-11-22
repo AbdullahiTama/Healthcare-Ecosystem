@@ -1,14 +1,87 @@
+# CareFind: public healthcare listings (pharmacies, hospitals, labs, medicines, verified professionals, articles)
+# are open to search engines and AI search / answer engines. Private app areas are not.
+
 User-agent: *
 Allow: /
-
-# Sitemaps
-Sitemap: https://carefind.ng/sitemap.xml
-
-# Keep crawlers off private app surfaces — they require auth and carry no index value
+Disallow: /api/
 Disallow: /admin
 Disallow: /admin-panel
+Disallow: /admin/
+Disallow: /dashboard
 Disallow: /business-dashboard
 Disallow: /professional-dashboard
+Disallow: /live-dashboard/
 Disallow: /wallet
+Disallow: /earn
 Disallow: /notifications
+Disallow: /profile
+Disallow: /saved
+Disallow: /onboarding
+Disallow: /verify
+Disallow: /claim-business
+Disallow: /claim-staff-position
+Disallow: /cart
+Disallow: /checkout
+Disallow: /orders
+Disallow: /wishlist
+Disallow: /account/
+Disallow: /track/
+Disallow: /track-report
+Disallow: /report-side-effect
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /link-expired
+Disallow: /agents/
+Disallow: /agent-login
+Disallow: /playlist/create
+
+# Search engines and AI search assistants are welcome on the public pages above.
+User-agent: Googlebot
+User-agent: Bingbot
+User-agent: Applebot
+User-agent: DuckDuckBot
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: Amazonbot
+Allow: /
 Disallow: /api/
+Disallow: /admin
+Disallow: /admin-panel
+Disallow: /admin/
+Disallow: /dashboard
+Disallow: /business-dashboard
+Disallow: /professional-dashboard
+Disallow: /live-dashboard/
+Disallow: /wallet
+Disallow: /earn
+Disallow: /notifications
+Disallow: /profile
+Disallow: /saved
+Disallow: /onboarding
+Disallow: /verify
+Disallow: /claim-business
+Disallow: /claim-staff-position
+Disallow: /cart
+Disallow: /checkout
+Disallow: /orders
+Disallow: /wishlist
+Disallow: /account/
+Disallow: /track/
+Disallow: /track-report
+Disallow: /report-side-effect
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /link-expired
+Disallow: /agents/
+Disallow: /agent-login
+Disallow: /playlist/create
+
+Sitemap: https://carefind.ng/sitemap.xml

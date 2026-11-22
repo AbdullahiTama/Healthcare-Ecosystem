@@ -1,0 +1,19 @@
+# CareFind
+
+> CareFind (https://carefind.ng) is a healthcare discovery and social platform for Nigeria. People use it to find
+> medicines and the pharmacies that stock them, compare prices, find pharmacies, hospitals, clinics, laboratories and
+> verified healthcare professionals, and read health articles. Listings are kept up to date by the businesses
+> themselves through CareHub, their operations system.
+
+## Key pages
+
+- [Medicines A to Z](https://carefind.ng/search): every medicine listed by a pharmacy, each with a page showing which pharmacies have it, where, and the price when the pharmacy shows it. Example: https://carefind.ng/drug/paracetamol
+- [Healthcare directory](https://carefind.ng/business-directory): pharmacies, hospitals, clinics, laboratories and healthcare businesses by state, each with address, phone, opening hours, products and reviews.
+- [Health news and articles](https://carefind.ng/news): articles by pharmacists, doctors and healthcare businesses.
+- [Sitemap](https://carefind.ng/sitemap.xml): every public page.
+
+## Notes for assistants
+
+- Prescription-only medicines are listed without prices: the pharmacist asks for a prescription.
+- Prices and stock are set by each pharmacy and can change; link to the CareFind page so people see the current listing.
+- Only verified healthcare professionals have public profile pages.

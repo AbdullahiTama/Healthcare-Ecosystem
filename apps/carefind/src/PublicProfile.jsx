@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, CalendarDays, Check, ChevronRight, Coins, Film, Link2, Lock, MapPin,
@@ -34,9 +34,14 @@ import {
   useToggleFollow, usePostReview, keys,
 } from './hooks/queries'
 import { useQueryClient } from '@tanstack/react-query'
+import { idFromParam } from './lib/seo/slugs.js'
+import { professionalPage } from './lib/seo/pages.js'
+import { useSeoPage, appSiteUrl } from './lib/seo/useSeo.js'
 
 function PublicProfile() {
-  const { id } = useParams()
+  // A readable URL ("<name>-<id>", lib/seo/slugs.js) and a bare id open the same record.
+  const { id: idParam } = useParams()
+  const id = idFromParam(idParam) || idParam
   const navigate = useNavigate()
   const { user } = useAuth()
   const { isMobile } = useBreakpoint()
@@ -56,6 +61,9 @@ function PublicProfile() {
 
   // React Query hooks
   const { data: profile, isLoading: loading, error: profileError, refetch: refetchProfile } = useProfile(id)
+  // Only verified professionals are indexable (owner decision 2026-11-22); other profiles are noindex.
+  const seoPage = useMemo(() => (profile ? professionalPage(appSiteUrl(), profile) : null), [profile])
+  useSeoPage(seoPage ? { ...seoPage, title: seoPage.robots.startsWith('noindex') ? (profile.full_name || profile.display_name || 'Profile') : seoPage.title } : null, !loading)
   const { data: postsData = [] } = useProfilePosts(id)
   const { data: reviewsData = { reviews: [], reviewers: {} } } = useProfileReviews(id)
   const { data: userStories = [] } = useProfileStories(id)

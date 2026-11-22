@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useRef } from 'react'
+﻿import { useMemo, useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { businessProfileRepository } from './repositories'
@@ -18,6 +18,9 @@ import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSe
 import { getSentimentSummary } from './sentiment'
 import { Card, Pill, TealBtn, Inp, Textarea, Empty, StarPicker, Stars, Toast, useToast, CardSkeleton } from '../../components/ui'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
+import { idFromParam } from '../../lib/seo/slugs.js'
+import { businessPage } from '../../lib/seo/pages.js'
+import { useSeoPage, appSiteUrl } from '../../lib/seo/useSeo.js'
 
 function PatientAppointmentLookup({ bizId }) {
   const toast = useToast()
@@ -560,7 +563,9 @@ function BookingCard({ biz }) {
 }
 
 function BusinessProfile() {
-  const { id } = useParams()
+  // A readable URL ("<name>-<id>", lib/seo/slugs.js) and a bare id open the same record.
+  const { id: idParam } = useParams()
+  const id = idFromParam(idParam) || idParam
   const navigate = useNavigate()
   const { user } = useAuth()
   const { isMobile } = useBreakpoint()
@@ -572,6 +577,9 @@ function BusinessProfile() {
   const [reviews, setReviews] = useState([])
   const [reviewers, setReviewers] = useState({})
   const [loading, setLoading] = useState(true)
+  // Title, description, canonical: the same page model the crawler page uses (lib/seo/pages.js).
+  const seoPage = useMemo(() => (biz ? businessPage(appSiteUrl(), biz, { products, reviews }) : null), [biz, products, reviews])
+  useSeoPage(seoPage, !loading)
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)

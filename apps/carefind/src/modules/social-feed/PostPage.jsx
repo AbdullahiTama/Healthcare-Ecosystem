@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Flag } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
@@ -14,6 +14,10 @@ import { isPostMissingError, postRepository } from './repositories'
 import { REPORT_REASONS } from './postSelectors.js'
 import PostCard from './PostCard.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
+import { idFromParam } from '../../lib/seo/slugs.js'
+import { articlePostPage } from '../../lib/seo/pages.js'
+import { useSeoPage, appSiteUrl } from '../../lib/seo/useSeo.js'
+import { titleFromContent, plainTextFromContent } from '../../lib/openGraph.js'
 
 // A post at its own URL — /post/:id. Second consumer of usePostEngagement;
 // the feed is the first. That's what makes the Task 2-4 extraction a real
@@ -37,7 +41,9 @@ import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 // items depending on who's looking — passing no-ops here would leave those
 // controls visible and dead. Every one of them is wired for real.
 export default function PostPage() {
-  const { id } = useParams()
+  // A readable URL ("<name>-<id>", lib/seo/slugs.js) and a bare id open the same record.
+  const { id: idParam } = useParams()
+  const id = idFromParam(idParam) || idParam
   const { user } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
@@ -47,6 +53,9 @@ export default function PostPage() {
   const [post, setPost] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  // Article posts are indexable pages; other posts (status updates, questions) are not indexed.
+  const seoPage = useMemo(() => (post ? (articlePostPage(appSiteUrl(), post) || { title: titleFromContent(post.content, 'Post on CareFind'), description: plainTextFromContent(post.content).slice(0, 160), canonical: appSiteUrl() + '/post/' + post.id, robots: 'noindex, follow' }) : null), [post])
+  useSeoPage(seoPage, !loading)
   const [loadFailed, setLoadFailed] = useState(false)
   // Bumped by the error state's Retry: the fetch lives in an effect, so
   // re-running it means changing something the effect depends on.

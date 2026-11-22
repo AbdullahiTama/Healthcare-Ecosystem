@@ -19,6 +19,7 @@
 // workflow that runs this file is triggered by a change to those other configs —
 // see the `paths` filters in .github/workflows/carefind-ci.yml.
 
+import { CRAWLER_UA_REGEX_SOURCE } from './seo/crawlers.js'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -447,8 +448,12 @@ describe('carefind cron contract', () => {
       { source: '/manifest.json', headers: [{ key: 'Cache-Control', value: 'public, max-age=3600' }] },
     ])
 
+    // 2026-11-22 (SEO and AI search visibility): sitemaps and search / AI crawlers are routed to the same single
+    // router (api/_handlers/sitemap.js, seo.js); still one function. The crawler list lives in src/lib/seo/crawlers.js.
     expect(CAREFIND.config.rewrites).toEqual([
       { source: '/api/(.*)', destination: '/api/router' },
+      { source: '/sitemap.xml', destination: '/api/router' },
+      { source: '/sitemaps/(.*)', destination: '/api/router' },
       {
         source: '/(.*)',
         has: [
@@ -461,6 +466,7 @@ describe('carefind cron contract', () => {
         ],
         destination: '/api/router',
       },
+      { source: '/(.*)', has: [{ type: 'header', key: 'user-agent', value: CRAWLER_UA_REGEX_SOURCE }], destination: '/api/router' },
       { source: '/(.*)', destination: '/index.html' },
     ])
   })

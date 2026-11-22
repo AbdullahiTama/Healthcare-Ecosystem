@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useMemo, useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -22,6 +22,8 @@ import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 import { canShowPrice, noPriceLabel, distanceLabel, SALE_TYPE_LABELS, whatsappLink, telLink } from '../utils/marketplace.js'
 import { recordContactLead } from '../utils/contactLeads.js'
 import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
+import { medicinePage } from '../../lib/seo/pages.js'
+import { useSeoPage, appSiteUrl } from '../../lib/seo/useSeo.js'
 
 function DrugProfile() {
   const { name } = useParams()
@@ -34,6 +36,8 @@ function DrugProfile() {
   const [reviews, setReviews] = useState([])
   const [reviewers, setReviewers] = useState({})
   const [loading, setLoading] = useState(true)
+  const seoPage = useMemo(() => medicinePage(appSiteUrl(), (() => { try { return decodeURIComponent(name) } catch { return name } })(), { listings: products }), [name, products])
+  useSeoPage(seoPage, !loading)
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)

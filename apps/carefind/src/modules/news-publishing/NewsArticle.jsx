@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { newsRepository } from './repositories'
@@ -19,9 +19,14 @@ import SupportPrompt from '../../components/SupportPrompt.jsx'
 import { Loading, Toast, useToast } from '../../components/ui'
 import { renderMarkdown } from '../social-feed/markdown.jsx'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
+import { idFromParam } from '../../lib/seo/slugs.js'
+import { newsPage } from '../../lib/seo/pages.js'
+import { useSeoPage, appSiteUrl } from '../../lib/seo/useSeo.js'
 
 function NewsArticle() {
-  const { id } = useParams()
+  // A readable URL ("<name>-<id>", lib/seo/slugs.js) and a bare id open the same record.
+  const { id: idParam } = useParams()
+  const id = idFromParam(idParam) || idParam
   const { user } = useAuth()
   const navigate = useNavigate()
   const { isMobile } = useBreakpoint()
@@ -29,6 +34,8 @@ function NewsArticle() {
   const toast = useToast()
   const [article, setArticle] = useState(null)
   const [loading, setLoading] = useState(true)
+  const seoPage = useMemo(() => (article ? newsPage(appSiteUrl(), article) : null), [article])
+  useSeoPage(seoPage, !loading)
   const [more, setMore] = useState([])
   const [likes, setLikes] = useState([])
   const [saved, setSaved] = useState(false)

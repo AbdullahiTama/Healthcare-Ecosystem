@@ -52,6 +52,8 @@
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/router" },
+    { "source": "/sitemap.xml", "destination": "/api/router" },
+    { "source": "/sitemaps/(.*)", "destination": "/api/router" },
     {
       "source": "/(.*)",
       "has": [
@@ -59,6 +61,17 @@
           "type": "header",
           "key": "user-agent",
           "value": ".*(facebookexternalhit|facebookcatalog|Facebot|meta-externalagent|WhatsApp|LinkedInBot|Twitterbot|Slackbot|Slack-ImgProxy|TelegramBot|Discordbot|Pinterest|redditbot|SkypeUriPreview|embedly|iframely|vkShare|Quora Link Preview).*"
+        }
+      ],
+      "destination": "/api/router"
+    },
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(Googlebot|Google-InspectionTool|Storebot-Google|AdsBot-Google|bingbot|BingPreview|msnbot|DuckDuckBot|YandexBot|Baiduspider|Applebot|PetalBot|SeznamBot|Sogou|Yeti|GPTBot|OAI-SearchBot|ChatGPT-User|ClaudeBot|Claude-SearchBot|Claude-User|anthropic-ai|PerplexityBot|Perplexity-User|CCBot|Amazonbot|cohere-ai|YouBot|Diffbot|MistralAI-User|DuckAssistBot|meta-externalfetcher|Bytespider).*"
         }
       ],
       "destination": "/api/router"

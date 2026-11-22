@@ -326,3 +326,30 @@ describe('BusinessProfile — facility actions and per-business search', () => {
     expect(screen.getByText('1 result found')).toBeInTheDocument()
   })
 })
+
+// SEO (2026-11-22): every page was served with the homepage's title and canonical. The page now sets its own,
+// from the same model as the page served to search engines, and opens from its readable URL.
+describe('BusinessProfile — title, canonical and readable URL', () => {
+  const ID = '0b6f2c4e-1111-4222-8333-944455556666'
+  beforeEach(() => {
+    mockSupabase.data.tables.businesses = [{ id: ID, name: 'MedPlus Pharmacy', business_type: 'pharmacy', city: 'Ikeja', state: 'Lagos', status: 'active', visible_on_carefind: true }]
+    mockSupabase.data.tables.products = [{ id: 'p1', business_id: ID, name: 'Paracetamol 500mg', price: 300, show_price: true, stock: 5, list_on_carefind: true }]
+    document.head.querySelectorAll('link[rel="canonical"]').forEach((l) => l.remove())
+  })
+
+  it('opens from "<name>-<id>" and sets its own title, description and canonical (carefind.ng, readable URL)', async () => {
+    const view = renderProfile(`/business/medplus-pharmacy-ikeja-lagos-${ID}`)
+    expect(await screen.findAllByText('MedPlus Pharmacy')).not.toHaveLength(0)
+    await waitFor(() => expect(document.title).toBe('MedPlus Pharmacy: Pharmacy in Ikeja, Lagos | CareFind'))
+    expect(document.head.querySelector('link[rel="canonical"]').getAttribute('href')).toBe(`https://carefind.ng/business/medplus-pharmacy-ikeja-lagos-${ID}`)
+    expect(document.head.querySelector('meta[name="description"]').getAttribute('content')).toMatch(/pharmacy in Ikeja, Lagos/)
+    expect(document.head.querySelector('meta[name="robots"]').getAttribute('content')).toMatch(/^index, follow/)
+    view.unmount()
+    expect(document.head.querySelector('link[rel="canonical"]')).toBeNull()   // nothing left behind for the next page
+  })
+
+  it('the bare id still opens it', async () => {
+    renderProfile(`/business/${ID}`)
+    expect(await screen.findAllByText('MedPlus Pharmacy')).not.toHaveLength(0)
+  })
+})
