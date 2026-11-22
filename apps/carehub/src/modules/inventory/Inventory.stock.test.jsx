@@ -286,3 +286,34 @@ describe('Inventory — stock is never written back from the stale page list', (
     })
   })
 })
+
+// CODE_AUDIT A25: staff who cannot see costs get products without cost_price, so their edits must not send one (it
+// would save their blank cost over the real one).
+describe('Inventory: saving keeps a cost the editor cannot see', () => {
+  const renderAs = async (role, perms, products) => {
+    await act(async () => { root.render(<MemoryRouter><Inventory brand={{ id: 'B1', plan: 'pro' }} products={products} setProducts={() => {}} catalog={catalog} role={role} perms={perms} /></MemoryRouter>) })
+    await flush()
+  }
+  const { cost_price: _hidden, ...AMOXIL_NO_COST } = AMOXIL   // as the catalogue now loads it for this person
+
+  it('a pharmacist allowed to change prices but not to see costs: the price is saved, no cost is sent', async () => {
+    await renderAs('Pharmacist', { canEditPrice: true, canEditStock: true, canViewCostPrice: false }, [AMOXIL_NO_COST])
+    await click(button('Edit'))
+    expect(byLabel('Cost Price')).toBeFalsy()
+    await type(byLabel('Selling Price'), '1600')
+    await click(button('Save Changes'))
+    await flush()
+    const update = calls.find(c => c[0] === 'update')
+    expect(update[3].price).toBe(1600)
+    expect('cost_price' in update[3]).toBe(false)
+  })
+
+  it('the Owner still saves the cost they edit', async () => {
+    await renderAs('Owner', { ...OWNER, canViewCostPrice: true }, [AMOXIL])   // the Owner's real permissions (ROLES.Owner)
+    await click(button('Edit'))
+    await type(byLabel('Cost Price'), '850')
+    await click(button('Save Changes'))
+    await flush()
+    expect(calls.find(c => c[0] === 'update')[3].cost_price).toBe(850)
+  })
+})

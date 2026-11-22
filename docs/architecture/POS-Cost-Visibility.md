@@ -75,3 +75,8 @@ The switch is now "See cost prices". Inventory shows cost price, margin, total p
 columns, product form, bulk edit) and Cost Price / Cost Value in its Excel export only to the Owner or staff with
 `canViewCostPrice`; a product saved by anyone else keeps its cost. This is still a screen rule: the data-level step
 (the API no longer returning cost to other staff) is planned separately.
+
+## Update 2026-11-22: data-level permission (CODE_AUDIT A25, step 2)
+
+The API no longer returns cost prices to staff without "See cost prices", nor to anyone outside the business: see
+[Cost-Price-Access.md](Cost-Price-Access.md). The "Security implications" above describe the state before that change.

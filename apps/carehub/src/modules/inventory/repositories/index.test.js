@@ -1,5 +1,5 @@
 import { createProductRepository as createProductRepositoryForBulk, translateDeleteError } from './index.js'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createProductRepository, productRepository } from './index.js'
 import { createInMemoryClient } from '../../../test/inMemoryClient.js'
 
@@ -50,8 +50,11 @@ describe('productRepository', () => {
       return []
     })
     await repo.getAll(A)
-    expect(calls).toHaveLength(1)
-    expect(calls[0]).toContain('limit=1000&offset=0')
+    // One page of products, plus the cost prices read beside it (A25).
+    expect(calls).toHaveLength(2)
+    expect(calls.filter((c) => c.startsWith('products'))).toHaveLength(1)
+    expect(calls.find((c) => c.startsWith('products'))).toContain('limit=1000&offset=0')
+    expect(calls).toContain('rpc/product_costs')
   })
 
   it('getAll requests a stable order so offset pages cannot shift rows', async () => {
@@ -300,3 +303,72 @@ describe('productRepository: bulk edit, delete and restore', () => {
     expect(translateDeleteError(net)).toBe(net)
   })
 })
+
+// CODE_AUDIT A25: products.cost_price is not readable by the API roles; costs come only from product_costs().
+describe('productRepository: cost prices', () => {
+  const ROWS = [{ id: 'p1', name: 'Amoxil' }, { id: 'p2', name: 'Vitamin C' }]
+  function transport({ costs = {}, costsFail = false } = {}) {
+    const calls = []
+    const request = vi.fn(async (path, opts = {}) => {
+      calls.push({ path, ...opts, body: opts.body ? JSON.parse(opts.body) : undefined })
+      if (path === 'rpc/product_costs') { if (costsFail) throw new Error('boom'); return costs }
+      if (opts.method === 'POST' || opts.method === 'PATCH') {
+        const body = JSON.parse(opts.body)
+        return (Array.isArray(body) ? body : [body]).map(({ cost_price: _c, ...b }, i) => ({ id: 'new' + i, ...b }))  // the database cannot read cost back
+      }
+      return path.includes('offset=0') || !path.includes('offset') ? ROWS : []
+    })
+    return { request, calls }
+  }
+
+  it('never asks for cost_price or * on products', async () => {
+    const { request, calls } = transport()
+    const repo = createProductRepository(request)
+    await repo.getAll(A)
+    await repo.getById('p1', A)
+    await repo.create(A, { name: 'X', cost_price: 5 })
+    await repo.createMany(A, [{ name: 'Y' }])
+    await repo.update('p1', A, { price: 3 })
+    await repo.updateMany(A, ['p1'], { price: 3 })
+    for (const c of calls.filter((c) => c.path.startsWith('products'))) {
+      expect(c.path).toMatch(/select=id,business_id,name,/)
+      expect(c.path).not.toMatch(/select=\*|cost_price/)
+    }
+  })
+
+  it('merges costs for people allowed to see them', async () => {
+    const { request, calls } = transport({ costs: { p1: 800 } })
+    const rows = await createProductRepository(request).getAll(A)
+    expect(rows).toEqual([{ id: 'p1', name: 'Amoxil', cost_price: 800 }, { id: 'p2', name: 'Vitamin C' }])
+    expect(calls.find((c) => c.path === 'rpc/product_costs').body).toEqual({ p_business_id: A, p_product_ids: null })
+  })
+
+  it('for everyone else the rows have no cost_price key at all', async () => {
+    const rows = await createProductRepository(transport({ costs: {} }).request).getAll(A)
+    expect(rows.every((r) => !('cost_price' in r))).toBe(true)
+  })
+
+  it('products still load when the cost read fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const rows = await createProductRepository(transport({ costsFail: true }).request).getAll(A)
+    expect(rows.map((r) => r.id)).toEqual(['p1', 'p2'])
+    console.error.mockRestore()
+  })
+
+  it('getById asks for that product\'s cost only', async () => {
+    const { request, calls } = transport({ costs: { p1: 800 } })
+    expect((await createProductRepository(request).getById('p1', A)).cost_price).toBe(800)
+    expect(calls.find((c) => c.path === 'rpc/product_costs').body.p_product_ids).toEqual(['p1'])
+  })
+
+  it('a save that sent a cost keeps it on the returned row; one that did not leaves the key out', async () => {
+    const repo = createProductRepository(transport().request)
+    expect((await repo.create(A, { name: 'X', cost_price: 5 }))[0].cost_price).toBe(5)
+    expect(await repo.update('p1', A, { cost_price: 7 })).toMatchObject({ cost_price: 7 })
+    expect('cost_price' in (await repo.update('p1', A, { price: 3 }))).toBe(false)
+    const many = await repo.createMany(A, [{ name: 'A', cost_price: 1 }, { name: 'B' }])
+    expect(many[0].cost_price).toBe(1)
+    expect('cost_price' in many[1]).toBe(false)
+  })
+})
+

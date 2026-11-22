@@ -183,4 +183,21 @@ describe('useProductCatalog', () => {
     expect(cacheData).toHaveBeenCalledTimes(1)
     expect(store.get('products_biz-A')).toHaveLength(3)
   })
+
+  // CODE_AUDIT A25: the saved copy is per business, not per person, so cost prices never go into browser storage.
+  it('the offline copy never holds cost prices; the list on screen keeps them for the person allowed', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    await mount('biz-A', async () => [{ id: '1', name: 'Amoxil', stock: 4, cost_price: 800 }])
+    await act(async () => { vi.advanceTimersByTime(10) })
+    expect(latest.products[0].cost_price).toBe(800)
+    await act(async () => { vi.advanceTimersByTime(2000) })
+    expect(store.get('products_biz-A')).toEqual([{ id: '1', name: 'Amoxil', stock: 4 }])
+  })
+
+  it('a copy saved with costs before this change is shown without them', async () => {
+    store.set('products_biz-A', [{ id: '1', name: 'Amoxil', stock: 4, cost_price: 800 }])
+    await mount('biz-A', () => new Promise(() => {}))
+    expect(latest.products).toEqual([{ id: '1', name: 'Amoxil', stock: 4 }])
+  })
 })
+

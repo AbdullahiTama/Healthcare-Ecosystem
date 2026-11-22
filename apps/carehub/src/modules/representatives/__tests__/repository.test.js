@@ -75,4 +75,19 @@ describe('representatives repository', () => {
     expect(calls.map((c) => c.body)).toEqual([{ p_representative_id: 'r1', p_territory_id: 't1' }, { p_representative_id: 'r1', p_territory_id: null }])
     expect(calls[0].path).toBe('rpc/set_representative_territory')
   })
+
+  // CODE_AUDIT A25: the cost (default unit value) comes from product_costs, only for people allowed to see it.
+  it('product search never asks for cost_price; the cost is added only where product_costs gives it', async () => {
+    const { calls, repo } = recorder((path) => (path === 'rpc/product_costs' ? { p1: 700 } : [{ id: 'p1', name: 'Amoxil' }, { id: 'p2', name: 'Zinc' }]))
+    const rows = await repo.searchProducts('co', 'am')
+    expect(calls[0].path).not.toMatch(/cost_price|select=\*/)
+    expect(calls[1]).toEqual({ path: 'rpc/product_costs', method: 'POST', body: { p_business_id: 'co', p_product_ids: ['p1', 'p2'] } })
+    expect(rows).toEqual([{ id: 'p1', name: 'Amoxil', cost_price: 700 }, { id: 'p2', name: 'Zinc' }])
+  })
+
+  it('without permission the rows carry no cost, so the unit value starts empty', async () => {
+    const { repo } = recorder((path) => (path === 'rpc/product_costs' ? {} : [{ id: 'p1', name: 'Amoxil' }]))
+    expect(await repo.searchProducts('co', '')).toEqual([{ id: 'p1', name: 'Amoxil' }])
+  })
 })
+

@@ -1,6 +1,7 @@
 import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
 import { translateBulkDeleteError, groupDeletions } from '../../../lib/bulkDelete'
+import { PRODUCT_COLUMNS, fetchProductCosts, withCosts, withSentCost } from '../productColumns'
 
 // ── Product repository ────────────────────────────────────────────────────────
 // A deep module over the `products` / `stock_batches` tables. Its interface is
@@ -63,8 +64,14 @@ export function createProductRepository(request = sbFetch) {
     // the last short page. `id.asc` pins the order so pages cannot shift rows.
     // The UI paginates the returned array for rendering. `onProgress(count)`
     // reports rows loaded so far, page by page.
+    // Costs are merged in from product_costs() for people allowed to see them (productColumns.js); the two reads run
+    // side by side.
     async getAll(businessId, { onProgress } = {}) {
-      return pagedQuery(request, `products?business_id=eq.${businessId}&order=name.asc,id.asc&select=*`, { onPage: onProgress })
+      const [rows, costs] = await Promise.all([
+        pagedQuery(request, `products?business_id=eq.${businessId}&order=name.asc,id.asc&select=${PRODUCT_COLUMNS}`, { onPage: onProgress }),
+        fetchProductCosts(request, businessId),
+      ])
+      return withCosts(rows, costs)
     },
 
     // Counts for a summary card (e.g. one per branch on Locations) without the
@@ -77,8 +84,9 @@ export function createProductRepository(request = sbFetch) {
     },
 
     async getById(productId, businessId) {
-      const results = await request(`products?id=eq.${productId}&business_id=eq.${businessId}&select=*`)
-      return results[0] || null
+      const results = await request(`products?id=eq.${productId}&business_id=eq.${businessId}&select=${PRODUCT_COLUMNS}`)
+      const row = results[0] || null
+      return row ? withCosts([row], await fetchProductCosts(request, businessId, [row.id]))[0] : null
     },
 
     // Type-ahead lookup for consultation forms: matches the brand name OR the
@@ -97,33 +105,41 @@ export function createProductRepository(request = sbFetch) {
       )
     },
 
+    // Writes read back named columns (the whole row would include cost_price, which cannot be read); a cost that was
+    // sent is put back on the returned row.
     async create(businessId, product) {
-      return request('products', {
+      const body = { ...product, business_id: businessId }
+      const rows = await request(`products?select=${PRODUCT_COLUMNS}`, {
         method: 'POST',
-        body: JSON.stringify({ ...product, business_id: businessId }),
+        body: JSON.stringify(body),
+        prefer: 'return=representation',
       })
+      return Array.isArray(rows) ? withSentCost(rows, body) : rows
     },
 
     // Bulk upload: many products in one request, every row stamped with this business. Returns the saved rows in
     // the order sent. One bad row (or going over the plan's product limit) refuses the whole request; the caller
     // (lib/spreadsheetImport.js saveInBatches) then saves that batch row by row to find it.
     async createMany(businessId, list) {
-      return request('products', {
+      const body = (list || []).map(p => ({ ...p, business_id: businessId }))
+      const rows = await request(`products?select=${PRODUCT_COLUMNS}`, {
         method: 'POST',
-        body: JSON.stringify((list || []).map(p => ({ ...p, business_id: businessId }))),
+        body: JSON.stringify(body),
+        prefer: 'return=representation',
       })
+      return Array.isArray(rows) ? withSentCost(rows, body) : rows
     },
 
     // Returns the saved row (or null when nothing matched — wrong tenant or a
     // deleted product) so callers can update their local list from what the
     // database actually stored instead of re-downloading the catalog.
     async update(productId, businessId, updates) {
-      const rows = await request(`products?id=eq.${productId}&business_id=eq.${businessId}`, {
+      const rows = await request(`products?id=eq.${productId}&business_id=eq.${businessId}&select=${PRODUCT_COLUMNS}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
         prefer: 'return=representation',
       })
-      return Array.isArray(rows) ? rows[0] || null : rows || null
+      return Array.isArray(rows) ? withSentCost(rows, updates)[0] || null : rows || null
     },
 
     // The same changes for many products in one request per 100 (bulk edit). Tenant-scoped like update(); returns
@@ -133,12 +149,12 @@ export function createProductRepository(request = sbFetch) {
       const rows = []
       for (let i = 0; i < ids.length; i += 100) {
         const chunk = ids.slice(i, i + 100)
-        const saved = await request(`products?business_id=eq.${businessId}&id=in.(${chunk.join(',')})`, {
+        const saved = await request(`products?business_id=eq.${businessId}&id=in.(${chunk.join(',')})&select=${PRODUCT_COLUMNS}`, {
           method: 'PATCH',
           body: JSON.stringify(updates),
           prefer: 'return=representation',
         })
-        rows.push(...(Array.isArray(saved) ? saved : []))
+        rows.push(...(Array.isArray(saved) ? withSentCost(saved, updates) : []))
       }
       return rows
     },

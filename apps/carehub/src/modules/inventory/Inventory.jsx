@@ -189,6 +189,9 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         reorder_level: parseInt(data.reorder_level) || 5,
         shelf_label: data.shelf_label || null,
       }
+      // Someone who cannot see costs never sends one: they never had it to send back, so an edit would otherwise
+      // save their blank cost over the real one (CODE_AUDIT A25). A new product starts with no cost.
+      if (!canSeeCost) delete productData.cost_price
       // Stock is only written when the caller sent it: ProductModal omits it on
       // an edit that did not change it (see ProductModal.save).
       if (category === 'Services') productData.stock = 999
@@ -248,7 +251,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         barcode: incoming.barcode || existing.barcode,
         list_on_carefind: incoming.list_on_carefind,
       }
-      if (perms?.canEditPrice) { updates.price = incoming.price; updates.cost_price = incoming.cost_price }
+      if (perms?.canEditPrice) { updates.price = incoming.price; if (canSeeCost) updates.cost_price = incoming.cost_price }
       const saved = await productRepository.update(existing.id, brand.id, updates)
       if (!saved) throw new Error('product not found')
       const added = incoming.category === 'Services' ? 0 : (parseInt(incoming.stock) || 0)

@@ -1,6 +1,7 @@
 import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
 import { SEGMENT_RATES, resolveEcommerceSegment } from '../../../lib/ecommerceSegments'
+import { PRODUCT_COLUMNS } from '../../inventory/productColumns'
 
 // ── E-commerce repository (Shop Foundation + Terms Auto-Approval) ─────────────
 // Seam over ecommerce_applications / ecommerce_products / ecommerce_product_images / ecommerce_terms.
@@ -155,7 +156,7 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
     let list = products
     if (!Array.isArray(list)) {
       try {
-        list = await pagedQuery(request, `products?business_id=eq.${businessId}&order=name.asc,id.asc&select=*`)
+        list = await pagedQuery(request, `products?business_id=eq.${businessId}&order=name.asc,id.asc&select=${PRODUCT_COLUMNS}`)
       } catch (e) {
         if (isMissingTable(e, 'products')) return []
         throw e

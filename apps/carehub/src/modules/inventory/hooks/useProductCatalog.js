@@ -4,6 +4,7 @@ import { productRepository } from '../repositories'
 import { cacheData, getCached } from '../../../services/supabase'
 import { keys } from '../../../hooks/queries'
 import { loadProductCatalog, catalogCacheKey } from '../productCatalog'
+import { withoutCosts } from '../productColumns'
 
 // The product catalog for the signed-in business, shared by every dashboard
 // page through BusinessDashboard. Built on React Query like the app's other
@@ -39,9 +40,11 @@ function readCache(key) {
   try { return getCached(key) } catch { return null }
 }
 
+// The saved copy is per business, not per person, so it never holds cost prices (CODE_AUDIT A25); copies saved before
+// that rule are cleaned as they are read. Costs return with the server load, for people allowed to see them.
 function savedCopy(businessId) {
   const cached = businessId ? readCache(catalogCacheKey(businessId)) : null
-  return Array.isArray(cached) && cached.length > 0 ? cached : null
+  return Array.isArray(cached) && cached.length > 0 ? withoutCosts(cached) : null
 }
 
 export function useProductCatalog(businessId, { fetchAll = productRepository.getAll } = {}) {
@@ -98,7 +101,7 @@ export function useProductCatalog(businessId, { fetchAll = productRepository.get
     if (savedRef.current === null && data.source === 'cache') { savedRef.current = data.products; return undefined }
     if (data.products === savedRef.current) return undefined
     const t = setTimeout(() => {
-      cacheData(catalogCacheKey(businessId), data.products)
+      cacheData(catalogCacheKey(businessId), withoutCosts(data.products))
       savedRef.current = data.products
     }, CACHE_WRITE_DELAY_MS)
     return () => clearTimeout(t)

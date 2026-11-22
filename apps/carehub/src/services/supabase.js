@@ -304,7 +304,6 @@ export async function getAllLocations(mainBusinessId) {
 // silent catch made the picker look empty. Replaced by
 // productRepository.search (modules/inventory/repositories), which matches
 // name OR generic_name and selects only real columns.
-export async function addProduct(data) { return sbFetch('products', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updateProduct(id, data) { return sbFetch('products?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function deleteProduct(id) { return sbFetch('products?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
 export async function deleteProductsBulk(ids) {

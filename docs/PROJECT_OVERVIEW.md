@@ -150,6 +150,7 @@ and database migrations on PGlite. On 2026-11-02 CareHub had 304 test files and 
 | Receivables / payables, debt import and export, supplier summary, customer credit accounts, POS stock limits | [architecture/Debt-Accounts-and-POS-Stock-Limits.md](architecture/Debt-Accounts-and-POS-Stock-Limits.md) |
 | Business directory and discovery | [architecture/CareHub-Business-Directory-and-Discovery.md](architecture/CareHub-Business-Directory-and-Discovery.md) |
 | Maps: Google Maps display with OpenStreetMap fallback, the browser key and its restrictions | [architecture/Maps.md](architecture/Maps.md) |
+| Cost price as a data-level permission: who may read products.cost_price, product_costs() | [architecture/Cost-Price-Access.md](architecture/Cost-Price-Access.md) |
 | CareFind SEO and AI search visibility: crawler pages, structured data, slug URLs, sitemaps, IndexNow | [architecture/SEO-and-AI-Search-Visibility.md](architecture/SEO-and-AI-Search-Visibility.md) |
 | Production readiness, performance | [architecture/Production-Readiness.md](architecture/Production-Readiness.md), [architecture/Performance-and-Resilience.md](architecture/Performance-and-Resilience.md) |
 | Linting | [architecture/Linting.md](architecture/Linting.md) |

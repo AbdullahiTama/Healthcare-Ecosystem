@@ -1,5 +1,6 @@
 import { sbFetch } from '../../../services/supabase'
 import { isMissingObject } from '../../../lib/dbErrors'
+import { fetchProductCosts, withCosts } from '../../inventory/productColumns'
 
 // ── Representatives and operating models (carehub_20270102_importer_operating_models) ─────────────────────────────
 // Every write is a database function that checks who is asking and does the whole job in one transaction (ledger
@@ -67,9 +68,12 @@ export function createRepresentativesRepository(request = sbFetch) {
     // Company products for the entry forms (the company's own catalogue, with its price and cost as defaults).
     async searchProducts(companyId, search = '') {
       const q = String(search).trim().replace(/[*,()]/g, ' ').trim()
-      return request(`products?business_id=eq.${companyId}`
+      // Cost (the default unit value) only for people allowed to see the company's costs (product_costs, A25).
+      const rows = await request(`products?business_id=eq.${companyId}`
         + (q ? `&name=ilike.*${encodeURIComponent(q)}*` : '')
-        + '&order=name.asc,id.asc&limit=30&select=id,name,price,cost_price,stock,master_product_id')
+        + '&order=name.asc,id.asc&limit=30&select=id,name,price,stock,master_product_id')
+      if (!Array.isArray(rows) || rows.length === 0) return rows
+      return withCosts(rows, await fetchProductCosts(request, companyId, rows.map((r) => r.id)))
     },
 
     async custody(repId) {
