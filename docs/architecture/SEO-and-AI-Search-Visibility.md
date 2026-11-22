@@ -1,6 +1,6 @@
 # CareFind: SEO and AI search visibility
 
-2026-11-22. Code audit A46. Owner decisions: canonical domain **carefind.ng**; **crawler pages now** (dynamic rendering);
+2026-11-22. Code audit A46. Owner decisions: canonical domain **carefind.app**; **crawler pages now** (dynamic rendering);
 **verified professionals only** get public profile pages.
 
 ## Root causes (before)
@@ -17,7 +17,7 @@
 
 ```
                        ┌─ user-agent matches a search / AI crawler ─► /api/router ─► seo handler ─► full HTML page
-request to carefind.ng ┤                                                                (title, meta, canonical, JSON-LD,
+request to carefind.app ┤                                                                (title, meta, canonical, JSON-LD,
                        │                                                                 content, internal links)
                        ├─ /sitemap.xml, /sitemaps/<kind>.xml ─────────► /api/router ─► sitemap handler
                        └─ everyone else ──────────────────────────────► index.html (the SPA, unchanged)
@@ -34,7 +34,7 @@ robots cannot drift apart. Link-preview bots (WhatsApp, Facebook, X…) keep the
 
 | Area | File |
 |---|---|
-| Site URL (`SITE_URL` → `VITE_SITE_URL` → `https://carefind.ng`) | `src/lib/seo/site.js` |
+| Site URL (`SITE_URL` → `VITE_SITE_URL` → `https://carefind.app`) | `src/lib/seo/site.js` |
 | SEO-friendly URLs: `/business/<name-city-state>-<uuid>`, `/u/<name-specialty>-<uuid>`, `/news/<headline>-<uuid>`, `/post/<title>-<uuid>`, `/drug/<name>` | `src/lib/seo/slugs.js` (`idFromParam` reads the UUID at the end, so old bare-UUID links keep working) |
 | Page models (title, description, canonical, robots, JSON-LD, content, links) | `src/lib/seo/pages.js` |
 | HTML renderer for crawlers | `src/lib/seo/render.js` |
@@ -98,10 +98,10 @@ directory and recent articles (internal linking).
 
 ## Owner steps (outside the code)
 
-1. Google Search Console and Bing Webmaster Tools: verify **carefind.ng** (DNS TXT record) and submit
-   `https://carefind.ng/sitemap.xml`.
-2. If the production host is not `carefind.ng`, set `SITE_URL` (server) and `VITE_SITE_URL` (app build) in Vercel.
-3. Make `carefind.ng` the primary domain in Vercel, so other hosts (`*.vercel.app`, `www`) redirect to it.
+1. Google Search Console and Bing Webmaster Tools: verify **carefind.app** (DNS TXT record) and submit
+   `https://carefind.app/sitemap.xml`.
+2. If the production host is not `carefind.app`, set `SITE_URL` (server) and `VITE_SITE_URL` (app build) in Vercel.
+3. Make `carefind.app` the primary domain in Vercel, so other hosts (`*.vercel.app`, `www`) redirect to it.
 
 ## Tests
 
@@ -117,11 +117,11 @@ directory and recent articles (internal linking).
 Manual check after deploy:
 
 ```bash
-curl -sA "Googlebot/2.1" https://carefind.ng/ | head -40
+curl -sA "Googlebot/2.1" https://carefind.app/ | head -40
 ```
 
 ```bash
-curl -s https://carefind.ng/sitemap.xml
+curl -s https://carefind.app/sitemap.xml
 ```
 
 Also use Search Console "URL inspection" on one pharmacy page.

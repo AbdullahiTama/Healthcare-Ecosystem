@@ -6,7 +6,7 @@ import { businessPage, medicinePage, professionalPage, newsPage, articlePostPage
 import { renderPage, esc } from './render.js'
 import { sitemapIndexXml, urlsetXml } from './sitemap.js'
 
-const SITE = 'https://carefind.ng'
+const SITE = 'https://carefind.app'
 const BIZ = { id: '0b6f2c4e-1111-4222-8333-944455556666', name: 'MedPlus Pharmacy', business_type: 'pharmacy', status: 'active', visible_on_carefind: true,
   address: '12 Allen Avenue', city: 'Ikeja', state: 'Lagos', phone: '0803 000 0000', hours: 'Mon-Sun 8am-10pm', website: 'https://medplus.ng', lat: 6.6, lng: 3.35, show_prices: true }
 const ld = (page, type) => page.jsonLd.find((x) => x['@type'] === type)
@@ -31,9 +31,9 @@ describe('crawlers and site', () => {
     for (const ua of ['Mozilla/5.0 (iPhone) Safari', 'WhatsApp/2.23', 'facebookexternalhit/1.1', '', null]) expect(isSearchOrAiCrawler(ua), String(ua)).toBe(false)
     expect(new RegExp(CRAWLER_UA_REGEX_SOURCE).test('Mozilla/5.0 (compatible; Googlebot/2.1)')).toBe(true)
   })
-  it('the canonical site defaults to carefind.ng; a bad setting falls back to it', () => {
+  it('the canonical site defaults to carefind.app; a bad setting falls back to it', () => {
     expect(serverSiteUrl({})).toBe(SITE)
-    expect(serverSiteUrl({ SITE_URL: 'https://carefind.ng/' })).toBe(SITE)
+    expect(serverSiteUrl({ SITE_URL: 'https://carefind.app/' })).toBe(SITE)
     expect(normaliseSiteUrl('javascript:alert(1)')).toBe(SITE)
   })
 })
@@ -144,14 +144,14 @@ describe('hubs, rendering and sitemaps', () => {
     expect(html).not.toContain('<script>alert(1)')
     expect(html).not.toContain('</script><img')
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
-    expect(html).toContain('<link rel="canonical" href="https://carefind.ng/business/')
+    expect(html).toContain('<link rel="canonical" href="https://carefind.app/business/')
     expect(html).toContain('<meta name="robots" content="index, follow')
     expect(esc('"&\'')).toBe('&quot;&amp;&#39;')
   })
   it('sitemaps: an index, and url sets with absolute, de-duplicated, escaped URLs', () => {
-    expect(sitemapIndexXml(SITE, [{ path: '/sitemaps/businesses.xml', lastmod: '2026-11-20T10:00:00Z' }])).toContain('<sitemap><loc>https://carefind.ng/sitemaps/businesses.xml</loc><lastmod>2026-11-20</lastmod></sitemap>')
+    expect(sitemapIndexXml(SITE, [{ path: '/sitemaps/businesses.xml', lastmod: '2026-11-20T10:00:00Z' }])).toContain('<sitemap><loc>https://carefind.app/sitemaps/businesses.xml</loc><lastmod>2026-11-20</lastmod></sitemap>')
     const xml = urlsetXml(SITE, [{ path: '/drug/a%26b' }, { path: '/drug/a%26b' }, { path: '/x?y=1&z=2' }])
     expect(xml.match(/<url>/g)).toHaveLength(2)
-    expect(xml).toContain('https://carefind.ng/x?y=1&amp;z=2')
+    expect(xml).toContain('https://carefind.app/x?y=1&amp;z=2')
   })
 })

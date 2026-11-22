@@ -138,7 +138,7 @@ export function buildInvoiceHtml(order) {
 
   <div class="footer">
     <p>Thank you for shopping with CareFind.</p>
-    <p>For support, contact support@carefind.ng</p>
+    <p>For support, contact support@carefind.app</p>
     <p>This is a computer-generated invoice. No signature required.</p>
   </div>
 </body>

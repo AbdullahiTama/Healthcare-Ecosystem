@@ -112,7 +112,7 @@ export default function AdminLogin() {
               <input
                 type="email" value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@carefind.ng" disabled={loading}
+                placeholder="admin@carefind.app" disabled={loading}
                 style={{
                   width: '100%', padding: '12px 14px', fontSize: theme.type.body.size,
                   border: `1px solid ${theme.border}`, borderRadius: theme.radius.md,

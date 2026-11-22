@@ -3,7 +3,7 @@
 // Every href here resolves to something that actually exists. The verified
 // route inventory for this app is exactly: /, /login, /register,
 // /forgot-password, /apply-agent, /dashboard, /admin, /receipt/:id — plus the
-// external carefind.ng, mailto:support@carehub.ng, and this page's own
+// external carefind.app, mailto:support@carehub.ng, and this page's own
 // section anchors.
 //
 // Nothing is invented. There is no /privacy, /terms, /blog, /docs or /careers
@@ -53,7 +53,7 @@ export const FOOTER_GROUPS = [
   {
     title: 'Company',
     links: [
-      { label: 'CareFind', href: 'https://carefind.ng', external: true },
+      { label: 'CareFind', href: 'https://carefind.app', external: true },
       { label: 'Agent programme', href: '/apply-agent' },
     ],
   },
@@ -80,4 +80,4 @@ export const FOOTER_GROUPS = [
 ]
 
 export const SUPPORT_EMAIL = 'support@carehub.ng'
-export const CAREFIND_URL = 'https://carefind.ng'
+export const CAREFIND_URL = 'https://carefind.app'

@@ -65,7 +65,7 @@ function call(path, ua = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.go
     res.status = (c) => { res.statusCode = c; return res }
     res.send = (b) => { res.body = b; resolve(res) }
     res.json = (b) => { res.body = b; resolve(res) }
-    router({ url: path, method: 'GET', headers: { 'user-agent': ua, host: 'carefind.ng' } }, res)
+    router({ url: path, method: 'GET', headers: { 'user-agent': ua, host: 'carefind.app' } }, res)
   })
 }
 const jsonLd = (html) => [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1]))
@@ -81,12 +81,12 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 
 describe('pages for search engines and AI crawlers', () => {
-  it('a pharmacy: its own title, canonical (carefind.ng, readable URL), products and Pharmacy structured data', async () => {
+  it('a pharmacy: its own title, canonical (carefind.app, readable URL), products and Pharmacy structured data', async () => {
     const res = await call('/business/' + BIZ_ID)
     expect(res.statusCode).toBe(200)
     expect(res.headers['content-type']).toMatch(/text\/html/)
     expect(res.body).toContain('<title>MedPlus Pharmacy: Pharmacy in Ikeja, Lagos | CareFind</title>')
-    expect(res.body).toContain(`<link rel="canonical" href="https://carefind.ng/business/medplus-pharmacy-ikeja-lagos-${BIZ_ID}" />`)
+    expect(res.body).toContain(`<link rel="canonical" href="https://carefind.app/business/medplus-pharmacy-ikeja-lagos-${BIZ_ID}" />`)
     expect(res.body).toContain('href="/drug/paracetamol%20500mg"')
     const org = jsonLd(res.body).find((x) => x['@type'] === 'Pharmacy')
     expect(org).toMatchObject({ name: 'MedPlus Pharmacy', aggregateRating: { ratingValue: 5 } })
@@ -143,8 +143,8 @@ describe('pages for search engines and AI crawlers', () => {
   })
 
   it('SITE_URL changes the canonical host', async () => {
-    vi.stubEnv('SITE_URL', 'https://www.carefind.ng')
-    expect((await call('/business/' + BIZ_ID)).body).toContain('href="https://www.carefind.ng/business/')
+    vi.stubEnv('SITE_URL', 'https://www.carefind.app')
+    expect((await call('/business/' + BIZ_ID)).body).toContain('href="https://www.carefind.app/business/')
   })
 })
 
@@ -174,23 +174,23 @@ describe('routing', () => {
     expect(idx((r) => r.source === '/sitemaps/(.*)')).toBeLessThan(spa)
     expect(existsSync(root + 'public/sitemap.xml')).toBe(false)
     const robots = readFileSync(root + 'public/robots.txt', 'utf8')
-    expect(robots).toContain('Sitemap: https://carefind.ng/sitemap.xml')
+    expect(robots).toContain('Sitemap: https://carefind.app/sitemap.xml')
     expect(robots).toContain('User-agent: GPTBot')
     expect(robots).toContain('Disallow: /track/')
   })
 })
 
 describe('sitemaps', () => {
-  it('the index lists one sitemap per kind on carefind.ng', async () => {
+  it('the index lists one sitemap per kind on carefind.app', async () => {
     const res = await call('/sitemap.xml', 'Mozilla/5.0')
     expect(res.headers['content-type']).toMatch(/xml/)
-    for (const k of ['pages', 'businesses', 'medicines', 'professionals', 'articles']) expect(res.body).toContain(`<loc>https://carefind.ng/sitemaps/${k}.xml</loc>`)
+    for (const k of ['pages', 'businesses', 'medicines', 'professionals', 'articles']) expect(res.body).toContain(`<loc>https://carefind.app/sitemaps/${k}.xml</loc>`)
   })
   it('each kind lists its public pages with lastmod, by the same rules as the pages', async () => {
-    expect((await call('/sitemaps/businesses.xml')).body).toContain(`<loc>https://carefind.ng/business/medplus-pharmacy-ikeja-lagos-${BIZ_ID}</loc><lastmod>2026-10-01</lastmod>`)
+    expect((await call('/sitemaps/businesses.xml')).body).toContain(`<loc>https://carefind.app/business/medplus-pharmacy-ikeja-lagos-${BIZ_ID}</loc><lastmod>2026-10-01</lastmod>`)
     const meds = (await call('/sitemaps/medicines.xml')).body
-    expect(meds).toContain('<loc>https://carefind.ng/drug/paracetamol%20500mg</loc>')
-    expect(meds).toContain('<loc>https://carefind.ng/drug/paracetamol</loc>')     // the generic name too
+    expect(meds).toContain('<loc>https://carefind.app/drug/paracetamol%20500mg</loc>')
+    expect(meds).toContain('<loc>https://carefind.app/drug/paracetamol</loc>')     // the generic name too
     const pros = (await call('/sitemaps/professionals.xml')).body
     expect(pros).toContain(`/u/ada-obi-pharmacist-${PRO_ID}`)
     expect(pros).not.toContain(MEMBER_ID)

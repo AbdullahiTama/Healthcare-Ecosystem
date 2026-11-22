@@ -92,28 +92,28 @@ describe('changedPaths', () => {
 describe('submitUrls', () => {
   it('posts host, key, key location and URLs to IndexNow', async () => {
     const fetchImpl = vi.fn(async () => new Response('', { status: 202 }))
-    const sent = await submitUrls(['https://carefind.ng/drug/amoxicillin'], { siteUrl: 'https://carefind.ng', fetchImpl })
+    const sent = await submitUrls(['https://carefind.app/drug/amoxicillin'], { siteUrl: 'https://carefind.app', fetchImpl })
     expect(sent).toBe(1)
     const [url, init] = fetchImpl.mock.calls[0]
     expect(url).toBe(INDEXNOW_ENDPOINT)
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body)).toEqual({
-      host: 'carefind.ng', key: INDEXNOW_KEY, keyLocation: `https://carefind.ng/${INDEXNOW_KEY}.txt`,
-      urlList: ['https://carefind.ng/drug/amoxicillin'],
+      host: 'carefind.app', key: INDEXNOW_KEY, keyLocation: `https://carefind.app/${INDEXNOW_KEY}.txt`,
+      urlList: ['https://carefind.app/drug/amoxicillin'],
     })
   })
 
   it('sends in batches of 10,000', async () => {
     const fetchImpl = vi.fn(async () => new Response('', { status: 200 }))
-    const urls = Array.from({ length: 10001 }, (_, i) => `https://carefind.ng/drug/m${i}`)
-    expect(await submitUrls(urls, { siteUrl: 'https://carefind.ng', fetchImpl })).toBe(10001)
+    const urls = Array.from({ length: 10001 }, (_, i) => `https://carefind.app/drug/m${i}`)
+    expect(await submitUrls(urls, { siteUrl: 'https://carefind.app', fetchImpl })).toBe(10001)
     expect(fetchImpl).toHaveBeenCalledTimes(2)
-    expect(JSON.parse(fetchImpl.mock.calls[1][1].body).urlList).toEqual(['https://carefind.ng/drug/m10000'])
+    expect(JSON.parse(fetchImpl.mock.calls[1][1].body).urlList).toEqual(['https://carefind.app/drug/m10000'])
   })
 
   it('a refusal is reported as an error (the next day resends)', async () => {
     const fetchImpl = vi.fn(async () => new Response('', { status: 403 }))
-    await expect(submitUrls(['https://carefind.ng/'], { siteUrl: 'https://carefind.ng', fetchImpl })).rejects.toThrow('HTTP 403')
+    await expect(submitUrls(['https://carefind.app/'], { siteUrl: 'https://carefind.app', fetchImpl })).rejects.toThrow('HTTP 403')
   })
 })
 
@@ -132,10 +132,10 @@ describe('submitChangedPages', () => {
     })
     tables.carefind_products.push({ ...tables.carefind_products[0] }) // same medicine changed at two sellers
     const now = Date.parse('2026-11-22T03:00:00Z')
-    const out = await submitChangedPages({ env: { VERCEL_ENV: 'production', SITE_URL: 'https://carefind.ng' }, now })
+    const out = await submitChangedPages({ env: { VERCEL_ENV: 'production', SITE_URL: 'https://carefind.app' }, now })
     expect(requests.find((r) => r.table === 'businesses').params.updated_at).toBe('gte.2026-11-21T01:00:00.000Z')
     const urls = calls[0].urlList
-    expect(urls.every((u) => u.startsWith('https://carefind.ng/'))).toBe(true)
+    expect(urls.every((u) => u.startsWith('https://carefind.app/'))).toBe(true)
     expect(new Set(urls).size).toBe(urls.length)
     expect(out.sent).toBe(urls.length)
   })

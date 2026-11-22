@@ -46,7 +46,7 @@ describe('AdminLogin', () => {
 
   it('verifies the Supabase session and uses the database-backed admin response', async () => {
     renderLogin()
-    fireEvent.change(screen.getByPlaceholderText('admin@carefind.ng'), {
+    fireEvent.change(screen.getByPlaceholderText('admin@carefind.app'), {
       target: { value: 'Admin@Example.com' },
     })
     fireEvent.change(screen.getByPlaceholderText('Enter your password'), {
@@ -69,7 +69,7 @@ describe('AdminLogin', () => {
     callAdminAuth.mockRejectedValue(new Error('Active admin access required'))
 
     renderLogin()
-    fireEvent.change(screen.getByPlaceholderText('admin@carefind.ng'), {
+    fireEvent.change(screen.getByPlaceholderText('admin@carefind.app'), {
       target: { value: 'user@example.com' },
     })
     fireEvent.change(screen.getByPlaceholderText('Enter your password'), {
@@ -93,7 +93,7 @@ describe('AdminLogin', () => {
     localStorage.setItem('admin_permissions', JSON.stringify({ all: true }))
 
     renderLogin()
-    fireEvent.change(screen.getByPlaceholderText('admin@carefind.ng'), {
+    fireEvent.change(screen.getByPlaceholderText('admin@carefind.app'), {
       target: { value: 'admin@example.com' },
     })
     fireEvent.change(screen.getByPlaceholderText('Enter your password'), {

@@ -286,7 +286,7 @@ export default async function handler(req, res) {
         const init = await getPaystackProvider().initializePayment({
           // Anonymous booking - no user email. Paystack requires an email,
           // so we use a synthetic one keyed on the appointment id.
-          email: `booking+${appointment.id}@carefind.ng`,
+          email: `booking+${appointment.id}@carefind.app`,
           amountKobo: feeKobo,
           reference,
           callbackUrl: `${origin}/business/${businessId}?reference=${reference}`,

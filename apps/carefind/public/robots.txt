@@ -84,4 +84,4 @@ Disallow: /agents/
 Disallow: /agent-login
 Disallow: /playlist/create
 
-Sitemap: https://carefind.ng/sitemap.xml
+Sitemap: https://carefind.app/sitemap.xml

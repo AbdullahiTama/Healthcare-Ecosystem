@@ -152,7 +152,7 @@ export default async function handler(req, res) {
 
   try {
     const init = await provider.initializePayment({
-      email: user.email || `order+${order.id}@carefind.ng`,
+      email: user.email || `order+${order.id}@carefind.app`,
       amountKobo: intent.expected_amount,
       reference,
       callbackUrl: `${origin}/orders/${order.id}?reference=${reference}`,

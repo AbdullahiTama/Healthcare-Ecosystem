@@ -337,11 +337,11 @@ describe('BusinessProfile — title, canonical and readable URL', () => {
     document.head.querySelectorAll('link[rel="canonical"]').forEach((l) => l.remove())
   })
 
-  it('opens from "<name>-<id>" and sets its own title, description and canonical (carefind.ng, readable URL)', async () => {
+  it('opens from "<name>-<id>" and sets its own title, description and canonical (carefind.app, readable URL)', async () => {
     const view = renderProfile(`/business/medplus-pharmacy-ikeja-lagos-${ID}`)
     expect(await screen.findAllByText('MedPlus Pharmacy')).not.toHaveLength(0)
     await waitFor(() => expect(document.title).toBe('MedPlus Pharmacy: Pharmacy in Ikeja, Lagos | CareFind'))
-    expect(document.head.querySelector('link[rel="canonical"]').getAttribute('href')).toBe(`https://carefind.ng/business/medplus-pharmacy-ikeja-lagos-${ID}`)
+    expect(document.head.querySelector('link[rel="canonical"]').getAttribute('href')).toBe(`https://carefind.app/business/medplus-pharmacy-ikeja-lagos-${ID}`)
     expect(document.head.querySelector('meta[name="description"]').getAttribute('content')).toMatch(/pharmacy in Ikeja, Lagos/)
     expect(document.head.querySelector('meta[name="robots"]').getAttribute('content')).toMatch(/^index, follow/)
     view.unmount()

@@ -1,6 +1,6 @@
 // The canonical address search engines are told to use for every CareFind page (owner decision 2026-11-22:
-// carefind.ng). Set SITE_URL (server) / VITE_SITE_URL (app) to change it without a code change.
-export const DEFAULT_SITE_URL = 'https://carefind.ng'
+// carefind.app). Set SITE_URL (server) / VITE_SITE_URL (app) to change it without a code change.
+export const DEFAULT_SITE_URL = 'https://carefind.app'
 export const SITE_NAME = 'CareFind'
 export const COUNTRY = 'NG'
 export const CURRENCY = 'NGN'

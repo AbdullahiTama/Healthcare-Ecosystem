@@ -22,7 +22,7 @@ Copy `apps/carefind/.env.example` → `apps/carefind/.env` (local) and set the s
 | `PAYSTACK_SECRET_KEY` | server | `sk_live_…` or `sk_test_…`; server validates `sk_` prefix, rejects `pk_` |
 | `RESEND_API_KEY` | server (optional) | empty = email no-op |
 | `RESEND_FROM_EMAIL` / `RESEND_REPLY_TO` | server | defaults in `.env.example` |
-| `APP_URL` / `SITE_URL` | server | email link origins (e.g. `https://carefind.ng`) |
+| `APP_URL` / `SITE_URL` | server | email link origins (e.g. `https://carefind.app`) |
 | `CRON_SECRET` | server | if cron job auth is gated |
 | `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` | build-time | only for sourcemap upload; build sets `sourcemap:'hidden'` when present, otherwise `false` |
 
@@ -68,11 +68,11 @@ The outbox drain is a **daily** cron at `02:00 UTC`, ahead of the `08:00 UTC` ex
 
 ## 5. Post-deploy checks
 
-- `https://carefind.ng/` — marketing + glass nav
-- `https://carefind.ng/search` — marketplace tabs, filters
-- `https://carefind.ng/feed` — authenticated feed (or redirect to `/login`)
+- `https://carefind.app/` — marketing + glass nav
+- `https://carefind.app/search` — marketplace tabs, filters
+- `https://carefind.app/feed` — authenticated feed (or redirect to `/login`)
 - `/manifest.json` installable, `/robots.txt` + `/sitemap.xml` 200
-- OG preview: `curl -H "User-Agent: WhatsApp" https://carefind.ng/post/<uuid>` → `og:image` absolute, `og:url` canonical (`/post/:id`)
+- OG preview: `curl -H "User-Agent: WhatsApp" https://carefind.app/post/<uuid>` → `og:image` absolute, `og:url` canonical (`/post/:id`)
 - Paystack webhook reachable at `/api/paystack-webhook` (if payments enabled)
 
 ## 6. Operational notes
