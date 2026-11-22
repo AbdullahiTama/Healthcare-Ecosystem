@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- SEO: when a public listing last changed (businesses, products, profiles, news, posts).
 -- 2026-11-22. Docs: docs/architecture/SEO-and-AI-Search-Visibility.md
--- Status: NOT APPLIED. Tested on PGlite (apps/carefind/src/test/seo/seoUpdatedAt.db.test.js).
+-- Status: APPLIED 2026-11-22 with owner approval (function bodies verified by md5; probed live in a rolled-back block). Tested on PGlite (apps/carefind/src/test/seo/seoUpdatedAt.db.test.js).
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY
