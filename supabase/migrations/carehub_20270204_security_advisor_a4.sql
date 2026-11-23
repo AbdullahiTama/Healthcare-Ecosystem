@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Security advisor findings (CODE_AUDIT A4): fix what is actionable, record what is accepted.
 -- 2026-11-23. Docs: docs/architecture/Security-Advisor-Baseline.md
--- Status: NOT APPLIED. Tested on PGlite (apps/carefind/src/test/security/securityAdvisorA4.db.test.js).
+-- Status: APPLIED 2026-11-23 with owner approval (track_product_view body verified by md5; grants, policy and paths checked; probed live in a rolled-back block). Tested on PGlite (apps/carefind/src/test/security/securityAdvisorA4.db.test.js).
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY (advisor run 2026-11-23, verified against the function bodies and grants)
