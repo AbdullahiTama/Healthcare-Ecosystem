@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Cost price: who may read it, and the one way to read it (CODE_AUDIT A25, part 1 of 2).
 -- 2026-11-22. Docs: docs/architecture/Cost-Price-Access.md
--- Status: NOT APPLIED. Tested on PGlite (apps/carefind/src/test/cost-price/costPriceAccess.db.test.js).
+-- Status: APPLIED 2026-11-23 with owner approval (bodies verified by md5; probed live in a rolled-back block: every active staff member matched the app rule). Tested on PGlite (apps/carefind/src/test/cost-price/costPriceAccess.db.test.js).
 -- ─────────────────────────────────────────────────────────────────────────────
 --
 -- WHY
