@@ -26,7 +26,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A9 | Low | Debt | About 600 `no-unused-vars` warnings | Open, tracked in Linting.md |
 | A12 | High | POS (production defect) | Re-holding an edited held sale is refused (`permission denied for table sales`); duplicate held sales; carts lost when leaving the POS | **Closed 2026-11-02**: grant live, app deployed and in use; owner review of 4 double-charged pairs pending |
 | A13 | Medium | Importer operating models | Every spec section implemented (gap review 2026-11-04); applied to production 2026-11-04 and probed; two owner decisions and one proposal open | Open: owner decisions |
-| A14 | Medium | Payments | Reported ~1% reduction in amounts: not reproduced in code or live data; Paystack's fee was not stored, so bank deposits could not be matched to payments | Open: migration applied 2026-11-04; confirm backfill, then match deposits |
+| A14 | Medium | Payments | Reported ~1% reduction in amounts: not reproduced in code or live data; Paystack's fee was not stored, so bank deposits could not be matched to payments | Open, **blocked by A48**: checked 2026-11-23, all 12 settled payments still have no fee; the fee code (Nov 4) never reached CareFind production. Closes after A48 is fixed and the `fees` step has run |
 | A15 | Medium | Expenses | The expense budget lived only in the browser, per month: it vanished at each new month, on another device and for staff | Open: migration applied 2026-11-04; the reporting Owner opens Expenses once on the original device |
 | A16 | Low | Expenses (data model) | Expenses had no payment status (every expense recorded as already paid) | **Closed 2026-11-09**: payment status, history and Record payment; migration applied and probed |
 | A17 | Medium | Inventory (bulk delete) | Bulk delete / delete all and re-upload / restore through checked database functions | **Closed 2026-11-10**: applied with owner approval and probed |
@@ -60,6 +60,8 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A45 | Low | Notifications (sales velocity, expiry) | Sales velocity opened the general Reports page (no breakdown; no slow-moving group); expiry alerts opened the whole Inventory list and did nothing when it was already open | **Closed 2026-11-19**: app only; Stock Management Sales velocity (fast / steady / slow / not moving) and Expiry tabs, one shared rule, kind-based links; tested (fail on the old wiring). See Stock-Alert-Breakdowns.md |
 | A46 | High | CareFind SEO / AI search | A static canonical and title in index.html made every page a duplicate of the homepage; crawlers that do not run JavaScript (all AI crawlers) got an empty page; the sitemap listed 5 URLs; no structured data; bare-UUID URLs; no change times or indexing pings | **Closed 2026-11-22**: crawler pages (dynamic rendering, same page models as the app), JSON-LD, slug URLs (old links still work), live sitemaps, robots.txt / llms.txt, daily IndexNow; `carefind_20270201_seo_updated_at` (change times) applied with owner approval, verified and probed live. Owner: verify carefind.app in Search Console / Bing Webmaster Tools. See SEO-and-AI-Search-Visibility.md |
 | A47 | High | Data exposure (cost price, cross-business) | Any signed-in user of any business (or none: CareFind sign-up is open) could read `products.cost_price` of every product listed on CareFind through the policy "public can view listed products" (11,122 costs, 14 businesses, verified 2026-11-22) | Fixed together with A25 step 2; closes when part 2 (carehub_20270203) is applied. See Cost-Price-Access.md |
+| A48 | High | Deployment (CareFind) | CareFind production has not been deployed since 2026-10-21 (`6248c0f`): every push to `main` since builds only a Preview of the Vercel project `healthcare-ecosystem`, while `carehub` deploys to Production. 61 commits touching CareFind or shared packages are not live (fee recording, SEO pages, carefind.app canonical, among others). Verified 2026-11-23 from GitHub deployment records and the live job slots (the steps that run are exactly those of `6248c0f`) | Open: owner, Vercel project settings (see §A48) |
+| A49 | High | Scheduling | The every-minute database scheduler (`email-outbox-carehub`, `email-outbox-carefind`) has failed every run since it was created (2026-09-28; 81,475 failures each) because its Vault secrets were never set. Email, payment reconciliation, refunds, withdrawals, vendor release and order expiry run only once a day (Vercel Hobby cron) | Open: owner, Supabase Vault (see §A49) |
 
 ## 2. Items
 
@@ -271,6 +273,43 @@ settled payment has a fee (`select count(*) from payment_intents where status in
 provider_fee_kobo is null and purpose not like '%\_wallet'` returns 0); match `provider_net_kobo` against the
 Paystack settlements export or the bank statement. If a ~1% gap remains in POS or report figures (which never touch
 Paystack), get a specific transaction from the owner and trace it.
+
+**Update 2026-11-23:** not closable yet. All 12 settled payments (2026-10-06 to 10-12; nothing has settled since) still
+have no `provider_fee_kobo`, and no `recon_fees` slot exists: the `fees` step has never run, because CareFind production is
+the 2026-10-21 build, which predates it (A48). (The close check's `purpose not like '%\_wallet'` excludes nothing: the
+purposes are `wallet_topup`, `business_wallet_topup`, `plan_renewal`, `shop_order`.) After A48, the next daily run fills
+in up to 25 fees; then compare `provider_net_kobo` with the Paystack settlement export.
+
+### A48. CareFind production frozen at 2026-10-21 (High, owner)
+
+**Evidence (2026-11-23):** GitHub deployment records: `Production – carehub` on every push to `main`;
+`healthcare-ecosystem` (CareFind, `healthcare-ecosystem-*.vercel.app`) has had only `Preview` deployments since its last
+Production, `6248c0f` on 2026-10-21, although its previews build successfully. The live daily cron runs exactly the
+finance steps of `6248c0f` (no `fees` step, no `seo_indexnow` step, both on `main` since Nov 4 and Nov 22).
+
+**Close by (Vercel, project `healthcare-ecosystem`):** check Settings › Git (or Environments) that the Production
+Branch is `main` and that production deployments are not paused or set to manual promotion; then promote the latest
+`main` deployment (or redeploy). Verify: GitHub shows a `Production – healthcare-ecosystem` deployment for the current
+commit, and after the next daily run `job_slots` has `recon_fees` and `job_seo_indexnow`. Check for Vercel's
+"skip unaffected projects" or an Ignored Build Step that could explain it.
+
+### A49. Every-minute scheduler never ran (High, owner)
+
+**Evidence (2026-11-23):** `cron.job_run_details`: jobs 1 and 2 (`* * * * *`) failed 81,475 times each since
+2026-09-28, never succeeded: `Vault secret email_outbox_cron_<app>_url is not set`. `vault.secrets` is empty. So the
+outbox and finance steps run only from the daily Vercel crons (CareFind about 02:00-02:59 UTC, Hobby precision);
+emails wait up to a day.
+
+**Close by (Supabase SQL editor, as the owner; the secret value never goes in the repository or a chat):**
+```sql
+select vault.create_secret('https://<carehub production domain>/api/cron/process-email-outbox', 'email_outbox_cron_carehub_url');
+select vault.create_secret('https://carefind.app/api/cron/process-email-outbox', 'email_outbox_cron_carefind_url');
+select vault.create_secret('<the CRON_SECRET set in both Vercel projects>', 'email_outbox_cron_secret');
+```
+Both Vercel projects must have the same `CRON_SECRET`. Verify after two minutes:
+`select status, count(*) from cron.job_run_details where start_time > now() - interval '5 minutes' group by 1` shows
+`succeeded`, and `select status_code, count(*) from net._http_response group by 1` shows 200s (401 means the secret
+differs from Vercel's).
 
 ### A15. Expense budget disappeared: stored only in the browser (Medium)
 
