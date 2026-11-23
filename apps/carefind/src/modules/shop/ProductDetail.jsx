@@ -54,7 +54,7 @@ export default function ProductDetail() {
 
   async function trackView() {
     try {
-      await recommendationsRepository.trackView(productId, user?.id || null)
+      await recommendationsRepository.trackView(productId)
     } catch (err) {
       console.error('Failed to track product view:', err)
     }

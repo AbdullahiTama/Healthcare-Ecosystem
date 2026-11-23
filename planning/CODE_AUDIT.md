@@ -18,7 +18,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A1 | High | Security / ADR | PV routing P0-1 fix is live but was never probed live; the trigger is the only barrier | **Closed 2026-11-02**: probed live, holds |
 | A2 | Medium | Governance | `export_logs` is not append-only: platform admins can edit or delete export records | **Closed 2026-11-02**: append-only, applied live |
 | A3 | Medium | Process | 27 migrations say "not applied", "draft" or "review only" but are all live; a live migration also sits in `pending-migrations/` | Open |
-| A4 | Medium | Security | Supabase security advisor: 2 errors and several actionable warnings | Open, partly accepted |
+| A4 | Medium | Security | Supabase security advisor: 2 errors and several actionable warnings | **Reviewed 2026-11-23**: `carehub_20270204_security_advisor_a4` fixes grant drift (anyone could inflate purchase patterns, write views under another customer, read others' browsing history; any user could read marketplace revenue), 3 search_paths, 1 trigger grant. Awaiting owner approval to apply. Rest accepted with reasons; owner step: leaked-password protection; follow-up: `adr_icsr_missing`. See Security-Advisor-Baseline.md |
 | A5 | Medium | Quality | React hook rules are not linted | Open |
 | A6 | Medium | Data model | `plan_catalog` and `business_subscriptions` are unused mirrors; the Plan Catalog screen edits prices checkout ignores | Open: owner decision |
 | A7 | Low | Admin | Hard delete of a business is selectable again | Open: owner decision |

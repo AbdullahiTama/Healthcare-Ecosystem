@@ -2,13 +2,13 @@ import { supabase } from '../../config/supabaseClient'
 
 export const recommendationsRepository = {
   /**
-   * Track when a user views a product
+   * Record that this product was viewed. The database records the signed-in user itself (auth.uid(); none when signed
+   * out) and ignores any user id sent (carehub_20270204), so none is sent.
    */
-  async trackView(productId, userId = null, sessionId = null) {
+  async trackView(productId, sessionId = null) {
     try {
       await supabase.rpc('track_product_view', {
         p_product_id: productId,
-        p_user_id: userId,
         p_session_id: sessionId
       })
     } catch (error) {
@@ -16,18 +16,8 @@ export const recommendationsRepository = {
     }
   },
 
-  /**
-   * Track purchase patterns after order completion
-   */
-  async trackPurchasePattern(orderId) {
-    try {
-      await supabase.rpc('track_purchase_pattern', {
-        p_order_id: orderId
-      })
-    } catch (error) {
-      console.error('Failed to track purchase pattern:', error)
-    }
-  },
+  // Purchase patterns are recorded by the payment server once an order is paid (shared-payments effects); the
+  // database accepts them from the server only (carehub_20270204). The same holds for auto_generate_recommendations.
 
   /**
    * Get product recommendations
@@ -49,19 +39,6 @@ export const recommendationsRepository = {
     } catch (error) {
       console.error('Failed to get recommendations:', error)
       return []
-    }
-  },
-
-  /**
-   * Auto-generate recommendations based on category
-   */
-  async autoGenerateRecommendations(productId) {
-    try {
-      await supabase.rpc('auto_generate_recommendations', {
-        p_product_id: productId
-      })
-    } catch (error) {
-      console.error('Failed to auto-generate recommendations:', error)
     }
   },
 
