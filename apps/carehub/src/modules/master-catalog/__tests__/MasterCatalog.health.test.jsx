@@ -12,7 +12,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 vi.mock('../repositories', () => ({
   PAGE_SIZE: 50,
   masterCatalogRepository: { getPage: vi.fn(), getHealth: vi.fn(), getCategories: vi.fn(), duplicatePairs: vi.fn(), dismissPair: vi.fn(),
-    merge: vi.fn(), setCategory: vi.fn(), carry: vi.fn(), push: vi.fn(), archive: vi.fn(), restore: vi.fn(), create: vi.fn(), update: vi.fn(), deactivate: vi.fn() },
+    merge: vi.fn(), setCategory: vi.fn(), suggestions: vi.fn(), applyFixes: vi.fn(), dismissSuggestions: vi.fn(), carry: vi.fn(), push: vi.fn(), archive: vi.fn(), restore: vi.fn(), create: vi.fn(), update: vi.fn(), deactivate: vi.fn() },
 }))
 vi.mock('../../locations/repositories', () => ({ locationsRepository: { getAll: vi.fn() } }))
 const lib = vi.hoisted(() => ({ linkMatches: vi.fn(), link: vi.fn(), unlink: vi.fn(), suggest: vi.fn(), search: vi.fn() }))
@@ -94,6 +94,21 @@ describe('catalogue health', () => {
     await show()
     expect(text()).toContain('Panadol Extra')
     expect(text()).not.toContain('Catalogue health')
+  })
+})
+
+describe('suggested fixes', () => {
+  it('opens on the categories when items sit in "Other medicines", and is hidden when nothing needs it', async () => {
+    repo.suggestions.mockResolvedValue({ available: true, total: 1, suggestions: [{ item: { id: 'm1', name: 'Panadol Extra' }, value: 'analgesics', reason: 'keyword', detail: 'panadol' }] })
+    await show()
+    await click(button('Suggested fixes'))
+    expect(repo.suggestions).toHaveBeenCalledWith('main', 'category', { offset: 0, limit: 100 })
+    expect(text()).toContain('Name contains "panadol"')
+
+    act(() => root.unmount()); root = createRoot(host)
+    repo.getHealth.mockResolvedValue({ ...HEALTH, counts: { ...HEALTH.counts, other_category: 0, no_price: 0 } })
+    await show()
+    expect(button('Suggested fixes')).toBeUndefined()
   })
 })
 

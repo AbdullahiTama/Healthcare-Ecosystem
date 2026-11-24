@@ -1,6 +1,6 @@
 # Product Catalogue: Review and Design
 
-Status: approved 2026-10-27. **Phases 1–4 are built** (sections 6–9); phase 5 is not started.
+Status: approved 2026-10-27. **Phases 1–5 are built and live** (sections 6–10). Phase 6, added 2026-11-24, is built (section 11).
 
 ## 1. Review (live data, 2026-10-27)
 
@@ -140,6 +140,7 @@ Each phase is shippable, keeps today's workflows working, and has its own migrat
 | **3. Moving stock between branches** | Transfers (send, in transit, receive with shortfall, cancel), on the Master Catalog and in each branch's Inventory | 1 |
 | **4. Shared library** | `catalog_items`, seeding from clustered business data, admin review queue, NAFDAC list import (CSV/Excel), business suggestions, link suggestions; add a product by search or barcode from the library | 1 |
 | **5. Catalogue health** | Score, duplicate merge, bulk category fixes, missing-data flags, CareFind hiding unpriced items (built and live, §10) | 1, 4 |
+| **6. Smart clean-up** (added 2026-11-24) | Suggested categories and prices, reviewed and applied in bulk; price given to locations that have none so they reappear on CareFind | 5 |
 
 ## 5. Risks and open points
 
@@ -641,3 +642,100 @@ creates a new catalogue item with that name.
   3. Select items and choose "Set category"; check that the "Other medicines" count drops.
   4. On CareFind, check that a listed product with price 0 is gone and that a prescription-only item still shows
      "ask the pharmacist".
+
+## 11. Phase 6 as built: smart clean-up
+
+**Owner's decision (2026-11-24):** phase 6 is the clean-up that phase 5 measures. The system suggests a category for
+items still in "Other medicines" and a price for unpriced ones. The owner reviews the suggestions, changes any, and
+applies them in bulk.
+
+**Finding (live, 2026-11-24):**
+
+| What | Live |
+|---|---|
+| Items without a specific category | 13,611 |
+| Items without a price | 1,283 |
+| Listed products hidden on CareFind for having no price | 1,212 |
+| Approved library items | 0 (the library can suggest nothing yet; it is used as soon as items are approved) |
+
+Where a category can come from:
+
+| Source | Items it covers |
+|---|---|
+| The category text the business typed, where it is clear but missing from the spelling map (SUPERMARKET 1,553, SUPPLEMENTS/VITAMINS 272, ANTIBOTICS 119, …) | about 2,400 |
+| "MEDICINES" (8,997) and "DRUGS" (1,339) say nothing. A reviewed keyword list on the name and generic name ("amoxicillin", "coartem", "metformin", "inj", "eye", "cream") | 5,223 |
+| The same name with a specific category at another business | 469 |
+
+Where a price can come from:
+
+| Source | Items |
+|---|---|
+| The item's own locations | 4 |
+| The same name at three or more other businesses | 86 |
+| Cost plus a markup | not used: that would choose someone's margin for them |
+
+### Database (`supabase/migrations/carehub_20270205_catalogue_suggestions.sql`)
+
+| Object | What it does |
+|---|---|
+| `category_aliases` (25 more spellings) | The clear spellings above. New items typed under them get the standard category straight away, as before. Existing items are only suggested, never changed without the owner. |
+| `category_keywords` | The reviewed keyword list (one word each, about 300). A lower priority is checked first: an injection or eye drop wins over the drug class, the drug class over a generic form such as a cream, and a food word over a skin form ("ice cream"). Not readable by the API roles. |
+| `catalogue_category_suggestions(business, offset, limit)` | Items without a specific category that have a suggestion, strongest reason first: `library` (its library entry), `text` (its own category text), `elsewhere` (the category most other businesses give the same name, with how many), `keyword` (the word matched). Items with nothing to go on, and dismissed ones, are left out. |
+| `catalogue_price_suggestions(business, offset, limit)` | Unpriced items (services aside) that have a suggestion: `locations` (median of its own location prices) or `elsewhere` (median of the same name at **3 or more** other businesses, rounded to ₦10). Each row counts the item's locations hidden on CareFind. |
+| `apply_catalogue_fixes(business, fixes, push_prices)` | Up to 500 accepted fixes. Each applies only if the item still has the problem, so nothing typed since is overwritten. With `push_prices`, the newly priced item's location products that follow the master price and have none take it (they reappear on CareFind). A location's own price is never changed. Returns the counts. |
+| `catalogue_suggestion_dismissals`, `dismiss_catalogue_suggestions` | "Don't suggest these": an item is not suggested again for that kind. Members read; nobody writes the table directly. |
+| Index `master_products_name_key_live` | Looks up other businesses' items by name. |
+
+### App (`apps/carehub/src/modules/master-catalog`)
+
+- **Suggested fixes** (`SuggestionsModal.jsx`), opened from the health panel when items have no category or no price:
+  - two tabs, Categories and Prices;
+  - each suggestion starts ticked, with its reason ("You filed it under SUPERMARKET", "Name contains inj",
+    "4 other pharmacies use this category", "Typical price at 3 other pharmacies");
+  - the category or price can be changed, or the row unticked, before applying;
+  - prices have an "Also price the locations that follow the catalogue price and have none" option, on by default;
+  - **Don't suggest these** hides the ticked rows for good;
+  - loading, error, empty and not-installed states; the database's refusal is shown as written.
+- Repository: `suggestions(business, kind)`, `applyFixes`, `dismissSuggestions`.
+- Rules: `suggestionReason`, `fixesSummary`.
+- The health score and list refresh after each apply.
+
+### Security implications
+
+- No permission is widened. Every function is SECURITY DEFINER and requires the owner or a manager of the main
+  business (`catalog_require_manager`). Every write is scoped to that business, and another business's ids are
+  ignored. EXECUTE is revoked from anon explicitly (see `carehub_20270204`).
+- The suggestions read other businesses' items as aggregates only:
+  - which category most of them use for a name, and how many do;
+  - a median price only when at least three other businesses sell that name, so no single pharmacy's price is ever
+    shown or inferable from one row.
+- Nothing changes without the owner applying it. Prescription status never changes here.
+
+### Test plan
+
+- **PGlite:** `apps/carefind/src/test/catalogue/catalogueSuggestions.db.test.js` (17 tests). It runs on the shared
+  set-up in `catalogueDb.js`, which the phase 5 test now uses too. Coverage:
+  - each category source and its order;
+  - form over class, food over skin form, the generic name counting;
+  - who can see suggestions, and that the keyword list is closed;
+  - a new item under a new spelling;
+  - prices from locations and from three or more businesses, never from fewer, never for a service;
+  - applying only where the problem remains, with push and without, and the location reappearing on CareFind;
+  - malformed fixes, the 500 limit, and another business's ids;
+  - dismissals for both kinds;
+  - re-running the migration.
+- **Unit and UI (CareHub):**
+  - `SuggestionsModal.test.jsx`:
+    - apply all;
+    - change and untick;
+    - prices with and without push;
+    - the zero-price check;
+    - tabs and dismiss;
+    - refusal, error, empty and not-installed states;
+  - `MasterCatalog.health.test.jsx`: the panel button, and that it is hidden when nothing needs it;
+  - `catalogueRules.test.js` and `repositories/index.test.js`.
+- **Manual, after applying the migration:**
+  1. Master Catalog → Suggested fixes. Check the reasons on a few category suggestions, change one, untick one, and
+     apply. Check that the "Other medicines" count drops.
+  2. Prices tab: apply one item that is hidden at a location, and check that the product shows on CareFind.
+  3. Choose "Don't suggest these" on an item, reopen, and check that it is gone.

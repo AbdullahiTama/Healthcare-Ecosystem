@@ -20,6 +20,7 @@ import LibraryItemModal from './LibraryItemModal'
 import CatalogueHealthPanel from './CatalogueHealthPanel'
 import DuplicatesModal from './DuplicatesModal'
 import CategoryDialog from './CategoryDialog'
+import SuggestionsModal from './SuggestionsModal'
 
 const { tealBright, navy, gray500, border } = theme
 const log = (what, e) => console.error(`[master-catalog] ${what}:`, e)
@@ -33,7 +34,8 @@ const reason = (e) => String(e?.message || e || '').replace(/^Supabase error \(\
 // With the CareHub library (carehub_20261223) the owner also links items to the shared library (in bulk from the
 // matches it finds, or one by one), suggests items for it, and can start a new item from it.
 // Catalogue health (carehub_20270127): a score and missing-data counts that filter the list, a review of possible
-// duplicates (merge or dismiss), and a bulk category for the selection.
+// duplicates (merge or dismiss), and a bulk category for the selection. Suggested fixes (carehub_20270205) propose a
+// category and a price for items missing one, applied in bulk after review.
 export default function MasterCatalog({ brand, role }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const { allow } = usePlanGate(showToast)
@@ -63,6 +65,7 @@ export default function MasterCatalog({ brand, role }) {
   const [healthStatus, setHealthStatus] = useState('loading')
   const [showDuplicates, setShowDuplicates] = useState(false)
   const [categoryTargets, setCategoryTargets] = useState(null)
+  const [showSuggestions, setShowSuggestions] = useState(false)
   const request = useRef(0)
 
   // Categories and locations change rarely: loaded once per business.
@@ -213,7 +216,7 @@ export default function MasterCatalog({ brand, role }) {
   // does nothing. The item form and the carry / location dialogs handle their
   // own scans, so this one is off while they are open (the library dialogs too).
   const rootRef = useRef(null)
-  const ownDialogOpen = formItem !== undefined || !!carryItems || !!locationsItemId || !!libraryItemId || showMatches || showDuplicates || !!categoryTargets
+  const ownDialogOpen = formItem !== undefined || !!carryItems || !!locationsItemId || !!libraryItemId || showMatches || showDuplicates || !!categoryTargets || showSuggestions
   useKeyboardScanner({
     ignore: (e) => {
       const t = e.target
@@ -315,7 +318,8 @@ export default function MasterCatalog({ brand, role }) {
 
       {!filters.archived && (
         <CatalogueHealthPanel health={health} status={healthStatus} active={filters.health}
-          onIssue={(key) => setFilters((f) => ({ ...f, health: key }))} onDuplicates={() => setShowDuplicates(true)} />
+          onIssue={(key) => setFilters((f) => ({ ...f, health: key }))} onDuplicates={() => setShowDuplicates(true)}
+          onSuggestions={() => setShowSuggestions(true)} />
       )}
 
       {/* Search and filters */}
@@ -399,6 +403,8 @@ export default function MasterCatalog({ brand, role }) {
 
       <DuplicatesModal show={showDuplicates} businessId={mainId} isOwner={isOwner} onChanged={reload}
         categoryLabel={(code) => categories.find((c) => c.code === code)?.label || ''} onClose={() => setShowDuplicates(false)} />
+      <SuggestionsModal show={showSuggestions} businessId={mainId} categories={categories}
+        initialKind={Number(health.counts?.other_category) > 0 ? 'category' : 'price'} onChanged={reload} onClose={() => setShowSuggestions(false)} />
       <CategoryDialog show={!!categoryTargets} count={categoryTargets?.length || 0} categories={categories} libraryAvailable={library.available}
         busy={busy} onApply={setCategory} onClose={() => setCategoryTargets(null)} />
 

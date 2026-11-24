@@ -211,3 +211,29 @@ export function mergeSummary(result, keptName) {
   if (Number(r.negative_left)) parts.push(`${r.negative_left} product${r.negative_left === 1 ? ' had' : 's had'} stock below zero, left on the stopped product: count it.`)
   return parts.join(' ')
 }
+
+// ── Suggested fixes (carehub_20270205) ───────────────────────────────────────
+// Why a category or price was suggested, in words.
+export function suggestionReason(kind, reason, detail) {
+  const n = Number(detail) || 0
+  if (kind === 'price') {
+    if (reason === 'locations') return `Price at ${n === 1 ? '1 of your locations' : `${n} of your locations`}`
+    return `Typical price at ${n} other pharmacies`
+  }
+  if (reason === 'library') return `CareHub library: ${detail}`
+  if (reason === 'text') return `You filed it under "${detail}"`
+  if (reason === 'elsewhere') return n === 1 ? '1 other pharmacy uses this category' : `${n} other pharmacies use this category`
+  return `Name contains "${detail}"`
+}
+
+// A sentence for the result of apply_catalogue_fixes.
+export function fixesSummary(result) {
+  const r = result || {}
+  const parts = []
+  const c = Number(r.categories) || 0
+  const p = Number(r.prices) || 0
+  const l = Number(r.location_prices) || 0
+  if (c) parts.push(`${c} item${c === 1 ? '' : 's'} given a category.`)
+  if (p) parts.push(`${p} item${p === 1 ? '' : 's'} given a price${l ? `, and ${l} location product${l === 1 ? '' : 's'} back on CareFind` : ''}.`)
+  return parts.join(' ') || 'Nothing needed changing: these items were already fixed.'
+}

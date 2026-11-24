@@ -1,5 +1,6 @@
 import { HeartPulse } from 'lucide-react'
 import { theme } from '../../styles/theme'
+import { TealBtn } from '../../components/ui'
 import { HEALTH_ISSUES, scoreTone } from './catalogueRules'
 
 const { navy, gray500, gray600, border, tealDeep, tealMist } = theme
@@ -13,7 +14,8 @@ const TONES = {
 // The catalogue's health (carehub_20270127): a 0-100 score and the count of each missing-data flag. Each count is a
 // button: a flag with a list filter shows those items (pressed again, it clears); "Possible duplicates" opens the
 // duplicates review. Flags at zero are left out. Shown only once the database has catalogue_health().
-export default function CatalogueHealthPanel({ health, status = 'ready', active = '', onIssue, onDuplicates }) {
+// "Suggested fixes" (phase 6) opens the category and price suggestions when either count is above zero.
+export default function CatalogueHealthPanel({ health, status = 'ready', active = '', onIssue, onDuplicates, onSuggestions }) {
   if (!health?.available) return null
   const tone = scoreTone(health.score)
   const colours = TONES[tone.tone]
@@ -30,6 +32,9 @@ export default function CatalogueHealthPanel({ health, status = 'ready', active 
           {health.score == null ? tone.label : `${health.score}/100 · ${tone.label}`}
         </span>
         {status === 'error' && <span style={{ fontSize: '12px', color: theme.danger }}>Could not refresh the health check.</span>}
+        {onSuggestions && (Number(health.counts?.other_category) > 0 || Number(health.counts?.no_price) > 0) && (
+          <TealBtn onClick={onSuggestions} style={{ marginLeft: 'auto', padding: '7px 14px', fontSize: '12px' }}>Suggested fixes</TealBtn>
+        )}
       </div>
       {health.total > 0 && (issues.length === 0
         ? <p style={{ margin: '10px 0 0', fontSize: '13px', color: gray600 }}>Nothing to fix: every item has its price, category, generic name and barcode.</p>

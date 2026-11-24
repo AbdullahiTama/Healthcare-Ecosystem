@@ -131,6 +131,40 @@ export function createMasterCatalogRepository(request = sbFetch) {
       return Number(n) || 0
     },
 
+    // ── Suggested fixes (carehub_20270205) ───────────────────────────────────
+    // A page of suggestions for items without a specific category ('category') or without a price ('price'):
+    // { available, total, suggestions: [{ item, value, reason, detail }] }. value is a category code or a price in
+    // naira. available is false before the migration.
+    async suggestions(businessId, kind, { offset = 0, limit = 100 } = {}) {
+      const fn = kind === 'price' ? 'catalogue_price_suggestions' : 'catalogue_category_suggestions'
+      try {
+        const rows = (await request(`rpc/${fn}`, {
+          method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_offset: offset, p_limit: limit }),
+        })) || []
+        return {
+          available: true,
+          total: rows.length ? Number(rows[0].total) : 0,
+          suggestions: rows.map((r) => ({ item: r.item, value: kind === 'price' ? Number(r.price) : r.category_code, reason: r.reason, detail: r.detail })),
+        }
+      } catch (e) {
+        if (isMissingObject(e)) return { available: false, total: 0, suggestions: [] }
+        throw e
+      }
+    },
+
+    // Applies accepted fixes ([{ id, category_code } | { id, default_price }], up to 500). With pushPrices, newly priced
+    // items' location products that follow the master price and have none take it. Returns { categories, prices,
+    // location_prices }.
+    async applyFixes(businessId, fixes, pushPrices = true) {
+      return rpc('apply_catalogue_fixes', { p_business_id: businessId, p_fixes: fixes, p_push_prices: !!pushPrices })
+    },
+
+    // "Don't suggest this again" for these items ('category' or 'price'). Returns how many were added.
+    async dismissSuggestions(businessId, ids, kind) {
+      const n = await rpc('dismiss_catalogue_suggestions', { p_business_id: businessId, p_ids: ids, p_kind: kind })
+      return Number(n) || 0
+    },
+
     // The standard categories (code, label, default prescription status), in
     // display order. Empty before carehub_20261215.
     async getCategories() {

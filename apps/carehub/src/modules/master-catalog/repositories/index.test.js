@@ -280,3 +280,43 @@ describe('catalogue health (phase 5)', () => {
     ])
   })
 })
+
+describe('suggested fixes (phase 6)', () => {
+  const MISSING = (name) => new Error(`Supabase error (404): Could not find the function public.${name} in the schema cache`)
+
+  it('reads category and price suggestions for the main business, and reports unavailable before the migration', async () => {
+    const calls = []
+    const repo = createMasterCatalogRepository(async (path, o) => {
+      calls.push({ path, body: JSON.parse(o.body) })
+      return path.includes('price')
+        ? [{ item: { id: 'p1' }, price: '400', reason: 'locations', detail: '1', total: '7' }]
+        : [{ item: { id: 'm1' }, category_code: 'vitamins', reason: 'keyword', detail: 'vit', total: '3' }]
+    })
+    expect(await repo.suggestions(PARENT, 'category')).toEqual({ available: true, total: 3, suggestions: [{ item: { id: 'm1' }, value: 'vitamins', reason: 'keyword', detail: 'vit' }] })
+    expect(await repo.suggestions(PARENT, 'price', { offset: 100, limit: 50 })).toEqual({ available: true, total: 7, suggestions: [{ item: { id: 'p1' }, value: 400, reason: 'locations', detail: '1' }] })
+    expect(calls).toEqual([
+      { path: 'rpc/catalogue_category_suggestions', body: { p_business_id: PARENT, p_offset: 0, p_limit: 100 } },
+      { path: 'rpc/catalogue_price_suggestions', body: { p_business_id: PARENT, p_offset: 100, p_limit: 50 } },
+    ])
+    const old = createMasterCatalogRepository(async () => { throw MISSING('catalogue_category_suggestions') })
+    expect(await old.suggestions(PARENT, 'category')).toEqual({ available: false, total: 0, suggestions: [] })
+    const down = createMasterCatalogRepository(async () => { throw new Error('Supabase error (500): down') })
+    await expect(down.suggestions(PARENT, 'category')).rejects.toThrow('down')
+  })
+
+  it('applies fixes and dismisses suggestions with the business on every call', async () => {
+    const calls = []
+    const repo = createMasterCatalogRepository(async (path, o) => {
+      calls.push([path, JSON.parse(o.body)])
+      return path.endsWith('dismiss_catalogue_suggestions') ? 2 : { categories: 1, prices: 0, location_prices: 0 }
+    })
+    expect(await repo.applyFixes(PARENT, [{ id: 'm1', category_code: 'vitamins' }])).toEqual({ categories: 1, prices: 0, location_prices: 0 })
+    await repo.applyFixes(PARENT, [{ id: 'p1', default_price: 400 }], false)
+    expect(await repo.dismissSuggestions(PARENT, ['m1', 'm2'], 'category')).toBe(2)
+    expect(calls).toEqual([
+      ['rpc/apply_catalogue_fixes', { p_business_id: PARENT, p_fixes: [{ id: 'm1', category_code: 'vitamins' }], p_push_prices: true }],
+      ['rpc/apply_catalogue_fixes', { p_business_id: PARENT, p_fixes: [{ id: 'p1', default_price: 400 }], p_push_prices: false }],
+      ['rpc/dismiss_catalogue_suggestions', { p_business_id: PARENT, p_ids: ['m1', 'm2'], p_kind: 'category' }],
+    ])
+  })
+})

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateMasterForm, formFromMaster, parseBranchPrice, carryingByLocation, carryingSummary, rxStatus, locationName, rxOptionsFor, applyLibraryToForm, HEALTH_ISSUES, healthIssue, scoreTone, duplicateReason, mergeSummary } from '../catalogueRules'
+import { validateMasterForm, formFromMaster, parseBranchPrice, carryingByLocation, carryingSummary, rxStatus, locationName, rxOptionsFor, applyLibraryToForm, HEALTH_ISSUES, healthIssue, scoreTone, duplicateReason, mergeSummary, suggestionReason, fixesSummary } from '../catalogueRules'
 
 const CATS = [
   { code: 'antibiotics', label: 'Antibiotics & anti-infectives', rx_default: 'prescription_only' },
@@ -119,5 +119,25 @@ describe('catalogue health (phase 5)', () => {
     expect(mergeSummary({ relinked: 0, merged_locations: 0, units_moved: 0, negative_left: 0 }, 'Panadol')).toBe('Merged into Panadol.')
     expect(mergeSummary({ relinked: 2, merged_locations: 2, units_moved: 1, negative_left: 1 }, 'Panadol'))
       .toBe('Merged into Panadol. 1 unit moved at 2 locations. 2 products now sold as Panadol. 1 product had stock below zero, left on the stopped product: count it.')
+  })
+})
+
+describe('suggested fixes (phase 6)', () => {
+  it('says why a category or price was suggested', () => {
+    expect(suggestionReason('category', 'library', 'Ciprotab')).toBe('CareHub library: Ciprotab')
+    expect(suggestionReason('category', 'text', 'SUPERMARKET')).toBe('You filed it under "SUPERMARKET"')
+    expect(suggestionReason('category', 'elsewhere', '1')).toBe('1 other pharmacy uses this category')
+    expect(suggestionReason('category', 'elsewhere', '4')).toBe('4 other pharmacies use this category')
+    expect(suggestionReason('category', 'keyword', 'inj')).toBe('Name contains "inj"')
+    expect(suggestionReason('price', 'locations', '1')).toBe('Price at 1 of your locations')
+    expect(suggestionReason('price', 'locations', '3')).toBe('Price at 3 of your locations')
+    expect(suggestionReason('price', 'elsewhere', '5')).toBe('Typical price at 5 other pharmacies')
+  })
+
+  it('summarises what was applied', () => {
+    expect(fixesSummary({ categories: 1, prices: 0, location_prices: 0 })).toBe('1 item given a category.')
+    expect(fixesSummary({ categories: 0, prices: 3, location_prices: 0 })).toBe('3 items given a price.')
+    expect(fixesSummary({ categories: 2, prices: 1, location_prices: 2 })).toBe('2 items given a category. 1 item given a price, and 2 location products back on CareFind.')
+    expect(fixesSummary({ categories: 0, prices: 0, location_prices: 0 })).toMatch(/already fixed/)
   })
 })
