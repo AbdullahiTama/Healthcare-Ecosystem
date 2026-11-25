@@ -1,7 +1,7 @@
 # Wholesale and retail prices; bulk stock deletion; mobile pagination; optional requisition cost
 
 2026-11-25. Feedback from a pharmacy newly onboarded in Lagos. One migration (`carehub_20270205_wholesale_retail_prices`,
-**apply before deploying the app**, see "Deployment order"); everything else is app only. CODE_AUDIT item A50.
+applied 2026-11-25 before the app was deployed, see "Deployment order"); everything else is app only. CODE_AUDIT item A50.
 
 ## 1. Wholesale and retail prices
 

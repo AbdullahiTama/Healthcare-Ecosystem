@@ -62,7 +62,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A47 | High | Data exposure (cost price, cross-business) | Any signed-in user of any business (or none: CareFind sign-up is open) could read `products.cost_price` of every product listed on CareFind through the policy "public can view listed products" (11,122 costs, 14 businesses, verified 2026-11-22) | Fixed together with A25 step 2; closes when part 2 (carehub_20270203) is applied. See Cost-Price-Access.md |
 | A48 | High | Deployment (CareFind) | CareFind production has not been deployed since 2026-10-21 (`6248c0f`): every push to `main` since builds only a Preview of the Vercel project `healthcare-ecosystem`, while `carehub` deploys to Production. 61 commits touching CareFind or shared packages are not live (fee recording, SEO pages, carefind.app canonical, among others). Verified 2026-11-23 from GitHub deployment records and the live job slots (the steps that run are exactly those of `6248c0f`) | Open: owner, Vercel project settings (see §A48) |
 | A49 | High | Scheduling | The every-minute database scheduler (`email-outbox-carehub`, `email-outbox-carefind`) has failed every run since it was created (2026-09-28; 81,475 failures each) because its Vault secrets were never set. Email, payment reconciliation, refunds, withdrawals, vendor release and order expiry run only once a day (Vercel Hobby cron) | Open: owner, Supabase Vault (see §A49) |
-| A50 | Medium | Pricing (wholesale / retail) | Pharmacy feedback 2026-11-25: optional wholesale and retail prices in Inventory, Purchases, templates and POS; the POS price guard must accept the wholesale price. Also: bulk delete hard to find, no pagination on phones, page reset after a delete, requisition cost required | Open: `carehub_20270205_wholesale_retail_prices` to apply (owner) **before** the app deploy; owner decision on wholesale-price visibility; follow-ups listed (see §A50) |
+| A50 | Medium | Pricing (wholesale / retail) | Pharmacy feedback 2026-11-25: optional wholesale and retail prices in Inventory, Purchases, templates and POS; the POS price guard must accept the wholesale price. Also: bulk delete hard to find, no pagination on phones, page reset after a delete, requisition cost required | Open: migration `carehub_20270205` **applied 2026-11-25** (version 20261125154202) and probed, then app deployed; owner decision on wholesale-price visibility; follow-ups listed (see §A50) |
 
 ## 2. Items
 
@@ -323,21 +323,20 @@ after every delete; a requisition could not be saved without a cost.
 
 **Done (app, tested):** everything in [Wholesale-and-Retail-Prices.md](../docs/architecture/Wholesale-and-Retail-Prices.md).
 **Migration:** `carehub_20270205_wholesale_retail_prices` (column, guard accepts either catalogue price, column grant);
-PGlite-tested; **not applied**. It must be applied and probed before the CareHub app is deployed: the app names the new
-column in every products read and cannot load products without it.
+PGlite-tested; **applied 2026-11-25 with owner approval** (version 20261125154202) and probed live (staff without "Edit
+prices": retail and wholesale accepted, any other price refused; rolled back), then the app was pushed. Evidence in the
+migration header.
 
 **Open:**
-1. Owner: apply the migration (then probe: a Cashier sale at the wholesale price is accepted, at any other price
-   refused), then deploy.
-2. Owner decision: the wholesale price is readable by whoever can read the product row, which includes any signed-in
+1. Owner decision: the wholesale price is readable by whoever can read the product row, which includes any signed-in
    user for products listed on CareFind (as for the retail price). Keep, or make it private to the business (revoke the
    column, read it through a checked function like `product_costs()`).
-3. Follow-up: `edit_purchase` rebuilds line items without `wholesale`, so an edited purchase stops showing the wholesale
+2. Follow-up: `edit_purchase` rebuilds line items without `wholesale`, so an edited purchase stops showing the wholesale
    price its lines were recorded with (the products keep theirs), and a product first created while editing a purchase
    gets no wholesale price.
-4. Follow-up: CareFind shows the retail price only; a wholesale-only product shows like the products already at ₦0.
+3. Follow-up: CareFind shows the retail price only; a wholesale-only product shows like the products already at ₦0.
    Decide what CareFind should show (it is frozen at 2026-10-21 by A48 in any case).
-5. Follow-up: the master-catalogue push carries the retail price only.
+4. Follow-up: the master-catalogue push carries the retail price only.
 
 ### A15. Expense budget disappeared: stored only in the browser (Medium)
 

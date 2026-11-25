@@ -1,8 +1,12 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Wholesale and retail prices on one product (feedback from a pharmacy onboarded in Lagos, 2026-11-25).
 -- Docs: docs/architecture/Wholesale-and-Retail-Prices.md
--- Status: NOT APPLIED. Apply BEFORE the CareHub app that reads products.wholesale_price is deployed (the app names
--- the column in every products read, so the app fails to load products while the column is missing).
+-- Status: APPLIED 2026-11-25 with owner approval (version 20261125154202), before the app deploy. The live guard was
+-- first checked identical to carehub_20270118's body (md5 of the whitespace-stripped source). Probed live in rolled-back
+-- transactions as an active staff member whose role has "Edit prices" off, on a product given a temporary wholesale
+-- price (retail 10000, wholesale 9950): retail ACCEPTED, wholesale ACCEPTED, 9923 REFUSED (42501, message names both
+-- prices); authenticated can read wholesale_price. Afterwards: 0 probe sales, 0 products with a wholesale price.
+-- (The app names the column in every products read, so it must never be deployed without this.)
 -- Tested on PGlite: apps/carefind/src/test/pos/wholesalePrices.db.test.js
 -- ─────────────────────────────────────────────────────────────────────────────
 --
