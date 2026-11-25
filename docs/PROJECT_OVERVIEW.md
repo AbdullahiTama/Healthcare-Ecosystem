@@ -153,6 +153,7 @@ and database migrations on PGlite. On 2026-11-02 CareHub had 304 test files and 
 | Maps: Google Maps display with OpenStreetMap fallback, the browser key and its restrictions | [architecture/Maps.md](architecture/Maps.md) |
 | Security advisor baseline: what was fixed, what is accepted and why | [architecture/Security-Advisor-Baseline.md](architecture/Security-Advisor-Baseline.md) |
 | Cost price as a data-level permission: who may read products.cost_price, product_costs() | [architecture/Cost-Price-Access.md](architecture/Cost-Price-Access.md) |
+| CareFind for guests (MED Market without an account), nearby-first medicine search, sharing links instead of files | [architecture/CareFind-Guest-Access-Nearby-Search-and-Link-Sharing.md](architecture/CareFind-Guest-Access-Nearby-Search-and-Link-Sharing.md) |
 | CareFind SEO and AI search visibility: crawler pages, structured data, slug URLs, sitemaps, IndexNow | [architecture/SEO-and-AI-Search-Visibility.md](architecture/SEO-and-AI-Search-Visibility.md) |
 | Production readiness, performance | [architecture/Production-Readiness.md](architecture/Production-Readiness.md), [architecture/Performance-and-Resilience.md](architecture/Performance-and-Resilience.md) |
 | Linting | [architecture/Linting.md](architecture/Linting.md) |

@@ -3,7 +3,7 @@ import { newsRepository } from './repositories'
 import { notify } from '../../services/notify.js'
 import { Bookmark, Heart, MessageCircle, Share2 } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { shareOrCopy } from '../../utils/share.js'
+import { shareOrCopy, newsShareUrl } from '../../utils/share.js'
 
 function NewsEngagementBar({ article, user, compact, onNavigate }) {
   const [liked, setLiked] = useState(false)
@@ -66,7 +66,7 @@ function NewsEngagementBar({ article, user, compact, onNavigate }) {
     const result = await shareOrCopy({
       title: article.headline,
       text,
-      url: `${window.location.origin}/news/${article.id}`,
+      url: newsShareUrl(article),
     })
     if (result === 'copied') setShareMsg('Link copied')
     else if (result === 'failed') setShareMsg('Could not share')

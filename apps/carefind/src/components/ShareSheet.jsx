@@ -16,8 +16,6 @@ export default function ShareSheet({
   url,
   title,
   text,
-  mediaUrl,
-  files,
   onShareComplete,
 }) {
   const [note, setNote] = useState('')
@@ -52,7 +50,7 @@ export default function ShareSheet({
 
   async function handleShare() {
     setSharing(true)
-    const result = await shareOrCopy({ title, text: shareText, url, files, mediaUrl })
+    const result = await shareOrCopy({ title, text: shareText, url })
     setSharing(false)
     if (onShareComplete) onShareComplete(result)
     if (result === 'shared' || result === 'copied') onClose()

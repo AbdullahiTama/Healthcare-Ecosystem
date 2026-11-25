@@ -1,4 +1,13 @@
 import { supabase } from '../../../config/supabaseClient'
+import { rankProducts } from '../../../lib/nearbyRanking.js'
+import { productCoords } from '../../utils/marketplace.js'
+
+const PRODUCT_SEARCH_LIMIT = 100
+const PRODUCT_SEARCH_COLUMNS = 'id, name, emoji, price, show_price, rx_restricted, stock, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, business_id, owner_id, list_on_carefind, created_at, businesses(name, city, state, whatsapp, phone, latitude, longitude, lat, lng, show_prices)'
+// PostgREST / Postgres: the function does not exist (migration not applied yet).
+const MISSING_FUNCTION_CODES = ['PGRST202', '42883']
+// The fallback query builds a PostgREST or() filter: characters with meaning there are dropped from the search text.
+const filterSafe = (q) => String(q || '').replace(/[,()"\\*%:]/g, ' ').replace(/\s+/g, ' ').trim()
 
 // Public product reads go through carefind_products (carehub_20261221): it lists every product on CareFind, and
 // sends prescription-only and controlled medicines without a price (rx_restricted).
@@ -70,16 +79,44 @@ export function createHealthcareRepository({ client = supabase } = {}) {
       return bq
     },
 
-    async searchProducts(q, saleType) {
-      let pq = client
-        .from('carefind_products')
-        .select('id, name, emoji, price, show_price, rx_restricted, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, business_id, owner_id, list_on_carefind, created_at, businesses(name, city, state, whatsapp, phone, latitude, longitude, lat, lng, show_prices)')
-      if (q) pq = pq.or(`name.ilike.%${q}%,generic_name.ilike.%${q}%,category.ilike.%${q}%`)
-      if (saleType && saleType !== 'all') pq = pq.eq('sale_type', saleType)
-      pq = pq.order('created_at', { ascending: false }).limit(100)
+    // Products search, nearby pharmacies first (CODE_AUDIT A51): search_carefind_products (carefind_20270207) ranks
+    // EVERY match by match strength, availability and distance from `userCoords`, and returns the best 100 ids; the
+    // rows are then read from carefind_products in that order, each with `distance_m` (metres, or null).
+    // Until that function exists the previous query is used and the same rule (lib/nearbyRanking.js) is applied to the
+    // rows it returns.
+    async searchProducts(q, saleType, userCoords = null) {
+      const sale = saleType && saleType !== 'all' ? saleType : null
+      const located = userCoords && Number.isFinite(Number(userCoords.lat)) && Number.isFinite(Number(userCoords.lng))
+      const { data: ranked, error: rankError } = await client.rpc('search_carefind_products', {
+        p_query: q || null,
+        p_lat: located ? Number(userCoords.lat) : null,
+        p_lng: located ? Number(userCoords.lng) : null,
+        p_sale_type: sale,
+        p_limit: PRODUCT_SEARCH_LIMIT,
+      })
+      if (!rankError) {
+        const order = (ranked || []).filter((r) => r && r.id)
+        if (order.length === 0) return []
+        const { data, error } = await client.from('carefind_products').select(PRODUCT_SEARCH_COLUMNS).in('id', order.map((r) => r.id))
+        if (error) throw error
+        const byId = new Map((data || []).map((row) => [row.id, row]))
+        return order.filter((r) => byId.has(r.id)).map((r) => ({ ...byId.get(r.id), distance_m: r.distance_m ?? null }))
+      }
+      if (!MISSING_FUNCTION_CODES.includes(String(rankError.code))) throw rankError
+      console.warn('[search] search_carefind_products is not installed yet (carefind_20270207); ranking in the browser')
+
+      let pq = client.from('carefind_products').select(PRODUCT_SEARCH_COLUMNS)
+      const term = filterSafe(q)
+      if (term) pq = pq.or(`name.ilike.%${term}%,generic_name.ilike.%${term}%,category.ilike.%${term}%`)
+      if (sale) pq = pq.eq('sale_type', sale)
+      pq = pq.order('created_at', { ascending: false }).limit(PRODUCT_SEARCH_LIMIT)
       const { data, error } = await pq
       if (error) throw error
-      return data || []
+      return rankProducts(data || [], {
+        query: term,
+        userCoords: located ? userCoords : null,
+        pick: (r) => ({ name: r.name, genericName: r.generic_name, category: r.category, stock: r.stock, coords: productCoords(r), createdAt: r.created_at }),
+      })
     },
 
     async searchVerifiedProfiles(q, specialtyFilter, stateFilter) {

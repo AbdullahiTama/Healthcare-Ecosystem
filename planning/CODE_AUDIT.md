@@ -63,6 +63,7 @@ Last full review: 2026-11-02, against `main` at `c52f666` and the live Supabase 
 | A48 | High | Deployment (CareFind) | CareFind production has not been deployed since 2026-10-21 (`6248c0f`): every push to `main` since builds only a Preview of the Vercel project `healthcare-ecosystem`, while `carehub` deploys to Production. 61 commits touching CareFind or shared packages are not live (fee recording, SEO pages, carefind.app canonical, among others). Verified 2026-11-23 from GitHub deployment records and the live job slots (the steps that run are exactly those of `6248c0f`) | Open: owner, Vercel project settings (see §A48) |
 | A49 | High | Scheduling | The every-minute database scheduler (`email-outbox-carehub`, `email-outbox-carefind`) has failed every run since it was created (2026-09-28; 81,475 failures each) because its Vault secrets were never set. Email, payment reconciliation, refunds, withdrawals, vendor release and order expiry run only once a day (Vercel Hobby cron) | Open: owner, Supabase Vault (see §A49) |
 | A50 | Medium | Pricing (wholesale / retail) | Pharmacy feedback 2026-11-25: optional wholesale and retail prices in Inventory, Purchases, templates and POS; the POS price guard must accept the wholesale price. Also: bulk delete hard to find, no pagination on phones, page reset after a delete, requisition cost required | Open: migration `carehub_20270205` **applied 2026-11-25** (version 20261125154202) and probed, then app deployed; owner decision on wholesale-price visibility; follow-ups listed (see §A50) |
+| A51 | High | CareFind (guests, search, sharing) | Feedback 2026-11-25: MED Market refused visitors who are not signed in (`ecommerce_products` read fails for anon through products → business_claims → `is_platform_admin`); medicine search fetched the 100 newest matches before any distance sort; shared posts sent WhatsApp the media file instead of a link | Open: app done and tested; migrations `carefind_20270206_guest_shop_read` and `carefind_20270207_nearby_product_search` **not applied** (owner approval); reaches users only after A48. See §A51 |
 
 ## 2. Items
 
@@ -337,6 +338,30 @@ migration header.
 3. Follow-up: CareFind shows the retail price only; a wholesale-only product shows like the products already at ₦0.
    Decide what CareFind should show (it is frozen at 2026-10-21 by A48 in any case).
 4. Follow-up: the master-catalogue push carries the retail price only.
+
+### A51. CareFind: guests blocked from MED Market; search not location-aware; shares send files (High)
+
+**What (verified 2026-11-25):** (1) as `anon`, `select … from ecommerce_products` fails with 42501 "permission denied
+for function is_platform_admin": the shop's public policy reads `products`, whose policy reads `business_claims`, whose
+policy calls a function anon may not execute; the shop then says "Sign in to browse the shop". Every other public page
+already worked for guests. (2) Products search fetched the 100 newest matches (13,988 listed) and sorted by distance only
+with "Near me" on, so nearby pharmacies were often never fetched; the search text went unescaped into a PostgREST
+`or()` filter. (3) `utils/share.js` attached the downloaded image / video file to the share sheet for posts and news.
+
+**Not done on purpose:** letting anon execute `is_platform_admin` (or scoping the claims policy) would open `products`,
+and with it `cost_price` (A25 / A47 part 2 not applied), to the internet.
+
+**Done (app, tested):** see [CareFind-Guest-Access-Nearby-Search-and-Link-Sharing.md](../docs/architecture/CareFind-Guest-Access-Nearby-Search-and-Link-Sharing.md).
+**Migrations (PGlite-tested, NOT applied):** `carefind_20270206_guest_shop_read` (checked helper in the shop policy;
+`reorder_level` on the public view) and `carefind_20270207_nearby_product_search` (ranked search function). The app works
+before and after each.
+
+**Open:**
+1. Owner: approve and apply both migrations, then probe as anon (steps in the doc).
+2. Owner: A48. CareFind production is frozen at 2026-10-21; none of the app changes reach users until it deploys.
+3. Follow-up: video posts have no stored thumbnail, so their preview card shows the CareFind icon; generating a
+   thumbnail at upload would give a real frame.
+4. Follow-up: when A25 part 2 lands, the shop's product details could stay on the view as now (no change needed).
 
 ### A15. Expense budget disappeared: stored only in the browser (Medium)
 

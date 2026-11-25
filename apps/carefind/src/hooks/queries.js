@@ -722,15 +722,20 @@ export function useFeatured() {
   })
 }
 
-export function useSearchResults({ searchQuery, tab, stateFilter, saleType, specialtyFilter, userId }) {
+export function useSearchResults({ searchQuery, tab, stateFilter, saleType, specialtyFilter, userId, userCoords }) {
+  // Products are ranked nearest first (CODE_AUDIT A51). The location is rounded to about 100 m for the cache key, so
+  // small GPS movements do not refetch; it is sent only for the Products tab.
+  const near = tab === 'products' && userCoords && Number.isFinite(Number(userCoords.lat)) && Number.isFinite(Number(userCoords.lng))
+    ? { lat: Math.round(Number(userCoords.lat) * 1000) / 1000, lng: Math.round(Number(userCoords.lng) * 1000) / 1000 }
+    : null
   return useQuery({
-    queryKey: keys.searchResults({ searchQuery, tab, stateFilter, saleType, specialtyFilter }),
+    queryKey: keys.searchResults({ searchQuery, tab, stateFilter, saleType, specialtyFilter, near }),
     queryFn: async () => {
       const q = (searchQuery || '').trim()
       let products = [], businesses = [], professionals = [], proStories = [], proViewed = new Set(), filterCategories = ['all']
 
       if (tab === 'products') {
-        const data = await healthcareRepository.searchProducts(q, saleType)
+        const data = await healthcareRepository.searchProducts(q, saleType, near)
         let list = data.filter(p => p.list_on_carefind !== false)
         if (stateFilter) list = list.filter(p => (p.seller_location || p.businesses?.state || p.businesses?.city || '').toLowerCase().includes(stateFilter.toLowerCase()))
         list = await attachOwnerProfiles(list)

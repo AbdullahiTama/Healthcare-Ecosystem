@@ -223,14 +223,32 @@ export function buildPostMeta(post, { origin, canonicalUrl, author } = {}) {
 
   const authorName = author?.full_name || author?.display_name || null
   const body = plainTextFromContent(post.content)
+  // The card's picture (CODE_AUDIT A51): the first image of a multi-image post, else its image. A video has no stored
+  // thumbnail, so its card shows the CareFind icon rather than none, and carries og:video for platforms that play
+  // video inside the preview (WhatsApp shows the picture; tapping opens the post).
+  const firstImage = (Array.isArray(post.image_urls) && post.image_urls.find(Boolean)) || post.image_url
+  const video = absoluteUrl(origin, post.video_url)
+  const fallbackTitle = video
+    ? (authorName ? `Video by ${authorName} on CareFind` : 'Video on CareFind')
+    : (authorName ? `${authorName} on CareFind` : DEFAULT_TITLE)
   return {
-    title: titleFromContent(post.content, authorName ? `${authorName} on CareFind` : DEFAULT_TITLE),
-    description: truncate(body) || DEFAULT_DESCRIPTION,
-    image: absoluteUrl(origin, post.image_url),
+    title: titleFromContent(post.content, fallbackTitle),
+    description: truncate(body) || (video ? 'Watch this video on CareFind.' : DEFAULT_DESCRIPTION),
+    image: absoluteUrl(origin, firstImage) || (video ? absoluteUrl(origin, SHARE_FALLBACK_IMAGE) : null),
+    video,
     url: canonicalUrl,
-    type: 'article',
+    type: video ? 'video.other' : 'article',
     authorName,
   }
+}
+
+// The picture for a shared video with no thumbnail: the app icon (public/icon-512.png, also index.html's og:image).
+export const SHARE_FALLBACK_IMAGE = '/icon-512.png'
+
+// og:video:type from the file extension; unknown types are left out rather than guessed.
+function videoMimeType(url) {
+  const ext = String(url || '').split(/[?#]/)[0].split('.').pop().toLowerCase()
+  return { mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', ogv: 'video/ogg' }[ext] || null
 }
 
 export function buildProfileMeta(profile, { origin, canonicalUrl } = {}) {
@@ -318,6 +336,12 @@ export function renderOgHtml(meta) {
   }
   tags.push(`<meta name="twitter:title" content="${e(meta.title)}" />`)
   tags.push(`<meta name="twitter:description" content="${e(meta.description)}" />`)
+  if (meta.video) {
+    tags.push(`<meta property="og:video" content="${e(meta.video)}" />`)
+    if (/^https:/i.test(meta.video)) tags.push(`<meta property="og:video:secure_url" content="${e(meta.video)}" />`)
+    const mime = videoMimeType(meta.video)
+    if (mime) tags.push(`<meta property="og:video:type" content="${e(mime)}" />`)
+  }
   if (meta.authorName) {
     tags.push(`<meta property="article:author" content="${e(meta.authorName)}" />`)
   }

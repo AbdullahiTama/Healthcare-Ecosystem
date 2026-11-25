@@ -83,8 +83,8 @@ vi.mock('../../components/ui', () => ({
   Toast: () => null,
   useToast: () => ({ msg: null, type: 'info', actionLabel: null, onAction: null, show: toastShow }),
 }))
-const shareMocks = vi.hoisted(() => ({ mediaToFile: vi.fn(), shareOrCopy: vi.fn() }))
-vi.mock('../../utils/share.js', () => shareMocks)
+const shareMocks = vi.hoisted(() => ({ shareOrCopy: vi.fn() }))
+vi.mock('../../utils/share.js', async (importOriginal) => ({ ...(await importOriginal()), ...shareMocks }))
 vi.mock('../../hooks/useBreakpoint', () => ({ useBreakpoint: () => ({ isMobile: true }) }))
 vi.mock('../../hooks/useHeaderIdentity', () => ({ useHeaderIdentity: () => ({ myUsername: '', myAvatar: null, unreadNotifs: 0 }) }))
 vi.mock('../../components/layout/AppShell.jsx', () => ({ default: ({ children }) => <div>{children}</div> }))
@@ -142,8 +142,6 @@ beforeEach(() => {
   h.ctrl.from.mockClear()
   notifyMock.mockClear()
   toastShow.mockClear()
-  shareMocks.mediaToFile.mockReset()
-  shareMocks.mediaToFile.mockResolvedValue(null)
   shareMocks.shareOrCopy.mockReset()
   shareMocks.shareOrCopy.mockResolvedValue('copied')
   auth.user = null
@@ -330,7 +328,7 @@ describe('NewsArticle route /news/:id', () => {
     expect(screen.queryByText(/repost/)).not.toBeInTheDocument()
   })
 
-  it('attaches the hero image to shares when present', async () => {
+  it('shares the article\'s link, never its hero image file (the link preview shows the image)', async () => {
     const withHero = { ...article, hero_image_url: 'https://cdn.test/hero.jpg' }
     h.ctrl.push({ data: withHero, error: null })
     h.ctrl.push({ data: [], error: null })
@@ -339,38 +337,13 @@ describe('NewsArticle route /news/:id', () => {
     renderArticle('art-1')
     await screen.findByText('Test headline on malaria')
 
-    const file = new File(['img'], 'hero.jpg', { type: 'image/jpeg' })
-    shareMocks.mediaToFile.mockResolvedValue(file)
-
     fireEvent.click(screen.getAllByRole('button', { name: /share this article/i })[0])
 
-    await waitFor(() => {
-      expect(shareMocks.mediaToFile).toHaveBeenCalledWith('https://cdn.test/hero.jpg')
-      expect(shareMocks.shareOrCopy).toHaveBeenCalled()
-    })
+    await waitFor(() => expect(shareMocks.shareOrCopy).toHaveBeenCalled())
     const args = shareMocks.shareOrCopy.mock.calls[0][0]
-    expect(args.mediaUrl).toBe('https://cdn.test/hero.jpg')
-    expect(args.files).toEqual([file])
-    expect(args.url).toBe('http://localhost:3000/news/art-1')
-  })
-
-  it('shares without media when the article has no hero image', async () => {
-    h.ctrl.push({ data: article, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push(...emptyEngagement())
-
-    renderArticle('art-1')
-    await screen.findByText('Test headline on malaria')
-
-    fireEvent.click(screen.getAllByRole('button', { name: /share this article/i })[0])
-
-    await waitFor(() => {
-      expect(shareMocks.shareOrCopy).toHaveBeenCalled()
-    })
-    const args = shareMocks.shareOrCopy.mock.calls[0][0]
-    expect(args.mediaUrl).toBeNull()
-    expect(args.files).toBeUndefined()
-    expect(shareMocks.mediaToFile).not.toHaveBeenCalled()
+    expect(args).not.toHaveProperty('files')
+    expect(args).not.toHaveProperty('mediaUrl')
+    expect(new URL(args.url).pathname).toBe('/news/test-headline-on-malaria-art-1')
   })
 
   it('renders comment bodies through markdown instead of raw content', async () => {

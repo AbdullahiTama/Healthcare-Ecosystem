@@ -12,6 +12,8 @@ import MiniCart from './MiniCart'
 import { getRecent } from './recentlyViewed'
 import { reviewsRepository } from './reviewsRepository'
 import ProductGrid from '../marketplace/ProductGrid'
+import { rankProducts } from '../../lib/nearbyRanking'
+import { productCoords } from '../utils/marketplace.js'
 
 const shopRepository = createShopRepository()
 
@@ -139,8 +141,17 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     else if (active.sort === 'price_desc') rows.sort((a,b) => (b.ecommerce_price_kobo ?? b.products.price*100 ?? 0) - (a.ecommerce_price_kobo ?? a.products.price*100 ?? 0))
     else if (active.sort === 'newest') rows.sort((a,b) => new Date(b.active_at) - new Date(a.active_at))
     else if (active.sort === 'rating') rows.sort((a,b) => (ratings[b.id]?.avg||0) - (ratings[a.id]?.avg||0))
+    // The default order: relevance, availability, then the seller nearest the user (CODE_AUDIT A51; one rule with
+    // medicine search, lib/nearbyRanking.js). An explicit sort above is left as chosen.
+    else rows = rankProducts(rows, {
+      query: externalQuery,
+      userCoords,
+      pick: (r) => ({ name: r.products?.name, genericName: r.products?.generic_name, category: r.category || r.products?.category,
+        // No date: the repository already returns newest-listed first, and ties keep that order.
+        stock: r.products?.stock, coords: productCoords({ businesses: r.businesses }), createdAt: null }),
+    })
     return rows
-  }, [products, brand, active.category, active.priceMin, active.priceMax, active.showRxOnly, active.inStockOnly, active.sort, ratings])
+  }, [products, brand, active.category, active.priceMin, active.priceMax, active.showRxOnly, active.inStockOnly, active.sort, ratings, externalQuery, userCoords])
 
   // The unfiltered landing shows a featured row; any query, segment or filter shows every match straight away.
   const filtersActive = active.priceMin !== '' || active.priceMax !== '' || active.category !== 'all' || active.showRxOnly || !active.inStockOnly || active.sort !== 'popular'

@@ -91,7 +91,7 @@ function Search() {
   const featuredType = featuredData?.type || 'promo'
 
   const { data: searchResults, isLoading: loading, refetch } = useSearchResults({
-    searchQuery, tab, stateFilter, saleType, specialtyFilter, userId: user?.id,
+    searchQuery, tab, stateFilter, saleType, specialtyFilter, userId: user?.id, userCoords,
   })
   const products = searchResults?.products || []
   const businesses = searchResults?.businesses || []
@@ -100,7 +100,8 @@ function Search() {
   const proViewed = searchResults?.proViewed || new Set()
   const filterCategories = searchResults?.filterCategories || ['all']
 
-  // Client-side near-me sort for products and businesses
+  // Products already arrive ranked by relevance, availability and distance (search_carefind_products). "Near me"
+  // additionally orders them by distance alone, as it does businesses.
   const sortedProducts = nearMe && userCoords
     ? [...products].sort((a, b) => (distanceMeters(a, userCoords) - distanceMeters(b, userCoords)))
     : products

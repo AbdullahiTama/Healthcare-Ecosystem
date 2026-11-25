@@ -95,9 +95,9 @@ vi.mock('../subscriptions-monetization/GiftPanel.jsx', () => ({ default: () => n
 vi.mock('../../services/notify.js', () => ({ notify: vi.fn() }))
 vi.mock('../../services/ensureProfile.js', () => ({ ensureProfile: vi.fn() }))
 vi.mock('../../lib/activeIdentity', () => ({ getActiveIdentity: vi.fn(() => null) }))
-vi.mock('../../utils/share.js', () => ({
+vi.mock('../../utils/share.js', async (importOriginal) => ({
+  ...(await importOriginal()),
   shareOrCopy: vi.fn().mockResolvedValue('copied'),
-  mediaToFile: vi.fn().mockResolvedValue(null),
 }))
 vi.mock('../../utils/voiceCard.js', () => ({
   canExportVideo: () => false,
@@ -158,7 +158,7 @@ beforeEach(() => {
 // covered here. Task 7 moved that shape itself from /feed?post=<id> to the
 // post's own permalink, /post/<id> — this pins the new contract.
 describe('Feed share URL', () => {
-  it('shares a post with a /post/<id> URL', async () => {
+  it('shares the post\'s own link (/post/<title-slug>-<id>), never a media file', async () => {
     mockSupabase.data.tables.posts = [makePost()]
     renderFeed('/feed')
 
@@ -168,7 +168,9 @@ describe('Feed share URL', () => {
     await waitFor(() => expect(shareOrCopy).toHaveBeenCalled())
     const arg = shareOrCopy.mock.calls[0][0]
     const url = new URL(arg.url)
-    expect(url.pathname).toBe('/post/p1')
+    expect(url.pathname).toMatch(/^\/post\/([a-z0-9-]+-)?p1$/)
+    expect(arg).not.toHaveProperty('files')
+    expect(arg).not.toHaveProperty('mediaUrl')
   })
 })
 

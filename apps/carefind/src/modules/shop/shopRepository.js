@@ -6,8 +6,35 @@ import { supabase } from '../../config/supabaseClient'
 const MISSING_TABLE_CODES = ['PGRST205', '42P01']
 const isMissingTable = (error) => MISSING_TABLE_CODES.includes(String(error.code))
 
-// Public Shop repository — reads Active ecommerce_products + products + ordered images
-// Uses anon supabase client (RLS public read: status=Active + approved vendor + in-stock + not restricted)
+// The shop item's product details come from the public view carefind_products, never by embedding `products`:
+// products is not readable by a visitor who is not signed in (its row security fails for anon, and it still carries
+// cost_price), so an embed refused the whole shop to guests (carefind_20270206_guest_shop_read, CODE_AUDIT A51).
+// reorder_level (the "Low stock" badge) was added to the view by that migration; before it is applied the read is
+// retried without it.
+const PRODUCT_DETAIL_COLUMNS = 'id,name,generic_name,price,stock,category,price_unit,sale_type,emoji,image_url,description'
+const UNDEFINED_COLUMN = '42703'
+
+async function productDetailsById(client, productIds) {
+  const ids = [...new Set((productIds || []).filter(Boolean))]
+  if (ids.length === 0) return new Map()
+  const read = (columns) => client.from('carefind_products').select(columns).in('id', ids)
+  let { data, error } = await read(PRODUCT_DETAIL_COLUMNS + ',reorder_level')
+  if (error && String(error.code) === UNDEFINED_COLUMN) {
+    console.warn('[shop] carefind_products has no reorder_level yet (carefind_20270206 not applied); reading without it')
+    ;({ data, error } = await read(PRODUCT_DETAIL_COLUMNS))
+  }
+  if (error) throw error
+  return new Map((data || []).map((p) => [p.id, p]))
+}
+
+// Puts each shop item's product details on `products`, as the embed used to (null when the product is not public).
+async function withProductDetails(client, rows) {
+  const details = await productDetailsById(client, rows.map((r) => r.product_id))
+  return rows.map((r) => ({ ...r, products: details.get(r.product_id) || null }))
+}
+
+// Public Shop repository — reads Active ecommerce_products + their public product details + ordered images.
+// Works signed out: RLS public read (status=Active + approved vendor + in-stock + not restricted).
 export function createShopRepository(client = supabase) {
   return {
     async getActiveProducts({ segment, query, limit = 50 } = {}) {
@@ -15,7 +42,7 @@ export function createShopRepository(client = supabase) {
         .from('ecommerce_products')
         // `businesses` is the seller shown on each card. Public RLS only exposes active, visible businesses, so a
         // vendor outside that comes back as null — callers must tolerate a product with no seller.
-        .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,active_at,prescription_required,warnings,restrictions,is_restricted, products(id,name,generic_name,price,stock,reorder_level,category,price_unit,sale_type,emoji,image_url), businesses(id,name,business_type,logo_url,city,state,lat,lng)')
+        .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,active_at,prescription_required,warnings,restrictions,is_restricted, businesses(id,name,business_type,logo_url,city,state,lat,lng)')
         .eq('status', 'Active')
         .eq('is_restricted', false)
         .order('active_at', { ascending: false })
@@ -24,7 +51,7 @@ export function createShopRepository(client = supabase) {
         if (isMissingTable(error)) return []
         throw error
       }
-      let rows = data || []
+      let rows = await withProductDetails(client, data || [])
       // RLS already enforces Approved vendor + stock>0, but keep defensive client filter for stale data
       rows = rows.filter(r => {
         const p = r.products
@@ -73,7 +100,7 @@ export function createShopRepository(client = supabase) {
     async getProductDetail(productId) {
       const { data: byId, error } = await client
         .from('ecommerce_products')
-        .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,attributes,active_at,prescription_required,warnings,restrictions,is_restricted, products(id,name,generic_name,price,stock,category,price_unit,sale_type,emoji,image_url,description)')
+        .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,attributes,active_at,prescription_required,warnings,restrictions,is_restricted')
         .eq('id', productId)
         .eq('status', 'Active')
         .eq('is_restricted', false)
@@ -83,7 +110,7 @@ export function createShopRepository(client = supabase) {
       if (!data) {
         const { data: byProduct } = await client
           .from('ecommerce_products')
-          .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,attributes,active_at,prescription_required,warnings,restrictions,is_restricted, products(id,name,generic_name,price,stock,category,price_unit,sale_type,emoji,image_url,description)')
+          .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,attributes,active_at,prescription_required,warnings,restrictions,is_restricted')
           .eq('product_id', productId)
           .eq('status', 'Active')
           .eq('is_restricted', false)
@@ -92,6 +119,7 @@ export function createShopRepository(client = supabase) {
       }
       if (!data) return null
       if (data.is_restricted) return null
+      ;[data] = await withProductDetails(client, [data])
       if ((data.products?.stock ?? 0) <= 0) return null
       const { data: images, error: imgErr } = await client
         .from('ecommerce_product_images')
@@ -148,10 +176,10 @@ export function createShopRepository(client = supabase) {
     async validateStock(ecommerceIds) {
       const { data, error } = await client
         .from('ecommerce_products')
-        .select('id, product_id, products(id, name, stock)')
+        .select('id, product_id')
         .in('id', ecommerceIds)
       if (error) throw error
-      return data || []
+      return withProductDetails(client, data || [])
     },
 
     async getOrderReturn(orderId) {

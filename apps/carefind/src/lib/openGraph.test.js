@@ -507,3 +507,43 @@ describe('deep-link preview card — image/title taps open canonical /post/:id',
     expect(html).not.toContain(LEGACY_POST_URL)
   })
 })
+
+describe('post previews for media posts (CODE_AUDIT A51)', () => {
+  const ctx = { origin: 'https://carefind.app', canonicalUrl: 'https://carefind.app/post/x', author: { full_name: 'Dr Ada' } }
+
+  it('uses the first image of a multi-image post', () => {
+    const meta = buildPostMeta({ content: 'Clinic day', image_urls: ['https://cdn/a.jpg', 'https://cdn/b.jpg'], image_url: 'https://cdn/a.jpg' }, ctx)
+    expect(meta.image).toBe('https://cdn/a.jpg')
+    expect(meta.video).toBeNull()
+    expect(meta.type).toBe('article')
+  })
+
+  it('gives a video post a picture, a video tag and a video title when it has no words', () => {
+    const meta = buildPostMeta({ content: '', video_url: 'https://cdn/clip.mp4' }, ctx)
+    expect(meta.title).toBe('Video by Dr Ada on CareFind')
+    expect(meta.description).toBe('Watch this video on CareFind.')
+    expect(meta.image).toBe('https://carefind.app/icon-512.png')
+    expect(meta.video).toBe('https://cdn/clip.mp4')
+    expect(meta.type).toBe('video.other')
+  })
+
+  it('prefers a video post\'s own image over the icon', () => {
+    const meta = buildPostMeta({ content: 'Watch', video_url: 'https://cdn/clip.mp4', image_url: 'https://cdn/poster.jpg' }, ctx)
+    expect(meta.image).toBe('https://cdn/poster.jpg')
+  })
+
+  it('renders og:video tags, with the type from the extension', () => {
+    const html = renderOgHtml(buildPostMeta({ content: 'Watch', video_url: 'https://cdn/clip.mp4?token=1' }, ctx))
+    expect(html).toContain('<meta property="og:video" content="https://cdn/clip.mp4?token=1" />')
+    expect(html).toContain('<meta property="og:video:secure_url" content="https://cdn/clip.mp4?token=1" />')
+    expect(html).toContain('<meta property="og:video:type" content="video/mp4" />')
+    expect(html).toContain('<meta property="og:type" content="video.other" />')
+    expect(html).toContain('<meta property="og:image" content="https://carefind.app/icon-512.png" />')
+  })
+
+  it('describes nothing of a paid video post', () => {
+    const meta = buildPostMeta({ content: 'secret', video_url: 'https://cdn/clip.mp4', subscriber_only: true }, ctx)
+    expect(meta.video).toBeUndefined()
+    expect(renderOgHtml(meta)).not.toContain('clip.mp4')
+  })
+})

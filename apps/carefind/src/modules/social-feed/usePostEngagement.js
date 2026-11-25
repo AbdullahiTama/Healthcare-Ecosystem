@@ -10,10 +10,9 @@ import { unresolvedSourceIds, indexPosts } from './reposts.js'
 import { validateArticleForPublish } from '../news-publishing/articleContent.js'
 import { notify, NOTIF_MESSAGES } from '../../services/notify.js'
 import { exportImage, exportVideo, canExportVideo, shareOrDownload } from '../../utils/voiceCard.js'
-import { shareOrCopy, mediaToFile } from '../../utils/share.js'
+import { shareOrCopy, postShareUrl } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
 import { loadActiveCreatorIds } from '../subscriptions-monetization/subscriptions.js'
-import { normaliseSiteUrl } from '../../lib/seo/site.js'
 
 // Merge-by-key for the array slices. `merge:false` replaces outright (a feed
 // refetch must drop rows belonging to posts that fell out of the batch);
@@ -599,12 +598,9 @@ export function usePostEngagement({
   async function sharePost(post) {
     const author = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
     const text = author ? `“${toShareText(post.content)}” · ${author} on CareFind` : toShareText(post.content)
-    // Attach the post's media (image/video) to the share where the browser
-    // supports it; the URL is still appended to the clipboard fallback so
-    // WhatsApp recipients always get the media, never just the caption.
-    const mediaUrl = post.image_url || post.video_url || null
-    const file = mediaUrl ? await mediaToFile(mediaUrl) : null
-    const result = await shareOrCopy({ title: 'CareFind', text, url: `${normaliseSiteUrl(import.meta.env.VITE_SITE_URL)}/post/${post.id}`, files: file ? [file] : undefined, mediaUrl })
+    // The post's link, never its media file (utils/share.js): recipients open the original post, and the link's
+    // preview card shows the image or video thumbnail (api/_handlers/og.js).
+    const result = await shareOrCopy({ title: 'CareFind', text, url: postShareUrl(post) })
     if (result === 'copied') toast.show('Post copied: paste it anywhere to share.', { type: 'success' })
     if (result === 'failed') toast.show("This browser won't let us share or copy from here.", { type: 'error' })
 

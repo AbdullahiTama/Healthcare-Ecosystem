@@ -6,7 +6,7 @@ import { useAuth } from '../../providers/AuthContext'
 import { notify } from '../../services/notify.js'
 import { ArrowLeft, Bookmark, Eye, Gift, Heart, MessageCircle, Newspaper, Repeat2, Share2, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { mediaToFile, shareOrCopy } from '../../utils/share.js'
+import { shareOrCopy, newsShareUrl } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
@@ -100,15 +100,10 @@ function NewsArticle() {
 
   // Same fallback as the feed's share (utils/share.js): Web Share where it
   // exists, clipboard everywhere else, and the user is told which happened.
-  // The article's hero image is attached to the share where the browser
-  // supports it (mirrors Feed.jsx's sharePost); the URL is still appended to
-  // the clipboard fallback so recipients always get the media. Best-effort:
-  // a failed media fetch leaves the text share intact.
+  // The article's link, never its hero image file: the link's preview card shows the image (api/_handlers/og.js).
   async function shareArticle() {
     const text = article.subtitle ? `${article.headline}: ${toShareText(article.subtitle)}` : article.headline
-    const mediaUrl = article.hero_image_url || null
-    const file = mediaUrl ? await mediaToFile(mediaUrl) : null
-    const result = await shareOrCopy({ title: article.headline, text, url: `${window.location.origin}/news/${article.id}`, files: file ? [file] : undefined, mediaUrl })
+    const result = await shareOrCopy({ title: article.headline, text, url: newsShareUrl(article) })
     if (result === 'copied') setShareMsg('Link copied. Paste it anywhere to share.')
     if (result === 'failed') setShareMsg("This browser won't let us share or copy from here.")
     if (result === 'copied' || result === 'failed') setTimeout(() => setShareMsg(''), 4000)

@@ -98,7 +98,7 @@ vi.mock('../subscriptions-monetization/GiftPanel.jsx', () => ({ default: () => n
 vi.mock('../../services/notify.js', () => ({ notify: vi.fn() }))
 vi.mock('../../services/ensureProfile.js', () => ({ ensureProfile: vi.fn(() => Promise.resolve(true)) }))
 vi.mock('../../lib/activeIdentity', () => ({ getActiveIdentity: vi.fn(() => null) }))
-vi.mock('../../utils/share.js', () => ({ shareOrCopy: vi.fn().mockResolvedValue('copied'), mediaToFile: vi.fn().mockResolvedValue(null) }))
+vi.mock('../../utils/share.js', async (importOriginal) => ({ ...(await importOriginal()), shareOrCopy: vi.fn().mockResolvedValue('copied') }))
 vi.mock('../../utils/voiceCard.js', () => ({ canExportVideo: () => false, exportImage: vi.fn().mockResolvedValue({}), exportVideo: vi.fn().mockRejectedValue(new Error('no-video')), shareOrDownload: vi.fn() }))
 vi.mock('../../utils/imageResize.js', () => ({ resizeImage: vi.fn((file) => Promise.resolve(file)) }))
 

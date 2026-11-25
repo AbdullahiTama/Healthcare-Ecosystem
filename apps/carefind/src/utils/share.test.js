@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { toShareText } from './formatShare.js'
-import { shareOrCopy, mediaToFile } from './share.js'
+import { shareOrCopy, postShareUrl, newsShareUrl } from './share.js'
 
 describe('toShareText', () => {
   it('returns empty string for null/undefined', () => {
@@ -96,31 +96,14 @@ describe('shareOrCopy', () => {
     expect(await shareOrCopy({ title: 't', text: 'hi', url: 'http://x.test' })).toBe('dismissed')
   })
 
-  it('passes files to navigator.share when canShare accepts them', async () => {
+  it('never hands a media file to the share sheet, even if a caller passes one (CODE_AUDIT A51)', async () => {
     const share = vi.fn().mockResolvedValue()
-    const file = new File(['x'], 'pic.jpg', { type: 'image/jpeg' })
-    Object.assign(global.navigator, {
-      share,
-      canShare: vi.fn(() => true),
-      clipboard: { writeText: vi.fn() },
-    })
-    expect(await shareOrCopy({ text: 'hi', url: 'http://x.test', files: [file] })).toBe('shared')
-    expect(share).toHaveBeenCalledWith(expect.objectContaining({ files: [file], url: 'http://x.test' }))
-  })
-
-  it('omits files when canShare rejects them but still shares url (deep-link preview)', async () => {
-    const share = vi.fn().mockResolvedValue()
-    const clipboard = vi.fn().mockResolvedValue()
-    const file = new File(['x'], 'pic.jpg', { type: 'image/jpeg' })
-    Object.assign(global.navigator, {
-      share,
-      canShare: vi.fn(() => false),
-      clipboard: { writeText: clipboard },
-    })
-    expect(await shareOrCopy({ text: 'hi', url: 'http://x.test', files: [file] })).toBe('shared')
-    expect(share).toHaveBeenCalledWith(expect.objectContaining({ url: 'http://x.test', text: 'hi' }))
-    expect(share).not.toHaveBeenCalledWith(expect.objectContaining({ files: expect.anything() }))
-    expect(clipboard).not.toHaveBeenCalled()
+    const canShare = vi.fn(() => true)
+    const file = new File(['x'], 'clip.mp4', { type: 'video/mp4' })
+    Object.assign(global.navigator, { share, canShare, clipboard: { writeText: vi.fn() } })
+    expect(await shareOrCopy({ title: 't', text: 'hi', url: 'http://x.test/post/abc', files: [file], mediaUrl: 'http://x.test/clip.mp4' })).toBe('shared')
+    expect(share).toHaveBeenCalledWith({ title: 't', text: 'hi', url: 'http://x.test/post/abc' })
+    expect(canShare).not.toHaveBeenCalled()
   })
 
   it('does not append the media URL to clipboard text (OG tags carry the image) — URL first', async () => {
@@ -132,28 +115,19 @@ describe('shareOrCopy', () => {
   })
 })
 
-describe('mediaToFile', () => {
-  it('returns null for no URL or a failed fetch', async () => {
-    expect(await mediaToFile(null)).toBeNull()
-    expect(await mediaToFile('')).toBeNull()
+describe('share links', () => {
+  const ID = '0b1c2d3e-4f50-4a61-8b72-9c83d4e5f607'
+
+  it('a post\'s link is its readable canonical URL on the public site', () => {
+    expect(postShareUrl({ id: ID, content: 'Malaria: signs to watch for this rainy season' }))
+      .toBe('https://carefind.app/post/malaria-signs-to-watch-for-this-rainy-season-' + ID)
   })
 
-  it('returns null when the fetch response is not ok', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: false })
-    expect(await mediaToFile('http://x.test/pic.jpg')).toBeNull()
+  it('a video or image post with no words still gets a working link', () => {
+    expect(postShareUrl({ id: ID, content: '' })).toBe('https://carefind.app/post/article-on-carefind-' + ID)
   })
 
-  it('builds a File from a fetched blob, deriving the name from the URL', async () => {
-    const blob = new Blob(['img'], { type: 'image/jpeg' })
-    global.fetch = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob })
-    const file = await mediaToFile('http://x.test/uploads/pic.jpg?token=abc')
-    expect(file).toBeInstanceOf(File)
-    expect(file.name).toBe('pic.jpg')
-    expect(file.type).toBe('image/jpeg')
-  })
-
-  it('returns null when fetch throws (CORS etc.)', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
-    expect(await mediaToFile('http://x.test/pic.jpg')).toBeNull()
+  it('a news article\'s link carries its headline', () => {
+    expect(newsShareUrl({ id: ID, headline: 'New clinic opens in Yaba' })).toBe('https://carefind.app/news/new-clinic-opens-in-yaba-' + ID)
   })
 })

@@ -1,52 +1,29 @@
-// Sharing, with the fallback every desktop browser needs.
+import { normaliseSiteUrl } from '../lib/seo/site.js'
+import { postPath, newsPath } from '../lib/seo/slugs.js'
+import { titleFromContent } from '../lib/openGraph.js'
+
+// Sharing a CareFind link, with the fallback every desktop browser needs.
 //
-// `navigator.share` exists on phones and on very few desktop browsers. A
-// share button wired straight to it is a button that silently does nothing
-// for a large share of users, so this falls back to the clipboard and tells
-// the caller which path was taken — the caller is expected to confirm
-// "copied" to the user, since a clipboard write has no visible effect.
+// `navigator.share` exists on phones and on very few desktop browsers. A share button wired straight to it is a button
+// that silently does nothing for a large share of users, so this falls back to the clipboard and tells the caller
+// which path was taken: the caller is expected to confirm "copied" to the user, since a clipboard write has no visible
+// effect.
 //
-// Media posts (visual/image/video) can pass `files` — real File objects —
-// which are handed to the Web Share API on capable browsers so WhatsApp and
-// friends receive the actual image/video. Where the Web Share API is missing
-// or rejects the files, the clipboard fallback copies only the post URL —
-// the OG tags on that URL already carry the image for link previews.
+// LINKS, NEVER FILES (CODE_AUDIT A51, feedback 2026-11-25). A shared post, article or video is its CareFind link: the
+// recipient taps it and lands on the original post, and WhatsApp, LinkedIn, Telegram and the rest draw a preview card
+// (thumbnail, title, description) from the link's own tags (api/_handlers/og.js, served to preview crawlers). Handing
+// the media file to the share sheet instead (as this module used to) sent WhatsApp the raw video or image with no way
+// back to the post. A `files` or `mediaUrl` argument from an older caller is ignored on purpose.
+// (The voice-note card in utils/voiceCard.js is a different, explicit "save as video for WhatsApp Status" export.)
 //
 // Returns: 'shared' | 'copied' | 'dismissed' | 'failed'
-//
-// Fetch a media URL into a File object for the Web Share API. The filename is
-// derived from the URL so the recipient sees a sensible name. Returns null on
-// any failure (CORS, missing response) so a media attach is always best-effort
-// and never blocks the text share.
-export async function mediaToFile(url) {
-  if (!url) return null
-  try {
-    const res = await fetch(url, { mode: 'cors' })
-    if (!res.ok) return null
-    const blob = await res.blob()
-    const clean = String(url).split(/[?#]/)[0]
-    const name = clean.split('/').pop() || 'carefind-media'
-    const type = blob.type || (name.match(/\.(png|jpe?g|gif|webp)$/i) ? 'image/' + name.split('.').pop().toLowerCase() : 'application/octet-stream')
-    return new File([blob], name, { type })
-  } catch {
-    return null
-  }
-}
-export async function shareOrCopy({ title, text, url, files, mediaUrl }) {
+export async function shareOrCopy({ title, text, url }) {
   const target = url || window.location.href
 
   if (navigator.share) {
-    const hasFiles = Array.isArray(files) && files.length > 0
-    const filesShareable = !hasFiles
-      || (typeof navigator.canShare === 'function' && navigator.canShare({ files }))
-    const payload = { title, text, url: target }
-    // Include files only when the browser confirms it can share them. When
-    // files are present but not shareable we still share url+text so the
-    // preview card deep-links to the canonical /post/:id (I/O matrix: omit
-    // files but still share url).
-    if (hasFiles && filesShareable) payload.files = files
     try {
-      await navigator.share(payload)
+      // Title, text and the link only: never a file (see LINKS, NEVER FILES above).
+      await navigator.share({ title, text, url: target })
       return 'shared'
     } catch (e) {
       // The user closing the share sheet is not a failure to report.
@@ -67,3 +44,14 @@ export async function shareOrCopy({ title, text, url, files, mediaUrl }) {
     return 'failed'
   }
 }
+
+// The link to share for a post or a news article: the readable canonical URL (/post/<title-slug>-<id>,
+// /news/<headline-slug>-<id>), the same one the sitemap and the preview card use, on the public site address. Old
+// /post/<id> links keep working (the id is read from the end of the path).
+export function postShareUrl(post) {
+  return siteOrigin() + postPath(post, titleFromContent(post?.content, 'Article on CareFind'))
+}
+export function newsShareUrl(article) {
+  return siteOrigin() + newsPath(article)
+}
+const siteOrigin = () => normaliseSiteUrl(import.meta.env?.VITE_SITE_URL)

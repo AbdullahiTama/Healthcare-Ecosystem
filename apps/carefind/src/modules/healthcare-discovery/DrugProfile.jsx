@@ -19,7 +19,8 @@ import { analyzeReviews } from '../business-profiles-reviews/reviewAI'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Loading, StarPicker, Stars } from '../../components/ui'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
-import { canShowPrice, noPriceLabel, distanceLabel, SALE_TYPE_LABELS, whatsappLink, telLink } from '../utils/marketplace.js'
+import { canShowPrice, noPriceLabel, distanceLabel, productCoords, SALE_TYPE_LABELS, whatsappLink, telLink } from '../utils/marketplace.js'
+import { rankSellers } from '../../lib/nearbyRanking.js'
 import { recordContactLead } from '../utils/contactLeads.js'
 import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
 import { medicinePage } from '../../lib/seo/pages.js'
@@ -381,7 +382,8 @@ function DrugProfile() {
         <div style={isMobile
           ? { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }
           : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 10, marginBottom: 24 }}>
-          {products.slice().sort((a, b) => (a.price == null ? Infinity : a.price) - (b.price == null ? Infinity : b.price)).map((p) => {
+          {/* In stock, nearest, then cheapest (CODE_AUDIT A51, lib/nearbyRanking.js). */}
+          {rankSellers(products, { userCoords, pick: (r) => ({ stock: r.stock, coords: productCoords(r), price: canShowPrice(r) ? r.price : null }) }).map((p) => {
             const wa = waLinkFor(p)
             const seller = sellerName(p)
             const bizLoc = [p.businesses?.city, p.businesses?.state].filter(Boolean).join(', ')
