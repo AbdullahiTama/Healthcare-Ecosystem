@@ -66,6 +66,51 @@ describe('design-system DataTable', () => {
     expect(page).toBe(1)
   })
 
+  describe('at phone width', () => {
+    let width
+    beforeEach(() => { width = window.innerWidth; window.innerWidth = 375 })
+    afterEach(() => { window.innerWidth = width })
+
+    it('shows Previous / Next under the card list (it had none, so only the first page was reachable)', async () => {
+      let page = 0
+      const setPage = (p) => { page = p }
+      await act(async () => { root.render(<DataTable rows={ROWS} columns={COLUMNS} page={page} setPage={setPage} pageSize={2} />) })
+      expect(host.querySelectorAll('table').length).toBe(0)
+      expect(host.textContent).toContain('1 to 2 of 3')
+      expect(host.textContent).toContain('Bandages')
+      expect(host.textContent).not.toContain('Tape')
+      const next = host.querySelector('button[aria-label="Next page"]')
+      const prev = host.querySelector('button[aria-label="Previous page"]')
+      expect(prev.disabled).toBe(true)
+      await act(async () => { next.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+      expect(page).toBe(1)
+      await act(async () => { root.render(<DataTable rows={ROWS} columns={COLUMNS} page={page} setPage={setPage} pageSize={2} />) })
+      expect(host.textContent).toContain('3 to 3 of 3')
+      expect(host.textContent).toContain('Tape')
+      expect(host.querySelector('button[aria-label="Next page"]').disabled).toBe(true)
+      await act(async () => { host.querySelector('button[aria-label="Previous page"]').dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+      expect(page).toBe(0)
+    })
+
+    it('gives the page buttons a finger-sized target', async () => {
+      await act(async () => { root.render(<DataTable rows={ROWS} columns={COLUMNS} page={0} setPage={() => {}} pageSize={2} />) })
+      expect(host.querySelector('button[aria-label="Next page"]').style.minHeight).toBe('40px')
+    })
+  })
+
+  it('keeps a page that still has rows after a delete, and shows the last page when it no longer exists', async () => {
+    const many = Array.from({ length: 7 }, (_, i) => ({ id: i + 1, name: 'Item ' + (i + 1), qty: i }))
+    let page = 2
+    const setPage = (p) => { page = p }
+    await act(async () => { root.render(<DataTable rows={many} columns={COLUMNS} page={page} setPage={setPage} pageSize={3} />) })
+    expect(host.textContent).toContain('7 to 7 of 7')
+    // The only row on page 3 is deleted: page 3 no longer exists, page 2 is shown and Previous goes to page 1.
+    await act(async () => { root.render(<DataTable rows={many.slice(0, 6)} columns={COLUMNS} page={page} setPage={setPage} pageSize={3} />) })
+    expect(host.textContent).toContain('4 to 6 of 6')
+    await act(async () => { host.querySelector('button[aria-label="Previous page"]').dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(page).toBe(0)
+  })
+
   it('renders skeleton rows while loading and the empty state when there are no rows', async () => {
     await act(async () => { root.render(<DataTable rows={ROWS} columns={COLUMNS} loading />) })
     expect(host.querySelectorAll('table').length).toBe(0)

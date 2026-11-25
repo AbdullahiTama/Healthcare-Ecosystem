@@ -73,3 +73,27 @@ describe('keptReasonText', () => {
     expect(keptReasonText(['shop_orders', 'reviews'])).toBe('in online shop orders, has customer reviews')
   })
 })
+
+describe('wholesale price (optional)', () => {
+  const withW = { id: 'w', name: 'ORS', category: 'Medicines', price: 0, wholesale_price: 400, reorder_level: 5 }
+  const withoutW = { id: 'r', name: 'Zinc', category: 'Medicines', price: 300, wholesale_price: null, reorder_level: 5 }
+
+  it('needs the price permission, like the retail price', () => {
+    expect(validateBulkEdit({ wholesale_price: { mode: 'set', value: '100' } }, { canEditPrice: false }).errors.wholesale_price).toMatch(/allowed to edit prices/)
+  })
+
+  it('sets a wholesale price on every marked product', () => {
+    const plan = planBulkEdit([withW, withoutW], { wholesale_price: { mode: 'set', value: '350' } }, { canEditPrice: true })
+    expect(plan.map(p => [p.id, p.updates.wholesale_price, p.before.wholesale_price])).toEqual([['w', 350, 400], ['r', 350, null]])
+  })
+
+  it('changes by a percentage only the products that have a wholesale price', () => {
+    const plan = planBulkEdit([withW, withoutW], { wholesale_price: { mode: 'increase', value: '10' } }, { canEditPrice: true })
+    expect(plan).toEqual([{ id: 'w', name: 'ORS', updates: { wholesale_price: 440 }, before: { wholesale_price: 400 } }])
+  })
+
+  it('removes the wholesale price when it is set to 0', () => {
+    const plan = planBulkEdit([withW, withoutW], { wholesale_price: { mode: 'set', value: '0' } }, { canEditPrice: true })
+    expect(plan).toEqual([{ id: 'w', name: 'ORS', updates: { wholesale_price: null }, before: { wholesale_price: 400 } }])
+  })
+})

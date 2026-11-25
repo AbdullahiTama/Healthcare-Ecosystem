@@ -84,7 +84,9 @@ export default function Stock({ brand, products = [] }) {
   const [filterStatus, setFilterStatus] = useState('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
-  useEffect(() => { setPage(0) }, [filterLoc, filterStatus, search, batches.length])
+  // Back to the first page only when the search or filters change. Not when rows are added or deleted: after a delete
+  // the user stays on the page they were on (DataTable shows the last page if that one no longer exists).
+  useEffect(() => { setPage(0) }, [filterLoc, filterStatus, search])
 
   const [receiving, setReceiving] = useState(false)
   const [form, setForm] = useState({})

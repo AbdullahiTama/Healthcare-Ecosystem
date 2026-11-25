@@ -34,6 +34,8 @@ import NewCustomerForm from './NewCustomerForm'
 import SaleDetailModal from './SaleDetailModal'
 import { creditCustomerFor } from './customerPick'
 import { unitCost, marginPct, saleCostSummary, readShowCost, writeShowCost } from './costView'
+import { priceOptions, priceFor, priceSummary, hasBothPrices, TIER_LABELS } from '../../lib/productPricing'
+import { newCartLine, catalogPriceOf, withTier, applyPriceMode, catalogHasWholesale } from './priceTiers'
 import { isDuplicateError } from '../../lib/dbErrors'
 import { startCameraScan } from '../../lib/barcodeScanner'
 import { useKeyboardScanner } from '../../hooks/useKeyboardScanner'
@@ -56,7 +58,7 @@ const cleanServerError = (e) => String(e?.message || e).replace(/^Supabase error
 
 // Said when a scanned or searched product cannot be sold for lack of stock. The
 // selling price is included so the cashier can still answer "how much is it?".
-export const outOfStockMessage = (p) => p.name + ' is out of stock. Selling price: ' + fmt(p.price) + '.'
+export const outOfStockMessage = (p) => p.name + ' is out of stock. Selling price: ' + priceSummary(p) + '.'
 
 const PAYMENT_METHODS = [
   ['Cash', DollarSign], ['Transfer', Repeat], ['POS', CreditCard], ['Split', Divide], ['Credit', Clock],
@@ -100,7 +102,9 @@ export default function POS(props) {
 // One product on the POS grid. Memoised: typing in the search box redraws only
 // the cards whose product or cart quantity changed, not every card.
 // `showCost`: the user may see costs and has turned them on (cost and margin under the price).
-const ProductCard = memo(function ProductCard({ p, qty, onAdd, showCost = false }) {
+// `mode`: the sale's price mode ('retail' | 'wholesale'). Only the prices the product has are shown; with both, the one
+// the next unit will be added at is the large one (docs/architecture/Wholesale-and-Retail-Prices.md).
+const ProductCard = memo(function ProductCard({ p, qty, onAdd, showCost = false, mode = 'retail' }) {
   const service = isService(p)
   const low = !service && p.stock > 0 && p.stock <= (p.reorder_level || 5)
   const Icon = productIcon(p)
@@ -119,8 +123,8 @@ const ProductCard = memo(function ProductCard({ p, qty, onAdd, showCost = false 
       </div>
       <div>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: navy, lineHeight: 1.3, textTransform: 'uppercase' }}>{p.name}</div>
-        <div style={{ fontSize: 14, fontWeight: 900, color: navy, marginTop: 4 }}>{fmt(p.price)}</div>
-        {showCost && !service && <CostLine price={p.price} cost={unitCost(p)} />}
+        <ProductPrices p={p} mode={mode} />
+        {showCost && !service && <CostLine price={priceFor(p, mode).price} cost={unitCost(p)} />}
       </div>
       <button type='button' onClick={() => onAdd(p)} aria-label={`Add ${p.name}${qty > 0 ? ` (${qty} in sale)` : ''}`}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '8px 0', borderRadius: theme.radius.sm, border: `1px solid ${qty > 0 ? tealDeep : border}`, background: qty > 0 ? tealMist : 'white', color: qty > 0 ? tealDeep : navy, fontWeight: 700, fontSize: 12, cursor: 'pointer', marginTop: 'auto' }}>
@@ -129,6 +133,26 @@ const ProductCard = memo(function ProductCard({ p, qty, onAdd, showCost = false 
     </div>
   )
 })
+
+// The product's prices on its POS card: one figure as before for a retail-only product; otherwise each price that is
+// set, labelled, the one that applies to the sale's mode first and largest.
+function ProductPrices({ p, mode }) {
+  const options = priceOptions(p)
+  if (options.length === 1 && options[0].tier === 'retail') {
+    return <div style={{ fontSize: 14, fontWeight: 900, color: navy, marginTop: 4 }}>{fmt(options[0].price)}</div>
+  }
+  const active = priceFor(p, mode).tier
+  const ordered = [...options].sort((a, b) => (a.tier === active ? -1 : b.tier === active ? 1 : 0))
+  return (
+    <div style={{ marginTop: 4 }}>
+      {ordered.map((o, i) => (
+        <div key={o.tier} style={i === 0 ? { fontSize: 14, fontWeight: 900, color: navy } : { fontSize: 11.5, fontWeight: 600, color: gray500, marginTop: 1 }}>
+          {fmt(o.price)} <span style={{ fontSize: 10.5, fontWeight: 700, color: i === 0 ? tealDeep : gray500 }}>{o.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 // Cost and margin of one unit, in a band under the price so it reads at a glance.
 // "No cost set" when none is recorded (never a 100% margin).
@@ -344,6 +368,12 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   // Returns true when a unit was added.
   const cartRef = useRef(cart)
   cartRef.current = cart
+  // Retail or wholesale (priceTiers.js): the price new lines are added at. Shown only when some product has a
+  // wholesale price; every new sale starts at retail. A ref, so `add` stays stable for the memoised cards.
+  const [priceMode, setPriceMode] = useState('retail')
+  const priceModeRef = useRef(priceMode)
+  priceModeRef.current = priceMode
+  const showPriceMode = useMemo(() => catalogHasWholesale(products), [products])
   // `baseCart`: the cart the add applies to when it is not the one on screen (a scan first puts the sale back as it
   // was before the scanner typed into a field).
   const add = useCallback((p, baseCart) => {
@@ -356,7 +386,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     }
     setCart(cart => cart.some(c => c.id === p.id)
       ? cart.map(c => c.id === p.id ? { ...c, qty: limitQty(p, c.qty + 1).qty } : c)
-      : [...cart, { ...p, qty: 1 }])
+      : [...cart, newCartLine(p, priceModeRef.current)])
     return true
   }, [setCart, showToast])
   // Picking a product from the grid: the search is done with, so it is cleared and the full list returns; the
@@ -455,10 +485,24 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
   // typing an invalid value falls back to the catalog price, so a line can
   // never be silently zeroed. The override travels into the sale's items JSON,
   // so receipts, reports and debts all reflect what was actually charged.
+  // The fallback is the catalogue price of the line's tier (retail or wholesale).
   const setPrice = (id, v) => {
     const n = parseFloat(v)
-    const fallback = products.find(p => p.id === id)?.price || 0
+    const line = cart.find(c => c.id === id)
+    const fallback = line ? catalogPriceOf(line, products.find(p => p.id === id)) : 0
     setCart(cart.map(c => c.id === id ? { ...c, price: isNaN(n) || n <= 0 ? fallback : n } : c))
+  }
+  // One line to its retail or wholesale price (a product with both).
+  const setLineTier = (id, tier) => {
+    const product = products.find(p => p.id === id)
+    setCart(cart.map(c => c.id === id ? withTier(c, tier, product) : c))
+  }
+  // The sale's mode: new lines use it, and lines with both prices that were not typed over follow it.
+  const changePriceMode = (mode) => {
+    if (mode === priceMode) return
+    setPriceMode(mode)
+    setCart(applyPriceMode(cart, mode, new Map(products.map(p => [p.id, p]))))
+    console.info('[pos] price mode', mode)
   }
 
   const sub = cart.reduce((s, c) => s + c.price * c.qty, 0)
@@ -822,7 +866,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
     setView('pos')
   }
 
-  function newSale() { setReceipt(null); clearDraft(); setRestoreSeen(false) }
+  function newSale() { setReceipt(null); clearDraft(); setRestoreSeen(false); setPriceMode('retail') }
 
   // Universal fallback path: render an HTML page and let the browser/OS
   // rasterize it via the system print dialog. Always works, but thermal
@@ -1230,7 +1274,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
             </div>
           ) : (
             <>
-              {sellable.slice(0, gridLimit).map(p => <ProductCard key={p.id} p={p} qty={qtyInCart[p.id] || 0} onAdd={pickProduct} showCost={showCost} />)}
+              {sellable.slice(0, gridLimit).map(p => <ProductCard key={p.id} p={p} qty={qtyInCart[p.id] || 0} onAdd={pickProduct} showCost={showCost} mode={priceMode} />)}
               {sellable.length > gridLimit && (
                 <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap', padding: '6px 0 4px', fontSize: 12, color: gray500 }}>
                   <span>Showing {gridLimit.toLocaleString()} of {sellable.length.toLocaleString()} products. Type more of the name to narrow the list.</span>
@@ -1271,6 +1315,21 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
           </div>
         </div>
 
+        {showPriceMode && (
+          <div role='group' aria-label='Price for this sale' style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderBottom: `1px solid ${border}`, flexShrink: 0, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: gray600 }}>Price</span>
+            <div style={{ display: 'inline-flex', border: `1px solid ${border}`, borderRadius: theme.radius.full, overflow: 'hidden' }}>
+              {['retail', 'wholesale'].map(mode => (
+                <button key={mode} type='button' onClick={() => changePriceMode(mode)} aria-pressed={priceMode === mode}
+                  style={{ minHeight: 36, padding: '6px 14px', border: 'none', background: priceMode === mode ? tealDeep : 'white', color: priceMode === mode ? 'white' : gray600, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                  {TIER_LABELS[mode]}
+                </button>
+              ))}
+            </div>
+            <span style={{ fontSize: 11, color: gray500 }}>Products with one price always sell at it.</span>
+          </div>
+        )}
+
         {showRestored && (
           <div role='status' style={{ padding: '8px 16px', background: tealMist, color: tealDeep, fontSize: 12, fontWeight: 600, lineHeight: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexShrink: 0 }}>
             <span>Picked up where you left off: this sale was kept on this device{restoredAt ? ' (' + new Date(restoredAt).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }) + ')' : ''}.</span>
@@ -1292,14 +1351,31 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
               <Empty icon={<Package size={80} strokeWidth={2} />} message="Your cart is empty" />
             </div>
           ) : cart.map(item => {
-            // The catalog price this line was added at — the baseline shown
-            // next to a one-off override (item.price !== catalogPrice).
-            const catalogPrice = products.find(p => p.id === item.id)?.price ?? item.price
+            // The catalog price this line was added at (its retail or wholesale
+            // price) — the baseline shown next to a one-off override
+            // (item.price !== catalogPrice).
+            const lineProduct = productById.get(item.id)
+            const catalogPrice = catalogPriceOf(item, lineProduct)
+            const tier = item.price_tier || 'retail'
+            const canSwitchTier = hasBothPrices(lineProduct || item)
             return (
             <div key={item.id} className="pos-cart-item" style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${gray100}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                  {canSwitchTier ? (
+                    <div role='group' aria-label={'Price for ' + item.name} style={{ display: 'inline-flex', gap: 4, marginTop: 4 }}>
+                      {['retail', 'wholesale'].map(t => (
+                        <button key={t} type='button' onClick={() => setLineTier(item.id, t)} aria-pressed={tier === t}
+                          aria-label={TIER_LABELS[t] + ' price for ' + item.name + ': ' + fmt(priceFor(lineProduct || item, t).price)}
+                          style={{ minHeight: 28, padding: '3px 9px', borderRadius: theme.radius.full, border: `1px solid ${tier === t ? tealDeep : border}`, background: tier === t ? tealMist : 'white', color: tier === t ? tealDeep : gray500, fontSize: 10.5, fontWeight: 700, cursor: 'pointer' }}>
+                          {TIER_LABELS[t]}
+                        </button>
+                      ))}
+                    </div>
+                  ) : tier === 'wholesale' && (
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: tealDeep, marginTop: 2 }}>Wholesale</div>
+                  )}
                   {perms?.canEditPrice ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                       <input type='number' min='0' step='any' value={item.price} onChange={e => setPrice(item.id, e.target.value)}
@@ -1495,7 +1571,7 @@ function POSInner({ brand, products, setProducts, role, perms, catalog }) {
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 14px', borderRadius: theme.radius.md, border: `1px solid ${gray100}`, background: 'white' }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                <div style={{ fontSize: '11.5px', color: gray400, marginTop: 2 }}>{p.cat || p.category || 'Product'}{p.reorder_level ? ' · reorder at ' + p.reorder_level : ''} · <span style={{ color: navy, fontWeight: 700 }}>Selling price {fmt(p.price)}</span></div>
+                <div style={{ fontSize: '11.5px', color: gray400, marginTop: 2 }}>{p.cat || p.category || 'Product'}{p.reorder_level ? ' · reorder at ' + p.reorder_level : ''} · <span style={{ color: navy, fontWeight: 700 }}>Selling price {priceSummary(p)}</span></div>
               </div>
               <Pill label='Out of stock' type='red' />
             </div>

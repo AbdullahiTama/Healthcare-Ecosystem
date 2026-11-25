@@ -3,7 +3,8 @@ import { normalize } from '../../lib/productMatches'
 // Purchase line items — the pure rules behind Purchases.jsx's bulk stock entry,
 // kept out of the component so they can be tested without rendering it.
 //
-// A line is { id, productId, name, qty, cost, sell, batch, expiry, barcode, cat }. An uploaded row without a
+// A line is { id, productId, name, qty, cost, sell, wholesale, batch, expiry, barcode, cat }. `sell` is the retail
+// price and `wholesale` the wholesale price: both optional (lib/productPricing.js). An uploaded row without a
 // quantity becomes an amount-only line: { ..., qty: '', cost: '', noQty: true, amount } (carehub_20270131). All
 // inputs are kept as the strings the user typed; numbers are parsed at the
 // edges (validation and save). `productId` links the line to an existing
@@ -13,7 +14,7 @@ import { normalize } from '../../lib/productMatches'
 let seq = 0
 const lineId = () => 'l' + Date.now().toString(36) + (seq++).toString(36)
 
-export const blankItem = () => ({ id: lineId(), productId: null, name: '', qty: '', cost: '', sell: '', batch: '', expiry: '', barcode: '', cat: 'Medicines' })
+export const blankItem = () => ({ id: lineId(), productId: null, name: '', qty: '', cost: '', sell: '', wholesale: '', batch: '', expiry: '', barcode: '', cat: 'Medicines' })
 
 // What a line costs: quantity x unit cost, or the amount of an amount-only line (recorded without a quantity).
 export function lineAmount(item) {
@@ -24,7 +25,7 @@ export function lineAmount(item) {
 // A line the user has not touched at all. Ignored at save, never an error —
 // the form always keeps a trailing empty line ready for the next product.
 export function isBlankItem(item) {
-  return !String(item.name || '').trim() && !item.qty && !item.cost && !item.sell && !item.batch && !item.expiry && !String(item.barcode || '').trim()
+  return !String(item.name || '').trim() && !item.qty && !item.cost && !item.sell && !item.wholesale && !item.batch && !item.expiry && !String(item.barcode || '').trim()
 }
 
 // The product a scanned or typed barcode belongs to (lib/barcodeScanner.js).
@@ -58,6 +59,7 @@ export function applyProduct(item, product) {
     name: product.name,
     cost: Number(product.cost_price) > 0 ? String(product.cost_price) : '',
     sell: Number(product.price) > 0 ? String(product.price) : '',
+    wholesale: Number(product.wholesale_price) > 0 ? String(product.wholesale_price) : '',
     cat: product.category || product.cat || item.cat || 'Medicines',
     // An existing barcode is retrieved; one typed on the line is kept only for
     // a product that has none yet (it is saved onto the product).
@@ -126,11 +128,13 @@ export function groupLinesByProduct(lines, resolve) {
     const qty = Number(line.qty)
     const cost = Number(line.cost)
     const sell = Number(line.sell) > 0 ? Number(line.sell) : null
-    if (!groups.has(key)) groups.set(key, { existing, name, qty: 0, cost, sell: null, cat: line.cat || 'Medicines', barcode: null, lines: [] })
+    const wholesale = Number(line.wholesale) > 0 ? Number(line.wholesale) : null
+    if (!groups.has(key)) groups.set(key, { existing, name, qty: 0, cost, sell: null, wholesale: null, cat: line.cat || 'Medicines', barcode: null, lines: [] })
     const g = groups.get(key)
     g.qty += qty
     g.cost = cost
     if (sell) g.sell = sell
+    if (wholesale) g.wholesale = wholesale
     if (!g.barcode && String(line.barcode || '').trim()) g.barcode = String(line.barcode).trim()
     g.lines.push({ id: line.id, qty, batch: String(line.batch || '').trim() || null, expiry: line.expiry || null })
   }

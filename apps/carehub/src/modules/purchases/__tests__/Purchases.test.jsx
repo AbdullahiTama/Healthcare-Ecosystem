@@ -235,6 +235,16 @@ describe('Purchases — bulk stock entry', () => {
     expect(update[3]).toEqual({ cost_price: 850 })
   })
 
+  it('has an optional wholesale price beside the retail price, filled from the product and locked without price permission', async () => {
+    await render(MANAGER, { products: [{ ...AMOXIL, wholesale_price: 1300 }] })
+    await openForm()
+    await type(field(0, 'name'), 'Amoxil 500mg')
+    expect(field(0, 'sell').value).toBe('1500')
+    expect(field(0, 'wholesale').value).toBe('1300')
+    expect(field(0, 'wholesale').readOnly).toBe(true)
+    expect(host.textContent).toContain('Wholesale price (₦)')
+  })
+
   it('reverts a price typed before the product list loaded when the role cannot reprice', async () => {
     await render(MANAGER, { products: [], status: 'loading' })
     await openForm()

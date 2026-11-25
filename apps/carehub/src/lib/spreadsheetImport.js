@@ -169,7 +169,10 @@ export function readTableByHeader(rawRows, columns, { maxRows, positional = fals
     else if (String(h ?? '').trim()) ignored.push(String(h).trim())
   })
   if (positional && Object.keys(keyByIndex).length === 0) {
-    keyByIndex = Object.fromEntries(columns.map((c, i) => [i, c.key]))
+    // `positional`: true reads the columns in `columns` order; an array of keys reads them in that order instead
+    // (a layout older than the current columns).
+    const order = Array.isArray(positional) ? positional : columns.map(c => c.key)
+    keyByIndex = Object.fromEntries(order.map((k, i) => [i, k]))
     ignored.length = 0
   }
   const present = new Set(Object.values(keyByIndex))

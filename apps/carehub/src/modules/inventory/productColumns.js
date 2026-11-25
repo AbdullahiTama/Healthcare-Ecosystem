@@ -9,7 +9,7 @@
 // A column added to products must be added here AND granted to the API roles (see the migration header).
 
 export const PRODUCT_COLUMNS = [
-  'id', 'business_id', 'name', 'generic_name', 'category', 'price', 'stock', 'emoji', 'list_on_carefind', 'created_at',
+  'id', 'business_id', 'name', 'generic_name', 'category', 'price', 'wholesale_price', 'stock', 'emoji', 'list_on_carefind', 'created_at',
   'barcode', 'reorder_level', 'owner_id', 'description', 'image_url', 'whatsapp', 'sale_type', 'min_purchase',
   'price_unit', 'seller_location', 'sales_unit', 'shelf', 'expiry', 'batch', 'show_price', 'latitude', 'longitude',
   'expiry_date', 'shelf_label', 'is_quarantined', 'tracking_mode', 'master_product_id', 'rx_status', 'price_source',

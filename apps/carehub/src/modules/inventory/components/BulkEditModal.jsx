@@ -9,8 +9,8 @@ const { navy, gray500, gray600, border, danger, warning, warningBg, bg } = theme
 
 const field = { width: '100%', minHeight: 40, padding: '8px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 13, color: navy, background: 'white', boxSizing: 'border-box' }
 const label = { display: 'block', fontSize: 11.5, fontWeight: 700, color: gray600, marginBottom: 6 }
-const FIELD_NAMES = { category: 'Category', price: 'Selling price', cost_price: 'Cost price', reorder_level: 'Reorder level', shelf_label: 'Shelf', list_on_carefind: 'CareFind' }
-const show = (key, v) => (key === 'price' || key === 'cost_price' ? fmt(v || 0) : key === 'list_on_carefind' ? (v ? 'Listed' : 'Hidden') : v === null || v === '' ? 'Not set' : String(v))
+const FIELD_NAMES = { category: 'Category', price: 'Retail price', wholesale_price: 'Wholesale price', cost_price: 'Cost price', reorder_level: 'Reorder level', shelf_label: 'Shelf', list_on_carefind: 'CareFind' }
+const show = (key, v) => (key === 'wholesale_price' && !(Number(v) > 0) ? 'Not set' : key === 'price' || key === 'wholesale_price' || key === 'cost_price' ? fmt(v || 0) : key === 'list_on_carefind' ? (v ? 'Listed' : 'Hidden') : v === null || v === '' ? 'Not set' : String(v))
 
 // Changes the same fields on every product the user marked. Each field is "leave as it is" unless filled in. Shows
 // how many products will really change and a few before → after lines; saving, progress, the result and retrying
@@ -37,7 +37,7 @@ export default function BulkEditModal({ products, perms, categories = [], runUpd
             {check.errors.category && <div role='alert' style={{ color: danger, fontSize: 12, marginTop: 4 }}>{check.errors.category}</div>}
           </div>
 
-          {['price', ...(perms?.canViewCostPrice ? ['cost_price'] : [])].map((key) => (
+          {['price', 'wholesale_price', ...(perms?.canViewCostPrice ? ['cost_price'] : [])].map((key) => (
             <fieldset key={key} style={{ border: 'none', margin: 0, padding: 0 }} disabled={!canEditPrice}>
               <legend style={{ ...label, padding: 0 }}>{FIELD_NAMES[key]}</legend>
               <div style={{ display: 'flex', gap: 8 }}>

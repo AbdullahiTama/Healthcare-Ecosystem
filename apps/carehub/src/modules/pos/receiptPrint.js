@@ -119,7 +119,8 @@ export function buildReceiptHtml({ receipt = {}, business = {}, settings = {}, q
   // never pushes content off the right edge.
   const itemRows = items.map(i => {
     const nameBlock = (i.emoji ? esc(i.emoji) + ' ' : '') + esc(i.name)
-    const qtyPrice = String(i.qty) + ' × ' + fmt(i.price)
+    // A line charged at the wholesale price says so (POS price tiers, priceTiers.js).
+    const qtyPrice = String(i.qty) + ' × ' + fmt(i.price) + (i.price_tier === 'wholesale' ? ' (wholesale)' : '')
     const lineTotal = fmt(i.price * i.qty)
     return '<div style="margin-bottom:6px">' +
       '<div style="word-break:break-word;overflow-wrap:anywhere">' + nameBlock + '</div>' +

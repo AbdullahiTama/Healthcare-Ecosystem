@@ -100,7 +100,10 @@ const PurchaseForm = forwardRef(function PurchaseForm({
         if (!match) return it
         changed = true
         const linked = { ...it, productId: match.id, name: match.name, barcode: match.barcode ? String(match.barcode).trim() : (it.barcode || '') }
-        if (!canReprice) linked.sell = Number(match.price) > 0 ? String(match.price) : ''
+        if (!canReprice) {
+          linked.sell = Number(match.price) > 0 ? String(match.price) : ''
+          linked.wholesale = Number(match.wholesale_price) > 0 ? String(match.wholesale_price) : ''
+        }
         return linked
       })
       return changed ? { ...p, items } : p
@@ -385,11 +388,21 @@ const PurchaseForm = forwardRef(function PurchaseForm({
                       type='number' inputMode='decimal' min='0' placeholder='0'
                       aria-invalid={!!problems.cost} aria-describedby={described('cost')} style={lineInput(problems.cost)} />
                   </LineField>
-                  <LineField id={fid('sell')} label='Selling price (₦)'>
+                  {/* Retail and wholesale prices are both optional (lib/productPricing.js). A new product with neither gets
+                      the automatic retail markup. Editing a purchase changes no prices, so the wholesale field is for
+                      recording only (docs/architecture/Wholesale-and-Retail-Prices.md). */}
+                  <LineField id={fid('sell')} label='Retail price (₦)'>
                     <input id={fid('sell')} ref={reg('sell')} value={item.sell} onChange={e => setItem(item.id, 'sell', e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'sell')}
-                      type='number' inputMode='decimal' min='0' placeholder={product ? '0' : 'Auto +50%'} readOnly={priceLocked}
+                      type='number' inputMode='decimal' min='0' placeholder={product || Number(item.wholesale) > 0 ? 'Optional' : 'Auto +50%'} readOnly={priceLocked}
                       aria-describedby={priceLocked ? fid('sell') + '-locked' : undefined} style={lineInput(false, priceLocked)} />
                   </LineField>
+                  {!editing && (
+                    <LineField id={fid('wholesale')} label='Wholesale price (₦)'>
+                      <input id={fid('wholesale')} ref={reg('wholesale')} value={item.wholesale || ''} onChange={e => setItem(item.id, 'wholesale', e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'wholesale')}
+                        type='number' inputMode='decimal' min='0' placeholder='Optional' readOnly={priceLocked}
+                        aria-describedby={priceLocked ? fid('sell') + '-locked' : undefined} style={lineInput(false, priceLocked)} />
+                    </LineField>
+                  )}
                   <LineField id={fid('barcode')} label='Barcode' error={problems.barcode}>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <input id={fid('barcode')} ref={reg('barcode')} value={productBarcode || item.barcode || ''} onChange={e => changeBarcode(item, e.target.value)} onKeyDown={e => onLineKeyDown(e, i, 'barcode')}
@@ -426,7 +439,7 @@ const PurchaseForm = forwardRef(function PurchaseForm({
 
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginTop: '8px', marginLeft: '32px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '11.5px', flex: '1 1 220px', minWidth: 0 }}>
-                    {priceLocked && <span id={fid('sell') + '-locked'} style={{ color: gray500 }}>{editing ? 'Selling prices of existing products are changed in Inventory.' : 'Selling price can only be changed by roles with price permission.'}</span>}
+                    {priceLocked && <span id={fid('sell') + '-locked'} style={{ color: gray500 }}>{editing ? 'Retail and wholesale prices of existing products are changed in Inventory.' : 'Retail and wholesale prices can only be changed by roles with price permission.'}</span>}
                     {sameProduct && info.min_qty > 1 && (
                       <span id={fid('qty') + '-min'} style={{ color: gray500 }}>{(Number(info.received) || 0) - Math.max(Number(info.product_stock) || 0, 0)} of the {info.received} from this purchase are already sold: the lowest quantity is {info.min_qty}.</span>
                     )}
@@ -484,7 +497,7 @@ const PurchaseForm = forwardRef(function PurchaseForm({
       <div style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealDeep}`, fontSize: '12px', color: tealDeep, lineHeight: '1.7' }}>
         {editing
           ? 'Saving moves stock by the difference on each line (removed lines give their units back, new lines add theirs), updates the supplier debt and the payment history, and records who changed what and why.'
-          : 'Saving adds every item to Inventory: existing products get the extra stock and the new unit cost; new products are created with your selling price (or a 50% markup if left blank). A barcode entered for a product without one is saved on it. Batch and expiry details create a stock batch for expiry tracking.'}
+          : 'Saving adds every item to Inventory: existing products get the extra stock and the new unit cost; new products are created with the retail and wholesale prices you enter (both optional; with neither, a retail price of unit cost + 50%). A barcode entered for a product without one is saved on it. Batch and expiry details create a stock batch for expiry tracking.'}
       </div>
     </div>
   )

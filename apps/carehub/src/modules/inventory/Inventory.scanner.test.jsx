@@ -87,7 +87,7 @@ describe('Inventory — product form: a scan goes into Barcode', () => {
     await render()
     await click(buttons('Add product')[0])
     await type(byLabel('Product Name'), 'New Syrup')
-    await type(byLabel('Selling Price'), '500')
+    await type(byLabel('Retail Price'), '500')
     const save = buttons('Add Product')[0]
     let enterReachedButton = 0
     save.addEventListener('keydown', (e) => { if (e.key === 'Enter') enterReachedButton++ })
@@ -100,8 +100,8 @@ describe('Inventory — product form: a scan goes into Barcode', () => {
   it('a scan into a price leaves the price as it was', async () => {
     await render()
     await click(buttons('Edit')[0])
-    await scan(byLabel('Selling Price'), '6151100001', 'Tab')
-    expect(byLabel('Selling Price').value).toBe('1500')
+    await scan(byLabel('Retail Price'), '6151100001', 'Tab')
+    expect(byLabel('Retail Price').value).toBe('1500')
     expect(byLabel('Barcode').value).toBe('6151100001')
   })
 

@@ -71,7 +71,7 @@ describe('InventoryImportModal', () => {
     await upload(csv)
     expect(text()).toContain('Duplicate: already in Inventory as Panadol 500mg.')
     expect(text()).toContain('Product name is missing.')
-    expect(text()).toContain('Selling price "abc" is not a number.')
+    expect(text()).toContain('Retail price "abc" is not a number.')
 
     await click(btn(b => b.textContent === 'Import 2 products'))
     expect(text()).toContain('1 of 5 rows imported. 1 duplicate skipped. 3 not imported (reasons below).')

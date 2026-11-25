@@ -34,9 +34,20 @@ describe('inventory export', () => {
     const ws = await load([med, service])
     expect(ws.rowCount).toBe(3)
     expect(ws.getRow(1).getCell(1).value).toBe('Product Name')
-    expect(ws.getRow(2).getCell(8).value).toBe('0123')
+    expect(ws.getRow(1).getCell(4).value).toBe('Retail Price (NGN)')
+    expect(ws.getRow(1).getCell(5).value).toBe('Wholesale Price (NGN)')
+    expect(ws.getRow(2).getCell(9).value).toBe('0123')
     expect(ws.getRow(2).getCell(4).value).toBe(1500)
-    expect(ws.getRow(2).getCell(10).value.toISOString().slice(0, 10)).toBe('2027-06-30')
+    expect(ws.getRow(2).getCell(11).value.toISOString().slice(0, 10)).toBe('2027-06-30')
+  })
+
+  it('exports only the prices that were entered (a price not entered is blank, not 0)', () => {
+    expect(toInventoryExportRow({ ...med, wholesale_price: 1200 })).toMatchObject({ price: 1500, wholesale_price: 1200 })
+    expect(toInventoryExportRow(med)).toMatchObject({ price: 1500, wholesale_price: null })
+    const wholesaleOnly = toInventoryExportRow({ ...med, price: 0, wholesale_price: 1200 })
+    expect(wholesaleOnly).toMatchObject({ price: null, wholesale_price: 1200 })
+    // Valued at the wholesale price when that is the only price (10 units).
+    expect(wholesaleOnly.stock_value).toBe(12000)
   })
 
   it('neutralises formula-looking text', async () => {

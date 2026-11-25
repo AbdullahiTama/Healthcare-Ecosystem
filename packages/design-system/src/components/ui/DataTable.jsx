@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { theme } from '../../theme'
 import { useBreakpoint } from './useBreakpoint'
@@ -26,7 +26,11 @@ export const NOT_SET = 'Not set'
 // `onRowClick`/`rowStyle`: row interaction (rowStyle can tint rows, e.g. the
 // Inventory low-stock / Appointments "today" highlights).
 // Pagination is fully controlled: pass `page`, `setPage`, `pageSize`, and
-// optionally `total` (when rows are a slice of a larger set).
+// optionally `total` (when rows are a slice of a larger set). Previous / Next
+// are shown at every width, the phone card list included. A `page` beyond the
+// last page (rows were deleted from it) shows the last page, and the buttons
+// move from the page shown, so a caller can keep its page across a delete
+// instead of resetting to the first one.
 // `mobileCard(row)` (table variant only): the mobile card-list transform;
 // defaults to a label/value card built from the columns.
 // `renderCard(row)` (cards variant only): the rich card body.
@@ -53,6 +57,7 @@ const valueStyle = { fontSize: 13, color: theme.navy, textAlign: 'right' }
 
 export function DataTable({ rows = [], columns = [], actions, onRowClick, rowStyle, count, empty, loading, error, onRetry, page, setPage, pageSize, total, variant = 'table', renderCard, mobileCard }) {
   const { isMobile } = useBreakpoint()
+  const topRef = useRef(null)
   const [sortKey, setSortKey] = useState(null)
   const [sortDir, setSortDir] = useState('asc')
 
@@ -127,20 +132,28 @@ export function DataTable({ rows = [], columns = [], actions, onRowClick, rowSty
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: theme.space[6] }}>{actions(row)}</div>
   )
 
+  // Moves from the page shown (safePage), never from a stale `page` beyond the
+  // end. On a phone the list is long and the buttons are at its foot, so the
+  // new page is brought into view from its top.
+  const goTo = (p) => {
+    setPage(p)
+    if (isMobile) topRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+  }
+  const pageButton = (disabled) => ({ minHeight: 40, minWidth: 44, padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}`, background: disabled ? theme.gray100 : 'white', color: disabled ? theme.gray400 : theme.navy, fontWeight: 700, fontSize: 12, cursor: disabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 })
   const pagination = (inside) => hasPagination && pageCount > 1 && (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...(inside ? { padding: '12px 14px', borderTop: `1px solid ${theme.border}` } : { padding: '12px 4px' }), fontSize: 12, color: theme.gray500 }}>
-      <span>{safePage * pageSize + 1} to {Math.min((safePage + 1) * pageSize, shown)} of {shown}</span>
+    <nav aria-label="Pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', ...(inside ? { padding: '12px 14px', borderTop: `1px solid ${theme.border}` } : { padding: '12px 4px' }), fontSize: 12, color: theme.gray500 }}>
+      <span aria-live="polite">{safePage * pageSize + 1} to {Math.min((safePage + 1) * pageSize, shown)} of {shown}</span>
       <div style={{ display: 'flex', gap: 6 }}>
-        <button onClick={() => setPage(Math.max(0, page - 1))} disabled={safePage === 0} aria-label="Previous page" style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}`, background: safePage === 0 ? theme.gray100 : 'white', color: safePage === 0 ? theme.gray400 : theme.navy, fontWeight: 700, fontSize: 12, cursor: safePage === 0 ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ChevronLeft size={13} /> {inside ? 'Previous' : 'Prev'}</button>
-        <button onClick={() => setPage(Math.min(pageCount - 1, page + 1))} disabled={safePage >= pageCount - 1} aria-label="Next page" style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}`, background: safePage >= pageCount - 1 ? theme.gray100 : 'white', color: safePage >= pageCount - 1 ? theme.gray400 : theme.navy, fontWeight: 700, fontSize: 12, cursor: safePage >= pageCount - 1 ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>Next <ChevronRight size={13} /></button>
+        <button type="button" onClick={() => goTo(Math.max(0, safePage - 1))} disabled={safePage === 0} aria-label="Previous page" style={pageButton(safePage === 0)}><ChevronLeft size={13} aria-hidden="true" /> {inside ? 'Previous' : 'Prev'}</button>
+        <button type="button" onClick={() => goTo(Math.min(pageCount - 1, safePage + 1))} disabled={safePage >= pageCount - 1} aria-label="Next page" style={pageButton(safePage >= pageCount - 1)}>Next <ChevronRight size={13} aria-hidden="true" /></button>
       </div>
-    </div>
+    </nav>
   )
 
   // ── CARDS VARIANT (rich card lists: Orders, Stock, Clients) ────────────────
   if (variant === 'cards') {
     return (
-      <div>
+      <div ref={topRef}>
         {countLine}
         {sortBar}
         <div style={{ display: 'flex', flexDirection: 'column', gap: theme.space[6] }}>
@@ -164,9 +177,11 @@ export function DataTable({ rows = [], columns = [], actions, onRowClick, rowSty
   // Mobile → card-list transform: at phone width the same column model renders
   // as stacked cards (or the caller's `mobileCard`) instead of a horizontal-
   // scroll table, matching the mobile-first pattern for long lists.
+  // The phone list pages like the table: before, it showed only the first page
+  // and no Previous / Next at all, so the rest of a long list was unreachable.
   if (isMobile) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: theme.space[6] }}>
+      <div ref={topRef} style={{ display: 'flex', flexDirection: 'column', gap: theme.space[6] }}>
         {countLine}
         {visible.map(row => (
           <Card key={row.id} onClick={onRowClick ? () => onRowClick(row) : undefined} style={{ padding: theme.space[8], ...(rowStyle ? rowStyle(row) : {}) }}>
@@ -178,12 +193,13 @@ export function DataTable({ rows = [], columns = [], actions, onRowClick, rowSty
             )}
           </Card>
         ))}
+        {pagination(false)}
       </div>
     )
   }
 
   return (
-    <div>
+    <div ref={topRef}>
       {countLine}
       <Card style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>

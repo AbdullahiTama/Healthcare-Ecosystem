@@ -1,10 +1,11 @@
-// Excel (.xlsx) export of the Inventory product list. The first ten columns
+// Excel (.xlsx) export of the Inventory product list. The first eleven columns
 // follow the bulk-import template order (see csvImport.js); the rest are
 // read-only extras. Pure builders — the component only triggers the download.
 
 import { SALE_TYPE_LABELS, unitLabel } from '@care-ecosystem/shared-marketplace'
 import { neutraliseFormula, downloadBlob } from '../business-directory/services/exportService'
 import { isStockItem, stockStatus } from './inventoryStats'
+import { referencePrice } from '../../lib/productPricing'
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const MONEY_FMT = '#,##0.00'
@@ -13,7 +14,8 @@ export const INVENTORY_EXPORT_COLUMNS = [
   { key: 'name', header: 'Product Name', width: 32 },
   { key: 'generic_name', header: 'Generic Name', width: 26 },
   { key: 'category', header: 'Category', width: 16 },
-  { key: 'price', header: 'Selling Price (NGN)', width: 18, numFmt: MONEY_FMT },
+  { key: 'price', header: 'Retail Price (NGN)', width: 18, numFmt: MONEY_FMT },
+  { key: 'wholesale_price', header: 'Wholesale Price (NGN)', width: 20, numFmt: MONEY_FMT },
   { key: 'cost_price', header: 'Cost Price (NGN)', width: 18, numFmt: MONEY_FMT },
   { key: 'stock', header: 'Stock Quantity', width: 15 },
   { key: 'reorder_level', header: 'Reorder Level', width: 14 },
@@ -40,13 +42,16 @@ function toDateCell(v) {
 export function toInventoryExportRow(p) {
   const stockItem = isStockItem(p)
   const stock = stockItem ? (p.stock || 0) : null
-  const price = Number(p.price) || 0
+  // A price that was not entered exports blank (not 0), so the file says what Inventory says.
+  const price = Number(p.price) > 0 ? Number(p.price) : null
+  const wholesale = Number(p.wholesale_price) > 0 ? Number(p.wholesale_price) : null
   const cost = Number(p.cost_price) || 0
   return {
     name: p.name || '',
     generic_name: p.generic_name || p.genericName || '',
     category: p.cat || p.category || '',
     price,
+    wholesale_price: wholesale,
     cost_price: cost,
     stock,
     reorder_level: stockItem ? (p.reorder_level || 5) : null,
@@ -57,7 +62,8 @@ export function toInventoryExportRow(p) {
     sale_type: SALE_TYPE_LABELS[p.sale_type] || p.sale_type || '',
     unit: p.price_unit ? unitLabel(p.price_unit) : '',
     status: stockStatus(p),
-    stock_value: stockItem ? price * stock : null,
+    // Valued at the retail price, or the wholesale price when that is the only one (as in Inventory's Stock Value).
+    stock_value: stockItem ? referencePrice(p) * stock : null,
     cost_value: stockItem ? cost * stock : null,
   }
 }

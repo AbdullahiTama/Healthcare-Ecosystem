@@ -15,18 +15,24 @@
 // name Paracetamol but are different products. Matching on it skipped every
 // brand of a generic already stocked, which is why large uploads came in short.
 //
-// Columns are matched by header (any order). A file whose headers are not
-// recognised at all is read in the template's order, as before:
-//   Product Name · Generic Name · Category · Selling Price (NGN) ·
-//   Cost Price (NGN) · Stock Quantity · Reorder Level · Barcode ·
-//   List on CareFind (yes/no) · Expiry Date
-// The Inventory Excel export uses the same first ten columns, so an export can
-// be edited and uploaded again.
+// Columns are matched by header (any order). The template's columns:
+//   Product Name · Generic Name · Category · Retail Price (NGN) ·
+//   Wholesale Price (NGN) · Cost Price (NGN) · Stock Quantity · Reorder Level ·
+//   Barcode · List on CareFind (yes/no) · Expiry Date
+// Retail and wholesale prices are both optional: a row may give one, both or
+// neither (lib/productPricing.js). "Selling Price (NGN)" from earlier templates
+// is read as the retail price.
+// A file whose headers are not recognised at all is read in the ten-column
+// order of the templates before wholesale prices (LEGACY_POSITIONAL_KEYS), so
+// such a file is read as it always was.
+// The Inventory Excel export uses the same first eleven columns, so an export
+// can be edited and uploaded again.
 //
 // Docs: docs/architecture/Bulk-Uploads-and-Debt-Linking.md
 
 import { normalize } from '../../lib/productMatches'
 import { parseImportDate, parseImportNumber, readTableByHeader, toCsv } from '../../lib/spreadsheetImport'
+import { parseOptionalPrice } from '../../lib/productPricing'
 
 export const MAX_INVENTORY_IMPORT_ROWS = 20000
 export const MAX_INVENTORY_IMPORT_BYTES = 10 * 1024 * 1024
@@ -37,7 +43,8 @@ export const INVENTORY_COLUMNS = [
   { key: 'name', header: 'Product Name', required: true, aliases: ['product', 'name', 'item', 'item name', 'brand name', 'product name'] },
   { key: 'generic_name', header: 'Generic Name', aliases: ['generic', 'generic name'] },
   { key: 'category', header: 'Category', aliases: ['category', 'product category'] },
-  { key: 'price', header: 'Selling Price (NGN)', aliases: ['selling price', 'selling price ngn', 'price', 'sell price', 'retail price', 'unit price'] },
+  { key: 'price', header: 'Retail Price (NGN)', aliases: ['retail price', 'retail price ngn', 'retail', 'selling price', 'selling price ngn', 'price', 'sell price', 'unit price'] },
+  { key: 'wholesale_price', header: 'Wholesale Price (NGN)', aliases: ['wholesale price', 'wholesale price ngn', 'wholesale', 'ws price', 'w/s price', 'trade price'] },
   { key: 'cost_price', header: 'Cost Price (NGN)', aliases: ['cost price', 'cost price ngn', 'cost', 'unit cost', 'unit cost ngn'] },
   { key: 'stock', header: 'Stock Quantity', aliases: ['stock', 'quantity', 'qty', 'stock qty', 'stock quantity'] },
   { key: 'reorder_level', header: 'Reorder Level', aliases: ['reorder', 'reorder level', 'reorder point'] },
@@ -46,10 +53,15 @@ export const INVENTORY_COLUMNS = [
   { key: 'expiry_date', header: 'Expiry Date', aliases: ['expiry', 'expiry date', 'exp date', 'expiration date'] },
 ]
 
+// The template before wholesale prices, in its column order: how a file without recognisable headers is read.
+export const LEGACY_POSITIONAL_KEYS = ['name', 'generic_name', 'category', 'price', 'cost_price', 'stock', 'reorder_level', 'barcode', 'list_on_carefind', 'expiry_date']
+
+// Examples of both prices, retail only and wholesale only: either price may be left blank.
 const TEMPLATE_ROWS = [
-  ['Amoxicillin 500mg', 'Amoxicillin', 'Medicines', '1500', '800', '100', '20', '', 'yes', '2027-06-30'],
-  ['Paracetamol 500mg', 'Paracetamol', 'Medicines', '800', '400', '200', '30', '', 'yes', '2028-01-31'],
-  ['Consultation Fee', 'Medical Consultation', 'Services', '5000', '0', '', '0', '', 'yes', ''],
+  ['Amoxicillin 500mg', 'Amoxicillin', 'Medicines', '1500', '1200', '800', '100', '20', '', 'yes', '2027-06-30'],
+  ['Paracetamol 500mg', 'Paracetamol', 'Medicines', '800', '', '400', '200', '30', '', 'yes', '2028-01-31'],
+  ['ORS Sachets (carton)', 'Oral Rehydration Salts', 'Medicines', '', '9500', '7000', '12', '2', '', 'no', '2027-12-31'],
+  ['Consultation Fee', 'Medical Consultation', 'Services', '5000', '', '0', '', '0', '', 'yes', ''],
 ]
 
 /** The upload template: the headers and three example rows to replace. */
@@ -78,7 +90,7 @@ export function normalizeExpiryDate(value) {
 
 /** Spreadsheet rows (from readSpreadsheet) → { rows: [{ rowNumber, cells }], missing, ignored }. Throws a user-facing error. */
 export function readInventoryTable(rawRows) {
-  return readTableByHeader(rawRows, INVENTORY_COLUMNS, { maxRows: MAX_INVENTORY_IMPORT_ROWS, positional: true })
+  return readTableByHeader(rawRows, INVENTORY_COLUMNS, { maxRows: MAX_INVENTORY_IMPORT_ROWS, positional: LEGACY_POSITIONAL_KEYS })
 }
 
 /**
@@ -101,7 +113,11 @@ export function toImportProduct(cells) {
   const name = String(cells.name || '').trim()
   if (!name) problems.push('Product name is missing.')
   else if (name.length > 300) problems.push('Product name is too long (300 characters at most).')
-  const price = num('price', 'Selling price', { blank: 0 })
+  // Both selling prices are optional. A blank retail price is stored as 0 (not entered, as before); a blank
+  // wholesale price as null.
+  const price = num('price', 'Retail price', { blank: 0 })
+  const wholesale = parseOptionalPrice(cells.wholesale_price)
+  if (Number.isNaN(wholesale)) problems.push(`Wholesale price "${cells.wholesale_price}" is not a price (a number, 0 or more).`)
   const cost = num('cost_price', 'Cost price', { blank: 0 })
   const stock = num('stock', 'Stock quantity', { whole: true, blank: UNCOUNTED_STOCK })
   const reorder = num('reorder_level', 'Reorder level', { whole: true, blank: 5 })
@@ -115,6 +131,7 @@ export function toImportProduct(cells) {
       generic_name: String(cells.generic_name || '').trim(),
       category: String(cells.category || '').trim() || 'Medicines',
       price,
+      wholesale_price: Number.isNaN(wholesale) ? null : wholesale,
       cost_price: cost,
       stock,
       reorder_level: reorder,

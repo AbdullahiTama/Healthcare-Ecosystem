@@ -8,6 +8,7 @@
 // Services are excluded from all stock money: they carry a sentinel stock of
 // 999 and no cost price, so counting them would make stock value meaningless.
 // This matches how the rest of the module treats them.
+import { referencePrice } from '../../lib/productPricing'
 
 export const isStockItem = (p) => (p.cat || p.category) !== 'Services'
 
@@ -43,7 +44,8 @@ export function computeInventoryStats(products = []) {
       if (!(p.cost_price > 0)) missingCost++
     }
 
-    stockValue += (p.price || 0) * stock
+    // At the retail price, or the wholesale price for a product sold only wholesale (lib/productPricing.js).
+    stockValue += referencePrice(p) * stock
     costValue += (p.cost_price || 0) * stock
   }
 

@@ -67,10 +67,10 @@ describe('Inventory: mark and edit', () => {
     expect(text()).toContain('2 selected')
     await click(byText('Edit selected'))
     await type(dialog().querySelector('input[list]'), 'Pharmacy')
-    await type(dialog().querySelector('select[aria-label="Selling price: how to change it"]'), 'increase')
-    await type(dialog().querySelector('input[aria-label="Selling price (%)"]'), '10')
+    await type(dialog().querySelector('select[aria-label="Retail price: how to change it"]'), 'increase')
+    await type(dialog().querySelector('input[aria-label="Retail price (%)"]'), '10')
     expect(dialog().textContent).toContain('2 of 2 products will change.')
-    expect(dialog().textContent).toContain('Selling price ₦1,000 → ₦1,100')
+    expect(dialog().textContent).toContain('Retail price ₦1,000 → ₦1,100')
     await click(btn((b) => b.textContent.startsWith('Update 2 products')))
     // A percentage gives each product its own price: one request each.
     expect(h.updateMany).toHaveBeenCalledWith('B1', ['p1'], { category: 'Pharmacy', price: 1100 })
@@ -190,3 +190,50 @@ describe('Inventory: restore at the plan limit', () => {
   })
 })
 
+
+describe('Inventory: bulk delete is visible before anything is ticked (pharmacy feedback)', () => {
+  it('shows Select all and Delete selected up front, disabled until something is selected', async () => {
+    await render()
+    const del = byText('Delete selected')
+    expect(del).toBeTruthy()
+    expect(del.closest('fieldset').disabled).toBe(true)
+    expect(text()).toContain('Tick the boxes to select, or select all.')
+    await click(btn((b) => b.textContent.startsWith('Select all 3 shown')))
+    expect(text()).toContain('3 selected')
+    expect(byText('Delete selected').closest('fieldset').disabled).toBe(false)
+    await click(byText('Clear'))
+    expect(byText('Delete selected').closest('fieldset').disabled).toBe(true)
+  })
+
+  it('shows no Delete selected to a role that may not delete', async () => {
+    await render({ role: 'Cashier', perms: { canEditPrice: true } })
+    expect(byText('Delete selected')).toBeUndefined()
+  })
+})
+
+describe('Inventory: deleting keeps the current page', () => {
+  // 120 products = 3 pages of 50.
+  const MANY = Array.from({ length: 120 }, (_, i) => ({ id: 'm' + i, name: 'Product ' + String(i).padStart(3, '0'), category: 'Medicines', price: 100, stock: 10, reorder_level: 5, list_on_carefind: true }))
+  const range = () => [...document.querySelectorAll('nav[aria-label="Pagination"] span')].map((s) => s.textContent).join('')
+
+  it('stays on page 2 after a product on it is deleted (it used to go back to page 1)', async () => {
+    h.deleteProducts.mockImplementation(async (_b, { ids }) => ({ deletion_id: 'd1', deleted: ids.length, not_found: 0, kept: [] }))
+    await render({ initial: MANY })
+    await click(btn((b) => b.getAttribute('aria-label') === 'Next page'))
+    expect(range()).toBe('51 to 100 of 120')
+    const row = [...document.querySelectorAll('tr')].find((r) => r.textContent.includes('PRODUCT 060') || r.textContent.includes('Product 060'))
+    await click([...row.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Del'))
+    await click(btn((b) => b.textContent.trim() === 'Delete' && b.closest('[role="dialog"], [role="alertdialog"]')))
+    expect(current).toHaveLength(119)
+    expect(range()).toBe('51 to 100 of 119')
+  })
+
+  it('a search still starts again from page 1', async () => {
+    await render({ initial: MANY })
+    await click(btn((b) => b.getAttribute('aria-label') === 'Next page'))
+    expect(range()).toBe('51 to 100 of 120')
+    // "Product 0" matches Product 000 to 099: 100 products, 2 pages, shown from the first.
+    await type(document.querySelector('input[placeholder*="Search"]'), 'Product 0')
+    expect(range()).toBe('1 to 50 of 100')
+  })
+})

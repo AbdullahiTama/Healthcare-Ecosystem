@@ -10,6 +10,7 @@ export const CAREFIND_CHOICES = [['yes', 'List on CareFind'], ['no', 'Hide from 
 export const EMPTY_BULK_EDIT = Object.freeze({
   category: '',
   price: Object.freeze({ mode: '', value: '' }),
+  wholesale_price: Object.freeze({ mode: '', value: '' }),
   cost_price: Object.freeze({ mode: '', value: '' }),
   reorder_level: '',
   shelf_label: '',
@@ -30,7 +31,7 @@ const number = (raw) => {
 export function validateBulkEdit(changes, { canEditPrice = false } = {}) {
   const c = { ...EMPTY_BULK_EDIT, ...changes }
   const errors = {}
-  for (const key of ['price', 'cost_price']) {
+  for (const key of ['price', 'wholesale_price', 'cost_price']) {
     const { mode, value } = c[key] || {}
     if (!mode) continue
     if (!canEditPrice) { errors[key] = 'Only roles allowed to edit prices can change them.'; continue }
@@ -47,7 +48,7 @@ export function validateBulkEdit(changes, { canEditPrice = false } = {}) {
   }
   if (c.category.trim().length > 60) errors.category = 'Keep the category under 60 characters.'
   if (c.shelf_label.trim().length > 50) errors.shelf_label = 'Keep the shelf under 50 characters.'
-  const hasChanges = !!(c.category.trim() || c.price?.mode || c.cost_price?.mode || String(c.reorder_level).trim() !== '' ||
+  const hasChanges = !!(c.category.trim() || c.price?.mode || c.wholesale_price?.mode || c.cost_price?.mode || String(c.reorder_level).trim() !== '' ||
     c.shelf_label.trim() || c.list_on_carefind)
   return { errors, ok: Object.keys(errors).length === 0, hasChanges }
 }
@@ -77,6 +78,12 @@ export function planBulkEdit(products, changes, opts = {}) {
     }
     if (c.category.trim()) set('category', c.category.trim(), p.category ?? p.cat)
     if (c.price?.mode) set('price', newPrice(p.price, c.price), p.price)
+    // The wholesale price is optional (lib/productPricing.js): a percentage changes only products that have one, and
+    // setting it to 0 removes it (null), so 0 never stands for a real wholesale price.
+    if (c.wholesale_price?.mode && (c.wholesale_price.mode === 'set' || Number(p.wholesale_price) > 0)) {
+      const w = newPrice(p.wholesale_price, c.wholesale_price)
+      set('wholesale_price', w > 0 ? w : null, p.wholesale_price ?? null)
+    }
     if (c.cost_price?.mode) set('cost_price', newPrice(p.cost_price, c.cost_price), p.cost_price)
     if (String(c.reorder_level).trim() !== '' && !isService(p)) set('reorder_level', number(c.reorder_level), p.reorder_level)
     if (c.shelf_label.trim()) set('shelf_label', c.shelf_label.trim(), p.shelf_label)

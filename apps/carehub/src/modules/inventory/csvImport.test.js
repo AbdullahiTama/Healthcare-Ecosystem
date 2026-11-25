@@ -50,7 +50,7 @@ describe('toImportProduct', () => {
 
   it('reports numbers it cannot read instead of saving 0', () => {
     const r = toImportProduct({ name: 'X', price: 'abc', stock: '-3', reorder_level: '2.5' })
-    expect(r.problems).toEqual(['Selling price "abc" is not a number.', 'Stock quantity cannot be negative.', 'Reorder level must be a whole number.'])
+    expect(r.problems).toEqual(['Retail price "abc" is not a number.', 'Stock quantity cannot be negative.', 'Reorder level must be a whole number.'])
   })
 
   it('keeps the old defaults for blank cells', () => {
@@ -126,6 +126,48 @@ describe('normalizeExpiryDate', () => {
 describe('buildInventoryTemplateCsv', () => {
   it('is read back by the importer with every example row ready', () => {
     const p = planInventoryImport(readInventoryTable(parseCsv(buildInventoryTemplateCsv())).rows)
-    expect(p.summary).toMatchObject({ submitted: 3, ready: 3 })
+    expect(p.summary).toMatchObject({ submitted: 4, ready: 4 })
+  })
+
+  it('has separate optional Retail Price and Wholesale Price columns, with examples of one, the other and both', () => {
+    const [header] = parseCsv(buildInventoryTemplateCsv())
+    expect(header.slice(3, 6)).toEqual(['Retail Price (NGN)', 'Wholesale Price (NGN)', 'Cost Price (NGN)'])
+    const products = planInventoryImport(readInventoryTable(parseCsv(buildInventoryTemplateCsv())).rows).items.map(i => i.product)
+    expect(products.map(p => [p.price, p.wholesale_price])).toEqual([[1500, 1200], [800, null], [0, 9500], [5000, null]])
+  })
+})
+
+describe('wholesale and retail prices', () => {
+  const NEW_HEADER = 'Product Name,Retail Price (NGN),Wholesale Price (NGN),Stock Quantity'
+  it('accepts a retail price only, a wholesale price only, both, or neither', () => {
+    const p = plan(NEW_HEADER + '\nA,500,,1\nB,,420,1\nC,500,420,1\nD,,,1')
+    expect(p.items.map(i => i.status)).toEqual(['ready', 'ready', 'ready', 'ready'])
+    expect(p.items.map(i => [i.product.price, i.product.wholesale_price])).toEqual([[500, null], [0, 420], [500, 420], [0, null]])
+  })
+
+  it('reads ₦ and thousands separators in the wholesale price', () => {
+    expect(toImportProduct({ name: 'X', wholesale_price: '₦1,250' }).product.wholesale_price).toBe(1250)
+  })
+
+  it('reports a wholesale price it cannot read instead of saving it', () => {
+    const r = toImportProduct({ name: 'X', wholesale_price: 'cheap' })
+    expect(r.problems).toEqual(['Wholesale price "cheap" is not a price (a number, 0 or more).'])
+    expect(toImportProduct({ name: 'X', wholesale_price: '-1' }).problems).toHaveLength(1)
+  })
+
+  it('still reads files made from the earlier template ("Selling Price" is the retail price)', () => {
+    const p = plan(HEADER + '\n"Amoxicillin 500mg","Amoxicillin","Medicines","1500","800","100","20","","yes",""')
+    expect(p.items[0].product).toMatchObject({ price: 1500, wholesale_price: null, cost_price: 800, stock: 100 })
+  })
+
+  it('reads the "Wholesale" and "Retail" short headers', () => {
+    const { rows } = table('Name,Retail,Wholesale\nZinc,300,250')
+    expect(rows[0].cells).toMatchObject({ name: 'Zinc', price: '300', wholesale_price: '250' })
+  })
+
+  it('reads a file without recognisable headers in the earlier ten-column order, so its cost and stock stay in place', () => {
+    const { rows } = table('A,B,C,D,E,F\nZinc 20mg,Zinc,Supplements,300,150,40')
+    expect(rows[0].cells).toMatchObject({ name: 'Zinc 20mg', price: '300', cost_price: '150', stock: '40' })
+    expect(rows[0].cells.wholesale_price).toBeUndefined()
   })
 })

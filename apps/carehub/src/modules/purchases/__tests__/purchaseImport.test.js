@@ -155,7 +155,7 @@ describe('row checks (the same rules as the Record Purchase form)', () => {
     const o = { 'Product Name': 'Paracetamol 500mg', 'Selling Price (NGN)': '95' }
     expect(one(o).warnings).toEqual([])
     const p = buildImportPlan(table({ Supplier: 'Emzor', 'Supply Date': '2026-11-03', Quantity: '1', 'Unit Cost (NGN)': '10', ...o }), { ...ctx, canReprice: true }).purchases[0]
-    expect(p.warnings).toEqual(['Row 2: the selling price of Paracetamol 500mg will change from 80 to 95.'])
+    expect(p.warnings).toEqual(['Row 2: the retail price of Paracetamol 500mg will change from 80 to 95.'])
   })
 })
 

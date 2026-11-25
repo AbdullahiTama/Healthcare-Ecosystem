@@ -190,12 +190,34 @@ describe('Inventory — stock is never written back from the stale page list', (
   it('editing only the price does not send stock back', async () => {
     await render()
     await click(button('Edit'))
-    await type(byLabel('Selling Price'), '1600')
+    await type(byLabel('Retail Price'), '1600')
     await click(button('Save Changes'))
     await flush()
     const update = calls.find(c => c[0] === 'update')
     expect(update[3].price).toBe(1600)
     expect('stock' in update[3]).toBe(false)
+  })
+
+  it('saves a product with only a wholesale price (both prices are optional)', async () => {
+    await render()
+    await click(button('Add product'))
+    await type(byLabel('Product Name'), 'ORS Sachets carton')
+    await type(byLabel('Wholesale Price'), '9500')
+    await type(byLabel('Stock Quantity'), '4')
+    await click(button('Add Product'))
+    await flush()
+    const create = calls.find(c => c[0] === 'create')
+    expect(create[2]).toMatchObject({ name: 'ORS Sachets carton', price: 0, wholesale_price: 9500 })
+  })
+
+  it('saves both prices, and clearing the wholesale price removes it', async () => {
+    await render(OWNER, [{ ...AMOXIL, wholesale_price: 1200 }])
+    await click(button('Edit'))
+    expect(byLabel('Wholesale Price').value).toBe('1200')
+    await type(byLabel('Wholesale Price'), '')
+    await click(button('Save Changes'))
+    await flush()
+    expect(calls.find(c => c[0] === 'update')[3]).toMatchObject({ price: 1500, wholesale_price: null })
   })
 
   it('editing the stock count itself is still saved as a correction', async () => {
@@ -211,7 +233,7 @@ describe('Inventory — stock is never written back from the stale page list', (
     await render({ canEditPrice: false, canEditStock: true })
     await click(button('Add product'))
     await type(byLabel('Product Name'), 'Amoxil 500mg')
-    await type(byLabel('Selling Price'), '9999')
+    await type(byLabel('Retail Price'), '9999')
     await type(byLabel('Stock Quantity'), '12')
     await click(button('Add Product'))
     await flush()
@@ -300,7 +322,7 @@ describe('Inventory: saving keeps a cost the editor cannot see', () => {
     await renderAs('Pharmacist', { canEditPrice: true, canEditStock: true, canViewCostPrice: false }, [AMOXIL_NO_COST])
     await click(button('Edit'))
     expect(byLabel('Cost Price')).toBeFalsy()
-    await type(byLabel('Selling Price'), '1600')
+    await type(byLabel('Retail Price'), '1600')
     await click(button('Save Changes'))
     await flush()
     const update = calls.find(c => c[0] === 'update')

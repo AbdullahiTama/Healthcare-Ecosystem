@@ -162,7 +162,9 @@ export default function Clients({ brand, role, perms }) {
   const [showDeleted, setShowDeleted] = useState(false)
   const toggleMarked = (id) => setMarked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
-  useEffect(() => { setPage(0) }, [listFilters, clients.length])
+  // Back to the first page only when the search or filters change. Not when rows are added or deleted: after a delete
+  // the user stays on the page they were on (DataTable shows the last page if that one no longer exists).
+  useEffect(() => { setPage(0) }, [listFilters])
 
   // React Query hooks for client detail
   const { data: clientSales = [] } = useClientSales(selected?.id, brand?.id)

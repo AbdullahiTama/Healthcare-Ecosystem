@@ -74,7 +74,9 @@ export default function Orders({ brand, view = 'all', products = [] }) {
   const [loadError, setLoadError] = useState('')
   const [filterStage, setFilterStage] = useState('all')
   const [page, setPage] = useState(0)
-  useEffect(() => { setPage(0) }, [filterStage, orders.length])
+  // Back to the first page only when the search or filters change. Not when rows are added or deleted: after a delete
+  // the user stays on the page they were on (DataTable shows the last page if that one no longer exists).
+  useEffect(() => { setPage(0) }, [filterStage])
 
   const [openOrder, setOpenOrder] = useState(null)
   const [events, setEvents] = useState([])

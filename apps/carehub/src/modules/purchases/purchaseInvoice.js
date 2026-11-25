@@ -23,6 +23,7 @@ export function purchaseItemsFromForm(validItems) {
     amount: Math.round(num(i.amount) * 100) / 100,
     no_qty: true,
     sell: null,
+    wholesale: null,
     batch: i.batch ? String(i.batch).trim() : null,
     expiry: i.expiry || null,
     barcode: String(i.barcode || '').trim() || null,
@@ -34,6 +35,7 @@ export function purchaseItemsFromForm(validItems) {
     qty: num(i.qty),
     cost: num(i.cost),
     sell: num(i.sell) > 0 ? num(i.sell) : null,
+    wholesale: num(i.wholesale) > 0 ? num(i.wholesale) : null,
     batch: i.batch ? String(i.batch).trim() : null,
     expiry: i.expiry || null,
     barcode: String(i.barcode || '').trim() || null,
@@ -63,6 +65,7 @@ export function formFromPurchase(purchase, editItems) {
       cost: e.no_qty ? '' : str(e.cost),
       ...(e.no_qty ? { noQty: true, amount: str(e.amount) } : {}),
       sell: Number(e.sell) > 0 ? String(e.sell) : '',
+      wholesale: Number(e.wholesale) > 0 ? String(e.wholesale) : '',
       batch: e.batch || '',
       expiry: day(e.expiry),
       barcode: e.barcode || '',
@@ -99,7 +102,7 @@ export function editItemsFromForm(items) {
   }))
 }
 
-// { lines: [{ name, qty, cost, total, sell, batch, expiry }], itemised }.
+// { lines: [{ name, qty, cost, total, sell, wholesale, batch, expiry }], itemised }. `sell` is the retail price.
 // itemised is false for an older purchase shown from its summary columns.
 export function purchaseLines(purchase) {
   let items = purchase?.items
@@ -120,6 +123,7 @@ export function purchaseLines(purchase) {
         total: i.no_qty ? Math.round(num(i.amount) * 100) / 100 : Math.round(num(i.qty) * num(i.cost) * 100) / 100,
         noQty: !!i.no_qty,
         sell: i.sell != null && num(i.sell) > 0 ? num(i.sell) : null,
+        wholesale: i.wholesale != null && num(i.wholesale) > 0 ? num(i.wholesale) : null,
         batch: i.batch || null,
         expiry: i.expiry || null,
         barcode: i.barcode || null,

@@ -92,7 +92,7 @@ export async function recordPurchase({ businessId, form, inventory = [], canRepr
   const keyBase = purchaseId || ('unsaved-' + Date.now().toString(36))
   // Only lines with a quantity reach Inventory: an amount-only line has no units to receive.
   for (const group of groupLinesByProduct(stocked, l => resolveExistingProduct(inventory, l))) {
-    const { existing, name, cost, sell, cat, barcode, lines: groupLines } = group
+    const { existing, name, cost, sell, wholesale, cat, barcode, lines: groupLines } = group
     // A barcode entered on the line is saved onto a product that has none,
     // unless another product already uses it (validation blocks that).
     const owner = barcode ? findProductByBarcode(inventory, barcode) : null
@@ -102,18 +102,24 @@ export async function recordPurchase({ businessId, form, inventory = [], canRepr
       if (existing) {
         // A changed selling price is an explicit repricing intent, honoured
         // only for roles allowed to edit prices (the same rule as Inventory).
+        // Retail and wholesale prices are each optional: only a price entered on the line can change the product's.
         const updates = { cost_price: cost }
         if (canReprice && sell && sell !== Number(existing.price)) updates.price = sell
+        if (canReprice && wholesale && wholesale !== Number(existing.wholesale_price)) updates.wholesale_price = wholesale
         if (newBarcode && !String(existing.barcode || '').trim()) updates.barcode = newBarcode
         row = (await products.update(existing.id, businessId, updates)) || { id: existing.id, ...updates }
         updated++
       } else {
         // Created empty, then received like any other line, so the units are
-        // journalled as this purchase rather than as opening stock.
+        // journalled as this purchase rather than as opening stock. A new
+        // product is priced at what was entered: retail, wholesale or both.
+        // Only when neither was entered does it get the automatic retail
+        // markup, so it is sellable at once (as before).
         const createdRow = await products.create(businessId, {
           name,
           category: cat,
-          price: sell || Math.ceil(cost * NEW_PRODUCT_MARKUP),
+          price: sell || (wholesale ? 0 : Math.ceil(cost * NEW_PRODUCT_MARKUP)),
+          wholesale_price: wholesale || null,
           cost_price: cost,
           stock: 0,
           reorder_level: 5,
@@ -191,6 +197,6 @@ export async function recordPurchase({ businessId, form, inventory = [], canRepr
 
   return {
     purchaseId, total, paid, balance, created, updated, syncFailed, changedRows, debtFailed, phone,
-    newProductsAutoPriced: created > 0 && !lines.some(i => !i.productId && Number(i.sell) > 0),
+    newProductsAutoPriced: created > 0 && !lines.some(i => !i.productId && (Number(i.sell) > 0 || Number(i.wholesale) > 0)),
   }
 }

@@ -10,7 +10,7 @@ import { purchaseStatus } from './SupplierPayments'
 import { IMPORT_COLUMNS, IMPORT_SHEET } from './purchaseImport'
 
 const MONEY_FMT = '#,##0.00'
-const MONEY_KEYS = new Set(['cost', 'sell', 'amountPaid', 'lineTotal', 'purchaseTotal', 'balance'])
+const MONEY_KEYS = new Set(['cost', 'sell', 'wholesale', 'amountPaid', 'lineTotal', 'purchaseTotal', 'balance'])
 
 export const PURCHASE_EXPORT_COLUMNS = [
   ...IMPORT_COLUMNS.map(c => ({ key: c.key, header: c.header })),
@@ -52,6 +52,7 @@ export function purchaseExportRows(p) {
     qty: l.noQty ? '' : num(l.qty),
     cost: l.noQty ? '' : num(l.cost),
     sell: l.sell != null ? num(l.sell) : '',
+    wholesale: l.wholesale != null ? num(l.wholesale) : '',
     batch: l.batch || '',
     expiry: day(l.expiry),
     barcode: l.barcode || '',

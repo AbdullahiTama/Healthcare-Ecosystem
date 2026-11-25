@@ -3,6 +3,7 @@ import {
   ClipboardList, PackageX, MessageSquare, FileText, Plus, Printer, CheckCircle, Search, X, Zap,
 } from 'lucide-react'
 import { demandRepository } from './repositories'
+import { savedLines, badCostLines, lineTotal, requisitionTotal, toSavedLine, NO_COST } from './requisitionLines'
 import { useClients } from '../../hooks/queries'
 import ClientsLoadNote from '../clients/components/ClientsLoadNote'
 import { fmt, nowStr } from '../../lib/utils'
@@ -188,8 +189,9 @@ export default function Demand({ brand, role, perms, products }) {
   }
 
   // ---- Requisitions ----
-  const validReqItems = reqsForm.items.filter(i => i.product_name.trim() && (parseFloat(i.cost) > 0))
-  const reqTotal = validReqItems.reduce((s, i) => s + (parseQty(i.quantity) * parseFloat(i.cost)), 0)
+  // A line needs only a product name; its unit cost is optional (requisitionLines.js).
+  const validReqItems = savedLines(reqsForm.items)
+  const { total: reqTotal, missing: reqMissingCost } = requisitionTotal(reqsForm.items, parseQty)
 
   // Merge open out-of-stock entries + open customer requests into one list of
   // requisition lines, with duplicate products combined (quantities summed,
@@ -218,14 +220,16 @@ export default function Demand({ brand, role, perms, products }) {
 
   async function saveReqs() {
     if (!reqsForm.supplier?.trim()) { showToast('Enter the supplier name.', { type: 'warning' }); return }
-    if (validReqItems.length === 0) { showToast('Add at least one item with a name and cost.', { type: 'warning' }); return }
+    if (validReqItems.length === 0) { showToast('Add at least one item with a product name.', { type: 'warning' }); return }
+    const badCost = badCostLines(reqsForm.items)
+    if (badCost.length) { showToast('The cost of ' + badCost.join(', ') + ' is not a number. Correct it, or leave it blank.', { type: 'warning' }); return }
     setSavingReqs(true)
     try {
       await demandRepository.addRequisition({
         business_id: brand.id,
         supplier_name: reqsForm.supplier.trim(),
         note: reqsForm.notes || '',
-        items: validReqItems.map(i => ({ product_name: i.product_name.trim(), quantity: i.quantity || '', cost: i.cost || 0, unit: i.unit || 'unit' })),
+        items: validReqItems.map(toSavedLine),
       })
       showToast('Requisition saved! Print or mark as sent when ready.', { type: 'success' })
       setReqsForm({ items: [blankItem()] }); setShowReqs(false); load()
@@ -244,7 +248,7 @@ export default function Demand({ brand, role, perms, products }) {
   // `items` is an array from the normalized read; legacy string payloads
   // (pre-fix saves) are parsed defensively.
   const reqItemsOf = r => (Array.isArray(r?.items) ? r.items : (() => { try { return JSON.parse(r?.items || '[]') } catch (e) { return [] } })())
-  const reqTotalOf = r => reqItemsOf(r).reduce((s, i) => s + (parseQty(i.quantity) * (parseFloat(i.cost) || 0)), 0)
+  const reqTotalOf = r => requisitionTotal(reqItemsOf(r), parseQty).total
 
   function printRequisition(r) {
     const items = reqItemsOf(r)
@@ -253,8 +257,8 @@ export default function Demand({ brand, role, perms, products }) {
       '<td>' + (idx + 1) + '</td>' +
       '<td>' + (i.product_name || '') + '</td>' +
       '<td>' + (i.quantity || '') + ' ' + (i.unit || '') + '</td>' +
-      '<td align="right">' + fmt(i.cost || 0) + '</td>' +
-      '<td align="right">' + fmt((parseQty(i.quantity)) * (parseFloat(i.cost) || 0)) + '</td>' +
+      '<td align="right">' + (lineTotal(i, parseQty) == null ? NO_COST : fmt(i.cost)) + '</td>' +
+      '<td align="right">' + (lineTotal(i, parseQty) == null ? NO_COST : fmt(lineTotal(i, parseQty))) + '</td>' +
       '</tr>'
     )).join('')
     const w = window.open('', '_blank', 'width=760,height=600')
@@ -545,7 +549,7 @@ export default function Demand({ brand, role, perms, products }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '40vh', overflowY: 'auto' }}>
               {reqsForm.items.map(item => {
-                const sub = (parseQty(item.quantity)) * (parseFloat(item.cost) || 0)
+                const sub = lineTotal(item, parseQty) || 0
                 return (
                   <div key={item._uid} style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${gray100}`, background: bg }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -554,8 +558,8 @@ export default function Demand({ brand, role, perms, products }) {
                       <input value={item.quantity} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map(it => it._uid === item._uid ? { ...it, quantity: e.target.value } : it) }))} placeholder='Qty'
                         aria-label='Quantity'
                         style={{ width: '64px', padding: '9px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
-                      <input value={item.cost} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map(it => it._uid === item._uid ? { ...it, cost: e.target.value } : it) }))} placeholder='Cost ₦'
-                        aria-label='Unit cost'
+                      <input value={item.cost} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map(it => it._uid === item._uid ? { ...it, cost: e.target.value } : it) }))} placeholder='Cost ₦ (optional)' inputMode='decimal'
+                        aria-label='Unit cost (optional)'
                         style={{ width: '96px', padding: '9px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
                       <button onClick={() => setReqsForm(p => ({ ...p, items: p.items.filter(it => it._uid !== item._uid) }))} aria-label={'Remove ' + (item.product_name || 'item')}
                         style={{ width: '34px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: theme.radius.md, border: 'none', background: 'transparent', color: gray400, cursor: 'pointer' }}>
@@ -566,7 +570,7 @@ export default function Demand({ brand, role, perms, products }) {
                       <input value={item.unit} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map(it => it._uid === item._uid ? { ...it, unit: e.target.value } : it) }))} placeholder='unit'
                         aria-label='Unit label'
                         style={{ width: '110px', padding: '6px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', background: 'white', color: navy }} />
-                      <span style={{ fontSize: '12px', fontWeight: '700', color: sub > 0 ? tealDeep : gray400 }}>{sub > 0 ? 'Subtotal: ' + fmt(sub) : 'Not set'}</span>
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: sub > 0 ? tealDeep : gray400 }}>{sub > 0 ? 'Subtotal: ' + fmt(sub) : 'No cost entered'}</span>
                     </div>
                   </div>
                 )
@@ -574,7 +578,7 @@ export default function Demand({ brand, role, perms, products }) {
             </div>
           </div>
           <div style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: bg, display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-            <span style={{ color: gray500 }}>Total</span>
+            <span style={{ color: gray500 }}>Total{reqMissingCost > 0 ? ` (${reqMissingCost} item${reqMissingCost === 1 ? '' : 's'} without a cost)` : ''}</span>
             <span style={{ fontWeight: '900', color: navy }}>{fmt(reqTotal)}</span>
           </div>
           <Textarea label='Notes (optional)' value={reqsForm.notes} onChange={v => setReqsForm(p => ({ ...p, notes: v }))} placeholder='Delivery date, terms...' rows={2} />

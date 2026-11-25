@@ -5,6 +5,7 @@
 // on the server and is the figure of record; this is the live preview and the
 // first line of validation.
 import { parseItems, saleReceived } from './salesReport'
+import { priceFor } from '../../lib/productPricing'
 
 const num = (v) => {
   const n = Number(v)
@@ -22,7 +23,9 @@ export function draftLines(sale) {
 export function addLine(lines, product) {
   const i = lines.findIndex((l) => l.id === product.id)
   if (i >= 0) return lines.map((l, k) => (k === i ? { ...l, qty: num(l.qty) + 1 } : l))
-  return [...lines, { id: product.id, name: product.name, price: num(product.price), qty: 1 }]
+  // At the retail price, or the wholesale price for a product sold only wholesale (lib/productPricing.js).
+  const { price, tier } = priceFor(product, 'retail')
+  return [...lines, { id: product.id, name: product.name, price, price_tier: tier, qty: 1 }]
 }
 
 export function lineErrors(line) {

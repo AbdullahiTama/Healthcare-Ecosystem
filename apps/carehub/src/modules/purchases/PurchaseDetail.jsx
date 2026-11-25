@@ -70,9 +70,9 @@ export default function PurchaseDetailModal({ brand, purchase: row, onClose, onP
                   <div style={{ fontSize: 12, color: gray500 }}>
                     {l.noQty ? 'Quantity not recorded: no stock was added (Edit to add it)' : <>{l.qty || '—'} × {l.cost ? fmt(l.cost) : '—'}{itemised ? '' : ' average'}</>}
                   </div>
-                  {(l.batch || l.expiry || l.sell) && (
+                  {(l.batch || l.expiry || l.sell || l.wholesale) && (
                     <div style={{ fontSize: 11.5, color: gray500 }}>
-                      {[l.batch && `Batch ${l.batch}`, l.expiry && `Expires ${fmtDate(l.expiry)}`, l.sell && `Sells at ${fmt(l.sell)}`].filter(Boolean).join(' · ')}
+                      {[l.batch && `Batch ${l.batch}`, l.expiry && `Expires ${fmtDate(l.expiry)}`, l.sell && `Retail ${fmt(l.sell)}`, l.wholesale && `Wholesale ${fmt(l.wholesale)}`].filter(Boolean).join(' · ')}
                     </div>
                   )}
                 </div>

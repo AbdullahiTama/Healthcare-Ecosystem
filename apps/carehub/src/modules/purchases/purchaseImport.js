@@ -36,7 +36,8 @@ export const IMPORT_COLUMNS = [
   { key: 'qty', header: 'Quantity', level: 'line', required: false, note: 'Whole number above 0. If you do not know it, leave it blank and fill Line Total: the amount is recorded and no stock is added (add the quantity later in Edit Purchase).', aliases: ['quantity', 'qty', 'units'] },
   { key: 'cost', header: 'Unit Cost (NGN)', level: 'line', required: false, note: 'Cost of one unit, above 0. Needed with a quantity (or give Line Total instead).', aliases: ['unit cost ngn', 'unit cost', 'cost', 'cost price', 'cost price ngn', 'unit price'] },
   { key: 'lineTotal', header: 'Line Total (NGN)', level: 'line', required: false, note: 'Optional. What the whole line cost. Used when Quantity is blank; with a quantity and no unit cost, the unit cost is worked out from it.', aliases: ['line total ngn', 'line total', 'line amount', 'amount ngn', 'amount'] },
-  { key: 'sell', header: 'Selling Price (NGN)', level: 'line', required: false, note: 'Optional. Sets the price of a new product; changes an existing product\'s price only if your role may edit prices.', aliases: ['selling price ngn', 'selling price', 'sell price', 'price', 'retail price'] },
+  { key: 'sell', header: 'Retail Price (NGN)', level: 'line', required: false, note: 'Optional. Sets the retail price of a new product; changes an existing product\'s retail price only if your role may edit prices.', aliases: ['retail price ngn', 'retail price', 'retail', 'selling price ngn', 'selling price', 'sell price', 'price'] },
+  { key: 'wholesale', header: 'Wholesale Price (NGN)', level: 'line', required: false, note: 'Optional. Sets the wholesale price of a new product; changes an existing product\'s wholesale price only if your role may edit prices. A new product with neither price gets a retail price of unit cost + 50%.', aliases: ['wholesale price ngn', 'wholesale price', 'wholesale', 'ws price', 'w/s price', 'trade price'] },
   { key: 'batch', header: 'Batch No.', level: 'line', required: false, note: 'Needed for products tracked by batch.', aliases: ['batch no', 'batch', 'batch number', 'lot', 'lot number'] },
   { key: 'expiry', header: 'Expiry Date', level: 'line', required: false, note: 'YYYY-MM-DD or DD/MM/YYYY. Needed for products tracked by expiry.', aliases: ['expiry date', 'expiry', 'exp date', 'expiration date'] },
   { key: 'barcode', header: 'Barcode', level: 'line', required: false, note: 'Optional. Saved onto a product that has none.', aliases: ['barcode', 'ean', 'upc', 'gtin'] },
@@ -50,9 +51,9 @@ const LABEL = Object.fromEntries(IMPORT_COLUMNS.map(c => [c.key, c.header]))
 
 // In IMPORT_COLUMNS order. The third row has no quantity: its Line Total is recorded, no stock is added.
 const SAMPLE_ROWS = [
-  ['INV-1042', 'Emzor Distributors', '08031234567', '2026-11-03', 'Paracetamol 500mg', '200', '45', '', '80', 'B2311', '2028-06-30', '', 'Medicines', '5000', '2026-11-30', ''],
-  ['INV-1042', 'Emzor Distributors', '', '2026-11-03', 'Amoxicillin 500mg', '50', '220', '', '350', 'AX77', '2027-12-31', '', 'Medicines', '', '', ''],
-  ['INV-1042', 'Emzor Distributors', '', '2026-11-03', 'Cotton wool 500g', '', '', '3500', '', '', '', '', 'Medicines', '', '', ''],
+  ['INV-1042', 'Emzor Distributors', '08031234567', '2026-11-03', 'Paracetamol 500mg', '200', '45', '', '80', '65', 'B2311', '2028-06-30', '', 'Medicines', '5000', '2026-11-30', ''],
+  ['INV-1042', 'Emzor Distributors', '', '2026-11-03', 'Amoxicillin 500mg', '50', '220', '', '350', '', 'AX77', '2027-12-31', '', 'Medicines', '', '', ''],
+  ['INV-1042', 'Emzor Distributors', '', '2026-11-03', 'Cotton wool 500g', '', '', '3500', '', '', '', '', '', 'Medicines', '', '', ''],
 ]
 
 function csvEscape(v) {
@@ -184,6 +185,7 @@ export function buildImportPlan(rows, { inventory = [], today, restricted = fals
     let cost = parseImportNumber(cells.cost)
     const lineTotal = parseImportNumber(cells.lineTotal)
     const sell = parseImportNumber(cells.sell)
+    const wholesale = parseImportNumber(cells.wholesale)
     const expiry = parseImportDate(cells.expiry)
     if (Number.isNaN(qty)) at(`Quantity "${cells.qty}" is not a number.`)
     if (Number.isNaN(cost)) at(`Unit cost "${cells.cost}" is not a number.`)
@@ -202,7 +204,8 @@ export function buildImportPlan(rows, { inventory = [], today, restricted = fals
       if (cost === '') cost = lineTotal / qty
       else if (!Number.isNaN(cost) && Math.abs(qty * cost - lineTotal) > 1) g.warnings.push(`Row ${rowNumber}: Line Total ${money(lineTotal)} is not Quantity x Unit Cost (${money(qty * cost)}); Quantity x Unit Cost is used.`)
     }
-    if (Number.isNaN(sell) || (sell !== '' && sell < 0)) at(`Selling price "${cells.sell}" is not a valid amount.`)
+    if (Number.isNaN(sell) || (sell !== '' && sell < 0)) at(`Retail price "${cells.sell}" is not a valid amount.`)
+    if (Number.isNaN(wholesale) || (wholesale !== '' && wholesale < 0)) at(`Wholesale price "${cells.wholesale}" is not a valid amount.`)
     if (expiry === null) at(`Expiry date "${cells.expiry}" is not a date (use YYYY-MM-DD or DD/MM/YYYY).`)
     const name = String(cells.name || '').trim()
     const product = name ? findProductForEntry(inventory, name) : null
@@ -215,6 +218,7 @@ export function buildImportPlan(rows, { inventory = [], today, restricted = fals
       cost: noQty || cost === '' || Number.isNaN(cost) ? '' : String(cost),
       ...(noQty ? { noQty: true, amount: amount === '' ? '' : String(amount) } : {}),
       sell: sell === '' || Number.isNaN(sell) ? '' : String(sell),
+      wholesale: wholesale === '' || Number.isNaN(wholesale) ? '' : String(wholesale),
       batch: String(cells.batch || '').trim(),
       expiry: expiry || '',
       barcode: String(cells.barcode || '').trim(),
@@ -231,7 +235,10 @@ export function buildImportPlan(rows, { inventory = [], today, restricted = fals
       for (const [field, msg] of Object.entries(problems)) at(`${LABEL[field] || field}: ${msg}.`)
     }
     // Recording applies a different selling price to an existing product (as the form does), so say so before.
-    if (product && canReprice && Number(line.sell) > 0 && Number(line.sell) !== Number(product.price)) g.warnings.push(`Row ${rowNumber}: the selling price of ${product.name} will change from ${money(product.price)} to ${money(line.sell)}.`)
+    if (product && canReprice && Number(line.sell) > 0 && Number(line.sell) !== Number(product.price)) g.warnings.push(`Row ${rowNumber}: the retail price of ${product.name} will change from ${money(product.price)} to ${money(line.sell)}.`)
+    if (product && canReprice && Number(line.wholesale) > 0 && Number(line.wholesale) !== Number(product.wholesale_price)) {
+      g.warnings.push(`Row ${rowNumber}: the wholesale price of ${product.name} will ` + (Number(product.wholesale_price) > 0 ? `change from ${money(product.wholesale_price)} to ${money(line.wholesale)}.` : `be set to ${money(line.wholesale)}.`))
+    }
     if (line.expiry && today && line.expiry < today) g.warnings.push(`Row ${rowNumber}: ${name || 'this product'} expired on ${line.expiry}.`)
     // An amount-only line stocks nothing, so it never creates a product.
     g.lines.push({ line, isNew: !product && !!name && !noQty })

@@ -153,7 +153,7 @@ export function buildReceiptEscpos({ receipt = {}, business = {}, settings = {} 
     cmd(CMD.BOLD_ON)
     wrapText(label, cols).forEach(line)
     cmd(CMD.BOLD_OFF)
-    twoCol(String(i.qty) + ' x ' + money(i.price), money(i.price * i.qty), cols).forEach(line)
+    twoCol(String(i.qty) + ' x ' + money(i.price) + (i.price_tier === 'wholesale' ? ' (W/S)' : ''), money(i.price * i.qty), cols).forEach(line)
     blank()
   }
   sep()

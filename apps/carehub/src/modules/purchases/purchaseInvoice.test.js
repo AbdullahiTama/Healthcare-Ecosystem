@@ -4,7 +4,7 @@ import { purchaseItemsFromForm, purchaseLines, formFromPurchase, editItemsFromFo
 describe('purchaseItemsFromForm', () => {
   it('keeps each line\'s name, quantity, cost and optional details as numbers', () => {
     expect(purchaseItemsFromForm([{ id: 'l1', productId: 'p-9', name: ' Amoxil ', qty: '10', cost: '1200', sell: '', batch: ' B1 ', expiry: '2027-01-01', barcode: ' 6001 ', cat: 'Medicines' }]))
-      .toEqual([{ id: 'l1', product_id: 'p-9', name: 'Amoxil', qty: 10, cost: 1200, sell: null, batch: 'B1', expiry: '2027-01-01', barcode: '6001', cat: 'Medicines' }])
+      .toEqual([{ id: 'l1', product_id: 'p-9', name: 'Amoxil', qty: 10, cost: 1200, sell: null, wholesale: null, batch: 'B1', expiry: '2027-01-01', barcode: '6001', cat: 'Medicines' }])
   })
   it('keeps the line id (the stock receipt key) and leaves an unlinked line\'s product empty', () => {
     expect(purchaseItemsFromForm([{ id: 'l2', productId: null, name: 'New', qty: '1', cost: '5', barcode: '' }])[0]).toMatchObject({ id: 'l2', product_id: null, barcode: null })
@@ -43,7 +43,7 @@ describe('edit form', () => {
   it('formFromPurchase turns the purchase and its lines into form strings', () => {
     expect(formFromPurchase(purchase, editItems)).toEqual({
       supplier: 'Emzor', supplyDate: '2026-10-30', dueDate: '', amountPaid: '1500', notes: 'inv 9',
-      items: [{ id: 'l1', productId: 'p1', name: 'Amoxil', qty: '10', cost: '120', sell: '', batch: '', expiry: '2027-01-31', barcode: '6001', cat: 'Medicines' }],
+      items: [{ id: 'l1', productId: 'p1', name: 'Amoxil', qty: '10', cost: '120', sell: '', wholesale: '', batch: '', expiry: '2027-01-31', barcode: '6001', cat: 'Medicines' }],
     })
   })
 

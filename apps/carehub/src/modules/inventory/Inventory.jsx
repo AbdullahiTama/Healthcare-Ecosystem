@@ -11,6 +11,7 @@ import { computeInventoryStats } from './inventoryStats'
 import { exportInventoryXlsx } from './inventoryExport'
 import { auditRepository } from '../audit/repositories'
 import { fmt, todayDate } from '../../lib/utils'
+import { parseOptionalPrice, priceSummary, retailPrice, wholesalePrice, referencePrice } from '../../lib/productPricing'
 import { PRODUCT_CATS } from '../../config/constants'
 import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
 import { findAllDuplicateGroups, createDuplicateIndex } from '../../lib/productMatches'
@@ -109,9 +110,8 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     return true
   }), [products, catFilter, search, stockFilter, expiryFilter])
 
-  // Pagination — 50 rows per page. Reset to page 0 whenever the result set
-  // changes (search, filter, or a save) so the user never lands on an
-  // empty page that no longer exists. DataTable does the slicing.
+  // Pagination — 50 rows per page. DataTable does the slicing (and never shows
+  // an empty page that no longer exists).
   function clearFilters() {
     setSearch('')
     setCatFilter('All')
@@ -121,7 +121,9 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 
   const PAGE_SIZE = 50
   const [page, setPage] = useState(0)
-  useEffect(() => { setPage(0) }, [search, catFilter, stockFilter, expiryFilter, products.length])
+  // Back to the first page only when the search or filters change. Not when rows are added or deleted: after a delete
+  // the user stays on the page they were on (DataTable shows the last page if that one no longer exists).
+  useEffect(() => { setPage(0) }, [search, catFilter, stockFilter, expiryFilter])
   // Summary figures (issue #3): one pass in inventoryStats.js, recomputed
   // whenever the product list changes so the KPI row tracks stock live.
   const { lowStock, outOfStock, stockValue, costValue, profit, margin, missingCost, onCareFind } =
@@ -185,6 +187,8 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         ...rest,
         category,
         price: parseFloat(data.price) || 0,
+        // Optional, like the retail price: null when not entered (lib/productPricing.js).
+        wholesale_price: Number(data.wholesale_price) > 0 ? Number(data.wholesale_price) : null,
         cost_price: parseFloat(data.cost_price) || 0,
         reorder_level: parseInt(data.reorder_level) || 5,
         shelf_label: data.shelf_label || null,
@@ -251,7 +255,12 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         barcode: incoming.barcode || existing.barcode,
         list_on_carefind: incoming.list_on_carefind,
       }
-      if (perms?.canEditPrice) { updates.price = incoming.price; if (canSeeCost) updates.cost_price = incoming.cost_price }
+      // Prices: only those entered on the new product replace the existing ones (both are optional).
+      if (perms?.canEditPrice) {
+        if (retailPrice(incoming) != null) updates.price = incoming.price
+        if (wholesalePrice(incoming) != null) updates.wholesale_price = incoming.wholesale_price
+        if (canSeeCost) updates.cost_price = incoming.cost_price
+      }
       const saved = await productRepository.update(existing.id, brand.id, updates)
       if (!saved) throw new Error('product not found')
       const added = incoming.category === 'Services' ? 0 : (parseInt(incoming.stock) || 0)
@@ -683,8 +692,18 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               render: p => <Pill label={p.cat || p.category || ''} type='teal' />,
             },
             {
-              key: 'price', label: 'Sell Price', sortable: true, align: 'right',
-              render: p => <span style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(p.price)}</span>,
+              key: 'price', label: 'Retail Price', sortable: true, align: 'right',
+              sortValue: p => retailPrice(p),
+              render: p => retailPrice(p) != null
+                ? <span style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(p.price)}</span>
+                : <span style={{ fontSize: '12px', color: gray400 }}>Not set</span>,
+            },
+            {
+              key: 'wholesale_price', label: 'Wholesale Price', sortable: true, align: 'right',
+              sortValue: p => wholesalePrice(p),
+              render: p => wholesalePrice(p) != null
+                ? <span style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(p.wholesale_price)}</span>
+                : <span style={{ fontSize: '12px', color: gray400 }}>Not set</span>,
             },
             ...(canSeeCost ? [{
               key: 'cost_price', label: 'Cost Price', sortable: true, align: 'right',
@@ -692,9 +711,11 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             },
             {
               key: 'margin', label: 'Margin', sortable: true, align: 'right',
-              sortValue: p => (p.price && p.cost_price ? ((p.price - p.cost_price) / p.price) : -1),
+              // On the retail price, or the wholesale price when that is the only one.
+              sortValue: p => { const sp = referencePrice(p); return sp && p.cost_price ? ((sp - p.cost_price) / sp) : -1 },
               render: p => {
-                const margin = p.price && p.cost_price ? Math.round(((p.price - p.cost_price) / p.price) * 100) : null
+                const sp = referencePrice(p)
+                const margin = sp && p.cost_price ? Math.round(((sp - p.cost_price) / sp) * 100) : null
                 return <span style={{ fontSize: '12px', fontWeight: '700', color: margin !== null ? (margin > 30 ? success : warning) : gray400 }}>
                   {margin !== null ? margin + '%' : 'Not set'}
                 </span>
@@ -838,7 +859,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                         <span style={{ fontWeight: '600' }}>{p.name}</span>
                         {(p.generic_name || p.genericName) && <span style={{ color: gray400 }}> · {p.generic_name || p.genericName}</span>}
                       </div>
-                      <span style={{ color: gray500, fontWeight: '600' }}>{p.stock} units · {fmt(p.price)}</span>
+                      <span style={{ color: gray500, fontWeight: '600' }}>{p.stock} units · {priceSummary(p)}</span>
                     </div>
                   ))}
                 </div>
@@ -872,7 +893,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                 {(duplicateWarning.existing.generic_name || duplicateWarning.existing.genericName) && (
                   <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{duplicateWarning.existing.generic_name || duplicateWarning.existing.genericName}</div>
                 )}
-                <div style={{ fontSize: '13px', fontWeight: '700', color: tealDeep, marginTop: '6px' }}>{fmt(duplicateWarning.existing.price)}</div>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: tealDeep, marginTop: '6px' }}>{priceSummary(duplicateWarning.existing)}</div>
                 <div style={{ fontSize: '12px', color: gray500 }}>{duplicateWarning.existing.stock} in stock</div>
               </div>
               <ArrowRight size={18} color={gray300} />
@@ -882,7 +903,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                 {duplicateWarning.incoming.generic_name && (
                   <div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>{duplicateWarning.incoming.generic_name}</div>
                 )}
-                <div style={{ fontSize: '13px', fontWeight: '700', color: tealDeep, marginTop: '6px' }}>{fmt(duplicateWarning.incoming.price)}</div>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: tealDeep, marginTop: '6px' }}>{priceSummary(duplicateWarning.incoming)}</div>
                 <div style={{ fontSize: '12px', color: theme.textFaint }}>+{duplicateWarning.incoming.stock} units</div>
               </div>
             </div>
@@ -955,7 +976,12 @@ function ProductModal({ product, products = [], perms, onSave, onClose, showToas
   }
 
   const save = async () => {
-    if (!form.name || !form.price) { showToast('Please enter product name and selling price.', { type: 'warning' }); return }
+    // Retail and wholesale prices are both optional; a price that is entered must be a number, 0 or more.
+    if (!String(form.name || '').trim()) { showToast('Please enter the product name.', { type: 'warning' }); return }
+    if (Number.isNaN(parseOptionalPrice(form.price)) || Number.isNaN(parseOptionalPrice(form.wholesale_price))) {
+      showToast('Prices must be numbers, 0 or more. Leave a price blank if you do not sell at it.', { type: 'warning' })
+      return
+    }
     const listedOnCareFind = form.list_on_carefind !== false
     if (hasSaleFields && listedOnCareFind && form.price_unit && !isUnitValidForSaleType(form.price_unit, form.sale_type || 'retail')) {
       showToast(saleUnitError(form.price_unit, form.sale_type || 'retail'), { type: 'error' })
@@ -981,7 +1007,7 @@ function ProductModal({ product, products = [], perms, onSave, onClose, showToas
     const { stock: _stock, ...withoutStock } = restForm
     const stockTouched = !isEdit || String(form.stock ?? '') !== String(product.stock ?? '')
     const stockData = isService ? { stock: 999 } : stockTouched ? { stock: parseInt(form.stock) || 0 } : {}
-    await onSave({ ...withoutStock, ...saleData, ...stockData, price: parseFloat(form.price) || 0, cost_price: parseFloat(form.cost_price) || 0, reorder_level: parseInt(form.reorder_level) || 5, category: form.cat || form.category || 'Medicines', expiry_date: form.expiry_date || null })
+    await onSave({ ...withoutStock, ...saleData, ...stockData, price: parseOptionalPrice(form.price) || 0, wholesale_price: parseOptionalPrice(form.wholesale_price) || null, cost_price: parseFloat(form.cost_price) || 0, reorder_level: parseInt(form.reorder_level) || 5, category: form.cat || form.category || 'Medicines', expiry_date: form.expiry_date || null })
     setSaving(false)
   }
 
@@ -992,15 +1018,20 @@ function ProductModal({ product, products = [], perms, onSave, onClose, showToas
         <Inp label='Product Name *' value={form.name} onChange={v => f('name', v)} placeholder='e.g. Amoxicillin 500mg' required />
         <Inp label='Generic / Common Name' value={form.generic_name} onChange={v => f('generic_name', v)} placeholder='e.g. Amoxicillin' />
         <Sel label='Category' value={form.cat} onChange={v => f('cat', v)} options={PRODUCT_CATS} />
-        <div style={{ display: 'grid', gridTemplateColumns: canSeeCost ? '1fr 1fr' : '1fr', gap: '12px' }}>
-          <Inp label='Selling Price (₦) *' value={form.price} onChange={v => f('price', v)} type='number' placeholder='0' required readOnly={!canEditPrice} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+          <Inp label='Retail Price (₦)' value={form.price || ''} onChange={v => f('price', v)} type='number' placeholder='Optional' readOnly={!canEditPrice} />
+          <Inp label='Wholesale Price (₦)' value={form.wholesale_price ?? ''} onChange={v => f('wholesale_price', v)} type='number' placeholder='Optional' readOnly={!canEditPrice} />
           {canSeeCost && <Inp label='Cost Price (₦)' value={form.cost_price} onChange={v => f('cost_price', v)} type='number' placeholder='0' readOnly={!canEditPrice} />}
         </div>
-        {canSeeCost && form.price && form.cost_price && parseFloat(form.price) > 0 && (
-          <div style={{ padding: '8px 12px', borderRadius: '8px', background: successBg, fontSize: '12px', color: success, fontWeight: '600' }}>
-            Profit margin: {Math.round(((parseFloat(form.price) - parseFloat(form.cost_price)) / parseFloat(form.price)) * 100)}%
+        <div style={{ fontSize: '12px', color: gray500, marginTop: '-6px' }}>
+          Enter a retail price, a wholesale price, or both. The POS offers only the prices you enter.
+          {!(Number(form.price) > 0) && !(Number(form.wholesale_price) > 0) && ' With neither, the product sells at ₦0 until a price is added.'}
+        </div>
+        {canSeeCost && Number(form.cost_price) > 0 && [['Retail', form.price], ['Wholesale', form.wholesale_price]].filter(([, v]) => Number(v) > 0).map(([label, v]) => (
+          <div key={label} style={{ padding: '8px 12px', borderRadius: '8px', background: successBg, fontSize: '12px', color: success, fontWeight: '600' }}>
+            {label} margin: {Math.round(((Number(v) - Number(form.cost_price)) / Number(v)) * 100)}%
           </div>
-        )}
+        ))}
         {!canEditPrice && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '8px', background: warningBg, fontSize: '12px', color: warning }}><AlertTriangle size={13} /> Only the Owner can edit prices</div>}
         <Inp label='Barcode (optional)' value={form.barcode} onChange={v => f('barcode', v)} placeholder='Scan or type barcode' />
         <Inp label='Shelf Label' value={form.shelf_label} onChange={v => f('shelf_label', v)} placeholder='e.g. A-03, Rack B Shelf 3' />

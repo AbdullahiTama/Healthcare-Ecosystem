@@ -30,7 +30,11 @@ describe('Owner sale edit arithmetic (mirrors edit_sale)', () => {
     const lines = draftLines(sale)
     expect(addLine(lines, { id: 'a', name: 'Paracetamol', price: 999 })[0].qty).toBe(3)
     const added = addLine(lines, { id: 'c', name: 'Vit C', price: '120' })
-    expect(added[2]).toEqual({ id: 'c', name: 'Vit C', price: 120, qty: 1 })
+    expect(added[2]).toEqual({ id: 'c', name: 'Vit C', price: 120, price_tier: 'retail', qty: 1 })
+  })
+  it('adds a product sold only wholesale at its wholesale price, never at 0', () => {
+    const added = addLine(draftLines(sale), { id: 'w', name: 'ORS carton', price: 0, wholesale_price: 9500 })
+    expect(added[2]).toEqual({ id: 'w', name: 'ORS carton', price: 9500, price_tier: 'wholesale', qty: 1 })
   })
   it('validates lines, discount and reason before saving', () => {
     const lines = draftLines(sale)
