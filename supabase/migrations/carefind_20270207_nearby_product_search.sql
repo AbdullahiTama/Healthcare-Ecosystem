@@ -2,7 +2,11 @@
 -- Medicine search on CareFind: nearby pharmacies first, keeping relevance and availability.
 -- Feedback 2026-11-25: "Search results do not sufficiently prioritise pharmacies based on the user's location."
 -- Docs: docs/architecture/CareFind-Guest-Access-Nearby-Search-and-Link-Sharing.md (CODE_AUDIT A51)
--- Status: NOT APPLIED. Apply with owner approval. Order-independent with the app (see DEPLOYMENT).
+-- Status: APPLIED 2026-11-26 with owner approval (version 20261126104543). Probed live as anon (rolled back), from Yaba,
+-- Lagos (6.5095, 3.3711): 'paracetamol' returns 100 name / generic-name matches, nearest 15.3 km, distances never
+-- decreasing among in-stock located results, top 10 all in stock; without a location 100 results; 'a,b),name.eq.x'
+-- returns nothing; '100%' matches literally (2). About 0.4-0.5 s per call over 13,991 listed products (follow-up in
+-- CODE_AUDIT A51 if the catalogue grows).
 -- Tested on PGlite: apps/carefind/src/test/search/nearbyProductSearch.db.test.js
 -- ─────────────────────────────────────────────────────────────────────────────
 --

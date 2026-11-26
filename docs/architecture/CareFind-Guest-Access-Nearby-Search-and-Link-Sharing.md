@@ -1,7 +1,7 @@
 # CareFind: browsing without an account, nearby pharmacies first, sharing links instead of files
 
-2026-11-25. Three pending CareFind issues. CODE_AUDIT item A51. Two migrations, neither applied yet (owner approval);
-the app works in either order with them (see "Deployment").
+2026-11-25. Three pending CareFind issues. CODE_AUDIT item A51. Two migrations, **applied 2026-11-26** with owner
+approval and probed live (evidence in each migration header); the app works in either order with them.
 
 > **None of this reaches users until CareFind production deploys again (CODE_AUDIT A48).** CareFind production has
 > been frozen at `6248c0f` (2026-10-21) because the Vercel project `healthcare-ecosystem` only builds Previews from
@@ -124,8 +124,8 @@ export and still produces a file; live shows already shared a link.
 
 ## Deployment
 
-1. Apply `carefind_20270206_guest_shop_read`, probe as `anon` (shop items readable; `products` still refused).
-2. Apply `carefind_20270207_nearby_product_search`, probe as `anon` with Lagos coordinates.
+1. ~~Apply `carefind_20270206_guest_shop_read`, probe as `anon`~~ done 2026-11-26.
+2. ~~Apply `carefind_20270207_nearby_product_search`, probe as `anon` with Lagos coordinates~~ done 2026-11-26.
 3. Deploy CareFind (blocked by A48 until the Vercel project deploys `main` to Production).
 
 Any order works: the app falls back when a migration is missing, and the migrations change nothing the current app relies

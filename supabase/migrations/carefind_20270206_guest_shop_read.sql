@@ -2,7 +2,11 @@
 -- MED Market (the CareFind shop) for visitors who are not signed in.
 -- Feedback 2026-11-25: "Users are required to sign up before accessing MED Market, browsing products or searching."
 -- Docs: docs/architecture/CareFind-Guest-Access-Nearby-Search-and-Link-Sharing.md (CODE_AUDIT A51)
--- Status: NOT APPLIED. Apply with owner approval. Order-independent with the app change (see DEPLOYMENT).
+-- Status: APPLIED 2026-11-26 with owner approval (version 20261126104459). Before: live policy and view definition
+-- checked identical to the ones written here; a signed-in shopper saw 8 shop items. Probed live after, in rolled-back
+-- transactions: anon sees the same 8 items (identical id list), all 8 with public details from carefind_products;
+-- the signed-in shopper still sees the same 8; anon reading products.cost_price still REFUSED (42501); the view has
+-- reorder_level and the same 13,991 rows.
 -- Tested on PGlite: apps/carefind/src/test/shop/guestShopRead.db.test.js
 -- ─────────────────────────────────────────────────────────────────────────────
 --
